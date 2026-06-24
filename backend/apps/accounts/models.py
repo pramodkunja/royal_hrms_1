@@ -1,0 +1,423 @@
+from __future__ import annotations
+
+import uuid
+from datetime import timedelta
+
+from django.conf import settings
+from django.contrib.auth.hashers import check_password as _check_hash
+from django.contrib.auth.hashers import make_password as _make_hash
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.db import models, transaction
+from django.db.models import F
+from django.utils import timezone
+
+
+# ─── Role & Permission ────────────────────────────────────────────────────────
+
+class Role(models.Model):
+    name         = models.CharField(max_length=50, unique=True)
+    display_name = models.CharField(max_length=100)
+    is_active    = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'hrms_roles'
+
+    def __str__(self) -> str:
+        return self.display_name
+
+
+class Permission(models.Model):
+    module   = models.CharField(max_length=50)
+    action   = models.CharField(max_length=20)
+    codename = models.CharField(max_length=100, unique=True)
+
+    class Meta:
+        db_table = 'hrms_permissions'
+        ordering = ['module', 'action']
+
+    def __str__(self) -> str:
+        return self.codename
+
+
+class RolePermission(models.Model):
+    role       = models.ForeignKey(Role,       on_delete=models.CASCADE, related_name='role_permissions')
+    permission = models.ForeignKey(Permission, on_delete=models.CASCADE, related_name='role_permissions')
+    granted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table      = 'hrms_role_permissions'
+        unique_together = ('role', 'permission')
+
+    def __str__(self) -> str:
+        return f'{self.role.name} → {self.permission.codename}'
+
+
+# ─── User ─────────────────────────────────────────────────────────────────────
+
+class UserManager(BaseUserManager):
+    def create_user(self, email: str, password: str | None = None, **extra_fields) -> User:
+        if not email:
+            raise ValueError('Email address is required')
+        email = self.normalize_email(email)
+        user  = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, email: str, password: str | None = None, **extra_fields) -> User:
+        extra_fields.setdefault('is_staff',           True)
+        extra_fields.setdefault('is_superuser',       True)
+        extra_fields.setdefault('must_change_password', False)
+        if not extra_fields.get('is_staff'):
+            raise ValueError('Superuser must have is_staff=True.')
+        if not extra_fields.get('is_superuser'):
+            raise ValueError('Superuser must have is_superuser=True.')
+        if 'role' not in extra_fields:
+            try:
+                extra_fields['role'] = Role.objects.get(name='hr_admin')
+            except Role.DoesNotExist:
+                pass
+        return self.create_user(email, password, **extra_fields)
+
+
+class User(AbstractBaseUser, PermissionsMixin):
+    id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email       = models.EmailField(unique=True)
+    full_name   = models.CharField(max_length=150)
+    role        = models.ForeignKey(
+                      Role,
+                      on_delete=models.SET_NULL,
+                      null=True,
+                      blank=True,
+                      related_name='users',
+                  )
+    employee_id   = models.CharField(max_length=20, blank=True, db_index=True)
+    department    = models.CharField(max_length=100, blank=True)
+    designation   = models.CharField(max_length=100, blank=True)
+    branch        = models.CharField(max_length=100, blank=True)
+    is_active     = models.BooleanField(default=True)
+    is_staff      = models.BooleanField(default=False)
+    must_change_password    = models.BooleanField(default=True)
+    failed_login_attempts   = models.PositiveSmallIntegerField(default=0)
+    locked_until            = models.DateTimeField(null=True, blank=True)
+    last_login_ip           = models.GenericIPAddressField(null=True, blank=True)
+    date_joined  = models.DateTimeField(auto_now_add=True)
+    updated_at   = models.DateTimeField(auto_now=True)
+
+    USERNAME_FIELD  = 'email'
+    REQUIRED_FIELDS = ['full_name']
+
+    objects = UserManager()
+
+    class Meta:
+        db_table = 'hrms_users'
+
+    def __str__(self) -> str:
+        return self.email
+
+    # ── Lockout helpers ───────────────────────────────────────────────────────
+
+    def is_locked(self) -> bool:
+        """Return True if the account is currently locked out."""
+        if not self.locked_until:
+            return False
+        if timezone.now() < self.locked_until:
+            return True
+        # Lock has expired — clear it atomically (fire-and-forget; failure is harmless)
+        User.objects.filter(pk=self.pk, locked_until=self.locked_until).update(
+            locked_until=None,
+            failed_login_attempts=0,
+        )
+        self.locked_until           = None
+        self.failed_login_attempts  = 0
+        return False
+
+    @transaction.atomic
+    def increment_failed_login(self) -> None:
+
+        max_attempts    = getattr(settings, 'LOGIN_MAX_ATTEMPTS', 5)
+        lockout_minutes = getattr(settings, 'LOGIN_LOCKOUT_MINUTES', 30)
+
+        # Atomic increment — safe under concurrent requests
+        User.objects.filter(pk=self.pk).update(
+            failed_login_attempts=F('failed_login_attempts') + 1
+        )
+        self.refresh_from_db(fields=['failed_login_attempts'])
+
+        if self.failed_login_attempts >= max_attempts:
+            lock_until = timezone.now() + timedelta(minutes=lockout_minutes)
+            User.objects.filter(pk=self.pk).update(locked_until=lock_until)
+            self.locked_until = lock_until
+
+    def reset_failed_login(self, ip_address: str | None = None) -> None:
+        """Reset lockout state on successful login."""
+        update_fields = {
+            'failed_login_attempts': 0,
+            'locked_until': None,
+        }
+        if ip_address:
+            update_fields['last_login_ip'] = ip_address
+        User.objects.filter(pk=self.pk).update(**update_fields)
+        self.failed_login_attempts  = 0
+        self.locked_until           = None
+        if ip_address:
+            self.last_login_ip = ip_address
+
+
+# ─── Organisation Structure ───────────────────────────────────────────────────
+
+class Department(models.Model):
+    name        = models.CharField(max_length=100, unique=True)
+    description = models.CharField(max_length=300, blank=True)
+    is_active   = models.BooleanField(default=True)
+    created_at  = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'hrms_departments'
+        ordering = ['name']
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class Designation(models.Model):
+    name        = models.CharField(max_length=100)
+    department  = models.ForeignKey(
+                      Department, on_delete=models.CASCADE, related_name='designations'
+                  )
+    is_active   = models.BooleanField(default=True)
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table        = 'hrms_designations'
+        unique_together = ('name', 'department')
+        ordering        = ['name']
+
+    def __str__(self) -> str:
+        return f'{self.name} ({self.department.name})'
+
+
+# ─── OTP Verification ─────────────────────────────────────────────────────────
+
+class OTPVerification(models.Model):
+    
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otps')
+    otp        = models.CharField(max_length=128)   # stores the hash, not the plain OTP
+    attempts   = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+    is_used    = models.BooleanField(default=False, db_index=True)
+
+    class Meta:
+        db_table = 'otp_verifications'
+        ordering = ['-created_at']
+        indexes  = [
+            models.Index(fields=['user', 'is_used', 'expires_at']),
+        ]
+
+    def __str__(self) -> str:
+        return f'OTP for {self.user.email} (used={self.is_used})'
+
+    def is_valid(self) -> bool:
+        max_attempts = getattr(settings, 'OTP_MAX_ATTEMPTS', 5)
+        return (
+            not self.is_used
+            and self.attempts <= max_attempts
+            and timezone.now() < self.expires_at
+        )
+
+    def check_otp(self, plain_otp: str) -> bool:
+        """Verify a plain OTP against the stored hash."""
+        return _check_hash(plain_otp, self.otp)
+
+    @classmethod
+    @transaction.atomic
+    def create_for_user(cls, user: User) -> tuple[OTPVerification, str]:
+       
+        from apps.accounts.utils import generate_otp  # avoid circular import
+
+        cls.objects.filter(user=user, is_used=False).update(is_used=True)
+
+        expiry_minutes = getattr(settings, 'OTP_EXPIRY_MINUTES', 10)
+        plain_otp      = generate_otp()
+
+        otp_obj = cls.objects.create(
+            user       = user,
+            otp        = _make_hash(plain_otp),   # store the hash
+            expires_at = timezone.now() + timedelta(minutes=expiry_minutes),
+        )
+        return otp_obj, plain_otp
+
+
+# ─── Password Reset Token ──────────────────────────────────────────────────────
+
+class PasswordResetToken(models.Model):
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reset_tokens')
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+    is_used    = models.BooleanField(default=False, db_index=True)
+
+    class Meta:
+        db_table = 'hrms_password_reset_tokens'
+
+    def __str__(self) -> str:
+        return f'ResetToken({self.user.email}, used={self.is_used})'
+
+    def is_valid(self) -> bool:
+        return not self.is_used and timezone.now() < self.expires_at
+
+    @classmethod
+    @transaction.atomic
+    def create_for_user(cls, user: User) -> PasswordResetToken:
+        """Invalidate all outstanding tokens for this user then issue a new one."""
+        cls.objects.filter(user=user, is_used=False).update(is_used=True)
+        return cls.objects.create(
+            user       = user,
+            expires_at = timezone.now() + timedelta(minutes=60),
+        )
+
+
+# ─── Audit Log ────────────────────────────────────────────────────────────────
+
+class AuditLog(models.Model):
+    """Immutable append-only audit trail. User FK is SET_NULL so logs survive user deletion."""
+    user       = models.ForeignKey(
+                     User, on_delete=models.SET_NULL, null=True, blank=True,
+                     related_name='audit_logs',
+                 )
+    action     = models.CharField(max_length=100)
+    module     = models.CharField(max_length=50)
+    object_id  = models.CharField(max_length=100, blank=True)
+    changes    = models.JSONField(default=dict)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = 'hrms_audit_logs'
+        ordering = ['-created_at']
+
+    def __str__(self) -> str:
+        actor = self.user.email if self.user_id else 'system'
+        return f'[{self.module}] {self.action} by {actor}'
+
+
+# ─── SMTP Settings ────────────────────────────────────────────────────────────
+
+class SMTPSettings(models.Model):
+
+    class SMTPType(models.TextChoices):
+        LOCAL  = 'local',  'Local (Gmail / Custom SMTP)'
+        SERVER = 'server', 'Server (Dedicated Mail Server)'
+
+    class Priority(models.TextChoices):
+        NORMAL = 'normal', 'Normal'
+        HIGH   = 'high',   'High'
+        LOW    = 'low',    'Low'
+
+    class ReceiverEmailType(models.TextChoices):
+        EMAIL_ID          = 'email_id',          'Email ID'
+        PERSONAL_EMAIL_ID = 'personal_email_id', 'Personal Email ID'
+
+    name                = models.CharField(max_length=100, unique=True)
+    smtp_type           = models.CharField(
+                              max_length=10,
+                              choices=SMTPType.choices,
+                              default=SMTPType.LOCAL,
+                          )
+    host                = models.CharField(max_length=255)
+    port                = models.PositiveIntegerField(default=587)
+    username            = models.CharField(max_length=255)   # may be email OR plain username
+    password            = models.CharField(max_length=255)
+    use_tls             = models.BooleanField(default=True)
+    sender_name         = models.CharField(max_length=255, blank=True)
+    from_email          = models.EmailField(max_length=255)
+    bcc_email           = models.EmailField(max_length=255, blank=True)
+    priority            = models.CharField(
+                              max_length=10, choices=Priority.choices, default=Priority.NORMAL
+                          )
+    receiver_email_type = models.CharField(
+                              max_length=20,
+                              choices=ReceiverEmailType.choices,
+                              default=ReceiverEmailType.EMAIL_ID,
+                          )
+    is_active           = models.BooleanField(default=False)
+    updated_at          = models.DateTimeField(auto_now=True)
+    updated_by          = models.ForeignKey(
+                              User, on_delete=models.SET_NULL, null=True, blank=True,
+                              related_name='smtp_updates',
+                          )
+
+    class Meta:
+        db_table         = 'hrms_smtp_settings'
+        verbose_name     = 'SMTP Settings'
+        verbose_name_plural = 'SMTP Settings'
+
+    def __str__(self) -> str:
+        status = 'active' if self.is_active else 'inactive'
+        return f'{self.name} — {status}'
+
+    @classmethod
+    def get_active(cls) -> SMTPSettings | None:
+        return cls.objects.filter(is_active=True).first()
+
+    @transaction.atomic
+    def activate(self) -> None:
+        """Activate this config and deactivate the other — atomically."""
+        SMTPSettings.objects.exclude(pk=self.pk).update(is_active=False)
+        SMTPSettings.objects.filter(pk=self.pk).update(is_active=True)
+        self.is_active = True
+
+
+# ─── Email Templates ──────────────────────────────────────────────────────────
+
+class EmailTemplate(models.Model):
+   
+    class TemplateType(models.TextChoices):
+        WISH         = 'wish',         'Wish'
+        REMINDER     = 'reminder',     'Reminder'
+        NOTIFICATION = 'notification', 'Notification'
+        DOCUMENT     = 'document',     'Document'
+
+    name                = models.CharField(max_length=100, unique=True)
+    display_name        = models.CharField(max_length=200)
+    description         = models.CharField(max_length=500, blank=True)
+    template_type       = models.CharField(
+                              max_length=20,
+                              choices=TemplateType.choices,
+                              default=TemplateType.NOTIFICATION,
+                          )
+    subject             = models.CharField(max_length=500)
+    body                = models.TextField()
+    is_active           = models.BooleanField(default=True)
+    is_builtin          = models.BooleanField(default=False)
+    available_variables = models.JSONField(
+                              default=list,
+                              help_text='List of {VARIABLE} names supported by this template.',
+                          )
+    updated_at          = models.DateTimeField(auto_now=True)
+    updated_by          = models.ForeignKey(
+                              User,
+                              on_delete=models.SET_NULL,
+                              null=True,
+                              blank=True,
+                              related_name='email_template_updates',
+                          )
+
+    class Meta:
+        db_table = 'hrms_email_templates'
+        ordering = ['template_type', 'display_name']
+
+    def __str__(self) -> str:
+        return self.display_name
+
+    def render(self, context: dict) -> tuple[str, str]:
+        
+        subject = self.subject
+        body    = self.body
+        for key, value in context.items():
+            placeholder = '{' + key + '}'
+            subject     = subject.replace(placeholder, str(value))
+            body        = body.replace(placeholder, str(value))
+        return subject, body
