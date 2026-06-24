@@ -33,7 +33,7 @@ interface LoginApiResponse {
 const inputCls = "w-full px-3 py-[10px] border-[1.5px] border-[var(--outline-v)] rounded-[var(--radius)] bg-[var(--bg)] text-[var(--on-bg)] text-sm font-[inherit] transition-colors outline-none focus:border-[var(--primary)] focus:bg-white";
 
 /* ── Submit button ── */
-const submitCls = "w-full py-[11px] bg-[var(--primary)] text-white rounded-[var(--radius)] text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer border-none font-[inherit] disabled:opacity-70 disabled:cursor-not-allowed hover:bg-[#163d6e] transition-colors";
+const submitCls = "w-full py-[11px] bg-[#1e4e8c] text-white rounded-[var(--radius)] text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer border-none font-[inherit] disabled:opacity-70 disabled:cursor-not-allowed hover:bg-[#163d6e] transition-colors";
 
 export default function LoginPage() {
   const router = useRouter();
