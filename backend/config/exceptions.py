@@ -3,6 +3,7 @@ from rest_framework.views import exception_handler
 from rest_framework.response import Response
 from rest_framework import status
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.utils import OperationalError as DBOperationalError
 from django.http import Http404
 
 logger = logging.getLogger('accounts')
@@ -47,6 +48,19 @@ def custom_exception_handler(exc, context):
             'message': exc.messages[0] if exc.messages else 'Validation error.',
             'data': {},
         }, status=status.HTTP_400_BAD_REQUEST)
+
+    if isinstance(exc, DBOperationalError):
+        view = context.get('view')
+        logger.error(
+            'Database unavailable in %s: %s',
+            view.__class__.__name__ if view else 'unknown view',
+            str(exc),
+        )
+        return Response({
+            'status': 'error',
+            'message': 'Database is temporarily unavailable. Please try again in a moment.',
+            'data': {},
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
     # Truly unexpected errors — log and return generic message
     view = context.get('view')
