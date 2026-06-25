@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.branch',
     'apps.announcements',
+    'apps.recruitment',
 ]
 
 MIDDLEWARE = [
