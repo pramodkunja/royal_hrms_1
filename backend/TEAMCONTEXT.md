@@ -422,6 +422,12 @@ On validation errors, `data` contains field-level detail:
     - [x] Stats endpoint: total + per-category counts
     - [x] Full validation: unique title, zero-size/missing-name file guard, path traversal sanitization, branch existence check
     - [x] `migrate_files_to_cloudinary` management command for migrating any legacy local files
+    - [x] **Document file preview & download fix** — 2026-06-25
+      - Root cause: Cloudinary CDN returned 401 for all direct resource URLs (account-level access restriction)
+      - Fix: `GET /api/documents/{id}/` now doubles as a streaming proxy when `?t=<token>` is in the URL
+      - `DocumentDetailView.get_permissions()` skips JWT when `?t=` is present; auth is a 2-hour Django-signed URL token
+      - `DocumentDetailView._stream_file()` uses `cloudinary.utils.private_download_url()` (API key + secret) to fetch the file server-side, then streams it to the browser — bypasses all CDN restrictions
+      - `DocumentSerializer.get_file_url` now returns `http://…/api/documents/{id}/?t=<token>` — plain `fetch()` from the frontend works without an Authorization header
 
 ### Planned (next modules)
 - [ ] Employee management (profiles, departments)
