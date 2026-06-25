@@ -20,6 +20,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard/profile":                  "My Profile",
   "/dashboard/settings/permissions":     "Roles & Permissions",
   "/dashboard/employees":                "Employees",
+  "/dashboard/employees/new":            "Add New Employee",
   "/dashboard/attendance":               "Attendance & Time",
   "/dashboard/payroll":                  "Payroll Management",
   "/dashboard/leave":                    "Leave Management",
@@ -53,7 +54,8 @@ export default function DashboardShell({
   const [darkMode,   setDarkMode]   = useState(false);
   const [searchVal,  setSearchVal]  = useState("");
 
-  const pageTitle  = PAGE_TITLES[pathname] ?? "Royal HRMS";
+  const pageTitle  = PAGE_TITLES[pathname]
+    ?? (pathname.startsWith("/dashboard/employees/") ? "Employee Profile" : "Royal HRMS");
   const visibleNav = buildNav(session.permissions ?? []);
 
   function toggleTheme() {
