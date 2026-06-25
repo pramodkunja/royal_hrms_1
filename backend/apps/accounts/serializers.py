@@ -3,6 +3,10 @@ from __future__ import annotations
 
 import os
 import re
+import time
+
+import cloudinary.utils
+from django.core import signing
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -313,12 +317,23 @@ class EmailTemplateAttachmentSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'filename', 'mime_type', 'size', 'url', 'uploaded_at')
 
     def get_url(self, obj):
-        url = obj.file.url
-        # Cloudinary URLs are already absolute; build_absolute_uri is a no-op for them
-        request = self.context.get('request')
-        if request and not url.startswith(('http://', 'https://')):
-            return request.build_absolute_uri(url)
-        return url
+        if not obj.file or not obj.file.name:
+            return ''
+        try:
+            signed_url, _ = cloudinary.utils.cloudinary_url(
+                obj.file.name,
+                resource_type='raw',
+                sign_url=True,
+                expires_at=int(time.time()) + 7200,
+                secure=True,
+            )
+            return signed_url
+        except Exception:
+            url = obj.file.url
+            request = self.context.get('request')
+            if request and not url.startswith(('http://', 'https://')):
+                return request.build_absolute_uri(url)
+            return url
 
 
 class EmailTemplateSerializer(serializers.ModelSerializer):
@@ -646,12 +661,16 @@ class DocumentSerializer(serializers.ModelSerializer):
         extra_kwargs = {'file': {'required': True}}
 
     def get_file_url(self, obj: Document) -> str:
-        url = obj.file.url
-        # Cloudinary URLs are already absolute; build_absolute_uri is a no-op for them
+        if not obj.file or not obj.file.name:
+            return ''
+        # Issue a short-lived signed token so the frontend can fetch the file
+        # through Django's proxy endpoint without needing an auth header.
+        token = signing.dumps({'id': obj.pk}, salt='doc-dl')
+        path = f'/api/documents/{obj.pk}/?t={token}'
         request = self.context.get('request')
-        if request and not url.startswith(('http://', 'https://')):
-            return request.build_absolute_uri(url)
-        return url
+        if request:
+            return request.build_absolute_uri(path)
+        return path
 
     def get_file_size_display(self, obj: Document) -> str:
         size = obj.file_size

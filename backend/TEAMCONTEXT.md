@@ -296,7 +296,8 @@ No need to call a separate permissions endpoint after login.
 | GET | `/api/documents/` | List active documents. Filters: `?category=`, `?branch=`, `?file_type=`, `?search=` |
 | POST | `/api/documents/` | Upload document (`multipart/form-data`) — requires `hr_admin` or `system_admin` |
 | GET | `/api/documents/stats/` | Document counts by category (`total` + `by_category`) |
-| GET | `/api/documents/{id}/` | Get single document |
+| GET | `/api/documents/{id}/` | Get single document (JSON) |
+| GET | `/api/documents/{id}/?t=<token>` | Stream/download the file — no JWT needed; `t` is a 2-hour signed token embedded in `file_url` |
 | PATCH | `/api/documents/{id}/` | Update metadata or replace file — requires `hr_admin` or `system_admin` |
 | DELETE | `/api/documents/{id}/` | Soft-delete (sets `is_active=False`) — requires `hr_admin` or `system_admin` |
 
@@ -422,7 +423,7 @@ On validation errors, `data` contains field-level detail:
     - [x] Stats endpoint: total + per-category counts
     - [x] Full validation: unique title, zero-size/missing-name file guard, path traversal sanitization, branch existence check
     - [x] `migrate_files_to_cloudinary` management command for migrating any legacy local files
-    - [x] **Document file preview & download fix** — 2026-06-25
+    - [x] **Document file preview & download fix** — 2026-06-25 (same session, later)
       - Root cause: Cloudinary CDN returned 401 for all direct resource URLs (account-level access restriction)
       - Fix: `GET /api/documents/{id}/` now doubles as a streaming proxy when `?t=<token>` is in the URL
       - `DocumentDetailView.get_permissions()` skips JWT when `?t=` is present; auth is a 2-hour Django-signed URL token
