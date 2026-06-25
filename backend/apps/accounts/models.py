@@ -94,11 +94,13 @@ class User(AbstractBaseUser, PermissionsMixin):
                       blank=True,
                       related_name='users',
                   )
-    employee_id   = models.CharField(max_length=20, blank=True, db_index=True)
-    department    = models.CharField(max_length=100, blank=True)
-    designation   = models.CharField(max_length=100, blank=True)
-    branch        = models.CharField(max_length=100, blank=True)
-    is_active     = models.BooleanField(default=True)
+    employee_id     = models.CharField(max_length=20, blank=True, db_index=True)
+    department      = models.CharField(max_length=100, blank=True)
+    designation     = models.CharField(max_length=100, blank=True)
+    branch          = models.CharField(max_length=100, blank=True)
+    phone           = models.CharField(max_length=20, blank=True)
+    date_of_joining = models.DateField(null=True, blank=True)
+    is_active       = models.BooleanField(default=True)
     is_staff      = models.BooleanField(default=False)
     must_change_password    = models.BooleanField(default=True)
     failed_login_attempts   = models.PositiveSmallIntegerField(default=0)

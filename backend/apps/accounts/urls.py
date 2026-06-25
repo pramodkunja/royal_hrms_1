@@ -9,6 +9,7 @@ from apps.accounts.views import (
     DocumentDetailView,
     DocumentListCreateView,
     DocumentStatsView,
+    EmployeeListCreateView,
     LoginView,
     LogoutView,
     TokenRefreshAPIView,
@@ -40,6 +41,9 @@ urlpatterns = [
     path('verify-otp/',      VerifyOTPView.as_view(),       name='verify-otp'),
     path('reset-password/',  ResetPasswordView.as_view(),   name='reset-password'),
     path('change-password/', ChangePasswordView.as_view(),  name='change-password'),
+
+    # Employees
+    path('employees/', EmployeeListCreateView.as_view(), name='employee-list-create'),
 
     # Organisation structure
     path('departments/',           DepartmentListCreateView.as_view(), name='department-list'),

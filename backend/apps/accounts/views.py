@@ -101,6 +101,42 @@ def get_client_ip(request) -> str:
     return request.META.get('REMOTE_ADDR') or '0.0.0.0'
 
 
+def _has_perm(user, codename: str) -> bool:
+    if not user or not user.role:
+        return False
+    return user.role.role_permissions.filter(permission__codename=codename).exists()
+
+
+def _employee_dict(user: User) -> dict:
+    parts = user.full_name.strip().split(' ', 1)
+    first = parts[0]
+    last  = parts[1] if len(parts) > 1 else ''
+    if user.is_active and user.must_change_password:
+        emp_status = 'onboarding'
+    elif not user.is_active:
+        emp_status = 'inactive'
+    else:
+        emp_status = 'active'
+    return {
+        'id':             str(user.id),
+        'employee_id':    user.employee_id,
+        'first_name':     first,
+        'last_name':      last,
+        'full_name':      user.full_name,
+        'email':          user.email,
+        'phone':          user.phone,
+        'department':     user.department,
+        'designation':    user.designation,
+        'branch':         user.branch,
+        'role':           user.role.name         if user.role else '',
+        'role_display':   user.role.display_name if user.role else '',
+        'date_of_joining': str(user.date_of_joining) if user.date_of_joining else '',
+        'date_joined':    user.date_joined.date().isoformat(),
+        'is_active':      user.is_active,
+        'status':         emp_status,
+    }
+
+
 # ─── Custom permissions ────────────────────────────────────────────────────────
 
 class CanManageRoles(BasePermission):
@@ -1826,6 +1862,140 @@ class CompanyRetrieveUpdateView(APIView):
 
 
 # ─── Audit Log ────────────────────────────────────────────────────────────────
+
+# ─── Employee List / Create ───────────────────────────────────────────────────
+
+class EmployeeListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    _DENIED = 'You do not have permission to perform this action.'
+
+    def get(self, request):
+        if not _has_perm(request.user, 'employees.view'):
+            return error(self._DENIED, http_status=status.HTTP_403_FORBIDDEN)
+
+        qs = (
+            User.objects
+            .select_related('role')
+            .filter(is_active__in=[True, False])
+            .order_by('-date_joined')
+        )
+
+        search = request.query_params.get('search', '').strip()
+        dept   = request.query_params.get('department', '').strip()
+        if search:
+            qs = qs.filter(
+                Q(full_name__icontains=search) |
+                Q(email__icontains=search)     |
+                Q(employee_id__icontains=search)
+            )
+        if dept:
+            qs = qs.filter(department=dept)
+
+        return success('Employees retrieved.', data=[_employee_dict(u) for u in qs])
+
+    def post(self, request):
+        if not _has_perm(request.user, 'employees.create'):
+            return error(self._DENIED, http_status=status.HTTP_403_FORBIDDEN)
+
+        first_name      = (request.data.get('first_name')      or '').strip()
+        last_name       = (request.data.get('last_name')       or '').strip()
+        email           = (request.data.get('email')           or '').strip().lower()
+        role_id         = request.data.get('role')
+        department      = (request.data.get('department')      or '').strip()
+        designation     = (request.data.get('designation')     or '').strip()
+        branch          = (request.data.get('branch')          or '').strip()
+        employee_type   = (request.data.get('employee_type')   or 'Permanent').strip()
+        date_of_joining = (request.data.get('date_of_joining') or '').strip()
+        phone           = (request.data.get('phone')           or '').strip()
+
+        errs = {}
+        if not first_name:      errs['first_name']      = 'First name is required.'
+        if not last_name:       errs['last_name']       = 'Last name is required.'
+        if not email:           errs['email']           = 'Email is required.'
+        if not role_id:         errs['role']            = 'Role is required.'
+        if not department:      errs['department']      = 'Department is required.'
+        if not designation:     errs['designation']     = 'Designation is required.'
+        if not branch:          errs['branch']          = 'Branch is required.'
+        if not date_of_joining: errs['date_of_joining'] = 'Date of joining is required.'
+        if errs:
+            return error('Please fix the errors below.', data=errs)
+
+        if User.objects.filter(email__iexact=email).exists():
+            return error(
+                'An account with this email already exists.',
+                data={'email': 'Email already registered.'},
+            )
+
+        try:
+            role = Role.objects.get(pk=role_id)
+        except (Role.DoesNotExist, ValueError, TypeError):
+            return error('Invalid role.', data={'role': 'Role not found.'})
+
+        if role.name == 'system_admin':
+            return error('system_admin cannot be assigned via employee creation.')
+
+        import secrets, string as _string
+        temp_password = ''.join(secrets.choice(_string.ascii_letters + _string.digits) for _ in range(12))
+
+        count       = User.objects.count() + 1
+        employee_id = f'RSS{str(count).zfill(5)}'
+        full_name   = f'{first_name} {last_name}'
+
+        with transaction.atomic():
+            user = User.objects.create_user(
+                email           = email,
+                password        = temp_password,
+                full_name       = full_name,
+                role            = role,
+                employee_id     = employee_id,
+                department      = department,
+                designation     = designation,
+                branch          = branch,
+                phone           = phone,
+                date_of_joining = date_of_joining or None,
+                must_change_password = True,
+            )
+            AuditLog.objects.create(
+                user=request.user, action='employee_created', module='accounts',
+                object_id=str(user.id),
+                changes={
+                    'name': full_name, 'email': email,
+                    'department': department, 'designation': designation,
+                    'role': role.name, 'employee_id': employee_id,
+                },
+                ip_address=get_client_ip(request),
+            )
+
+        try:
+            from django.core.mail import send_mail
+            from django.conf import settings
+            send_mail(
+                subject=f'Welcome to Royal HRMS — Your Login Credentials',
+                message='',
+                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@royalhrms.com'),
+                recipient_list=[email],
+                html_message=(
+                    f'<p>Hi <strong>{full_name}</strong>,</p>'
+                    f'<p>Your Royal HRMS account has been created. Use the credentials below to log in:</p>'
+                    f'<p><strong>Employee ID:</strong> {employee_id}<br>'
+                    f'<strong>Login Email:</strong> {email}<br>'
+                    f'<strong>Temporary Password:</strong> {temp_password}</p>'
+                    f'<p>You will be asked to change your password on first login.</p>'
+                    f'<p>— Royal HRMS Team</p>'
+                ),
+                fail_silently=True,
+            )
+        except Exception as exc:
+            logger.warning('Welcome email failed for %s: %s', email, exc)
+
+        logger.info('Employee %s (%s) created by %s', employee_id, email, request.user.email)
+        return success(
+            f'{full_name} added successfully. Login credentials sent to {email}.',
+            data=_employee_dict(user),
+            http_status=status.HTTP_201_CREATED,
+        )
+
 
 class AuditLogListView(APIView):
     permission_classes = [IsAuthenticated, CanManageRoles]
