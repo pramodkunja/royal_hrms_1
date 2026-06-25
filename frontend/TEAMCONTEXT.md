@@ -616,3 +616,37 @@ documents/
 - **Axios 1.x FormData bug** — the clientApi interceptor in `lib/clientApi.ts` now deletes `Content-Type` when body is `FormData`. This must stay or file uploads will break silently.
 - **`available_variables`** — backend returns it as either `string[]` or a JSON-stringified string. Always use `parseAvailableVars()` from `_data.ts` when reading this field.
 - **Email template list API** — omits `attachments` per template. Always fetch the detail endpoint `/settings/email-templates/{id}/` when you need attachments.
+
+---
+
+## Session 4 — Nithin Sandala (25 June 2026)
+
+**Branch:** `Frontend/employee`
+**Commit:** `05a101d`
+
+### Employee Management Module
+
+Developed full employee management screens wired to the backend API.
+
+#### Files Created
+
+| File | Purpose |
+|------|---------|
+| `app/dashboard/employees/page.tsx` | Employee list page — table with search/filter, status badges |
+| `app/dashboard/employees/new/page.tsx` | Add Employee full-page wizard |
+| `app/dashboard/employees/[id]/page.tsx` | Employee profile detail page |
+| `app/dashboard/employees/_data.ts` | API endpoints, types, field definitions |
+| `app/dashboard/employees/_components/AddEmployeeModal.tsx` | Modal variant of add-employee form |
+| `app/dashboard/employees/_components/AddEmployeeWizard.tsx` | Multi-step wizard for employee creation |
+| `app/dashboard/employees/_components/Avatar.tsx` | Avatar initials component |
+| `app/dashboard/employees/_components/FormField.tsx` | Reusable labelled input/select/textarea |
+| `app/dashboard/employees/_components/StatusBadge.tsx` | Active/inactive badge |
+| `app/dashboard/employees/[id]/_components/ProfileForm.tsx` | Editable profile form |
+| `app/dashboard/employees/[id]/_components/ProfileHeader.tsx` | Profile page header with avatar + meta |
+| `app/dashboard/employees/[id]/_components/ProfileSidebar.tsx` | Sidebar quick-info panel |
+| `app/dashboard/employees/[id]/_components/ProfileTabBar.tsx` | Tab navigation (Personal/Work/Documents) |
+
+#### DashboardShell additions (`components/dashboard/DashboardShell.tsx`)
+
+- Added `"/dashboard/employees/new": "Add New Employee"` to `PAGE_TITLES`
+- Dynamic fallback: `pathname.startsWith("/dashboard/employees/")` → `"Employee Profile"`
