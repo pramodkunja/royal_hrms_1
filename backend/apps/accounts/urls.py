@@ -77,7 +77,7 @@ urlpatterns = [
     path('settings/email-templates/<int:pk>/preview/', EmailTemplatePreviewView.as_view(), name='email-template-preview'),
 
     # Document Center
-    path('documents/',              DocumentListCreateView.as_view(), name='document-list'),
-    path('documents/stats/',        DocumentStatsView.as_view(),      name='document-stats'),
-    path('documents/<int:pk>/',     DocumentDetailView.as_view(),     name='document-detail'),
+    path('documents/',           DocumentListCreateView.as_view(), name='document-list'),
+    path('documents/stats/',     DocumentStatsView.as_view(),      name='document-stats'),
+    path('documents/<int:pk>/',  DocumentDetailView.as_view(),     name='document-detail'),
 ]

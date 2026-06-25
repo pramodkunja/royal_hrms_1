@@ -2,10 +2,16 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections import defaultdict
 
+import cloudinary.utils
+import requests as http_req
+
+from django.core import signing
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
+from django.http import StreamingHttpResponse
 from django.db.models.deletion import ProtectedError
 from django.db.models import Count, F, Q
 from django.utils import timezone
@@ -1592,6 +1598,12 @@ class DocumentListCreateView(APIView):
 class DocumentDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def get_permissions(self):
+        # Download requests authenticate via a short-lived URL token — no JWT needed.
+        if self.request.method == 'GET' and self.request.query_params.get('t'):
+            return []
+        return super().get_permissions()
+
     def _get_doc(self, pk: int):
         try:
             return (
@@ -1602,7 +1614,56 @@ class DocumentDetailView(APIView):
         except Document.DoesNotExist:
             return None
 
+    def _stream_file(self, pk: int, token: str):
+        try:
+            data = signing.loads(token, salt='doc-dl', max_age=7200)
+            if data.get('id') != pk:
+                raise ValueError('pk mismatch')
+        except Exception:
+            return error('Invalid or expired download link.', http_status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            doc = Document.objects.only('file', 'file_name', 'is_active').get(pk=pk, is_active=True)
+        except Document.DoesNotExist:
+            return error('Document not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        name  = doc.file.name
+        parts = os.path.basename(name).rsplit('.', 1)
+        fmt   = parts[1].lower() if len(parts) == 2 else ''
+
+        try:
+            # private_download_url signs the request with API key + secret,
+            # bypassing any CDN-level access restrictions on the Cloudinary account.
+            dl_url = cloudinary.utils.private_download_url(
+                name, fmt,
+                resource_type='raw',
+                type='upload',
+                attachment=False,
+            )
+            r = http_req.get(dl_url, stream=True, timeout=30)
+            r.raise_for_status()
+        except http_req.exceptions.HTTPError as exc:
+            logger.error('Cloudinary download failed pk=%s status=%s', pk, exc.response.status_code)
+            return error('File temporarily unavailable.', http_status=status.HTTP_502_BAD_GATEWAY)
+        except Exception as exc:
+            logger.error('Document download error pk=%s: %s', pk, exc, exc_info=True)
+            return error('File temporarily unavailable.', http_status=status.HTTP_502_BAD_GATEWAY)
+
+        content_type = r.headers.get('content-type', 'application/octet-stream')
+        response = StreamingHttpResponse(
+            r.iter_content(chunk_size=8192),
+            content_type=content_type,
+        )
+        response['Content-Disposition'] = f'inline; filename="{doc.file_name}"'
+        if 'content-length' in r.headers:
+            response['Content-Length'] = r.headers['content-length']
+        response['Cache-Control'] = 'no-store'
+        return response
+
     def get(self, request, pk: int):
+        token = request.query_params.get('t', '').strip()
+        if token:
+            return self._stream_file(pk, token)
         doc = self._get_doc(pk)
         if not doc:
             return error('Document not found.', http_status=status.HTTP_404_NOT_FOUND)
