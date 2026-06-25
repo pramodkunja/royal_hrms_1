@@ -2,16 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import clientApi from "@/lib/clientApi";
 import { saveAuth } from "@/lib/auth";
 import type { UserInfo } from "@/lib/auth";
-
-const FEATURES = [
-  { icon: "👥", title: "Employee Management", desc: "Centralise employee records, documents, and lifecycle events." },
-  { icon: "⏱", title: "Attendance & Leave", desc: "Real-time attendance tracking with automated leave workflows." },
-  { icon: "💰", title: "Payroll Processing", desc: "Accurate payroll with tax calculations and payslip generation." },
-  { icon: "📊", title: "HR Analytics", desc: "Actionable reports and dashboards for data-driven decisions." },
-];
 
 interface LoginApiResponse {
   status: string;
@@ -72,57 +66,18 @@ export default function LoginPage() {
 
   return (
     /* Full viewport — constant outer boundary at any zoom */
-    <div className="flex h-screen w-screen overflow-hidden bg-[var(--bg)]"
-      style={{ backgroundImage: "radial-gradient(ellipse at 20% 50%, rgba(91,134,201,0.14) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(30,78,140,0.09) 0%, transparent 50%)" }}>
+    <div className="flex h-screen w-screen overflow-hidden bg-white">
 
-      <div className="w-full h-full overflow-hidden bg-white flex flex-col md:grid"
+      <div className="grid w-full h-full overflow-hidden bg-white"
         style={{ gridTemplateColumns: "1.2fr 1fr" }}>
 
-        {/* ── Left Panel — hidden on mobile ── */}
-        <div className="hidden md:flex flex-col justify-center items-center px-9 py-10 overflow-y-auto min-w-0"
-          style={{ backgroundImage: "radial-gradient(circle at 12% 12%, rgba(255,255,255,0.12) 0%, transparent 38%), radial-gradient(circle at 88% 78%, rgba(255,255,255,0.07) 0%, transparent 45%), repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 13px), linear-gradient(160deg, var(--primary-c) 0%, var(--primary) 45%, #163e73 100%)" }}>
-
-          <div className="max-w-[380px] w-full flex flex-col flex-1 justify-center">
-            {/* Logo */}
-            <div className="flex items-center gap-2.5 mb-8">
-              <div className="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center text-lg flex-shrink-0" style={{ background: "rgba(255,255,255,0.2)" }}>👑</div>
-              <span className="text-[17px] font-bold text-white" style={{ letterSpacing: "-0.02em" }}>Royal HRMS</span>
-            </div>
-
-            {/* Hero */}
-            <div className="mb-7">
-              <h1 className="text-[26px] font-bold text-white leading-tight mb-2.5" style={{ letterSpacing: "-0.02em" }}>
-                Your people.<br />Your platform.
-              </h1>
-              <p className="text-[13px] leading-relaxed" style={{ color: "rgba(255,255,255,0.75)" }}>
-                Everything HR needs — from onboarding to payroll — in one intelligent system built for modern teams.
-              </p>
-            </div>
-
-            {/* Features */}
-            <div className="flex flex-col gap-3.5 mt-1">
-              {FEATURES.map(f => (
-                <div key={f.title} className="flex items-start gap-3">
-                  <div className="w-[34px] h-[34px] rounded-lg flex items-center justify-center text-base flex-shrink-0" style={{ background: "rgba(255,255,255,0.15)" }}>
-                    {f.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[13px] font-semibold text-white mb-0.5">{f.title}</div>
-                    <div className="text-[11px] leading-snug" style={{ color: "rgba(255,255,255,0.65)" }}>{f.desc}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="mt-auto pt-6 text-[11px] w-full max-w-[380px]" style={{ color: "rgba(255,255,255,0.45)" }}>
-            © 2026 Royal HRMS · By SRIA Infotech
-          </div>
+        {/* ── Left Panel ── */}
+        <div className="relative min-w-0 overflow-hidden">
+          <Image src="/login.jpg" alt="Royal HRMS" fill style={{ objectFit: "cover" }} priority />
         </div>
 
         {/* ── Right Panel ── */}
-        <div className="flex-1 md:flex-none bg-white px-6 py-8 md:px-10 md:py-12 flex flex-col justify-center min-w-0 overflow-y-auto">
+        <div className="bg-white px-10 py-12 flex flex-col justify-center min-w-0 overflow-y-auto">
           <div className="max-w-[360px] w-full mx-auto">
 
             {/* Brand icon */}
