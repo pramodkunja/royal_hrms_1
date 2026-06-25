@@ -9,7 +9,7 @@ environ.Env.read_env(BASE_DIR / '.env')
 
 SECRET_KEY = env('SECRET_KEY')
 DEBUG = env('DEBUG')
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'apps.accounts',
     'apps.branch',
+    'apps.announcements',
 ]
 
 MIDDLEWARE = [
@@ -186,7 +187,6 @@ if not DEBUG:
     SECURE_BROWSER_XSS_FILTER       = True
     SECURE_CONTENT_TYPE_NOSNIFF     = True
     X_FRAME_OPTIONS                 = 'DENY'
-
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
 LOGS_DIR = BASE_DIR / 'logs'

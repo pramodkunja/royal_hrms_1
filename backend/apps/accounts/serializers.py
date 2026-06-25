@@ -9,6 +9,8 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from apps.accounts.models import (
+    AuditLog,
+    Company,
     Department,
     Designation,
     Document,
@@ -501,6 +503,119 @@ class DepartmentSerializer(serializers.ModelSerializer):
                 {'name': f'A department named "{name}" already exists.'}
             )
         return attrs
+
+
+# ─── Company ──────────────────────────────────────────────────────────────────
+
+_GSTIN_RE = re.compile(r'^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z1-9]Z[A-Z\d]$')
+_PAN_RE   = re.compile(r'^[A-Z]{5}\d{4}[A-Z]$')
+_CIN_RE   = re.compile(r'^[UL]\d{5}[A-Z]{2}\d{4}[A-Z]{3}\d{6}$')
+_TAN_RE   = re.compile(r'^[A-Z]{4}\d{5}[A-Z]$')
+_PIN_RE   = re.compile(r'^\d{6}$')
+_PHONE_RE = re.compile(r'^\+?[\d\s\-()\./]{7,20}$')
+
+
+class CompanySerializer(serializers.ModelSerializer):
+    logo_url = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model  = Company
+        fields = [
+            'id', 'company_name', 'trade_name', 'logo', 'logo_url',
+            'gstin', 'cin', 'pan', 'tan',
+            'address', 'city', 'state', 'pin_code',
+            'website', 'official_phone', 'updated_at',
+        ]
+        read_only_fields = ['id', 'updated_at', 'logo_url']
+        extra_kwargs     = {'logo': {'required': False, 'allow_null': True}}
+
+    def get_logo_url(self, obj: Company) -> str | None:
+        if not obj.logo:
+            return None
+        request = self.context.get('request')
+        return request.build_absolute_uri(obj.logo.url) if request else obj.logo.url
+
+    def validate_gstin(self, value: str) -> str:
+        v = value.strip().upper()
+        if not _GSTIN_RE.match(v):
+            raise serializers.ValidationError('Enter a valid 15-character GSTIN (e.g. 22AAAAA0000A1Z5).')
+        return v
+
+    def validate_cin(self, value: str) -> str:
+        v = value.strip().upper()
+        if not _CIN_RE.match(v):
+            raise serializers.ValidationError('Enter a valid CIN (e.g. U74999MH2020PTC123456).')
+        return v
+
+    def validate_pan(self, value: str) -> str:
+        v = value.strip().upper()
+        if not _PAN_RE.match(v):
+            raise serializers.ValidationError('Enter a valid 10-character PAN (e.g. AAAAA0000A).')
+        return v
+
+    def validate_tan(self, value: str) -> str:
+        v = value.strip().upper()
+        if not _TAN_RE.match(v):
+            raise serializers.ValidationError('Enter a valid 10-character TAN (e.g. PNEA12345B).')
+        return v
+
+    def validate_pin_code(self, value: str) -> str:
+        v = value.strip()
+        if not _PIN_RE.match(v):
+            raise serializers.ValidationError('PIN code must be exactly 6 digits.')
+        return v
+
+    def validate_website(self, value: str) -> str:
+        if not value:
+            return value
+        v = value.strip()
+        if v and not v.startswith(('http://', 'https://')):
+            raise serializers.ValidationError('Website must start with http:// or https://.')
+        return v
+
+    def validate_official_phone(self, value: str) -> str:
+        if not value:
+            return value
+        v = value.strip()
+        if v and not _PHONE_RE.match(v):
+            raise serializers.ValidationError('Enter a valid phone number.')
+        return v
+
+    def validate_logo(self, value):
+        if value is None:
+            return value
+        if hasattr(value, 'size') and value.size > 5 * 1024 * 1024:
+            raise serializers.ValidationError('Logo must be under 5 MB.')
+        allowed = {'image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'}
+        if hasattr(value, 'content_type') and value.content_type not in allowed:
+            raise serializers.ValidationError('Only JPEG, PNG, WebP, or SVG files are allowed.')
+        return value
+
+
+# ─── Audit Log ────────────────────────────────────────────────────────────────
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    actor_name  = serializers.SerializerMethodField()
+    actor_email = serializers.SerializerMethodField()
+    actor_role  = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = AuditLog
+        fields = [
+            'id', 'actor_name', 'actor_email', 'actor_role',
+            'action', 'module', 'object_id', 'ip_address', 'created_at',
+        ]
+
+    def get_actor_name(self, obj: AuditLog) -> str:
+        return obj.user.full_name if obj.user_id else 'System'
+
+    def get_actor_email(self, obj: AuditLog) -> str | None:
+        return obj.user.email if obj.user_id else None
+
+    def get_actor_role(self, obj: AuditLog) -> str | None:
+        if obj.user_id and obj.user.role_id:
+            return obj.user.role.display_name
+        return None
 
 
 # ─── Document Center ──────────────────────────────────────────────────────────

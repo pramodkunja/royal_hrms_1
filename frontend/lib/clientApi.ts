@@ -24,9 +24,16 @@ const clientApi = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// ── Request: attach access token ──────────────────────────────────────────────
+// ── Request: attach access token + fix FormData Content-Type ─────────────────
 clientApi.interceptors.request.use((config) => {
-  if (typeof window !== "undefined") {
+  // When the body is FormData, remove the default Content-Type so the browser
+  // can set multipart/form-data with the correct boundary automatically.
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
+  }
+
+  const isAuthUrl = AUTH_URLS.some(u => config.url?.endsWith(u));
+  if (!isAuthUrl && typeof window !== "undefined") {
     const token = localStorage.getItem(TOKEN_KEY);
     if (token) config.headers.Authorization = `Bearer ${token}`;
   }

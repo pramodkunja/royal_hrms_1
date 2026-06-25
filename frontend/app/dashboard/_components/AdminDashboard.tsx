@@ -29,12 +29,12 @@ export default function AdminDashboard({ session }: Props) {
         <div className="card-body">
           <div className="qa-grid">
             {[
-              { href: "/dashboard/employees",              icon: "ti-id-badge",         bg: "rgba(30,78,140,0.12)",  color: "var(--primary)", label: "Employees"         },
-              { href: "/dashboard/settings/permissions",   icon: "ti-shield-check",     bg: "rgba(27,138,107,0.12)", color: "var(--success)", label: "Roles & Perms"     },
-              { href: "/dashboard/attendance",             icon: "ti-clock",            bg: "rgba(14,124,134,0.12)", color: "var(--info)",    label: "Attendance"        },
-              { href: "/dashboard/payroll",                icon: "ti-report-money",     bg: "rgba(181,101,29,0.12)", color: "var(--warn)",    label: "Payroll"           },
-              { href: "/dashboard/branches",               icon: "ti-building-skyscraper", bg: "rgba(30,78,140,0.12)", color: "var(--primary)", label: "Branches"         },
-              { href: "/dashboard/settings",               icon: "ti-settings",         bg: "rgba(181,101,29,0.12)", color: "var(--warn)",    label: "Settings"          },
+              { href: "/dashboard/employees", icon: "ti-id-badge", bg: "rgba(30,78,140,0.12)", color: "var(--primary)", label: "Employees" },
+              { href: "/dashboard/settings/permissions", icon: "ti-shield-check", bg: "rgba(27,138,107,0.12)", color: "var(--success)", label: "Roles & Perms" },
+              { href: "/dashboard/attendance", icon: "ti-clock", bg: "rgba(14,124,134,0.12)", color: "var(--info)", label: "Attendance" },
+              { href: "/dashboard/payroll", icon: "ti-report-money", bg: "rgba(181,101,29,0.12)", color: "var(--warn)", label: "Payroll" },
+              { href: "/dashboard/branches", icon: "ti-building-skyscraper", bg: "rgba(30,78,140,0.12)", color: "var(--primary)", label: "Branches" },
+              { href: "/dashboard/settings", icon: "ti-settings", bg: "rgba(181,101,29,0.12)", color: "var(--warn)", label: "Settings" },
             ].map(a => (
               <a key={a.href} href={a.href} className="qa-tile">
                 <div className="qa-icon" style={{ background: a.bg, color: a.color }}>
@@ -58,12 +58,12 @@ export default function AdminDashboard({ session }: Props) {
             <div className="card-body">
               <div className="health-grid">
                 {[
-                  { name: "Recruitment",   status: "operational", meta: "156 events / day",   dot: ""      },
-                  { name: "Payroll",       status: "operational", meta: "Last run: Jun 30",   dot: ""      },
-                  { name: "Attendance",    status: "operational", meta: "186 punches today",  dot: ""      },
-                  { name: "Leave Mgmt",    status: "warn",        meta: "2 pending approvals", dot: "warn" },
-                  { name: "Documents",     status: "operational", meta: "All synced",          dot: ""      },
-                  { name: "Email",         status: "warn",        meta: "SMTP test needed",    dot: "warn" },
+                  { name: "Recruitment", status: "operational", meta: "156 events / day", dot: "" },
+                  { name: "Payroll", status: "operational", meta: "Last run: Jun 30", dot: "" },
+                  { name: "Attendance", status: "operational", meta: "186 punches today", dot: "" },
+                  { name: "Leave Mgmt", status: "warn", meta: "2 pending approvals", dot: "warn" },
+                  { name: "Documents", status: "operational", meta: "All synced", dot: "" },
+                  { name: "Email", status: "warn", meta: "SMTP test needed", dot: "warn" },
                 ].map(m => (
                   <div key={m.name} className="health-item">
                     <div className="health-row">
@@ -90,10 +90,10 @@ export default function AdminDashboard({ session }: Props) {
                 </div>
               </div>
               <div style={{ flex: 1, minWidth: 140 }}>
-                {[["Engineering","43","var(--primary)"],["HR","28","var(--success)"],["Finance","25","var(--info)"],["Sales","20","var(--warn)"],["IT","26","var(--secondary)"]].map(([d,c,col]) => (
-                  <div key={d} style={{ display:"flex",alignItems:"center",gap:8,padding:"4px 0",fontSize:12 }}>
-                    <span style={{ width:10,height:10,borderRadius:2,background:col,flexShrink:0 }} />
-                    <span style={{ flex:1 }}>{d}</span>
+                {[["Engineering", "43", "var(--primary)"], ["HR", "28", "var(--success)"], ["Finance", "25", "var(--info)"], ["Sales", "20", "var(--warn)"], ["IT", "26", "var(--secondary)"]].map(([d, c, col]) => (
+                  <div key={d} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", fontSize: 12 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 2, background: col, flexShrink: 0 }} />
+                    <span style={{ flex: 1 }}>{d}</span>
                     <strong>{c}</strong>
                   </div>
                 ))}
@@ -139,18 +139,18 @@ export default function AdminDashboard({ session }: Props) {
             </div>
             <div style={{ padding: 0 }}>
               {[
-                { initials: "HA", name: "HR Admin",     role: "hr_admin",      time: "2 min ago"  },
-                { initials: "SA", name: "System Admin", role: "system_admin",  time: "Now"        },
-                { initials: "AM", name: "Arjun Mehta",  role: "manager",       time: "5 min ago"  },
-                { initials: "PS", name: "Priya Sharma", role: "employee",      time: "12 min ago" },
+                { initials: "HA", name: "HR Admin", role: "hr_admin", time: "2 min ago" },
+                { initials: "SA", name: "System Admin", role: "system_admin", time: "Now" },
+                { initials: "AM", name: "Arjun Mehta", role: "manager", time: "5 min ago" },
+                { initials: "PS", name: "Priya Sharma", role: "employee", time: "12 min ago" },
               ].map(u => (
-                <div key={u.name} style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 20px",borderBottom:"1px solid var(--bg-high)" }}>
-                  <div style={{ width:32,height:32,borderRadius:"50%",background:"var(--primary)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:600,flexShrink:0 }}>{u.initials}</div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:13,fontWeight:500 }}>{u.name}</div>
-                    <code style={{ fontSize:10,color:"var(--on-variant)" }}>{u.role}</code>
+                <div key={u.name} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 20px", borderBottom: "1px solid var(--bg-high)" }}>
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--primary)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, flexShrink: 0 }}>{u.initials}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{u.name}</div>
+                    <code style={{ fontSize: 10, color: "var(--on-variant)" }}>{u.role}</code>
                   </div>
-                  <span style={{ fontSize:11,color:"var(--outline)" }}>{u.time}</span>
+                  <span style={{ fontSize: 11, color: "var(--outline)" }}>{u.time}</span>
                 </div>
               ))}
             </div>

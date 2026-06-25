@@ -28,10 +28,12 @@ const CATS = [
 type CatId = "all" | "company" | "modules" | "comm" | "system";
 
 const ITEM_ROUTES: Record<string, string> = {
+  company:           "/dashboard/settings/company",
   permissions:       "/dashboard/settings/permissions",
   departments:       "/dashboard/settings/departments",
   smtp:              "/dashboard/settings/smtp",
   "email-templates": "/dashboard/settings/email-templates",
+  audit:             "/dashboard/settings/audit",
 };
 
 export default function SettingsPage() {

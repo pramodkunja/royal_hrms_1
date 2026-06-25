@@ -274,3 +274,379 @@ Full static announcements page (all styling pure Tailwind, no CSS modules). Colo
 const isActive = pathname === item.path ||
   (item.path !== "/dashboard" && pathname.startsWith(item.path + "/"));
 ```
+
+---
+
+## Session 3 — Rithwika (25 June 2026)
+
+### 1. JWT Login Fix (`lib/clientApi.ts`)
+
+**Problem:** After login, a stale Bearer token was being attached to the `/login/` request itself. Django's `JWTAuthentication` then rejected it with `token_not_valid` even though the view uses `AllowAny`.
+
+**Fix:** Added `AUTH_URLS` list to the Axios request interceptor. The interceptor now skips attaching the `Authorization` header when the request URL ends with any auth endpoint.
+
+```ts
+const AUTH_URLS = ["/login/", "/token/refresh/", "/forgot-password/", "/verify-otp/", "/reset-password/"];
+
+clientApi.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    const isAuthUrl = AUTH_URLS.some(u => config.url?.endsWith(u));
+    if (!isAuthUrl) {
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (token) config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
+  return config;
+});
+```
+
+> **Note:** Only `lib/clientApi.ts` was modified. The Django backend was not touched.
+
+---
+
+### 2. Mobile Responsiveness — Full Application (Hybrid CSS approach)
+
+All responsive changes use a hybrid model: **global CSS classes in `app/globals.css`** for layout-level rules, and **Tailwind responsive prefixes** (`md:`, `sm:`, `lg:`) for component-level overrides.
+
+#### 2a. Login Page (`app/login/page.tsx`)
+- Two-column layout (`grid`) converted to `flex flex-col md:grid` — stacks vertically on mobile
+- Left decorative panel: `hidden md:flex` — hidden on mobile (full screen for the login form)
+- Right panel padding: `px-6 py-8 md:px-10 md:py-12`
+
+#### 2b. Dashboard Shell (`components/dashboard/DashboardShell.tsx`)
+- **Sidebar** converted to a fixed overlay drawer on mobile using CSS `transform: translateX(-100%)` / `translateX(0)`:
+  - `fixed left-0 top-0 w-[220px]` always; `md:relative md:translate-x-0` reverts to normal flow on desktop
+  - `mobileOpen` state toggles `translate-x-0` vs `-translate-x-full`
+  - Semi-transparent backdrop (`fixed inset-0 bg-black/40 md:hidden`) closes drawer on tap
+- **Hamburger button:** `md:hidden` — visible only on mobile
+- **Search bar:** `hidden md:flex` — hidden on mobile header
+- **Header + content padding:** `px-3 md:px-6`, `p-4 md:p-6`
+
+#### 2c. Announcements Page
+- Stats grid, filter tabs (horizontal scroll on mobile), post cards — responsive via Tailwind grid utilities
+
+#### 2d. Branches Page
+- Card grid responsive via Tailwind responsive prefixes
+
+---
+
+### 3. Settings Pages — Mobile Responsiveness + Button Order
+
+All settings sub-pages made mobile-responsive. **Button order rule enforced across all pages: Back button always first, Add button second.**
+
+#### 3a. Departments & Designations (`app/dashboard/settings/departments/page.tsx`)
+- **Stats bar:** `grid grid-cols-1 sm:grid-cols-3` with shared background and `gap: 1` separator trick
+- **Two-panel layout:** `flex flex-col md:grid` with `gridTemplateColumns: "320px 1fr"`
+- **Mobile panel navigation pattern:**
+  - List panel: `className={selected ? "hidden md:block" : "block"}` — hides when detail is open
+  - No-selection placeholder: `hidden md:flex` — never shown on mobile (list takes its place)
+  - Detail panel: `block md:block` — shown when selected
+  - Mobile-only "← Back to Departments" button inside detail panel (`md:hidden`)
+- **Hero header actions** (`dept-hero-row` / `dept-hero-actions` CSS classes):
+  - On mobile → `flex-direction: column`; Edit + Add Designation buttons stretch to full width
+- **Designations grid:** `repeat(auto-fill, minmax(min(210px, 100%), 1fr))`
+- **Back button added** to page header (was missing)
+
+#### 3b. Roles & Permissions (`app/dashboard/settings/permissions/page.tsx`)
+- Button order was already correct (Back → Add Role) ✓
+- Tables already wrapped in `.table-wrap` with `overflow-x: auto` ✓
+
+#### 3c. Email Templates (`app/dashboard/settings/email-templates/page.tsx`)
+- Button order fixed: Back (ghost) → Add Template (filled)
+- Cards grid: `grid grid-cols-1 sm:grid-cols-2` (was fixed 2-col inline style)
+- **`EditTemplateModal.tsx`** — editor + tags sidebar layout:
+  - Was: `gridTemplateColumns: "1fr 200px"` (gave editor only ~160px on iPhone SE)
+  - Now: `.email-editor-grid` CSS class — switches to `flex flex-col` on mobile
+  - Editor panel gets `.email-editor-left` class; Tags sidebar gets `.email-tags-sidebar` class (max 130px, scrollable on mobile)
+
+#### 3d. SMTP Settings (`app/dashboard/settings/smtp/page.tsx`)
+- Button order fixed: Back (ghost) → Add SMTP (filled)
+- Cards grid: `grid grid-cols-1 lg:grid-cols-2`
+- **`SmtpModal.tsx`** — form fields grid:
+  - Was: `style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}` (2-col always, unoverrideable)
+  - Now: `.smtp-form-grid` CSS class — collapses to single column on `≤768px`
+
+---
+
+### 4. CSS Classes Added to `app/globals.css`
+
+| Class | Purpose |
+|-------|---------|
+| `.smtp-form-grid` | 2-col form grid (SMTP modal) → 1-col on mobile |
+| `.email-editor-grid` | Side-by-side editor+tags → stacked column on mobile |
+| `.email-editor-left` | Editor left panel — removes right border on mobile |
+| `.email-tags-sidebar` | Tags right panel — max 130px scrollable on mobile |
+| `.dept-hero-row` | Departments hero header row → column on mobile |
+| `.dept-hero-actions` | Action buttons in hero → full-width stretch on mobile |
+
+Responsive breakpoint for all new layout classes: `max-width: 768px` (inside existing `@media` block).
+
+---
+
+### Key Files Changed (25 June 2026)
+
+| File | Change |
+|------|--------|
+| `lib/clientApi.ts` | Skip Bearer token for auth URLs in request interceptor |
+| `app/login/page.tsx` | Mobile responsive — left panel hidden, form stacks vertically |
+| `components/dashboard/DashboardShell.tsx` | Mobile sidebar overlay drawer, hamburger toggle, responsive padding |
+| `app/globals.css` | New CSS classes + responsive overrides for modal grids and dept hero |
+| `app/dashboard/settings/departments/page.tsx` | Two-panel mobile nav, hero action fix, Back button added, responsive grids |
+| `app/dashboard/settings/permissions/page.tsx` | No changes needed (already correct) |
+| `app/dashboard/settings/email-templates/page.tsx` | Button order fixed, cards grid responsive |
+| `app/dashboard/settings/email-templates/_components/EditTemplateModal.tsx` | Editor+tags layout responsive (`email-editor-grid`) |
+| `app/dashboard/settings/smtp/page.tsx` | Button order fixed, cards grid responsive |
+| `app/dashboard/settings/smtp/_components/SmtpModal.tsx` | Form grid responsive (`smtp-form-grid`) |
+
+---
+
+## Surya — Backend + Settings Modules (24–25 June 2026)
+
+### What I Built
+
+#### 1. Company Information Module (full stack)
+
+**Backend** (`backend/apps/accounts/`)
+- `models.py` — Added `Company` model (singleton, `db_table = 'hrms_company'`): `company_name`, `trade_name`, `logo` (ImageField), `gstin`, `cin`, `pan`, `tan`, `address`, `city`, `state`, `pin_code`, `website`, `official_phone`, `updated_at`, `updated_by` FK
+- `migrations/0013_add_company.py` — new migration; depends on `0012_add_department_designation`
+- `serializers.py` — `CompanySerializer` with `logo_url` (absolute URL via `request.build_absolute_uri`), regex validators for GSTIN/CIN/PAN/TAN/PIN/phone
+- `views.py` — `CompanyRetrieveUpdateView`: GET returns existing record or `{}`, PUT for hr_admin/system_admin, handles logo upload/replace/remove with `remove_logo=true` flag, `transaction.atomic()`, audit log on save
+- `urls.py` — `path('settings/company/', CompanyRetrieveUpdateView.as_view(), name='company')`
+- `requirements.txt` — added `Pillow==10.4.0` (required for ImageField)
+- `config/urls.py` — added `static(MEDIA_URL, document_root=MEDIA_ROOT)` for DEBUG media serving
+
+**Frontend** (`frontend/app/dashboard/settings/company/page.tsx`)
+- 4-section form: Branding (logo preview 80×80 + upload/change/remove + company_name + trade_name), Legal & Statutory (GSTIN/CIN/PAN/TAN 2-col grid), Registered Address (textarea + 3-col: city/state-select/pin_code), Contact (website/phone 2-col)
+- State dropdown: 28 states + 8 UTs hardcoded
+- Client-side validation mirrors backend regex
+- Logo upload uses FormData with `headers: { 'Content-Type': undefined }` (lets browser set multipart boundary — do not set it manually on axios)
+- Logo removal sends `remove_logo=true` in FormData (can't send `null` via FormData reliably)
+
+#### 2. Audit Log Module (full stack)
+
+**Backend** — `AuditLog` model already existed. Added logging coverage to all admin write operations:
+
+| Module | Actions logged |
+|--------|---------------|
+| `accounts` | departments (create/update/delete), designations (create/update/delete) |
+| `branch` | branches (create/update/delete) |
+| `company` | company info (updated) |
+
+- `apps/accounts/views.py` — added `AuditLog.objects.create()` to Department + Designation views
+- `apps/branch/views.py` — added `from apps.accounts.models import AuditLog`, local `_get_ip(request)` helper, audit create calls in BranchListCreateView + BranchDetailView
+- `serializers.py` — `AuditLogSerializer` with `actor_name`, `actor_email`, `actor_role` as SerializerMethodFields
+- `views.py` — `AuditLogListView`: GET only, `CanManageRoles`, filters by module/action/search (icontains on name+email)/date_from/date_to, Django `Paginator` 25/page (max 100), returns `{ count, page, page_size, total_pages, results }`
+- `urls.py` — `path('settings/audit/', AuditLogListView.as_view(), name='audit-log-list')`
+
+**Frontend** (`frontend/app/dashboard/settings/audit/page.tsx`)
+- Filters: Module dropdown, date-range pickers (default last 30 days → today), actor search (submit on Enter or button)
+- Table: Timestamp (date + time stacked), Actor (name + email + role badge), Module chip, Action badge, IP in `<code>`
+- Action badge colors: `badge-success` (_created), `badge-error` (_deleted), `badge-warn` (_updated), `badge-info` (login/_activated), `badge-neutral` (logout), `badge-primary` (password*)
+- Module chip colors: `badge-primary` (accounts), `badge-warn` (settings), `badge-info` (company), `badge-success` (branch)
+- Pagination: Prev/Next + numbered pills (±2 from current page)
+- Auto-fetch on module/date change; search only fires on submit
+
+#### 3. Settings Page Routing Update
+
+`frontend/app/dashboard/settings/page.tsx` — added to `ITEM_ROUTES`:
+```ts
+company: "/dashboard/settings/company",
+audit:   "/dashboard/settings/audit",
+```
+
+#### 4. CORS + ALLOWED_HOSTS (backend only)
+
+`backend/config/settings.py`:
+```python
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
+CORS_ALLOW_ALL_ORIGINS = True   # NOT CORS_ALLOWED_ORIGINS = ['*'] — that breaks django-cors-headers
+```
+`backend/.env` — changed `ALLOWED_HOSTS` to `*`, removed the stale `CORS_ALLOWED_ORIGINS= "*"` line.
+
+---
+
+### API Endpoints Added
+
+| Method | Endpoint | Used for |
+|--------|----------|----------|
+| `GET` | `/api/settings/company/` | Load company record (returns `{}` if none yet) |
+| `PUT` | `/api/settings/company/` | Save/update company info (multipart/form-data for logo) |
+| `GET` | `/api/settings/audit/` | Paginated audit log — params: `module`, `action`, `search`, `date_from`, `date_to`, `page`, `page_size` |
+
+---
+
+### Key Files Changed / Created
+
+| File | What |
+|------|------|
+| `backend/apps/accounts/models.py` | Added `Company` model |
+| `backend/apps/accounts/migrations/0013_add_company.py` | New migration |
+| `backend/apps/accounts/serializers.py` | Added `CompanySerializer`, `AuditLogSerializer` |
+| `backend/apps/accounts/views.py` | Added audit logging to dept/designation views, `CompanyRetrieveUpdateView`, `AuditLogListView` |
+| `backend/apps/accounts/urls.py` | Added company + audit routes |
+| `backend/apps/branch/views.py` | Added `AuditLog` import + audit logging to all branch write views |
+| `backend/config/urls.py` | Added media file serving for DEBUG |
+| `backend/config/settings.py` | `CORS_ALLOW_ALL_ORIGINS = True`, `ALLOWED_HOSTS = env.list(...)` |
+| `backend/requirements.txt` | Added `Pillow==10.4.0` |
+| `frontend/app/dashboard/settings/company/page.tsx` | New — Company Info settings page |
+| `frontend/app/dashboard/settings/audit/page.tsx` | New — Audit Log viewer |
+| `frontend/app/dashboard/settings/page.tsx` | Updated — added company + audit routes |
+
+---
+
+### Notes for Next Developer
+
+- **Company is a singleton** — one record ever. Views use `Company.objects.first()`, never `Company.objects.get(id=...)`. Never create a second record.
+- **Logo field needs Pillow** — `pip install Pillow==10.4.0`. Without it Django throws `fields.E210` and won't start.
+- **Logo FormData upload** — use `headers: { 'Content-Type': undefined }` in the axios request config (not `'multipart/form-data'`). Setting it manually breaks the multipart boundary.
+- **Logo removal** — send `remove_logo=true` as a FormData string field. View handles deletion via `instance.logo.delete(save=False)` then `instance.save(update_fields=['logo'])`.
+- **CORS pattern** — use `CORS_ALLOW_ALL_ORIGINS = True` in settings.py. Never set `CORS_ALLOWED_ORIGINS = ['*']` — the wildcard string is rejected by django-cors-headers at startup.
+- **Audit workflow** — every new module that has admin write operations should get `AuditLog.objects.create()` calls. Notify Surya when a new backend module is added and audit coverage will be dropped in.
+- **Cross-app AuditLog import in branch** — `from apps.accounts.models import AuditLog` in `apps/branch/views.py` is safe (no circular dependency — accounts doesn't import branch).
+
+---
+
+## Session 3 — Safura Samreen (25 June 2026)
+
+**Branch:** `Frontend/Email-Document`
+**Commits:** `8999189` · `e7bdcac` · `b4835df`
+
+---
+
+### 7. Email Templates — Bug Fixes & Enhancements
+
+#### Bug fixes
+
+**Attachments payload was empty (`attachments: {}` or `[{}, {}]`)**
+- Root cause: Axios 1.x has an instance-level `Content-Type: application/json` header that prevents it from auto-detecting `FormData`, so it serialised files to empty objects instead.
+- Fix 1 — `lib/clientApi.ts`: added request interceptor that deletes `Content-Type` when `config.data instanceof FormData`, letting the browser set `multipart/form-data` with the correct boundary.
+- Fix 2 — `page.tsx`: removed the `buildPayload()` helper that branched between JSON and FormData. Both `handleCreate` and `handleUpdate` now always build `FormData` inline.
+
+**`available_variables` sent as a nested JSON string**
+- The list API returns it as `string | string[]` inconsistently.
+- Fix: `parseAvailableVars(val)` added to `_data.ts` — handles both formats. Sent to backend as `JSON.stringify(array)` inside FormData.
+
+**Existing attachments not shown when opening the edit modal**
+- Cause: the list endpoint omits `attachments` for performance.
+- Fix: `EditTemplateModal` fetches `GET /api/settings/email-templates/{id}/` on mount and sets `existingAttachments` state. Existing chips use solid blue border + paperclip icon; new pending files use dashed border + upload icon.
+- Removed attachments are tracked in `removedAttachmentIds[]` and `DELETE`d via `Promise.allSettled` in `handleSave` before calling `onSave`.
+
+**`display_name` required error when creating a category**
+- Was only sending `{ name: slug }`. Fix: now sends `{ name: toSlug(displayName), display_name: displayName }`.
+
+**Chevron arrow rendered outside the category input box**
+- The inner wrapper div was missing `width: "100%"`. Added to both the wrapper `div` and the `input`.
+
+#### New features
+
+**Inline category creation in the combobox**
+- When the typed text doesn't match any existing category, a "+ Create new category" option appears at the bottom of the dropdown.
+- On click: `handleCreateCategory` POSTs `{ name, display_name }` to `EMAIL_TEMPLATE_CATEGORIES`, appends the new item to `categories[]`, and selects it.
+- `catCreating` boolean shows a spinner during the POST.
+- `onMouseDown → e.preventDefault()` on all dropdown options prevents blur before click registers.
+
+**Full responsive layout**
+
+*`page.tsx` (card list):*
+- Card grid: 1 col (< 560 px) → 2 col (560–1099 px) → 3 col (≥ 1100 px)
+- Toast: `left: 8px; right: 8px` on mobile (≤ 480 px)
+- Search bar: full-width on mobile
+
+*`EditTemplateModal.tsx` (editor modal):*
+- **Mobile (≤ 640 px):** modal goes full-screen (`100vw × 100dvh`, `border-radius: 0`); a 3-tab bar appears — **Editor / Preview / Variables** — only the active column is visible.
+- **Tablet (641–1023 px):** editor + sidebar (200 px); preview column hidden.
+- **Desktop (≥ 1024 px):** original 3-column grid `1fr 1fr 180px` unchanged.
+- CSS classes `et-modal-wrap`, `et-modal-grid`, `et-col-editor`, `et-col-preview`, `et-col-sidebar`, `et-tab-bar`, `et-tab-active` drive all breakpoint logic via `!important` overrides.
+
+#### Files changed
+| File | What |
+|---|---|
+| `lib/clientApi.ts` | Request interceptor: delete `Content-Type` when body is `FormData` |
+| `settings/email-templates/_data.ts` | Added `ApiAttachment`, `emailTemplateAttachmentDetail()`, `parseAvailableVars()` |
+| `settings/email-templates/page.tsx` | Always FormData; responsive CSS; 3-col grid |
+| `settings/email-templates/_components/EditTemplateModal.tsx` | Existing attachments, inline category creation, chevron fix, mobile tabs, responsive CSS |
+
+---
+
+### 8. Document Center — New Page (`app/dashboard/documents/`)
+
+Full page at route `/dashboard/documents` wired to the real backend API.
+
+#### File structure
+```
+documents/
+  _data.ts                  ← API endpoints, types, file-type meta, validation helpers
+  page.tsx                  ← main page (stats, list, upload, delete, preview logic)
+  _components/
+    DocPreviewBody.tsx      ← in-app document renderer (PDF, images, DOCX, XLSX, TXT/CSV)
+```
+
+#### API endpoints used
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/api/documents/stats/` | Live counts: total, by category |
+| `GET` | `/api/documents/` | List — query params: `category`, `search` |
+| `POST` | `/api/documents/` | Upload (`multipart/form-data`) |
+| `DELETE` | `/api/documents/{id}/` | Soft delete |
+
+#### Features
+- **Stats row** — 4 live-count cards (Total Documents, Policies, Forms, Templates)
+- **Filter tabs + debounced search** — pill tabs + search, both as server-side query params. Search debounced 400 ms.
+- **Document grid** — `.doc-grid` / `.doc-tile` / `.doc-icon` CSS classes. Responsive: `auto-fill minmax(220px, 1fr)`.
+- **Detail modal** — file preview banner, metadata rows, Delete · Close · Preview · Download.
+- **Upload modal** — drag-and-drop zone, auto-fills name from filename, category select, description.
+- **In-app preview** — PDF via blob URL → iframe; JPG/PNG → img; TXT/CSV → pre; DOCX → `docx-preview`; XLSX → SheetJS; PPT → download prompt.
+
+#### Key bug fixes during build
+- **PDF preview 401** — MinIO uses bucket-level ACL not JWT. Removed `Authorization` header from media fetches.
+- **PDF downloading instead of previewing** — MinIO sets `Content-Disposition: attachment`. Fix: fetch as ArrayBuffer → Blob → `URL.createObjectURL()`.
+- **File picker not showing PDFs on Windows** — `accept` now includes both MIME types and extensions.
+
+#### New packages installed
+| Package | Version | Purpose |
+|---|---|---|
+| `docx-preview` | `^0.3.7` | Client-side DOCX → HTML rendering |
+| `xlsx` | `^0.18.5` | Client-side XLSX/XLS → HTML table rendering |
+
+---
+
+## Key Notes for Next Developer (Safura Session 3)
+
+- **MinIO media files** — never send the Django JWT token to `file_url` (MinIO endpoint). Use plain `fetch(url)` without `Authorization` header.
+- **Axios 1.x FormData bug** — the clientApi interceptor in `lib/clientApi.ts` now deletes `Content-Type` when body is `FormData`. This must stay or file uploads will break silently.
+- **`available_variables`** — backend returns it as either `string[]` or a JSON-stringified string. Always use `parseAvailableVars()` from `_data.ts` when reading this field.
+- **Email template list API** — omits `attachments` per template. Always fetch the detail endpoint `/settings/email-templates/{id}/` when you need attachments.
+
+---
+
+## Session 4 — Nithin Sandala (25 June 2026)
+
+**Branch:** `Frontend/employee`
+**Commit:** `05a101d`
+
+### Employee Management Module
+
+Developed full employee management screens wired to the backend API.
+
+#### Files Created
+
+| File | Purpose |
+|------|---------|
+| `app/dashboard/employees/page.tsx` | Employee list page — table with search/filter, status badges |
+| `app/dashboard/employees/new/page.tsx` | Add Employee full-page wizard |
+| `app/dashboard/employees/[id]/page.tsx` | Employee profile detail page |
+| `app/dashboard/employees/_data.ts` | API endpoints, types, field definitions |
+| `app/dashboard/employees/_components/AddEmployeeModal.tsx` | Modal variant of add-employee form |
+| `app/dashboard/employees/_components/AddEmployeeWizard.tsx` | Multi-step wizard for employee creation |
+| `app/dashboard/employees/_components/Avatar.tsx` | Avatar initials component |
+| `app/dashboard/employees/_components/FormField.tsx` | Reusable labelled input/select/textarea |
+| `app/dashboard/employees/_components/StatusBadge.tsx` | Active/inactive badge |
+| `app/dashboard/employees/[id]/_components/ProfileForm.tsx` | Editable profile form |
+| `app/dashboard/employees/[id]/_components/ProfileHeader.tsx` | Profile page header with avatar + meta |
+| `app/dashboard/employees/[id]/_components/ProfileSidebar.tsx` | Sidebar quick-info panel |
+| `app/dashboard/employees/[id]/_components/ProfileTabBar.tsx` | Tab navigation (Personal/Work/Documents) |
+
+#### DashboardShell additions (`components/dashboard/DashboardShell.tsx`)
+
+- Added `"/dashboard/employees/new": "Add New Employee"` to `PAGE_TITLES`
+- Dynamic fallback: `pathname.startsWith("/dashboard/employees/")` → `"Employee Profile"`

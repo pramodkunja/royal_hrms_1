@@ -4,11 +4,13 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 
+from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.db.models import Count, F, Q
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -18,6 +20,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import (
     AuditLog,
+    Company,
     Department,
     Designation,
     Document,
@@ -32,7 +35,9 @@ from apps.accounts.models import (
     User,
 )
 from apps.accounts.serializers import (
+    AuditLogSerializer,
     ChangePasswordSerializer,
+    CompanySerializer,
     DepartmentSerializer,
     DesignationSerializer,
     DocumentSerializer,
@@ -108,8 +113,9 @@ class CanManageRoles(BasePermission):
 # ─── Authentication ────────────────────────────────────────────────────────────
 
 class LoginView(APIView):
-    permission_classes  = [AllowAny]
-    throttle_classes    = [LoginRateThrottle]
+    permission_classes      = [AllowAny]
+    authentication_classes  = []
+    throttle_classes        = [LoginRateThrottle]
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -671,6 +677,11 @@ class DepartmentListCreateView(APIView):
                 f"Department '{serializer.validated_data['name']}' already exists.",
                 http_status=status.HTTP_409_CONFLICT,
             )
+        AuditLog.objects.create(
+            user=request.user, action='dept_created', module='accounts',
+            object_id=str(dept.pk), changes={'name': dept.name},
+            ip_address=get_client_ip(request),
+        )
         return success(
             'Department created successfully.',
             data=DepartmentSerializer(dept).data,
@@ -707,6 +718,11 @@ class DepartmentDetailView(APIView):
                 f"Department '{serializer.validated_data.get('name', '')}' already exists.",
                 http_status=status.HTTP_409_CONFLICT,
             )
+        AuditLog.objects.create(
+            user=request.user, action='dept_updated', module='accounts',
+            object_id=str(updated.pk), changes={'name': updated.name},
+            ip_address=get_client_ip(request),
+        )
         return success('Department updated successfully.', data=DepartmentSerializer(updated).data)
 
     def patch(self, request, pk: int):
@@ -723,6 +739,11 @@ class DepartmentDetailView(APIView):
                 f"Department '{serializer.validated_data.get('name', '')}' already exists.",
                 http_status=status.HTTP_409_CONFLICT,
             )
+        AuditLog.objects.create(
+            user=request.user, action='dept_updated', module='accounts',
+            object_id=str(updated.pk), changes={'name': updated.name},
+            ip_address=get_client_ip(request),
+        )
         return success('Department updated successfully.', data=DepartmentSerializer(updated).data)
 
     def delete(self, request, pk: int):
@@ -743,6 +764,11 @@ class DepartmentDetailView(APIView):
                 f'Cannot delete department "{name}" — it is referenced by other records.',
                 http_status=status.HTTP_409_CONFLICT,
             )
+        AuditLog.objects.create(
+            user=request.user, action='dept_deleted', module='accounts',
+            object_id=str(dept.pk), changes={'name': name},
+            ip_address=get_client_ip(request),
+        )
         return success(f'Department "{name}" deleted successfully.')
 
 
@@ -775,6 +801,12 @@ class DesignationListCreateView(APIView):
                 f"Designation '{serializer.validated_data['name']}' already exists in this department.",
                 http_status=status.HTTP_409_CONFLICT,
             )
+        AuditLog.objects.create(
+            user=request.user, action='designation_created', module='accounts',
+            object_id=str(desig.pk),
+            changes={'name': desig.name, 'department': desig.department.name},
+            ip_address=get_client_ip(request),
+        )
         return success(
             'Designation created successfully.',
             data=DesignationSerializer(desig).data,
@@ -811,6 +843,12 @@ class DesignationDetailView(APIView):
                 f"Designation '{serializer.validated_data.get('name', '')}' already exists in this department.",
                 http_status=status.HTTP_409_CONFLICT,
             )
+        AuditLog.objects.create(
+            user=request.user, action='designation_updated', module='accounts',
+            object_id=str(updated.pk),
+            changes={'name': updated.name, 'department': updated.department.name},
+            ip_address=get_client_ip(request),
+        )
         return success('Designation updated successfully.', data=DesignationSerializer(updated).data)
 
     def patch(self, request, pk: int):
@@ -827,6 +865,12 @@ class DesignationDetailView(APIView):
                 f"Designation '{serializer.validated_data.get('name', '')}' already exists in this department.",
                 http_status=status.HTTP_409_CONFLICT,
             )
+        AuditLog.objects.create(
+            user=request.user, action='designation_updated', module='accounts',
+            object_id=str(updated.pk),
+            changes={'name': updated.name, 'department': updated.department.name},
+            ip_address=get_client_ip(request),
+        )
         return success('Designation updated successfully.', data=DesignationSerializer(updated).data)
 
     def delete(self, request, pk: int):
@@ -849,6 +893,12 @@ class DesignationDetailView(APIView):
                 f'Cannot delete designation "{name}" — it is referenced by other records.',
                 http_status=status.HTTP_409_CONFLICT,
             )
+        AuditLog.objects.create(
+            user=request.user, action='designation_deleted', module='accounts',
+            object_id=str(desig.pk),
+            changes={'name': name, 'department': desig.department.name},
+            ip_address=get_client_ip(request),
+        )
         return success(f'Designation "{name}" deleted successfully.')
 
 
@@ -1398,7 +1448,7 @@ class EmailTemplatePreviewView(APIView):
         if not serializer.is_valid():
             return error(_first_error(serializer.errors), data=serializer.errors)
 
-        context                      = serializer.validated_data.get('context', {})
+        context                         = serializer.validated_data.get('context', {})
         rendered_subject, rendered_body = tpl.render(context)
 
         # Update the template with the rendered content
@@ -1651,4 +1701,111 @@ class DocumentStatsView(APIView):
                 cat: by_category.get(cat, 0)
                 for cat, _ in Document.CATEGORY_CHOICES
             },
+        })
+
+
+# ─── Company ──────────────────────────────────────────────────────────────────
+
+class CompanyRetrieveUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes     = [MultiPartParser, FormParser, JSONParser]
+
+    def get(self, request):
+        company = Company.objects.first()
+        if not company:
+            return success('No company info found.', data={})
+        serializer = CompanySerializer(company, context={'request': request})
+        return success('Company info retrieved.', data=serializer.data)
+
+    def put(self, request):
+        if not (request.user.role and request.user.role.name in ('hr_admin', 'system_admin')):
+            return error(
+                'You do not have permission to update company info.',
+                http_status=status.HTTP_403_FORBIDDEN,
+            )
+
+        company = Company.objects.first()
+        is_new  = company is None
+
+        with transaction.atomic():
+            serializer = CompanySerializer(
+                company,
+                data=request.data,
+                partial=not is_new,
+                context={'request': request},
+            )
+            if not serializer.is_valid():
+                return error(_first_error(serializer.errors), data=serializer.errors)
+
+            # Replace old logo file when a new one is uploaded
+            if not is_new and 'logo' in request.FILES and company.logo:
+                company.logo.delete(save=False)
+
+            instance = serializer.save(updated_by=request.user)
+
+            # Handle explicit logo removal
+            remove_logo = str(request.data.get('remove_logo', '')).lower() == 'true'
+            if remove_logo and instance.logo:
+                instance.logo.delete(save=False)
+                instance.logo = None
+                instance.save(update_fields=['logo'])
+
+        AuditLog.objects.create(
+            user=request.user,
+            action='create' if is_new else 'update',
+            module='company',
+            object_id=str(instance.pk),
+            ip_address=get_client_ip(request),
+        )
+        logger.info('Company info %s by %s', 'created' if is_new else 'updated', request.user.email)
+        return success(
+            'Company info saved successfully.',
+            data=CompanySerializer(instance, context={'request': request}).data,
+        )
+
+
+# ─── Audit Log ────────────────────────────────────────────────────────────────
+
+class AuditLogListView(APIView):
+    permission_classes = [IsAuthenticated, CanManageRoles]
+
+    def get(self, request):
+        qs = AuditLog.objects.select_related('user', 'user__role').order_by('-created_at')
+
+        module    = request.query_params.get('module', '').strip()
+        action    = request.query_params.get('action', '').strip()
+        search    = request.query_params.get('search', '').strip()
+        date_from = request.query_params.get('date_from', '').strip()
+        date_to   = request.query_params.get('date_to', '').strip()
+
+        if module:
+            qs = qs.filter(module=module)
+        if action:
+            qs = qs.filter(action__icontains=action)
+        if search:
+            qs = qs.filter(
+                Q(user__full_name__icontains=search) |
+                Q(user__email__icontains=search)
+            )
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
+
+        try:
+            page_size = min(int(request.query_params.get('page_size', 25)), 100)
+            page_num  = max(int(request.query_params.get('page', 1)), 1)
+        except (ValueError, TypeError):
+            page_size, page_num = 25, 1
+
+        paginator   = Paginator(qs, page_size)
+        page_obj    = paginator.get_page(page_num)
+        serializer  = AuditLogSerializer(page_obj.object_list, many=True)
+
+        return success('Audit logs retrieved.', data={
+            'count':       paginator.count,
+            'page':        page_num,
+            'page_size':   page_size,
+            'total_pages': paginator.num_pages,
+            'results':     serializer.data,
         })

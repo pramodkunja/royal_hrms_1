@@ -55,15 +55,14 @@ export default function EmailTemplatesPage() {
     setSaving(true);
     try {
       const fd = new FormData();
-      fd.append("name",         form.name);
-      fd.append("display_name", form.display_name);
-      fd.append("subject",      form.subject);
-      fd.append("body",         form.body);
+      fd.append("name",                form.name);
+      fd.append("display_name",        form.display_name);
+      fd.append("template_type",       form.template_type);
+      fd.append("subject",             form.subject);
+      fd.append("body",                form.body);
+      fd.append("available_variables", JSON.stringify(form.available_variables));
       form.attachments.forEach(f => fd.append("attachments", f, f.name));
-
-      const res = await clientApi.post(EMAIL_TEMPLATES_BASE, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const res = await clientApi.post(EMAIL_TEMPLATES_BASE, fd);
       const created: ApiEmailTemplate = res.data.data ?? res.data;
       setTemplates(prev => [...prev, created]);
       setEditing(null);
@@ -82,23 +81,12 @@ export default function EmailTemplatesPage() {
     const target = editing as ApiEmailTemplate;
     setSaving(true);
     try {
-      const hasFiles = form.attachments.length > 0;
-      let res;
-      if (hasFiles) {
-        const fd = new FormData();
-        fd.append("subject", form.subject);
-        fd.append("body",    form.body);
-        form.attachments.forEach(f => fd.append("attachments", f, f.name));
-        res = await clientApi.put(emailTemplateDetail(target.id), fd, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-      } else {
-        res = await clientApi.put(emailTemplateDetail(target.id), {
-          subject: form.subject,
-          body:    form.body,
-        });
-      }
-      void res;
+      const fd = new FormData();
+      fd.append("subject",             form.subject);
+      fd.append("body",                form.body);
+      fd.append("available_variables", JSON.stringify(form.available_variables));
+      form.attachments.forEach(f => fd.append("attachments", f, f.name));
+      await clientApi.patch(emailTemplateDetail(target.id), fd);
       setTemplates(prev => prev.map(t => t.id === target.id ? { ...t, subject: form.subject, body: form.body } : t));
       setEditing(null);
       showToast("Email template updated");
@@ -106,6 +94,20 @@ export default function EmailTemplatesPage() {
       showToast((err as { message?: string }).message ?? "Failed to update template", false);
     } finally {
       setSaving(false);
+    }
+  }
+
+  // ── Toggle active ──────────────────────────────────────────────────────────
+
+  async function handleToggleActive(template: ApiEmailTemplate) {
+    const next = !template.is_active;
+    setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, is_active: next } : t));
+    try {
+      await clientApi.patch(emailTemplateDetail(template.id), { is_active: next });
+      showToast(`Template ${next ? "activated" : "deactivated"}`);
+    } catch (err: unknown) {
+      setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, is_active: !next } : t));
+      showToast((err as { message?: string }).message ?? "Failed to update template", false);
     }
   }
 
@@ -146,7 +148,7 @@ export default function EmailTemplatesPage() {
     <>
       {/* Toast */}
       {toast && (
-        <div style={{ position: "fixed", top: 20, right: 24, zIndex: 9999, display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", background: toast.ok ? "var(--success-c)" : "var(--error-c)", border: `1px solid ${toast.ok ? "var(--success)" : "var(--error)"}`, borderRadius: "var(--radius)", boxShadow: "var(--shadow-md)", fontSize: 13, color: toast.ok ? "var(--success)" : "var(--error)", animation: "slideIn 0.2s ease" }}>
+        <div className="et-toast" style={{ position: "fixed", top: 16, right: 20, zIndex: 9999, display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", background: toast.ok ? "var(--success-c)" : "var(--error-c)", border: `1px solid ${toast.ok ? "var(--success)" : "var(--error)"}`, borderRadius: "var(--radius)", boxShadow: "var(--shadow-md)", fontSize: 13, color: toast.ok ? "var(--success)" : "var(--error)", animation: "slideIn 0.2s ease" }}>
           <i className={`ti ${toast.ok ? "ti-circle-check" : "ti-alert-circle"}`} style={{ fontSize: 16 }} />
           {toast.msg}
         </div>
@@ -170,7 +172,7 @@ export default function EmailTemplatesPage() {
 
       {/* Search */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ position: "relative", maxWidth: 360 }}>
+        <div className="et-search-wrap" style={{ position: "relative" }}>
           <i className="ti ti-search" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 15, color: "var(--outline)", pointerEvents: "none" }} />
           <input className="field-input" placeholder="Search templates…" value={search}
             onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 36 }} suppressHydrationWarning />
@@ -222,9 +224,9 @@ export default function EmailTemplatesPage() {
                 </div>
 
                 {/* Cards grid */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div className="et-cards-grid" style={{ display: "grid", gap: 10 }}>
                   {group.map(template => (
-                    <div key={template.id} style={{
+                    <div key={template.id} className="et-card" style={{
                       background: "#fff", border: "1px solid var(--outline-v)",
                       borderRadius: "var(--radius)", padding: "14px 16px",
                       display: "flex", alignItems: "flex-start", gap: 12,
@@ -233,7 +235,7 @@ export default function EmailTemplatesPage() {
                       <div style={{ width: 36, height: 36, borderRadius: 8, background: `${meta.color}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
                         <i className={`ti ${meta.icon}`} style={{ fontSize: 15, color: meta.color }} />
                       </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="et-card-body" style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: "var(--on-bg)", marginBottom: 2, cursor: "pointer" }}
                           onClick={() => setEditing(template)}>
                           {template.display_name}
@@ -245,12 +247,30 @@ export default function EmailTemplatesPage() {
                           {template.subject}
                         </div>
                       </div>
-                      <div style={{ display: "flex", gap: 3, flexShrink: 0, marginTop: 2 }}>
+                      <div className="et-card-actions" style={{ display: "flex", gap: 3, flexShrink: 0, marginTop: 2, alignItems: "center" }}>
                         <button className="btn btn-ghost btn-sm" title="Preview" onClick={() => openPreview(template)} style={{ padding: "4px 7px" }} suppressHydrationWarning>
                           <i className="ti ti-eye" style={{ fontSize: 14 }} />
                         </button>
                         <button className="btn btn-ghost btn-sm" title="Edit" onClick={() => setEditing(template)} style={{ padding: "4px 7px" }} suppressHydrationWarning>
                           <i className="ti ti-pencil" style={{ fontSize: 14 }} />
+                        </button>
+                        {/* Active toggle */}
+                        <button
+                          title={template.is_active ? "Deactivate" : "Activate"}
+                          onClick={() => handleToggleActive(template)}
+                          suppressHydrationWarning
+                          style={{
+                            width: 34, height: 20, borderRadius: 10, border: "none", cursor: "pointer",
+                            background: template.is_active ? "var(--primary)" : "var(--outline-v)",
+                            position: "relative", flexShrink: 0, transition: "background 0.2s",
+                            marginLeft: 2,
+                          }}
+                        >
+                          <span style={{
+                            position: "absolute", top: 3, left: template.is_active ? 17 : 3,
+                            width: 14, height: 14, borderRadius: "50%", background: "#fff",
+                            transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                          }} />
                         </button>
                       </div>
                     </div>
@@ -308,6 +328,27 @@ export default function EmailTemplatesPage() {
       <style>{`
         @keyframes spin    { to { transform: rotate(360deg); } }
         @keyframes slideIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+
+        /* Cards grid: 1 col → 2 col → 3 col */
+        .et-cards-grid { grid-template-columns: 1fr; }
+        @media (min-width: 560px)  { .et-cards-grid { grid-template-columns: 1fr 1fr; } }
+        @media (min-width: 1100px) { .et-cards-grid { grid-template-columns: 1fr 1fr 1fr; } }
+
+        /* Search: full-width mobile, capped on larger screens */
+        .et-search-wrap { max-width: 100%; }
+        @media (min-width: 560px) { .et-search-wrap { max-width: 360px; } }
+
+        /* Card: tighter padding + stack body/actions on very small screens */
+        @media (max-width: 400px) {
+          .et-card { padding: 10px 12px !important; gap: 8px !important; flex-wrap: wrap; }
+          .et-card-body { min-width: 0; width: 100%; }
+          .et-card-actions { margin-top: 0 !important; margin-left: auto; }
+        }
+
+        /* Toast: full-width on mobile */
+        @media (max-width: 480px) {
+          .et-toast { left: 8px !important; right: 8px !important; top: 8px !important; width: auto !important; }
+        }
       `}</style>
     </>
   );

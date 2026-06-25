@@ -1,5 +1,7 @@
 from django.urls import path
 from apps.accounts.views import (
+    AuditLogListView,
+    CompanyRetrieveUpdateView,
     DepartmentDetailView,
     DepartmentListCreateView,
     DesignationDetailView,
@@ -52,6 +54,12 @@ urlpatterns = [
     # Permissions
     path('permissions/',         PermissionListView.as_view(),   name='permission-list'),
     path('permissions/<int:pk>/', PermissionDetailView.as_view(), name='permission-detail'),
+
+    # Company (singleton)
+    path('settings/company/', CompanyRetrieveUpdateView.as_view(), name='company'),
+
+    # Audit Log (read-only)
+    path('settings/audit/', AuditLogListView.as_view(), name='audit-log-list'),
 
     # SMTP Settings — unlimited named configs, one active at a time
     path('settings/smtp/',                    SMTPSettingsListCreateView.as_view(), name='smtp-list'),
