@@ -7,11 +7,19 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.models import AuditLog
 from apps.branch.models import Branch, City, State
 from apps.branch.serializers import BranchSerializer, CitySerializer, StateSerializer
 from apps.branch.utils import generate_branch_code
 
 logger = logging.getLogger('branch')
+
+
+def _get_ip(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        return x_forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR') or '0.0.0.0'
 
 
 def _has_perm(user, codename):
@@ -111,6 +119,12 @@ class BranchListCreateView(APIView):
                 data=serializer.errors,
             )
         branch = serializer.save()
+        AuditLog.objects.create(
+            user=request.user, action='branch_created', module='branch',
+            object_id=str(branch.pk),
+            changes={'branch_code': branch.branch_code, 'branch_name': branch.branch_name},
+            ip_address=_get_ip(request),
+        )
         logger.info('Branch "%s" created by %s', branch.branch_code, request.user.email)
         return success(
             'Branch created successfully.',
@@ -149,6 +163,12 @@ class BranchDetailView(APIView):
                 data=serializer.errors,
             )
         updated = serializer.save()
+        AuditLog.objects.create(
+            user=request.user, action='branch_updated', module='branch',
+            object_id=str(updated.pk),
+            changes={'branch_code': updated.branch_code, 'branch_name': updated.branch_name},
+            ip_address=_get_ip(request),
+        )
         logger.info('Branch "%s" updated by %s', updated.branch_code, request.user.email)
         return success('Branch updated successfully.', data=BranchSerializer(updated).data)
 
@@ -165,6 +185,12 @@ class BranchDetailView(APIView):
                 data=serializer.errors,
             )
         updated = serializer.save()
+        AuditLog.objects.create(
+            user=request.user, action='branch_updated', module='branch',
+            object_id=str(updated.pk),
+            changes={'branch_code': updated.branch_code, 'branch_name': updated.branch_name},
+            ip_address=_get_ip(request),
+        )
         logger.info('Branch "%s" patched by %s', updated.branch_code, request.user.email)
         return success('Branch updated successfully.', data=BranchSerializer(updated).data)
 
@@ -175,6 +201,12 @@ class BranchDetailView(APIView):
         if not branch:
             return error('Branch not found.', http_status=status.HTTP_404_NOT_FOUND)
         code = branch.branch_code
+        AuditLog.objects.create(
+            user=request.user, action='branch_deleted', module='branch',
+            object_id=str(branch.pk),
+            changes={'branch_code': code, 'branch_name': branch.branch_name},
+            ip_address=_get_ip(request),
+        )
         branch.delete()
         logger.info('Branch "%s" deleted by %s', code, request.user.email)
         return success(f'Branch "{code}" deleted successfully.')

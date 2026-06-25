@@ -33,6 +33,7 @@ const ITEM_ROUTES: Record<string, string> = {
   departments:       "/dashboard/settings/departments",
   smtp:              "/dashboard/settings/smtp",
   "email-templates": "/dashboard/settings/email-templates",
+  audit:             "/dashboard/settings/audit",
 };
 
 export default function SettingsPage() {

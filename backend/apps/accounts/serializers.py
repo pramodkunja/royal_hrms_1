@@ -16,6 +16,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from apps.accounts.models import (
+    AuditLog,
     Company,
     Department,
     Designation,
@@ -514,3 +515,29 @@ class CompanySerializer(serializers.ModelSerializer):
         if hasattr(value, 'content_type') and value.content_type not in allowed:
             raise serializers.ValidationError('Only JPEG, PNG, WebP, or SVG files are allowed.')
         return value
+
+
+# ─── Audit Log ────────────────────────────────────────────────────────────────
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    actor_name  = serializers.SerializerMethodField()
+    actor_email = serializers.SerializerMethodField()
+    actor_role  = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = AuditLog
+        fields = [
+            'id', 'actor_name', 'actor_email', 'actor_role',
+            'action', 'module', 'object_id', 'ip_address', 'created_at',
+        ]
+
+    def get_actor_name(self, obj: AuditLog) -> str:
+        return obj.user.full_name if obj.user_id else 'System'
+
+    def get_actor_email(self, obj: AuditLog) -> str | None:
+        return obj.user.email if obj.user_id else None
+
+    def get_actor_role(self, obj: AuditLog) -> str | None:
+        if obj.user_id and obj.user.role_id:
+            return obj.user.role.display_name
+        return None
