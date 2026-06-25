@@ -1,7 +1,8 @@
 import logging
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Sum
+from django.db.models.deletion import ProtectedError
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -33,6 +34,15 @@ def error(message, data=None, http_status=status.HTTP_400_BAD_REQUEST):
         {'status': 'error', 'message': message, 'data': data if data is not None else {}},
         status=http_status,
     )
+
+
+def _first_error(serializer_errors: dict) -> str:
+    for field_errors in serializer_errors.values():
+        if isinstance(field_errors, list) and field_errors:
+            return str(field_errors[0])
+        if isinstance(field_errors, str):
+            return field_errors
+    return 'Validation error.'
 
 
 _PERM_DENIED = 'You do not have permission to perform this action.'
@@ -73,6 +83,10 @@ class BranchPreviewCodeView(APIView):
         if not city_id:
             return error('city_id query parameter is required.')
         try:
+            city_id = int(city_id)
+        except (TypeError, ValueError):
+            return error('city_id must be a valid integer.')
+        try:
             city = City.objects.select_related('state').get(pk=city_id, is_active=True)
         except City.DoesNotExist:
             return error('City not found.', http_status=status.HTTP_404_NOT_FOUND)
@@ -94,11 +108,20 @@ class BranchListCreateView(APIView):
             return error(_PERM_DENIED, http_status=status.HTTP_403_FORBIDDEN)
         qs = Branch.objects.select_related('state', 'city').all()
         if status_filter := request.query_params.get('status'):
+            allowed_statuses = {Branch.STATUS_ACTIVE, Branch.STATUS_INACTIVE}
+            if status_filter not in allowed_statuses:
+                return error(f'status must be one of: {", ".join(sorted(allowed_statuses))}.')
             qs = qs.filter(status=status_filter)
         if state_id := request.query_params.get('state'):
-            qs = qs.filter(state_id=state_id)
+            try:
+                qs = qs.filter(state_id=int(state_id))
+            except (TypeError, ValueError):
+                return error('state filter must be a valid integer ID.')
         if city_id := request.query_params.get('city'):
-            qs = qs.filter(city_id=city_id)
+            try:
+                qs = qs.filter(city_id=int(city_id))
+            except (TypeError, ValueError):
+                return error('city filter must be a valid integer ID.')
         return success('Branches retrieved successfully.', data=BranchSerializer(qs, many=True).data)
 
     def post(self, request):
@@ -106,11 +129,14 @@ class BranchListCreateView(APIView):
             return error(_PERM_DENIED, http_status=status.HTTP_403_FORBIDDEN)
         serializer = BranchSerializer(data=request.data)
         if not serializer.is_valid():
+            return error(_first_error(serializer.errors), data=serializer.errors)
+        try:
+            branch = serializer.save()
+        except IntegrityError:
             return error(
-                list(serializer.errors.values())[0][0],
-                data=serializer.errors,
+                'A branch with this code already exists.',
+                http_status=status.HTTP_409_CONFLICT,
             )
-        branch = serializer.save()
         logger.info('Branch "%s" created by %s', branch.branch_code, request.user.email)
         return success(
             'Branch created successfully.',
@@ -144,11 +170,14 @@ class BranchDetailView(APIView):
             return error('Branch not found.', http_status=status.HTTP_404_NOT_FOUND)
         serializer = BranchSerializer(branch, data=request.data)
         if not serializer.is_valid():
+            return error(_first_error(serializer.errors), data=serializer.errors)
+        try:
+            updated = serializer.save()
+        except IntegrityError:
             return error(
-                list(serializer.errors.values())[0][0],
-                data=serializer.errors,
+                'A branch with this name or code already exists.',
+                http_status=status.HTTP_409_CONFLICT,
             )
-        updated = serializer.save()
         logger.info('Branch "%s" updated by %s', updated.branch_code, request.user.email)
         return success('Branch updated successfully.', data=BranchSerializer(updated).data)
 
@@ -160,11 +189,14 @@ class BranchDetailView(APIView):
             return error('Branch not found.', http_status=status.HTTP_404_NOT_FOUND)
         serializer = BranchSerializer(branch, data=request.data, partial=True)
         if not serializer.is_valid():
+            return error(_first_error(serializer.errors), data=serializer.errors)
+        try:
+            updated = serializer.save()
+        except IntegrityError:
             return error(
-                list(serializer.errors.values())[0][0],
-                data=serializer.errors,
+                'A branch with this name or code already exists.',
+                http_status=status.HTTP_409_CONFLICT,
             )
-        updated = serializer.save()
         logger.info('Branch "%s" patched by %s', updated.branch_code, request.user.email)
         return success('Branch updated successfully.', data=BranchSerializer(updated).data)
 
@@ -175,7 +207,14 @@ class BranchDetailView(APIView):
         if not branch:
             return error('Branch not found.', http_status=status.HTTP_404_NOT_FOUND)
         code = branch.branch_code
-        branch.delete()
+        try:
+            branch.delete()
+        except ProtectedError:
+            return error(
+                f'Cannot delete branch "{code}" — it is referenced by employee records. '
+                'Reassign or remove them first.',
+                http_status=status.HTTP_409_CONFLICT,
+            )
         logger.info('Branch "%s" deleted by %s', code, request.user.email)
         return success(f'Branch "{code}" deleted successfully.')
 

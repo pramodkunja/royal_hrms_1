@@ -15,6 +15,7 @@ Backend API for the Royal Staffing HRMS system. Built with Django REST Framework
 | Auth | JWT via `djangorestframework-simplejwt` 5.3 |
 | Database | PostgreSQL (Neon cloud) |
 | ORM | Django ORM |
+| File Storage | **Cloudinary** (`django-cloudinary-storage` 0.3.0) — all `FileField` uploads go here |
 | Email | Gmail SMTP (App Password) |
 | Environment | `django-environ` (.env file) |
 
@@ -31,18 +32,26 @@ HRMS/
     │   ├── exceptions.py        # Global JSON error handler
     │   └── wsgi.py
     ├── apps/
-    │   ├── accounts/            # Auth + roles + permissions app
-    │   │   ├── models.py        # User, Role, Permission, RolePermission, AuditLog, OTP models
-    │   │   ├── views.py         # Auth + role + permission API views
+    │   ├── accounts/            # Auth + roles + permissions + document center app
+    │   │   ├── models.py        # User, Role, Permission, RolePermission, AuditLog, OTP, Document models
+    │   │   ├── views.py         # Auth + role + permission + document API views
     │   │   ├── serializers.py   # Request/response validation
     │   │   ├── urls.py          # Endpoint routes
     │   │   ├── tokens.py        # Custom JWT with role + permissions
     │   │   ├── utils.py         # OTP generator + email sender
     │   │   ├── admin.py         # Django admin registrations
+    │   │   ├── throttles.py     # Custom DRF throttle classes
+    │   │   ├── management/
+    │   │   │   └── commands/
+    │   │   │       └── migrate_files_to_cloudinary.py  # One-time migration: local → Cloudinary
     │   │   └── migrations/
     │   │       ├── 0001_initial.py
     │   │       ├── 0002_seed_roles_permissions.py   # Seeds 4 roles + 46 permissions
-    │   │       └── 0003_seed_demo_users.py          # Seeds 4 demo users
+    │   │       ├── 0003_seed_demo_users.py          # Seeds 4 demo users
+    │   │       ├── 0013_email_template_attachments.py
+    │   │       ├── 0014_add_performance_indexes.py
+    │   │       ├── 0015_email_template_categories.py
+    │   │       └── 0016_document_center.py          # Creates hrms_documents table
     │   └── branch/              # Branch management app (added 2026-06-24)
     │       ├── models.py        # State, City, Branch models
     │       ├── views.py         # Branch CRUD + stats + distribution views
@@ -82,6 +91,7 @@ HRMS/
 | `branch_states` | Indian states and union territories master |
 | `branch_cities` | Cities per state (cascading dropdown source) |
 | `branch_branches` | Company branches with auto-generated branch codes |
+| `hrms_documents` | Document Center — files stored on Cloudinary (added 2026-06-25) |
 
 ---
 
@@ -127,6 +137,11 @@ EMAIL_USE_TLS=True
 EMAIL_HOST_USER=<gmail>
 EMAIL_HOST_PASSWORD=<app-password>
 DEFAULT_FROM_EMAIL=Royal Staffing HRMS <email>
+
+# Cloudinary — all FileField uploads (documents, email attachments)
+CLOUDINARY_CLOUD_NAME=<cloud-name>
+CLOUDINARY_API_KEY=<api-key>
+CLOUDINARY_API_SECRET=<api-secret>
 
 CORS_ALLOWED_ORIGINS=http://localhost:3000
 ```
@@ -274,6 +289,29 @@ No need to call a separate permissions endpoint after login.
 | GET | `/api/branch/branches/stats/` | `branches.view` | Dashboard counts (employees, branches, cities) |
 | GET | `/api/branch/branches/distribution/` | `branches.view` | Employee count per branch (bar chart data) |
 
+### Document Center (hr_admin / system_admin only for write; all authenticated users can read)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/documents/` | List active documents. Filters: `?category=`, `?branch=`, `?file_type=`, `?search=` |
+| POST | `/api/documents/` | Upload document (`multipart/form-data`) — requires `hr_admin` or `system_admin` |
+| GET | `/api/documents/stats/` | Document counts by category (`total` + `by_category`) |
+| GET | `/api/documents/{id}/` | Get single document |
+| PATCH | `/api/documents/{id}/` | Update metadata or replace file — requires `hr_admin` or `system_admin` |
+| DELETE | `/api/documents/{id}/` | Soft-delete (sets `is_active=False`) — requires `hr_admin` or `system_admin` |
+
+#### Document Upload fields (`multipart/form-data`)
+
+| Field | Required | Notes |
+|---|---|---|
+| `file` | Yes | PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, JPG, PNG, TXT, CSV — max 25 MB |
+| `title` | Yes | Max 200 chars, must be unique (case-insensitive) |
+| `category` | Yes | `policy` / `form` / `template` / `other` |
+| `description` | No | Max 1,000 chars |
+| `branch` | No | Branch FK (integer ID) |
+
+> `file_name`, `file_type`, `file_size`, `is_active` are all set server-side — never send them from the client.
+
 ---
 
 ## Branch Module Details (added 2026-06-24 — SwethaD)
@@ -377,6 +415,14 @@ On validation errors, `data` contains field-level detail:
   - [x] 4 branch permissions seeded and assigned to `system_admin` + `hr_admin`
   - [x] Permission-codename-based access guard on all branch endpoints
 
+  - [x] **Document Center** — 2026-06-25
+    - [x] `Document` model with `hrms_documents` table, soft-delete, `is_active`, category choices
+    - [x] All file uploads stored on **Cloudinary** via `RawMediaCloudinaryStorage`
+    - [x] Document CRUD: list (with category/branch/file_type/search filters), upload, detail, update, soft-delete
+    - [x] Stats endpoint: total + per-category counts
+    - [x] Full validation: unique title, zero-size/missing-name file guard, path traversal sanitization, branch existence check
+    - [x] `migrate_files_to_cloudinary` management command for migrating any legacy local files
+
 ### Planned (next modules)
 - [ ] Employee management (profiles, departments)
 - [ ] Attendance module
@@ -384,9 +430,94 @@ On validation errors, `data` contains field-level detail:
 - [ ] Payroll
 - [ ] Recruitment
 - [ ] Expenses
-- [ ] Documents
 - [ ] Announcements
 - [ ] Notifications
+
+---
+
+## Session Log
+
+### 2026-06-25 — Document Center + Cloudinary Integration
+
+**Who:** Durga Prasad
+
+#### 1. Document Center (`apps/accounts/`) — full feature
+
+New model `Document` (`hrms_documents` table, migration `0016_document_center.py`):
+- Fields: `title`, `description`, `category` (policy/form/template/other), `file` (FileField), `file_name`, `file_type`, `file_size`, `branch` FK, `uploaded_by` FK, `is_active` (soft-delete), timestamps
+- Indexes on `category`, `branch`, `uploaded_at`
+
+New views appended to `apps/accounts/views.py`:
+- `_can_manage_docs(user)` — permission helper (hr_admin + system_admin only)
+- `DocumentListCreateView` — GET list with filters, POST multipart upload
+- `DocumentDetailView` — GET detail, PATCH metadata/file replace, DELETE soft-delete
+- `DocumentStatsView` — single GROUP BY query, returns total + per-category counts
+
+New URLs in `apps/accounts/urls.py`:
+```
+GET/POST  /api/documents/
+GET       /api/documents/stats/
+GET/PATCH/DELETE  /api/documents/{id}/
+```
+
+New serializer `DocumentSerializer` in `apps/accounts/serializers.py`:
+- `file_url` — SerializerMethodField returning absolute URL (Cloudinary-aware)
+- `file_size_display` — human-readable (B / KB / MB)
+- `branch_name` — SerializerMethodField (returns `null` for no branch, not string `"None"`)
+- `is_active` in `read_only_fields` — client can never set it to False
+
+#### 2. Bug fix — document disappeared after upload
+
+Root cause: `is_active` was writable in the serializer. Multipart form data sent `is_active=false` → DRF saved `False` → list filtered it out (`filter(is_active=True)`).
+
+Fix:
+- Added `'is_active'` to `read_only_fields`
+- Added `is_active=True` to `serializer.save()` call in POST as a hard override
+- Replaced `branch_name = CharField(source='branch.branch_name')` (returned string `"None"`) with `SerializerMethodField`
+
+#### 3. Cloudinary integration — all file storage
+
+Installed: `cloudinary==1.44.2`, `django-cloudinary-storage==0.3.0`
+
+`config/settings.py` changes:
+- Added `'cloudinary_storage'` (before `staticfiles`) and `'cloudinary'` to `INSTALLED_APPS`
+- Added `CLOUDINARY_STORAGE` dict reading from env vars
+- Set `DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.RawMediaCloudinaryStorage'`
+
+Effect: every `FileField` on every model (documents, email attachments) now uploads to Cloudinary automatically. URLs returned by the API are `https://res.cloudinary.com/...` absolute links. `DELETE_CLOUDINARY_MEDIA: True` auto-removes files when model instances are deleted.
+
+`apps/accounts/serializers.py` — both `get_file_url` and `get_url` (EmailTemplateAttachment) updated to detect already-absolute Cloudinary URLs and skip `build_absolute_uri` wrapping.
+
+Management command: `python manage.py migrate_files_to_cloudinary`
+- Finds all Document and EmailTemplateAttachment records with local file paths
+- Uploads each to Cloudinary via Django's storage API
+- Deletes local copy after successful upload
+- `--dry-run` flag for safe preview
+- Handles legacy `media/` path prefix bug in old records
+
+#### 4. Document Center — complete validations & error handling
+
+**Serializer (`DocumentSerializer`)**:
+
+| Validator | What it checks |
+|---|---|
+| `validate_file` | Empty file (`size == 0`), missing filename, unsupported MIME (shows rejected type), >25 MB, path-traversal sanitization via `os.path.basename()` |
+| `validate_title` | Blank, >200 chars, **case-insensitive uniqueness** among active docs (update-safe — excludes current instance on PATCH) |
+| `validate_description` | `.strip()` before length check, >1,000 chars |
+| `validate_category` | Explicit choice validation with "Choose from: …" message |
+| `validate` (cross-field) | Branch FK existence check |
+
+**Views**:
+
+| Endpoint | Added guard |
+|---|---|
+| GET `?search=` | Max 100 chars |
+| GET `?branch=` | Must be positive integer |
+| GET `?file_type=` | New filter — validated against `MIME_TO_TYPE` values |
+| GET `?search=` | Now searches `description` field too (was title-only) |
+| POST | Explicit `'file' not in request.data` check; `serializer.save()` wrapped; AuditLog isolated |
+| PATCH | Empty body rejected; `serializer.save()` wrapped; `old_file.delete()` wrapped — Cloudinary failure is logged but never crashes the response; AuditLog isolated |
+| DELETE | `doc.save()` wrapped; AuditLog isolated |
 
 ---
 

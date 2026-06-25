@@ -33,12 +33,27 @@ class BranchSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['branch_code', 'created_at', 'updated_at']
 
+    def validate_branch_name(self, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Branch name must not be blank.')
+        if len(value) > 200:
+            raise serializers.ValidationError('Branch name must be under 200 characters.')
+        return value
+
+    def validate_employees_count(self, value: int) -> int:
+        if value < 0:
+            raise serializers.ValidationError('Employee count cannot be negative.')
+        if value > 100000:
+            raise serializers.ValidationError('Employee count cannot exceed 100,000.')
+        return value
+
     def validate(self, data):
-        city = data.get('city') or (self.instance.city if self.instance else None)
+        city  = data.get('city')  or (self.instance.city  if self.instance else None)
         state = data.get('state') or (self.instance.state if self.instance else None)
         if city and state and city.state_id != state.pk:
             raise serializers.ValidationError(
-                'Selected city does not belong to the selected state.'
+                {'city': 'Selected city does not belong to the selected state.'}
             )
         return data
 

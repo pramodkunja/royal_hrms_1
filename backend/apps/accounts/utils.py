@@ -146,11 +146,13 @@ def send_template_email(
     template_name: str,
     context: dict,
 ) -> None:
-    
+
     from apps.accounts.models import EmailTemplate  # avoid circular import
 
     try:
-        tpl = EmailTemplate.objects.get(name=template_name, is_active=True)
+        tpl = EmailTemplate.objects.prefetch_related('attachments').get(
+            name=template_name, is_active=True
+        )
     except EmailTemplate.DoesNotExist:
         logger.warning(
             'Email template "%s" not found or inactive — skipping send to %s.',
@@ -169,6 +171,11 @@ def send_template_email(
         to=[recipient_email],
         connection=connection,
     )
+
+    for att in tpl.attachments.all():
+        with att.file.open('rb') as f:
+            msg.attach(att.filename, f.read(), att.mime_type)
+
     msg.send(fail_silently=False)
     logger.info(
         'Template email "%s" sent to %s.', template_name, recipient_email

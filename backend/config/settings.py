@@ -17,7 +17,9 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'cloudinary_storage',          # must come before staticfiles
     'django.contrib.staticfiles',
+    'cloudinary',
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
@@ -87,9 +89,18 @@ MEDIA_URL  = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# ─── Cloudinary (all FileField / ImageField uploads) ─────────────────────────
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME':             env('CLOUDINARY_CLOUD_NAME'),
+    'API_KEY':                env('CLOUDINARY_API_KEY'),
+    'API_SECRET':             env('CLOUDINARY_API_SECRET'),
+    'SECURE':                 True,   # always serve over HTTPS
+    'DELETE_CLOUDINARY_MEDIA': True,  # delete from Cloudinary when model instance is deleted
+}
+# RawMediaCloudinaryStorage handles PDFs, DOCs, XLS, images — every file type
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.RawMediaCloudinaryStorage'
+
 # ─── Cache ───────────────────────────────────────────────────────────────────
-# Dev: in-memory cache (no Redis needed, resets on server restart)
-# Prod: set REDIS_URL in .env to switch to Redis automatically
 _REDIS_URL = env('REDIS_URL', default='')
 
 if _REDIS_URL:
@@ -120,6 +131,17 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon':            '300/hour',
+        'user':            '3000/hour',
+        'login':           '10/hour',
+        'forgot_password': '5/hour',
+        'otp_verify':      '10/hour',
+    },
     'EXCEPTION_HANDLER': 'config.exceptions.custom_exception_handler',
 }
 
@@ -146,7 +168,25 @@ OTP_MAX_ATTEMPTS = 5
 LOGIN_MAX_ATTEMPTS = 5
 LOGIN_LOCKOUT_MINUTES = 30
 
-CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=['http://localhost:3000'])
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_PREFLIGHT_MAX_AGE = 86400
+
+# ─── Upload limits ────────────────────────────────────────────────────────────
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024   # 5 MB JSON body
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB files
+
+# ─── Security (production only) ───────────────────────────────────────────────
+if not DEBUG:
+    SECURE_SSL_REDIRECT             = True
+    SECURE_HSTS_SECONDS             = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS  = True
+    SECURE_HSTS_PRELOAD             = True
+    SESSION_COOKIE_SECURE           = True
+    CSRF_COOKIE_SECURE              = True
+    SECURE_BROWSER_XSS_FILTER       = True
+    SECURE_CONTENT_TYPE_NOSNIFF     = True
+    X_FRAME_OPTIONS                 = 'DENY'
+
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
 LOGS_DIR = BASE_DIR / 'logs'

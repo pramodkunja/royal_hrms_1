@@ -1,14 +1,7 @@
-"""
-Serializers for the accounts app.
 
-Validation philosophy:
-  - Field-level validators catch format errors (regex, length, type).
-  - object-level validate() catches cross-field and business-rule errors.
-  - Views are responsible for uniqueness checks that involve a DB query AND
-    must handle IntegrityError as the authoritative uniqueness guard.
-"""
 from __future__ import annotations
 
+import os
 import re
 
 from django.contrib.auth.password_validation import validate_password
@@ -18,7 +11,10 @@ from rest_framework import serializers
 from apps.accounts.models import (
     Department,
     Designation,
+    Document,
     EmailTemplate,
+    EmailTemplateAttachment,
+    EmailTemplateCategory,
     Permission,
     Role,
     RolePermission,
@@ -57,14 +53,13 @@ class RoleSerializer(serializers.ModelSerializer):
         )
 
     def get_permissions(self, obj: Role) -> list[str]:
-        return list(
-            obj.role_permissions
-               .select_related('permission')
-               .values_list('permission__codename', flat=True)
-        )
+        # Uses prefetch_related('role_permissions__permission') cache — no extra query.
+        return [rp.permission.codename for rp in obj.role_permissions.all()]
 
     def get_user_count(self, obj: Role) -> int:
-        # If prefetch_related('users') was used, this hits no extra query.
+        # Uses annotated active_user_count when available — no extra query.
+        if hasattr(obj, 'active_user_count'):
+            return obj.active_user_count
         return obj.users.filter(is_active=True).count()
 
     def validate_name(self, value: str) -> str:
@@ -276,13 +271,57 @@ class SMTPTestSerializer(serializers.Serializer):
             raise serializers.ValidationError('Host must not be blank.')
         return value.strip()
 
+    def validate_sender_name(self, value: str) -> str:
+        if '\r' in value or '\n' in value:
+            raise serializers.ValidationError('Sender name must not contain line breaks.')
+        return value
+
 
 # ─── Email Templates ──────────────────────────────────────────────────────────
 
+class EmailTemplateCategorySerializer(serializers.ModelSerializer):
+    template_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = EmailTemplateCategory
+        fields = ('id', 'name', 'display_name', 'is_builtin', 'order', 'template_count')
+        read_only_fields = ('id', 'is_builtin', 'template_count')
+
+    def get_template_count(self, obj: EmailTemplateCategory) -> int:
+        counts = self.context.get('template_counts')
+        if counts is not None:
+            return counts.get(obj.name, 0)
+        return EmailTemplate.objects.filter(template_type=obj.name).count()
+
+    def validate_name(self, value: str) -> str:
+        if not _NAME_RE.match(value):
+            raise serializers.ValidationError(
+                'Name must start with a letter and contain only lowercase letters, '
+                'digits, and underscores (e.g. birthday_wishes).'
+            )
+        return value
+
+
+class EmailTemplateAttachmentSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = EmailTemplateAttachment
+        fields = ('id', 'filename', 'mime_type', 'size', 'url', 'uploaded_at')
+        read_only_fields = ('id', 'filename', 'mime_type', 'size', 'url', 'uploaded_at')
+
+    def get_url(self, obj):
+        url = obj.file.url
+        # Cloudinary URLs are already absolute; build_absolute_uri is a no-op for them
+        request = self.context.get('request')
+        if request and not url.startswith(('http://', 'https://')):
+            return request.build_absolute_uri(url)
+        return url
+
+
 class EmailTemplateSerializer(serializers.ModelSerializer):
-    template_type_display = serializers.CharField(
-        source='get_template_type_display', read_only=True
-    )
+    template_type_display = serializers.SerializerMethodField()
+    attachments           = EmailTemplateAttachmentSerializer(many=True, read_only=True)
 
     class Meta:
         model  = EmailTemplate
@@ -292,8 +331,26 @@ class EmailTemplateSerializer(serializers.ModelSerializer):
             'subject', 'body',
             'is_active', 'is_builtin',
             'available_variables', 'updated_at',
+            'attachments',
         )
         read_only_fields = ('id', 'is_builtin', 'updated_at', 'template_type_display')
+
+    def get_template_type_display(self, obj: EmailTemplate) -> str:
+        category_map = self.context.get('category_map')
+        if category_map is not None:
+            return category_map.get(obj.template_type, obj.template_type)
+        try:
+            return EmailTemplateCategory.objects.get(name=obj.template_type).display_name
+        except EmailTemplateCategory.DoesNotExist:
+            return obj.template_type
+
+    def validate_template_type(self, value: str) -> str:
+        if not EmailTemplateCategory.objects.filter(name=value).exists():
+            raise serializers.ValidationError(
+                f'Template type "{value}" does not exist. '
+                'Create it first via POST /api/settings/email-template-categories/.'
+            )
+        return value
 
     def validate_name(self, value: str) -> str:
         if not _NAME_RE.match(value):
@@ -365,9 +422,16 @@ class DesignationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Designation name must be under 100 characters.')
         return value
 
+    def validate_department(self, value):
+        if value is None:
+            raise serializers.ValidationError('Department is required.')
+        return value
+
     def validate(self, attrs: dict) -> dict:
         name  = attrs.get('name', getattr(self.instance, 'name', None))
         dept  = attrs.get('department', getattr(self.instance, 'department', None))
+        if dept is None:
+            raise serializers.ValidationError({'department': 'Department is required.'})
         qs    = Designation.objects.filter(name__iexact=name, department=dept)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
@@ -392,12 +456,18 @@ class DepartmentSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at', 'designation_count', 'employee_count', 'roles')
 
     def get_designation_count(self, obj: Department) -> int:
-        return obj.designations.count()
+        return len(obj.designations.all())  # uses prefetch cache — no extra query
 
     def get_employee_count(self, obj: Department) -> int:
+        counts = self.context.get('emp_counts')
+        if counts is not None:
+            return counts.get(obj.name, 0)
         return User.objects.filter(department=obj.name).count()
 
     def get_roles(self, obj: Department) -> list:
+        roles = self.context.get('dept_roles')
+        if roles is not None:
+            return [{'name': r[0], 'display_name': r[1]} for r in roles.get(obj.name, [])]
         rows = (
             User.objects.filter(department=obj.name)
                 .select_related('role')
@@ -416,6 +486,11 @@ class DepartmentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Department name must be under 100 characters.')
         return value
 
+    def validate_description(self, value: str) -> str:
+        if len(value) > 300:
+            raise serializers.ValidationError('Description must be under 300 characters.')
+        return value
+
     def validate(self, attrs: dict) -> dict:
         name = attrs.get('name', getattr(self.instance, 'name', None))
         qs   = Department.objects.filter(name__iexact=name)
@@ -425,4 +500,111 @@ class DepartmentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {'name': f'A department named "{name}" already exists.'}
             )
+        return attrs
+
+
+# ─── Document Center ──────────────────────────────────────────────────────────
+
+class DocumentSerializer(serializers.ModelSerializer):
+    file_url          = serializers.SerializerMethodField()
+    file_size_display = serializers.SerializerMethodField()
+    category_display  = serializers.CharField(source='get_category_display', read_only=True)
+    uploaded_by_name  = serializers.SerializerMethodField()
+    branch_name       = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = Document
+        fields = (
+            'id', 'title', 'description',
+            'category', 'category_display',
+            'file', 'file_url', 'file_name', 'file_type',
+            'file_size', 'file_size_display',
+            'branch', 'branch_name',
+            'uploaded_by_name', 'uploaded_at', 'updated_at', 'is_active',
+        )
+        read_only_fields = (
+            'id', 'file_url', 'file_name', 'file_type', 'file_size',
+            'file_size_display', 'category_display',
+            'uploaded_by_name', 'branch_name', 'uploaded_at', 'updated_at',
+            'is_active',   # managed by the view — never set by the client
+        )
+        extra_kwargs = {'file': {'required': True}}
+
+    def get_file_url(self, obj: Document) -> str:
+        url = obj.file.url
+        # Cloudinary URLs are already absolute; build_absolute_uri is a no-op for them
+        request = self.context.get('request')
+        if request and not url.startswith(('http://', 'https://')):
+            return request.build_absolute_uri(url)
+        return url
+
+    def get_file_size_display(self, obj: Document) -> str:
+        size = obj.file_size
+        if size < 1024:
+            return f'{size} B'
+        if size < 1024 * 1024:
+            return f'{size / 1024:.0f} KB'
+        return f'{size / (1024 * 1024):.1f} MB'
+
+    def get_branch_name(self, obj: Document):
+        return obj.branch.branch_name if obj.branch_id else None
+
+    def get_uploaded_by_name(self, obj: Document) -> str:
+        return obj.uploaded_by.full_name if obj.uploaded_by else '—'
+
+    def validate_title(self, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Title must not be blank.')
+        if len(value) > 200:
+            raise serializers.ValidationError('Title must be under 200 characters.')
+        # Uniqueness check — instance is set on update (PATCH), None on create (POST)
+        qs = Document.objects.filter(title__iexact=value, is_active=True)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError('A document with this title already exists.')
+        return value
+
+    def validate_description(self, value: str) -> str:
+        value = value.strip() if value else ''
+        if len(value) > 1000:
+            raise serializers.ValidationError('Description must be under 1,000 characters.')
+        return value
+
+    def validate_category(self, value: str) -> str:
+        valid = {c for c, _ in Document.CATEGORY_CHOICES}
+        if value not in valid:
+            raise serializers.ValidationError(
+                f'Invalid category. Choose from: {", ".join(sorted(valid))}.'
+            )
+        return value
+
+    def validate_file(self, value) -> object:
+        if not getattr(value, 'name', None):
+            raise serializers.ValidationError('Uploaded file must have a name.')
+        if value.size == 0:
+            raise serializers.ValidationError('Uploaded file is empty.')
+        if value.content_type not in Document.ALLOWED_MIME_TYPES:
+            allowed = ', '.join(sorted(Document.MIME_TO_TYPE.values()))
+            raise serializers.ValidationError(
+                f'Unsupported file type "{value.content_type}". Allowed: {allowed}.'
+            )
+        if value.size > Document.MAX_FILE_SIZE:
+            raise serializers.ValidationError(
+                f'File size {value.size / (1024 * 1024):.1f} MB exceeds the 25 MB limit.'
+            )
+        # Strip any path components a client might inject (e.g. "../../etc/passwd")
+        value.name = os.path.basename(value.name).strip()
+        if not value.name:
+            raise serializers.ValidationError('File name is invalid after sanitization.')
+        return value
+
+    def validate(self, attrs):
+        branch = attrs.get('branch', getattr(self.instance, 'branch', None))
+        if branch is not None:
+            # Verify the branch is active (has employees_count or at least exists & is not deleted)
+            from apps.branch.models import Branch
+            if not Branch.objects.filter(pk=branch.pk).exists():
+                raise serializers.ValidationError({'branch': 'Selected branch does not exist.'})
         return attrs
