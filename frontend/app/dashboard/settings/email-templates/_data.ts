@@ -1,11 +1,30 @@
 // ─── API endpoints ────────────────────────────────────────────────────────────
-export const EMAIL_TEMPLATES_BASE = "/settings/email-templates/";
-export const emailTemplateDetail  = (id: number) => `/settings/email-templates/${id}/`;
-export const emailTemplatePreview = (id: number) => `/settings/email-templates/${id}/preview/`;
+export const EMAIL_TEMPLATES_BASE           = "/settings/email-templates/";
+export const emailTemplateDetail            = (id: number) => `/settings/email-templates/${id}/`;
+export const emailTemplatePreview           = (id: number) => `/settings/email-templates/${id}/preview/`;
+export const emailTemplateAttachmentDetail  = (templateId: number, attachmentId: number) =>
+  `/settings/email-templates/${templateId}/attachments/${attachmentId}/`;
+export const EMAIL_TEMPLATE_CATEGORIES      = "/settings/email-template-categories/";
 
 // ─── API types ────────────────────────────────────────────────────────────────
 
 export type TemplateType = "document" | "notification" | "reminder" | "wish";
+
+export interface ApiAttachment {
+  id:          number;
+  filename:    string;
+  mime_type:   string;
+  size:        number;
+  url:         string;
+  uploaded_at: string;
+}
+
+export interface ApiTemplateCategory {
+  id:    number;
+  name:  string;
+  code?: string;   // e.g. "document" | "notification" | "reminder" | "wish"
+  slug?: string;
+}
 
 export interface ApiEmailTemplate {
   id:                    number;
@@ -18,7 +37,8 @@ export interface ApiEmailTemplate {
   body:                  string;
   is_active:             boolean;
   is_builtin:            boolean;
-  available_variables:   string[];         // e.g. ["FNAME", "FULL_NAME", ...]
+  available_variables:   string[] | string; // API may return array or JSON string
+  attachments:           ApiAttachment[];
   updated_at:            string;
 }
 
@@ -30,17 +50,29 @@ export function flattenTemplates(data: ApiEmailTemplatesResponse): ApiEmailTempl
   return (Object.values(data) as ApiEmailTemplate[][]).flat();
 }
 
+// Backend stores available_variables as a JSON-stringified string, e.g. "[\"A\",\"B\"]"
+// Always call this when reading the field from any API response.
+export function parseAvailableVars(val: unknown): string[] {
+  if (Array.isArray(val)) return val as string[];
+  if (typeof val === "string" && val.trim().startsWith("[")) {
+    try { return JSON.parse(val) as string[]; } catch { /* fall through */ }
+  }
+  return [];
+}
+
 // ─── Form ─────────────────────────────────────────────────────────────────────
 
 export interface TemplateForm {
-  name:         string;    // slug: lowercase, digits, underscores (add mode only)
-  display_name: string;    // human-readable label (add mode only)
-  subject:      string;
-  body:         string;
-  attachments:  File[];
+  name:                string;    // slug: lowercase, digits, underscores (add mode only)
+  display_name:        string;    // human-readable label (add mode only)
+  template_type:       string;    // category code e.g. "document" | "notification" | "reminder" | "wish"
+  subject:             string;
+  body:                string;
+  attachments:         File[];
+  available_variables: string[];
 }
 
-export const EMPTY_TEMPLATE_FORM: TemplateForm = { name: "", display_name: "", subject: "", body: "", attachments: [] };
+export const EMPTY_TEMPLATE_FORM: TemplateForm = { name: "", display_name: "", template_type: "", subject: "", body: "", attachments: [], available_variables: [] };
 
 // Convert a display name to a valid slug automatically
 export function toSlug(s: string): string {
@@ -96,9 +128,10 @@ const SLUG_RE = /^[a-z][a-z0-9_]*$/;
 export function validateTemplateForm(form: TemplateForm, isAdd: boolean): TemplateFormErrors {
   const e: TemplateFormErrors = {};
   if (isAdd) {
-    if (!form.display_name.trim()) e.display_name = "Display name is required";
-    if (!form.name.trim())         e.name         = "Slug is required";
-    else if (!SLUG_RE.test(form.name)) e.name     = "Slug must start with a letter and contain only lowercase letters, digits, and underscores";
+    if (!form.display_name.trim())  e.display_name  = "Display name is required";
+    if (!form.name.trim())          e.name          = "Slug is required";
+    else if (!SLUG_RE.test(form.name)) e.name       = "Slug must start with a letter and contain only lowercase letters, digits, and underscores";
+    if (!form.template_type.trim()) e.template_type = "Category is required";
   }
   if (!form.subject.trim()) e.subject = "Subject is required";
   if (!form.body.trim())    e.body    = "Body is required";
