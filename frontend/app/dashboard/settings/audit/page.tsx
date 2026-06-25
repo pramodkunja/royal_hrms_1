@@ -32,7 +32,8 @@ const MODULES = [
   { value: 'accounts', label: 'Accounts' },
   { value: 'settings', label: 'Settings' },
   { value: 'company',  label: 'Company'  },
-  { value: 'branch',   label: 'Branch'   },
+  { value: 'branch',        label: 'Branch'        },
+  { value: 'announcements', label: 'Announcements' },
 ];
 
 function actionClass(action: string): string {
@@ -51,8 +52,9 @@ function moduleClass(module: string): string {
     case 'accounts': return 'badge-primary';
     case 'settings': return 'badge-warn';
     case 'company':  return 'badge-info';
-    case 'branch':   return 'badge-success';
-    default:         return 'badge-neutral';
+    case 'branch':        return 'badge-success';
+    case 'announcements': return 'badge-error';
+    default:              return 'badge-neutral';
   }
 }
 

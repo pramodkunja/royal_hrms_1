@@ -1,443 +1,804 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import clientApi from "@/lib/clientApi";
+import { getStoredUser } from "@/lib/auth";
 
-type Category = "general" | "policy" | "events" | "celebrations";
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Post {
-  id: number;
-  authorInitials: string;
-  authorName: string;
-  authorRole: string;
-  timeAgo: string;
-  pinned: boolean;
-  category: Category;
-  title: string;
-  content: string;
-  reactions: number;
-  comments: number;
-  views: number;
-  branch: string;
-  visibility: string;
+type Category   = "general" | "policy" | "event" | "celebration";
+type Visibility = "all" | "department" | "branch";
+
+interface Announcement {
+  id:                     number;
+  title:                  string;
+  body:                   string;
+  category:               Category;
+  visibility:             Visibility;
+  target_department:      number | null;
+  target_department_name: string;
+  target_branch:          number | null;
+  target_branch_name:     string;
+  is_pinned:              boolean;
+  send_email:             boolean;
+  posted_by:              string | null;
+  posted_by_name:         string;
+  posted_by_role:         string;
+  views_count:            number;
+  reactions_count:        number;
+  has_reacted:            boolean;
+  can_edit:               boolean;
+  created_at:             string;
+  updated_at:             string;
 }
 
-interface FormState {
-  title: string;
-  category: Category | "";
-  visibility: string;
-  branch: string;
-  body: string;
-  pin: boolean;
-  emailNotification: boolean;
+interface PageMeta {
+  count:           number;
+  page:            number;
+  page_size:       number;
+  total_pages:     number;
+  pinned_count:    number;
+  total_reactions: number;
+  total_views:     number;
+  results:         Announcement[];
 }
 
-type FormErrors = Partial<Record<"title" | "category" | "body", string>>;
+interface Department { id: number; name: string }
+interface Branch     { id: number; branch_name: string; branch_code: string }
 
-const BRANCHES          = ["All Branches", "Head Office", "North Branch", "South Branch", "East Branch", "West Branch"];
-const VISIBILITY_OPTIONS = ["All Employees", "Managers Only", "HR Only", "Specific Branch"];
+type FormState = {
+  title:             string;
+  body:              string;
+  category:          Category | "";
+  visibility:        Visibility;
+  target_department: string;
+  target_branch:     string;
+  is_pinned:         boolean;
+  send_email:        boolean;
+};
+
+type FormErrors = Partial<Record<keyof FormState, string>>;
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const CATEGORIES: { value: Category; label: string }[] = [
-  { value: "general",      label: "General"      },
-  { value: "policy",       label: "Policy"       },
-  { value: "events",       label: "Events"       },
-  { value: "celebrations", label: "Celebrations" },
+  { value: "general",     label: "General"     },
+  { value: "policy",      label: "Policy"      },
+  { value: "event",       label: "Event"       },
+  { value: "celebration", label: "Celebration" },
 ];
-const FILTERS = ["All Posts", "General", "Policy", "Events", "Celebrations"];
+
+const VISIBILITY_OPTIONS: { value: Visibility; label: string }[] = [
+  { value: "all",        label: "All Employees" },
+  { value: "department", label: "By Department" },
+  { value: "branch",     label: "By Branch"     },
+];
+
+const FILTERS = [
+  { value: "",            label: "All Posts"   },
+  { value: "general",     label: "General"     },
+  { value: "policy",      label: "Policy"      },
+  { value: "event",       label: "Event"       },
+  { value: "celebration", label: "Celebration" },
+];
 
 const EMPTY_FORM: FormState = {
-  title: "", category: "", visibility: "All Employees",
-  branch: "All Branches", body: "", pin: false, emailNotification: true,
+  title: "", body: "", category: "", visibility: "all",
+  target_department: "", target_branch: "",
+  is_pinned: false, send_email: true,
 };
 
-const INITIAL_POSTS: Post[] = [
-  {
-    id: 1, authorInitials: "SV", authorName: "Sunil Varghese",
-    authorRole: "Managing Director", timeAgo: "2 hours ago",
-    pinned: true, category: "celebrations",
-    title: "Diwali Bonus Announced — 1 Month Extra! 🎉",
-    content: "Dear team, in recognition of an outstanding Q3, the management is delighted to announce a Diwali bonus equivalent to one month gross salary for all confirmed employees. The bonus will be credited along with November payroll. Wishing everyone a sparkling festival season!",
-    reactions: 42, comments: 8, views: 54, branch: "All Branches", visibility: "All Employees",
-  },
-  {
-    id: 2, authorInitials: "KR", authorName: "Kavitha Rajan",
-    authorRole: "HR Admin", timeAgo: "Yesterday",
-    pinned: true, category: "policy",
-    title: "Updated Work From Home Policy — Effective November 1st",
-    content: "Please be informed that the Work From Home policy has been revised. Employees are now permitted up to 2 WFH days per week subject to manager approval. The revised policy document has been uploaded to the Document Center for reference.",
-    reactions: 31, comments: 5, views: 72, branch: "All Branches", visibility: "All Employees",
-  },
-  {
-    id: 3, authorInitials: "AR", authorName: "Arun Raj",
-    authorRole: "HR Manager", timeAgo: "3 days ago",
-    pinned: false, category: "events",
-    title: "Annual Company Picnic — Register by October 20th",
-    content: "We are thrilled to announce our Annual Company Picnic scheduled for October 28th at Cubbon Park. This is a great opportunity to bond with your colleagues outside the office. Please register via the My Requests section before October 20th.",
-    reactions: 19, comments: 12, views: 48, branch: "Head Office", visibility: "All Employees",
-  },
-  {
-    id: 4, authorInitials: "PM", authorName: "Priya Menon",
-    authorRole: "IT Admin", timeAgo: "5 days ago",
-    pinned: false, category: "general",
-    title: "Scheduled Server Maintenance — October 15th, 11 PM to 2 AM",
-    content: "The IT team will be conducting scheduled maintenance on our servers on October 15th from 11:00 PM to 2:00 AM IST. During this window the HRMS portal and email services may be temporarily unavailable. Please plan your work accordingly.",
-    reactions: 15, comments: 3, views: 11, branch: "All Branches", visibility: "All Employees",
-  },
-];
+const POSTER_ROLES = new Set(["hr_admin", "system_admin", "manager"]);
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function initials(name: string): string {
+  return name.split(" ").filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("");
+}
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1)  return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7)  return `${days}d ago`;
+  return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
 
 const CAT_BADGE: Record<Category, string> = {
-  general:      "bg-[#e6f1fb] text-[#0e7c86]",
-  policy:       "bg-[#fef3c7] text-[#b5651d]",
-  events:       "bg-[#d8f3dc] text-[#1b8a6b]",
-  celebrations: "bg-[#ecd9a0] text-[#c99a2e]",
+  general:     "badge-info",
+  policy:      "badge-warn",
+  event:       "badge-success",
+  celebration: "badge-primary",
 };
-const CAT_LABEL: Record<Category, string> = {
-  general: "General", policy: "Policy", events: "Events", celebrations: "Celebrations",
-};
-const STAT_ICON_CLS = [
-  "bg-[rgba(30,78,140,0.10)] text-[#1e4e8c]",
-  "bg-[#fef3c7] text-[#b5651d]",
-  "bg-[#d8f3dc] text-[#1b8a6b]",
-  "bg-[#e6f1fb] text-[#0e7c86]",
-];
 
-const INPUT_BASE =
-  "w-full px-3 py-2.5 rounded-lg border text-[13px] bg-[var(--bg-low)] text-[var(--on-bg)] placeholder:text-[var(--outline)] focus:outline-none transition-colors";
+const CAT_LABEL: Record<Category, string> = {
+  general:     "General",
+  policy:      "Policy",
+  event:       "Event",
+  celebration: "Celebration",
+};
+
+const AVATAR_COLORS = [
+  { bg: "rgba(30,78,140,0.15)",  color: "#1e4e8c" },
+  { bg: "rgba(14,124,134,0.15)", color: "#0e7c86" },
+  { bg: "rgba(27,138,107,0.15)", color: "#1b8a6b" },
+  { bg: "rgba(181,101,29,0.15)", color: "#b5651d" },
+];
+function avatarColor(name: string) {
+  return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
+}
+
+function viewKey(id: number) { return `ann_viewed_${id}`; }
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AnnouncementsPage() {
-  const [posts, setPosts]               = useState<Post[]>(INITIAL_POSTS);
-  const [activeFilter, setActiveFilter] = useState("All Posts");
-  const [showModal, setShowModal]       = useState(false);
-  const [editPost, setEditPost]         = useState<Post | null>(null);
-  const [form, setForm]                 = useState<FormState>(EMPTY_FORM);
-  const [errors, setErrors]             = useState<FormErrors>({});
+  const router = useRouter();
 
-  const filtered =
-    activeFilter === "All Posts"
-      ? posts
-      : posts.filter(p => p.category === activeFilter.toLowerCase());
+  // Read localStorage only on the client to avoid SSR/hydration mismatch.
+  const [currentUser, setCurrentUser] = useState<ReturnType<typeof getStoredUser>>(null);
+  useEffect(() => { setCurrentUser(getStoredUser()); }, []);
+
+  const canPost = currentUser ? POSTER_ROLES.has(currentUser.role) : false;
+  const isAdmin = currentUser?.role === "system_admin";
+  const isHR    = currentUser?.role === "hr_admin";
+
+  // ── Data ────────────────────────────────────────────────────────────────────
+  const [meta,    setMeta]    = useState<PageMeta | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [pageErr, setPageErr] = useState<string | null>(null);
+
+  // ── Filters / pagination ────────────────────────────────────────────────────
+  const [category, setCategory] = useState("");
+  const [page,     setPage]     = useState(1);
+
+  // ── Modal ───────────────────────────────────────────────────────────────────
+  const [showModal,  setShowModal]  = useState(false);
+  const [editTarget, setEditTarget] = useState<Announcement | null>(null);
+  const [form,       setForm]       = useState<FormState>(EMPTY_FORM);
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [saveErr,    setSaveErr]    = useState<string | null>(null);
+  const [saving,     setSaving]     = useState(false);
+
+  // ── Delete confirm ──────────────────────────────────────────────────────────
+  const [deleteId,  setDeleteId]  = useState<number | null>(null);
+  const [deleting,  setDeleting]  = useState(false);
+
+  // ── Dropdown data ───────────────────────────────────────────────────────────
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [branches,    setBranches]    = useState<Branch[]>([]);
+
+  // ── Expanded cards ──────────────────────────────────────────────────────────
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  // ─── Fetch announcements ───────────────────────────────────────────────────
+
+  const fetchAnnouncements = useCallback(async (pg: number, cat: string) => {
+    setLoading(true);
+    setPageErr(null);
+    try {
+      const params: Record<string, string> = { page: String(pg), page_size: "10" };
+      if (cat) params.category = cat;
+      const res = await clientApi.get("/announcements/", { params });
+      setMeta(res.data?.data ?? null);
+    } catch (e: unknown) {
+      setPageErr((e as { message?: string }).message ?? "Failed to load announcements.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAnnouncements(page, category);
+  }, [page, category, fetchAnnouncements]);
+
+  // Fetch departments + branches once for modal dropdowns
+  useEffect(() => {
+    if (!canPost) return;
+    clientApi.get("/departments/").then(r => setDepartments(r.data?.data ?? [])).catch(() => {});
+    clientApi.get("/branch/branches/").then(r => setBranches(r.data?.data ?? [])).catch(() => {});
+  }, [canPost]);
+
+  // Track views once per card per session (non-authors only)
+  useEffect(() => {
+    if (!meta?.results.length) return;
+    meta.results.forEach(ann => {
+      const key = viewKey(ann.id);
+      if (!localStorage.getItem(key) && ann.posted_by !== currentUser?.userId) {
+        clientApi.post(`/announcements/${ann.id}/view/`).then(() => {
+          localStorage.setItem(key, "1");
+        }).catch(() => {});
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta?.results]);
+
+  // ─── Modal helpers ─────────────────────────────────────────────────────────
+
+  function openCreate() {
+    setEditTarget(null);
+    setForm({ ...EMPTY_FORM, send_email: isAdmin || isHR });
+    setFormErrors({});
+    setSaveErr(null);
+    setShowModal(true);
+    setTimeout(() => titleRef.current?.focus(), 80);
+  }
+
+  function openEdit(ann: Announcement) {
+    setEditTarget(ann);
+    setForm({
+      title:             ann.title,
+      body:              ann.body,
+      category:          ann.category,
+      visibility:        ann.visibility,
+      target_department: ann.target_department ? String(ann.target_department) : "",
+      target_branch:     ann.target_branch     ? String(ann.target_branch)     : "",
+      is_pinned:         ann.is_pinned,
+      send_email:        ann.send_email,
+    });
+    setFormErrors({});
+    setSaveErr(null);
+    setShowModal(true);
+    setTimeout(() => titleRef.current?.focus(), 80);
+  }
+
+  function closeModal() {
+    setShowModal(false);
+    setEditTarget(null);
+  }
+
+  function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm(prev => {
+      const next = { ...prev, [key]: value };
+      if (key === "visibility") {
+        if (value !== "department") next.target_department = "";
+        if (value !== "branch")     next.target_branch     = "";
+      }
+      return next;
+    });
+    setFormErrors(prev => ({ ...prev, [key]: undefined }));
+  }
+
+  // ─── Validation ────────────────────────────────────────────────────────────
+
+  function validate(): boolean {
+    const errs: FormErrors = {};
+    if (!form.title.trim())    errs.title    = "Title is required.";
+    if (!form.body.trim())     errs.body     = "Body is required.";
+    if (!form.category)        errs.category = "Category is required.";
+    if (form.visibility === "department" && !form.target_department)
+      errs.target_department = "Select a department.";
+    if (form.visibility === "branch" && !form.target_branch)
+      errs.target_branch = "Select a branch.";
+    setFormErrors(errs);
+    return Object.keys(errs).length === 0;
+  }
+
+  // ─── Save ──────────────────────────────────────────────────────────────────
+
+  async function handleSave() {
+    if (!validate()) return;
+    setSaving(true);
+    setSaveErr(null);
+    try {
+      const payload: Record<string, unknown> = {
+        title:             form.title.trim(),
+        body:              form.body.trim(),
+        category:          form.category,
+        visibility:        form.visibility,
+        is_pinned:         form.is_pinned,
+        send_email:        form.send_email,
+        target_department: form.target_department ? Number(form.target_department) : null,
+        target_branch:     form.target_branch     ? Number(form.target_branch)     : null,
+      };
+
+      if (editTarget) {
+        await clientApi.put(`/announcements/${editTarget.id}/`, payload);
+      } else {
+        await clientApi.post("/announcements/", payload);
+      }
+
+      closeModal();
+      setPage(1);
+      fetchAnnouncements(1, category);
+    } catch (e: unknown) {
+      setSaveErr((e as { message?: string }).message ?? "Failed to save announcement.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ─── Delete ────────────────────────────────────────────────────────────────
+
+  async function handleDelete() {
+    if (deleteId == null) return;
+    setDeleting(true);
+    try {
+      await clientApi.delete(`/announcements/${deleteId}/`);
+      setDeleteId(null);
+      // If we delete the last item on a page > 1, go back one page
+      const remaining = (meta?.results.length ?? 1) - 1;
+      const newPage   = remaining === 0 && page > 1 ? page - 1 : page;
+      setPage(newPage);
+      fetchAnnouncements(newPage, category);
+    } catch (e: unknown) {
+      alert((e as { message?: string }).message ?? "Delete failed.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  // ─── React / like ──────────────────────────────────────────────────────────
+
+  async function toggleReact(ann: Announcement) {
+    if (!meta) return;
+    // Optimistic update
+    const delta = ann.has_reacted ? -1 : 1;
+    setMeta(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        total_reactions: prev.total_reactions + delta,
+        results: prev.results.map(a =>
+          a.id === ann.id
+            ? { ...a, has_reacted: !a.has_reacted, reactions_count: a.reactions_count + delta }
+            : a
+        ),
+      };
+    });
+    try {
+      await clientApi.post(`/announcements/${ann.id}/react/`);
+    } catch {
+      // Rollback on error
+      fetchAnnouncements(page, category);
+    }
+  }
+
+  function toggleExpand(id: number) {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  // ─── Stats from API meta ───────────────────────────────────────────────────
 
   const stats = [
-    { label: "Total Posts",     value: posts.length,                               icon: "ti-speakerphone" },
-    { label: "Pinned",          value: posts.filter(p => p.pinned).length,         icon: "ti-pin"          },
-    { label: "Total Reactions", value: posts.reduce((a, p) => a + p.reactions, 0), icon: "ti-heart"        },
-    { label: "Total Views",     value: posts.reduce((a, p) => a + p.views, 0),     icon: "ti-eye"          },
+    { label: "Total Posts",     value: meta?.count           ?? 0, icon: "ti-speakerphone", cls: "si-primary" },
+    { label: "Pinned",          value: meta?.pinned_count    ?? 0, icon: "ti-pin",          cls: "si-warn"    },
+    { label: "Total Reactions", value: meta?.total_reactions ?? 0, icon: "ti-heart",        cls: "si-success" },
+    { label: "Total Views",     value: meta?.total_views     ?? 0, icon: "ti-eye",          cls: "si-info"    },
   ];
 
-  function openNew() {
-    setEditPost(null); setForm(EMPTY_FORM); setErrors({}); setShowModal(true);
-  }
-  function openEdit(post: Post) {
-    setEditPost(post);
-    setForm({ title: post.title, category: post.category, visibility: post.visibility,
-      branch: post.branch, body: post.content, pin: post.pinned, emailNotification: false });
-    setErrors({}); setShowModal(true);
-  }
-  function closeModal() {
-    setShowModal(false); setEditPost(null); setForm(EMPTY_FORM); setErrors({});
-  }
-  function setField(key: keyof FormState, val: string | boolean) {
-    setForm(f => ({ ...f, [key]: val }));
-  }
-  function validate(): boolean {
-    const e: FormErrors = {};
-    if (!form.title.trim()) e.title    = "Title is required";
-    if (!form.category)     e.category = "Category is required";
-    if (!form.body.trim())  e.body     = "Body is required";
-    setErrors(e);
-    return !Object.keys(e).length;
-  }
-  function handleSubmit() {
-    if (!validate()) return;
-    if (editPost) {
-      setPosts(prev => prev.map(p =>
-        p.id === editPost.id
-          ? { ...p, title: form.title, category: form.category as Category,
-              content: form.body, pinned: form.pin,
-              visibility: form.visibility, branch: form.branch }
-          : p
-      ));
-    } else {
-      setPosts(prev => [{
-        id: Date.now(), authorInitials: "RS", authorName: "Ravi Shankar",
-        authorRole: "System Admin", timeAgo: "Just now",
-        pinned: form.pin, category: form.category as Category,
-        title: form.title, content: form.body,
-        reactions: 0, comments: 0, views: 0,
-        branch: form.branch, visibility: form.visibility,
-      }, ...prev]);
-    }
-    closeModal();
-  }
+  const BODY_PREVIEW = 220;
+
+  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div>
-
-      {/* ── Page Header ── */}
-      <div className="flex items-start justify-between flex-wrap gap-3 mb-6">
+    <>
+      {/* ── Page header ──────────────────────────────────────────────────── */}
+      <div className="page-header">
         <div>
-          <h1 className="text-[22px] font-bold text-[var(--on-bg)] tracking-tight mb-1">
-            Announcements
-          </h1>
-          <p className="text-[13px] text-[var(--on-variant)]">
-            Company updates, policies, and important news
-          </p>
+          <div className="page-title">Announcements</div>
+          <div className="page-sub">Company-wide news, policy updates, and celebrations</div>
         </div>
-        <button
-          onClick={openNew}
-          className="flex items-center gap-1.5 px-4 py-[9px] bg-[#1e4e8c] text-white rounded-lg text-[13px] font-semibold hover:bg-[#163d72] transition-colors shadow-sm"
-        >
-          <i className="ti ti-plus text-base" />
-          Post Announcement
-        </button>
+        {canPost && (
+          <div className="page-actions">
+            <button className="btn btn-filled" onClick={openCreate}>
+              <i className="ti ti-plus" /> Post Announcement
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* ── Stats Row ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        {stats.map((st, i) => (
-          <div key={st.label}
-            className="bg-white rounded-xl border border-[var(--outline-v)] p-4 sm:p-5 flex items-center justify-between hover:shadow-md transition-shadow"
-          >
-            <div>
-              <div className="text-[11px] sm:text-[12px] font-medium text-[var(--on-variant)] mb-1">{st.label}</div>
-              <div className="text-[22px] sm:text-[28px] font-bold text-[var(--on-bg)] leading-none tracking-tight">{st.value}</div>
-            </div>
-            <div className={`w-9 h-9 sm:w-[42px] sm:h-[42px] rounded-[10px] flex items-center justify-center text-lg sm:text-xl flex-shrink-0 ${STAT_ICON_CLS[i]}`}>
-              <i className={`ti ${st.icon}`} />
-            </div>
+      {/* ── Stat cards ───────────────────────────────────────────────────── */}
+      <div className="stats-grid">
+        {stats.map(s => (
+          <div className="stat-card" key={s.label}>
+            <div className={`stat-icon ${s.cls}`}><i className={`ti ${s.icon}`} /></div>
+            <div className="stat-label">{s.label}</div>
+            <div className="stat-value">{s.value.toLocaleString()}</div>
           </div>
         ))}
       </div>
 
-      {/* ── Filter Tabs ── */}
-      <div className="flex items-center gap-2 flex-wrap mb-5">
+      {/* ── Category filter tabs ─────────────────────────────────────────── */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
         {FILTERS.map(f => (
           <button
-            key={f}
-            onClick={() => setActiveFilter(f)}
-            className={`px-3 sm:px-4 py-[6px] sm:py-[7px] rounded-full text-[12px] sm:text-[13px] font-medium border transition-all ${
-              activeFilter === f
-                ? "bg-[#1e4e8c] text-white border-[#1e4e8c]"
-                : "bg-white text-[var(--on-variant)] border-[var(--outline-v)] hover:border-[#1e4e8c] hover:text-[#1e4e8c]"
-            }`}
+            key={f.value}
+            onClick={() => { setCategory(f.value); setPage(1); }}
+            className={`btn ${category === f.value ? "btn-filled" : "btn-ghost"}`}
+            style={{ fontSize: 13 }}
+            suppressHydrationWarning
           >
-            {f}
+            {f.label}
           </button>
         ))}
       </div>
 
-      {/* ── Posts List ── */}
-      <div className="flex flex-col gap-3.5">
-        {filtered.length === 0 ? (
-          <div className="bg-white rounded-xl border border-[var(--outline-v)] p-10 text-center">
-            <i className="ti ti-speakerphone text-4xl text-[var(--outline)] block mb-3" />
-            <p className="text-[13px] text-[var(--on-variant)]">No announcements in this category.</p>
-          </div>
-        ) : filtered.map(post => (
-          <div
-            key={post.id}
-            className={`bg-white rounded-xl border border-[var(--outline-v)] p-4 sm:p-5 transition-shadow hover:shadow-[0_4px_16px_rgba(30,78,140,0.08)] border-l-4 ${
-              post.pinned ? "border-l-[#c99a2e]" : "border-l-transparent"
-            }`}
-          >
-            {/* Author row */}
-            <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-9 h-9 rounded-full bg-[#1e4e8c] text-white flex items-center justify-center text-[13px] font-semibold flex-shrink-0">
-                  {post.authorInitials}
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[14px] font-semibold text-[var(--on-bg)] leading-tight truncate">{post.authorName}</div>
-                  <div className="text-[12px] text-[var(--on-variant)] mt-0.5">{post.authorRole} · {post.timeAgo}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap">
-                {post.pinned && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#ecd9a0] text-[#c99a2e]">
-                    <i className="ti ti-pin text-[10px]" /> PINNED
-                  </span>
-                )}
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium ${CAT_BADGE[post.category]}`}>
-                  {CAT_LABEL[post.category]}
-                </span>
-              </div>
-            </div>
+      {/* ── Error ────────────────────────────────────────────────────────── */}
+      {pageErr && (
+        <div className="alert alert-error mb-16">
+          <i className="ti ti-alert-circle" /> {pageErr}
+        </div>
+      )}
 
-            {/* Title & content */}
-            <div className="text-[14px] sm:text-[15px] font-semibold text-[var(--on-bg)] mb-1.5 leading-snug">{post.title}</div>
-            <div className="text-[13px] text-[var(--on-variant)] leading-relaxed mb-4">{post.content}</div>
+      {/* ── Loading ──────────────────────────────────────────────────────── */}
+      {loading && (
+        <div style={{ display: "flex", justifyContent: "center", padding: 60, color: "var(--on-variant)" }}>
+          <i className="ti ti-loader-2" style={{ fontSize: 28, animation: "spin 1s linear infinite" }} />
+        </div>
+      )}
 
-            {/* Footer */}
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
-                <span className="flex items-center gap-1.5 text-[12px] text-[var(--on-variant)]">
-                  <i className="ti ti-heart text-[14px] text-[var(--outline)]" />{post.reactions}
-                </span>
-                <span className="flex items-center gap-1.5 text-[12px] text-[var(--on-variant)]">
-                  <i className="ti ti-message-circle text-[14px] text-[var(--outline)]" />{post.comments} comments
-                </span>
-                <span className="flex items-center gap-1.5 text-[12px] text-[var(--on-variant)]">
-                  <i className="ti ti-eye text-[14px] text-[var(--outline)]" />{post.views} views
-                </span>
-              </div>
-              <button
-                onClick={() => openEdit(post)}
-                title="Edit"
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-[13px] text-[var(--outline)] border border-transparent hover:bg-[var(--bg-low)] hover:border-[var(--outline-v)] hover:text-[#1e4e8c] transition-all"
+      {/* ── Empty state ──────────────────────────────────────────────────── */}
+      {!loading && meta && meta.results.length === 0 && (
+        <div className="empty-state">
+          <i className="ti ti-speakerphone" />
+          <h3>No announcements yet</h3>
+          <p>{category ? "No posts in this category." : "Be the first to post an announcement."}</p>
+          {canPost && (
+            <button className="btn btn-filled" onClick={openCreate}>Post Announcement</button>
+          )}
+        </div>
+      )}
+
+      {/* ── Announcement cards ───────────────────────────────────────────── */}
+      {!loading && meta && meta.results.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {meta.results.map(ann => {
+            const av    = avatarColor(ann.posted_by_name);
+            const isExp = expanded.has(ann.id);
+
+            return (
+              <div
+                key={ann.id}
+                className="card"
+                style={ann.is_pinned ? { borderLeft: "3px solid var(--warn)" } : undefined}
               >
-                <i className="ti ti-pencil" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+                <div style={{ padding: "16px 20px" }}>
+                  {/* ── Author row ─────────────────────────────────────── */}
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+                    <div style={{
+                      width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
+                      background: av.bg, color: av.color,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontWeight: 700, fontSize: 14,
+                    }}>
+                      {initials(ann.posted_by_name)}
+                    </div>
 
-      {/* ══════════════════ MODAL ══════════════════ */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 600, fontSize: 14 }}>{ann.posted_by_name}</span>
+                        {ann.posted_by_role && (
+                          <span style={{ fontSize: 11, color: "var(--on-variant)" }}>{ann.posted_by_role}</span>
+                        )}
+                        {ann.is_pinned && (
+                          <span className="badge badge-warn" style={{ fontSize: 10 }}>
+                            <i className="ti ti-pin" /> Pinned
+                          </span>
+                        )}
+                        <span className={`badge ${CAT_BADGE[ann.category]}`} style={{ fontSize: 10, textTransform: "capitalize" }}>
+                          {CAT_LABEL[ann.category]}
+                        </span>
+                        {ann.visibility !== "all" && (
+                          <span className="badge badge-neutral" style={{ fontSize: 10 }}>
+                            <i className={`ti ${ann.visibility === "department" ? "ti-sitemap" : "ti-building"}`} />
+                            {" "}{ann.visibility === "department" ? ann.target_department_name : ann.target_branch_name}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--on-variant)", marginTop: 2 }}>
+                        {timeAgo(ann.created_at)}
+                        {ann.updated_at !== ann.created_at && " · edited"}
+                      </div>
+                    </div>
+
+                    {ann.can_edit && (
+                      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                        <button className="btn btn-ghost btn-sm" title="Edit" onClick={() => openEdit(ann)} suppressHydrationWarning>
+                          <i className="ti ti-pencil" />
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          title="Delete"
+                          style={{ color: "var(--error)" }}
+                          onClick={() => setDeleteId(ann.id)}
+                          suppressHydrationWarning
+                        >
+                          <i className="ti ti-trash" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Title ─────────────────────────────────────────── */}
+                  <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>
+                    {ann.title}
+                  </div>
+
+                  {/* ── Body ──────────────────────────────────────────── */}
+                  <div style={{ fontSize: 14, color: "var(--on-variant)", lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
+                    {isExp || ann.body.length <= BODY_PREVIEW
+                      ? ann.body
+                      : ann.body.slice(0, BODY_PREVIEW) + "…"}
+                  </div>
+                  {ann.body.length > BODY_PREVIEW && (
+                    <button
+                      onClick={() => toggleExpand(ann.id)}
+                      style={{ fontSize: 12, color: "var(--primary)", background: "none", border: "none", cursor: "pointer", marginTop: 4, padding: 0 }}
+                      suppressHydrationWarning
+                    >
+                      {isExp ? "Show less" : "Read more"}
+                    </button>
+                  )}
+
+                  {/* ── Footer ────────────────────────────────────────── */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--outline-v)" }}>
+                    <button
+                      onClick={() => toggleReact(ann)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 5,
+                        background: "none", border: "none", cursor: "pointer", fontSize: 13,
+                        color: ann.has_reacted ? "var(--error)" : "var(--on-variant)",
+                        fontWeight: ann.has_reacted ? 600 : 400,
+                      }}
+                      suppressHydrationWarning
+                    >
+                      <i className={`ti ${ann.has_reacted ? "ti-heart-filled" : "ti-heart"}`} style={{ fontSize: 16 }} />
+                      {ann.reactions_count > 0 && ann.reactions_count}
+                    </button>
+
+                    <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, color: "var(--on-variant)" }}>
+                      <i className="ti ti-eye" style={{ fontSize: 15 }} />
+                      {ann.views_count > 0 ? ann.views_count : "—"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Pagination ───────────────────────────────────────────────────── */}
+      {meta && meta.total_pages > 1 && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20, padding: "8px 0" }}>
+          <span style={{ fontSize: 12, color: "var(--on-variant)" }}>
+            Page {meta.page} of {meta.total_pages}
+          </span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button className="btn btn-ghost btn-sm" disabled={meta.page <= 1} onClick={() => setPage(p => p - 1)} suppressHydrationWarning>
+              <i className="ti ti-chevron-left" /> Prev
+            </button>
+            {Array.from({ length: meta.total_pages }, (_, i) => i + 1)
+              .filter(n => Math.abs(n - meta.page) <= 2)
+              .map(n => (
+                <button
+                  key={n}
+                  className="btn btn-sm"
+                  style={{
+                    background: n === meta.page ? "var(--primary)" : "transparent",
+                    color:      n === meta.page ? "#fff" : "var(--on-variant)",
+                    border:     n === meta.page ? "none" : "1.5px solid var(--outline-v)",
+                    minWidth: 32,
+                  }}
+                  onClick={() => setPage(n)}
+                  suppressHydrationWarning
+                >
+                  {n}
+                </button>
+              ))}
+            <button className="btn btn-ghost btn-sm" disabled={meta.page >= meta.total_pages} onClick={() => setPage(p => p + 1)} suppressHydrationWarning>
+              Next <i className="ti ti-chevron-right" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════
+          Post / Edit Modal
+      ══════════════════════════════════════════════════════════════════ */}
       {showModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
-          style={{ background: "rgba(10,20,40,0.40)" }}
-          onClick={e => { if (e.target === e.currentTarget) closeModal(); }}
-        >
-          <div
-            className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col"
-            style={{ maxHeight: "90vh" }}
-          >
-            {/* Modal header */}
-            <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-[var(--outline-v)] flex-shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-[rgba(30,78,140,0.10)] flex items-center justify-center flex-shrink-0">
-                  <i className="ti ti-speakerphone text-[16px] text-[#1e4e8c]" />
-                </div>
-                <h2 className="text-[15px] font-semibold text-[var(--on-bg)]">
-                  {editPost ? "Edit Announcement" : "Post New Announcement"}
-                </h2>
+        <div className="modal-overlay open" onClick={e => { if (e.target === e.currentTarget) closeModal(); }}>
+          <div className="modal" style={{ width: "min(640px, 96vw)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div className="modal-header">
+              <div className="modal-title">
+                <i className="ti ti-speakerphone" />
+                {editTarget ? " Edit Announcement" : " Post New Announcement"}
               </div>
-              <button
-                onClick={closeModal}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--on-variant)] hover:bg-[var(--bg-low)] transition-colors flex-shrink-0"
-              >
-                <i className="ti ti-x text-[18px]" />
+              <button className="modal-close" onClick={closeModal} suppressHydrationWarning>
+                <i className="ti ti-x" />
               </button>
             </div>
 
-            {/* Modal body */}
-            <div className="px-5 sm:px-6 py-5 space-y-4 overflow-y-auto flex-1">
+            <div className="modal-body">
+              {saveErr && (
+                <div className="alert alert-error mb-16">
+                  <i className="ti ti-alert-circle" /> {saveErr}
+                </div>
+              )}
 
               {/* Title */}
-              <div>
-                <label className="block text-[12px] font-semibold text-[var(--on-variant)] uppercase tracking-wide mb-1.5">
-                  Title <span className="text-[var(--error)] normal-case tracking-normal">*</span>
-                </label>
+              <div className="field-group">
+                <label className="field-label">Title <span style={{ color: "var(--error)" }}>*</span></label>
                 <input
-                  type="text"
-                  placeholder="e.g. Diwali Bonus Announcement"
+                  ref={titleRef}
+                  className={`field-input${formErrors.title ? " field-error" : ""}`}
+                  placeholder="e.g. Diwali Bonus Announced"
                   value={form.title}
                   onChange={e => setField("title", e.target.value)}
-                  className={`${INPUT_BASE} ${errors.title ? "border-[var(--error)] focus:border-[var(--error)]" : "border-[var(--outline-v)] focus:border-[#1e4e8c]"}`}
+                  suppressHydrationWarning
                 />
-                {errors.title && <p className="text-[11px] text-[var(--error)] mt-1">{errors.title}</p>}
+                {formErrors.title && <div className="field-error-msg">{formErrors.title}</div>}
               </div>
 
               {/* Category + Visibility */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[12px] font-semibold text-[var(--on-variant)] uppercase tracking-wide mb-1.5">
-                    Category <span className="text-[var(--error)] normal-case tracking-normal">*</span>
-                  </label>
+              <div className="form-row cols-2">
+                <div className="field-group">
+                  <label className="field-label">Category <span style={{ color: "var(--error)" }}>*</span></label>
                   <select
+                    className={`field-input${formErrors.category ? " field-error" : ""}`}
                     value={form.category}
-                    onChange={e => setField("category", e.target.value)}
-                    className={`${INPUT_BASE} ${errors.category ? "border-[var(--error)] focus:border-[var(--error)]" : "border-[var(--outline-v)] focus:border-[#1e4e8c]"}`}
+                    onChange={e => setField("category", e.target.value as Category)}
                   >
-                    <option value="">Select category...</option>
+                    <option value="">Select category…</option>
                     {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
-                  {errors.category && <p className="text-[11px] text-[var(--error)] mt-1">{errors.category}</p>}
+                  {formErrors.category && <div className="field-error-msg">{formErrors.category}</div>}
                 </div>
-                <div>
-                  <label className="block text-[12px] font-semibold text-[var(--on-variant)] uppercase tracking-wide mb-1.5">
-                    Visibility
-                  </label>
+
+                <div className="field-group">
+                  <label className="field-label">Visibility <span style={{ color: "var(--error)" }}>*</span></label>
                   <select
+                    className="field-input"
                     value={form.visibility}
-                    onChange={e => setField("visibility", e.target.value)}
-                    className={`${INPUT_BASE} border-[var(--outline-v)] focus:border-[#1e4e8c]`}
+                    onChange={e => setField("visibility", e.target.value as Visibility)}
                   >
-                    {VISIBILITY_OPTIONS.map(v => <option key={v} value={v}>{v}</option>)}
+                    {VISIBILITY_OPTIONS.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
                   </select>
                 </div>
               </div>
 
-              {/* Branch */}
-              <div>
-                <label className="block text-[12px] font-semibold text-[var(--on-variant)] uppercase tracking-wide mb-1.5">
-                  Branch
-                </label>
-                <select
-                  value={form.branch}
-                  onChange={e => setField("branch", e.target.value)}
-                  className={`${INPUT_BASE} border-[var(--outline-v)] focus:border-[#1e4e8c]`}
-                >
-                  {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
-                </select>
-              </div>
+              {/* Conditional: Department */}
+              {form.visibility === "department" && (
+                <div className="field-group">
+                  <label className="field-label">Department <span style={{ color: "var(--error)" }}>*</span></label>
+                  <select
+                    className={`field-input${formErrors.target_department ? " field-error" : ""}`}
+                    value={form.target_department}
+                    onChange={e => setField("target_department", e.target.value)}
+                  >
+                    <option value="">Select department…</option>
+                    {departments.map(d => <option key={d.id} value={String(d.id)}>{d.name}</option>)}
+                  </select>
+                  {formErrors.target_department && <div className="field-error-msg">{formErrors.target_department}</div>}
+                </div>
+              )}
+
+              {/* Conditional: Branch */}
+              {form.visibility === "branch" && (
+                <div className="field-group">
+                  <label className="field-label">Branch <span style={{ color: "var(--error)" }}>*</span></label>
+                  <select
+                    className={`field-input${formErrors.target_branch ? " field-error" : ""}`}
+                    value={form.target_branch}
+                    onChange={e => setField("target_branch", e.target.value)}
+                  >
+                    <option value="">Select branch…</option>
+                    {branches.map(b => <option key={b.id} value={String(b.id)}>{b.branch_name} ({b.branch_code})</option>)}
+                  </select>
+                  {formErrors.target_branch && <div className="field-error-msg">{formErrors.target_branch}</div>}
+                </div>
+              )}
 
               {/* Body */}
-              <div>
-                <label className="block text-[12px] font-semibold text-[var(--on-variant)] uppercase tracking-wide mb-1.5">
-                  Body <span className="text-[var(--error)] normal-case tracking-normal">*</span>
-                </label>
+              <div className="field-group">
+                <label className="field-label">Body <span style={{ color: "var(--error)" }}>*</span></label>
                 <textarea
-                  rows={5}
-                  placeholder="Write your announcement..."
+                  className={`field-input${formErrors.body ? " field-error" : ""}`}
+                  rows={6}
+                  placeholder="Write your announcement…"
                   value={form.body}
                   onChange={e => setField("body", e.target.value)}
-                  className={`${INPUT_BASE} resize-none ${errors.body ? "border-[var(--error)] focus:border-[var(--error)]" : "border-[var(--outline-v)] focus:border-[#1e4e8c]"}`}
+                  style={{ resize: "vertical" }}
                 />
-                {errors.body && <p className="text-[11px] text-[var(--error)] mt-1">{errors.body}</p>}
+                {formErrors.body && <div className="field-error-msg">{formErrors.body}</div>}
               </div>
 
               {/* Checkboxes */}
-              <div className="flex items-center gap-4 sm:gap-6 flex-wrap pt-1">
-                <label className="flex items-center gap-2 cursor-pointer">
+              <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 14 }}>
                   <input
                     type="checkbox"
-                    checked={form.pin}
-                    onChange={e => setField("pin", e.target.checked)}
-                    className="w-4 h-4 rounded cursor-pointer accent-[#1e4e8c]"
+                    checked={form.is_pinned}
+                    onChange={e => setField("is_pinned", e.target.checked)}
+                    style={{ accentColor: "var(--primary)" }}
+                    suppressHydrationWarning
                   />
-                  <span className="text-[13px] text-[var(--on-bg)]">Pin this announcement</span>
+                  <i className="ti ti-pin" style={{ color: "var(--warn)" }} />
+                  Pin this announcement
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.emailNotification}
-                    onChange={e => setField("emailNotification", e.target.checked)}
-                    className="w-4 h-4 rounded cursor-pointer accent-[#1e4e8c]"
-                  />
-                  <span className="text-[13px] text-[var(--on-bg)]">Send email notification</span>
-                </label>
+
+                {(isAdmin || isHR) && (
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 14 }}>
+                    <input
+                      type="checkbox"
+                      checked={form.send_email}
+                      onChange={e => setField("send_email", e.target.checked)}
+                      style={{ accentColor: "var(--primary)" }}
+                      suppressHydrationWarning
+                    />
+                    <i className="ti ti-mail" style={{ color: "var(--info)" }} />
+                    Send email notification
+                  </label>
+                )}
               </div>
             </div>
 
-            {/* Modal footer */}
-            <div className="flex items-center justify-end gap-3 px-5 sm:px-6 py-4 border-t border-[var(--outline-v)] flex-shrink-0">
-              <button
-                onClick={closeModal}
-                className="px-4 py-[9px] rounded-lg text-[13px] font-medium border border-[var(--outline-v)] text-[var(--on-bg)] bg-white hover:bg-[var(--bg-low)] transition-colors"
-              >
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={closeModal} disabled={saving} suppressHydrationWarning>
                 Cancel
               </button>
-              <button
-                onClick={handleSubmit}
-                className="flex items-center gap-2 px-4 sm:px-5 py-[9px] rounded-lg text-[13px] font-semibold bg-[#1e4e8c] text-white hover:bg-[#163d72] transition-colors shadow-sm"
-              >
-                <i className="ti ti-send text-[15px]" />
-                {editPost ? "Save Changes" : "Post Announcement"}
+              <button className="btn btn-filled" onClick={handleSave} disabled={saving} suppressHydrationWarning>
+                {saving
+                  ? <><i className="ti ti-loader-2" style={{ animation: "spin 1s linear infinite" }} /> Saving…</>
+                  : <><i className="ti ti-send" /> {editTarget ? "Save Changes" : "Post Announcement"}</>
+                }
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          Delete Confirm Dialog
+      ══════════════════════════════════════════════════════════════════ */}
+      {deleteId != null && (
+        <div className="modal-overlay open" onClick={e => { if (e.target === e.currentTarget && !deleting) setDeleteId(null); }}>
+          <div className="modal" style={{ width: "min(420px, 94vw)" }}>
+            <div className="modal-header">
+              <div className="modal-title" style={{ color: "var(--error)" }}>
+                <i className="ti ti-trash" /> Delete Announcement
+              </div>
+              <button className="modal-close" onClick={() => setDeleteId(null)} disabled={deleting} suppressHydrationWarning>
+                <i className="ti ti-x" />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 14, color: "var(--on-variant)" }}>
+                This announcement will be permanently deleted and cannot be recovered.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setDeleteId(null)} disabled={deleting} suppressHydrationWarning>
+                Cancel
+              </button>
+              <button
+                className="btn btn-filled"
+                style={{ background: "var(--error)" }}
+                onClick={handleDelete}
+                disabled={deleting}
+                suppressHydrationWarning
+              >
+                {deleting
+                  ? <><i className="ti ti-loader-2" style={{ animation: "spin 1s linear infinite" }} /> Deleting…</>
+                  : <><i className="ti ti-trash" /> Delete</>
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
