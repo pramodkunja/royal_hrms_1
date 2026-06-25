@@ -159,11 +159,11 @@ export default function EmailTemplatesPage() {
           <div className="page-sub">Customize transactional email messages sent by Royal HRMS</div>
         </div>
         <div className="page-actions">
-          <button className="btn btn-filled btn-sm" onClick={() => setEditing("add")} style={{ gap: 6 }} suppressHydrationWarning>
-            <i className="ti ti-plus" /> Add Template
-          </button>
           <button className="btn btn-ghost" onClick={() => router.push("/dashboard/settings")} suppressHydrationWarning>
             <i className="ti ti-arrow-left" /> Back
+          </button>
+          <button className="btn btn-filled btn-sm" onClick={() => setEditing("add")} style={{ gap: 6 }} suppressHydrationWarning>
+            <i className="ti ti-plus" /> Add Template
           </button>
         </div>
       </div>
@@ -222,7 +222,7 @@ export default function EmailTemplatesPage() {
                 </div>
 
                 {/* Cards grid */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {group.map(template => (
                     <div key={template.id} style={{
                       background: "#fff", border: "1px solid var(--outline-v)",

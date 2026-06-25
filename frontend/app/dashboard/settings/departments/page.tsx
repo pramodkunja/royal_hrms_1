@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import clientApi from "@/lib/clientApi";
 
 interface RoleInfo    { name: string; display_name: string }
@@ -34,6 +35,8 @@ function Spin() {
 }
 
 export default function DepartmentsPage() {
+  const router = useRouter();
+
   const [departments,  setDepartments]  = useState<Department[]>([]);
   const [designations, setDesignations] = useState<Designation[]>([]);
   const [selected,     setSelected]     = useState<Department | null>(null);
@@ -179,6 +182,9 @@ export default function DepartmentsPage() {
           <p className="page-sub">Global organisation structure — shared across all branches</p>
         </div>
         <div className="page-actions">
+          <button className="btn btn-ghost" onClick={() => router.push("/dashboard/settings")}>
+            <i className="ti ti-arrow-left" /> Back
+          </button>
           <button className="btn btn-filled" onClick={openAddDept}>
             <i className="ti ti-building-plus" /> Add Department
           </button>
@@ -195,11 +201,14 @@ export default function DepartmentsPage() {
       )}
 
       {/* ── Stats bar ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1, background: "var(--outline-v)", borderRadius: "var(--radius-lg)", overflow: "hidden", border: "1px solid var(--outline-v)", marginBottom: 24 }}>
+      <div
+        className="grid grid-cols-1 sm:grid-cols-3 rounded-xl overflow-hidden border border-[var(--outline-v)] mb-6"
+        style={{ gap: 1, background: "var(--outline-v)" }}
+      >
         {[
-          { icon: "ti-building",    color: "var(--primary)", bg: "rgba(30,78,140,0.08)",  label: "Departments",      value: departments.length },
-          { icon: "ti-id-badge",    color: "var(--info)",    bg: "rgba(14,124,134,0.08)", label: "Designations",     value: totalDesig },
-          { icon: "ti-circle-check",color: "var(--success)", bg: "rgba(27,138,107,0.08)", label: "Active Depts",     value: departments.filter(d => d.is_active).length },
+          { icon: "ti-building",    color: "var(--primary)", bg: "rgba(30,78,140,0.08)",  label: "Departments",  value: departments.length },
+          { icon: "ti-id-badge",    color: "var(--info)",    bg: "rgba(14,124,134,0.08)", label: "Designations", value: totalDesig },
+          { icon: "ti-circle-check",color: "var(--success)", bg: "rgba(27,138,107,0.08)", label: "Active Depts", value: departments.filter(d => d.is_active).length },
         ].map((s, i) => (
           <div key={i} style={{ background: "var(--surface)", padding: "18px 22px", display: "flex", alignItems: "center", gap: 14 }}>
             <div style={{ width: 44, height: 44, borderRadius: 12, background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", color: s.color, flexShrink: 0 }}>
@@ -213,11 +222,11 @@ export default function DepartmentsPage() {
         ))}
       </div>
 
-      {/* ── Main grid ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 20, alignItems: "start" }}>
+      {/* ── Main grid — single col on mobile, two-col on desktop ── */}
+      <div className="flex flex-col md:grid md:items-start gap-5" style={{ gridTemplateColumns: "320px 1fr" }}>
 
-        {/* ── LEFT: department list ── */}
-        <div style={{ position: "sticky", top: 20 }}>
+        {/* ── LEFT: department list — hidden on mobile when dept selected ── */}
+        <div className={`${selected ? "hidden md:block" : "block"} md:sticky md:top-5`}>
           {/* Search */}
           <div style={{ position: "relative", marginBottom: 12 }}>
             <i className="ti ti-search" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--outline)", fontSize: 15, pointerEvents: "none" }} />
@@ -319,15 +328,15 @@ export default function DepartmentsPage() {
           </div>
         </div>
 
-        {/* ── RIGHT: detail panel ── */}
+        {/* ── RIGHT: detail panel — hidden on mobile when nothing selected ── */}
         {!selected ? (
-          <div style={{ background: "var(--surface)", border: "1.5px dashed var(--outline-v)", borderRadius: "var(--radius-lg)", minHeight: 400, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 40 }}>
+          <div className="hidden md:flex" style={{ background: "var(--surface)", border: "1.5px dashed var(--outline-v)", borderRadius: "var(--radius-lg)", minHeight: 400, flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 40 }}>
             <div style={{ width: 64, height: 64, borderRadius: 18, background: "var(--bg-low)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <i className="ti ti-building" style={{ fontSize: 30, color: "var(--outline)" }} />
             </div>
             <p style={{ fontSize: 15, fontWeight: 600, color: "var(--on-variant)", margin: 0 }}>No department selected</p>
             <p style={{ fontSize: 13, color: "var(--outline)", margin: 0, textAlign: "center", maxWidth: 260 }}>
-              Pick a department on the left to view and manage its designations
+              Tap a department above to view and manage its designations
             </p>
           </div>
         ) : (() => {
@@ -335,9 +344,19 @@ export default function DepartmentsPage() {
           return (
             <div style={{ background: "var(--surface)", border: "1px solid var(--outline-v)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
 
+              {/* Mobile back button */}
+              <div className="md:hidden px-4 pt-3 pb-0">
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setSelected(null)}
+                >
+                  <i className="ti ti-arrow-left" /> Back to Departments
+                </button>
+              </div>
+
               {/* Hero header */}
               <div style={{ background: `linear-gradient(135deg, ${c.bg} 0%, var(--surface) 65%)`, borderBottom: "1px solid var(--outline-v)", padding: "22px 24px" }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 16, justifyContent: "space-between" }}>
+                <div className="dept-hero-row">
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
                     <div style={{ width: 56, height: 56, borderRadius: 16, background: c.bg, color: c.fg, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 22, border: `2px solid ${c.solid}22`, flexShrink: 0 }}>
                       {selected.name.charAt(0).toUpperCase()}
@@ -369,11 +388,11 @@ export default function DepartmentsPage() {
                   </div>
 
                   {/* Actions */}
-                  <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                    <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => openEditDept(selected)}>
+                  <div className="dept-hero-actions">
+                    <button className="btn btn-ghost btn-sm" onClick={() => openEditDept(selected)}>
                       <i className="ti ti-edit" /> Edit
                     </button>
-                    <button className="btn btn-filled" style={{ fontSize: 13 }} onClick={openAddDesig}>
+                    <button className="btn btn-filled btn-sm" onClick={openAddDesig}>
                       <i className="ti ti-plus" /> Add Designation
                     </button>
                   </div>
@@ -417,7 +436,7 @@ export default function DepartmentsPage() {
                     </button>
                   </div>
                 ) : (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 12 }}>
+                  <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(210px, 100%), 1fr))" }}>
                     {designations.map(d => (
                       <div
                         key={d.id}

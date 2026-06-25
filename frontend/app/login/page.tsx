@@ -75,11 +75,11 @@ export default function LoginPage() {
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--bg)]"
       style={{ backgroundImage: "radial-gradient(ellipse at 20% 50%, rgba(91,134,201,0.14) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(30,78,140,0.09) 0%, transparent 50%)" }}>
 
-      <div className="grid w-full h-full overflow-hidden bg-white"
+      <div className="w-full h-full overflow-hidden bg-white flex flex-col md:grid"
         style={{ gridTemplateColumns: "1.2fr 1fr" }}>
 
-        {/* ── Left Panel ── */}
-        <div className="flex flex-col justify-center items-center px-9 py-10 overflow-y-auto min-w-0"
+        {/* ── Left Panel — hidden on mobile ── */}
+        <div className="hidden md:flex flex-col justify-center items-center px-9 py-10 overflow-y-auto min-w-0"
           style={{ backgroundImage: "radial-gradient(circle at 12% 12%, rgba(255,255,255,0.12) 0%, transparent 38%), radial-gradient(circle at 88% 78%, rgba(255,255,255,0.07) 0%, transparent 45%), repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 13px), linear-gradient(160deg, var(--primary-c) 0%, var(--primary) 45%, #163e73 100%)" }}>
 
           <div className="max-w-[380px] w-full flex flex-col flex-1 justify-center">
@@ -122,7 +122,7 @@ export default function LoginPage() {
         </div>
 
         {/* ── Right Panel ── */}
-        <div className="bg-white px-10 py-12 flex flex-col justify-center min-w-0 overflow-y-auto">
+        <div className="flex-1 md:flex-none bg-white px-6 py-8 md:px-10 md:py-12 flex flex-col justify-center min-w-0 overflow-y-auto">
           <div className="max-w-[360px] w-full mx-auto">
 
             {/* Brand icon */}

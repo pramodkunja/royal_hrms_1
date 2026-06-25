@@ -59,7 +59,7 @@ export default function SmtpModal({ entry, saving, onClose, onSave }: Props) {
         </div>
 
         <div className="modal-body">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px 24px" }}>
+          <div className="smtp-form-grid">
 
             {/* Configuration Name — full width */}
             <div className="field-group" style={{ gridColumn: "1 / -1" }}>
