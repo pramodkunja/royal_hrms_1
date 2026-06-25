@@ -24,6 +24,7 @@ function DocxPreview({ fileUrl }: { fileUrl: string }) {
       try {
         // Dynamic import — avoids SSR crash (docx-preview uses browser APIs)
         const { renderAsync } = await import("docx-preview");
+        // No auth header — files are on MinIO (object storage), not Django API
         const res = await fetch(fileUrl);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const buf = await res.arrayBuffer();

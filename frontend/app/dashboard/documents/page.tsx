@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import clientApi from "@/lib/clientApi";
-import { TOKEN_KEY } from "@/lib/auth";
 import DocPreviewBody from "./_components/DocPreviewBody";
 import {
   DOCUMENTS_BASE, DOCUMENTS_STATS, documentDetail,
@@ -198,33 +197,34 @@ export default function DocumentCenterPage() {
 
     const ft = doc.file_type.toUpperCase();
 
+    // Media files are served directly from MinIO (object storage).
+    // MinIO uses its own bucket-level access policy — sending the Django
+    // JWT Bearer token causes MinIO to return 401. Fetch without auth headers.
+    async function fetchMedia(url: string): Promise<Response> {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res;
+    }
+
     try {
       if (["JPG", "PNG"].includes(ft)) {
-        // Images — fetch as blob so auth headers are sent
-        const token = typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
-        const res = await fetch(doc.file_url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const res  = await fetchMedia(doc.file_url);
         const blob = await res.blob();
         const url  = URL.createObjectURL(blob);
         blobUrlRef.current = url;
         setPreviewBlobUrl(url);
 
       } else if (ft === "PDF") {
-        // PDFs — fetch as blob, create object URL, render in iframe
-        // (avoids Content-Disposition: attachment from the server)
-        const token = typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
-        const res = await fetch(doc.file_url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        // Fetch as blob → object URL so the browser renders inline
+        // (ignores Content-Disposition: attachment from the server)
+        const res  = await fetchMedia(doc.file_url);
         const blob = new Blob([await res.arrayBuffer()], { type: "application/pdf" });
         const url  = URL.createObjectURL(blob);
         blobUrlRef.current = url;
         setPreviewBlobUrl(url);
 
       } else if (["TXT", "CSV"].includes(ft)) {
-        // Plain text — fetch and display in <pre>
-        const token = typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
-        const res = await fetch(doc.file_url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const res = await fetchMedia(doc.file_url);
         setPreviewText(await res.text());
 
       }
