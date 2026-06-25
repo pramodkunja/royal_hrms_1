@@ -8,6 +8,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -17,6 +18,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import (
     AuditLog,
+    Company,
     Department,
     Designation,
     EmailTemplate,
@@ -29,6 +31,7 @@ from apps.accounts.models import (
 )
 from apps.accounts.serializers import (
     ChangePasswordSerializer,
+    CompanySerializer,
     DepartmentSerializer,
     DesignationSerializer,
     EmailTemplatePreviewSerializer,
@@ -1041,7 +1044,7 @@ class EmailTemplateDetailView(APIView):
 
 
 class EmailTemplatePreviewView(APIView):
-    
+
     permission_classes = [IsAuthenticated, CanManageRoles]
 
     def post(self, request, pk):
@@ -1054,7 +1057,7 @@ class EmailTemplatePreviewView(APIView):
         if not serializer.is_valid():
             return error(_first_error(serializer.errors), data=serializer.errors)
 
-        context                      = serializer.validated_data.get('context', {})
+        context                         = serializer.validated_data.get('context', {})
         rendered_subject, rendered_body = tpl.render(context)
 
         return success('Preview generated.', data={
@@ -1063,3 +1066,63 @@ class EmailTemplatePreviewView(APIView):
             'body':                rendered_body,
             'available_variables': tpl.available_variables,
         })
+
+
+# ─── Company ──────────────────────────────────────────────────────────────────
+
+class CompanyRetrieveUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes     = [MultiPartParser, FormParser, JSONParser]
+
+    def get(self, request):
+        company = Company.objects.first()
+        if not company:
+            return success('No company info found.', data={})
+        serializer = CompanySerializer(company, context={'request': request})
+        return success('Company info retrieved.', data=serializer.data)
+
+    def put(self, request):
+        if not (request.user.role and request.user.role.name in ('hr_admin', 'system_admin')):
+            return error(
+                'You do not have permission to update company info.',
+                http_status=status.HTTP_403_FORBIDDEN,
+            )
+
+        company = Company.objects.first()
+        is_new  = company is None
+
+        with transaction.atomic():
+            serializer = CompanySerializer(
+                company,
+                data=request.data,
+                partial=not is_new,
+                context={'request': request},
+            )
+            if not serializer.is_valid():
+                return error(_first_error(serializer.errors), data=serializer.errors)
+
+            # Replace old logo file when a new one is uploaded
+            if not is_new and 'logo' in request.FILES and company.logo:
+                company.logo.delete(save=False)
+
+            instance = serializer.save(updated_by=request.user)
+
+            # Handle explicit logo removal
+            remove_logo = str(request.data.get('remove_logo', '')).lower() == 'true'
+            if remove_logo and instance.logo:
+                instance.logo.delete(save=False)
+                instance.logo = None
+                instance.save(update_fields=['logo'])
+
+        AuditLog.objects.create(
+            user=request.user,
+            action='create' if is_new else 'update',
+            module='company',
+            object_id=str(instance.pk),
+            ip_address=get_client_ip(request),
+        )
+        logger.info('Company info %s by %s', 'created' if is_new else 'updated', request.user.email)
+        return success(
+            'Company info saved successfully.',
+            data=CompanySerializer(instance, context={'request': request}).data,
+        )

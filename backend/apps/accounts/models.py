@@ -413,7 +413,7 @@ class EmailTemplate(models.Model):
         return self.display_name
 
     def render(self, context: dict) -> tuple[str, str]:
-        
+
         subject = self.subject
         body    = self.body
         for key, value in context.items():
@@ -421,3 +421,36 @@ class EmailTemplate(models.Model):
             subject     = subject.replace(placeholder, str(value))
             body        = body.replace(placeholder, str(value))
         return subject, body
+
+
+# ─── Company (singleton) ──────────────────────────────────────────────────────
+
+class Company(models.Model):
+    """Single legal entity. Only one record ever exists in this table."""
+    company_name   = models.CharField(max_length=200)
+    trade_name     = models.CharField(max_length=200, blank=True)
+    logo           = models.ImageField(upload_to='company/', null=True, blank=True)
+    gstin          = models.CharField(max_length=15)
+    cin            = models.CharField(max_length=21)
+    pan            = models.CharField(max_length=10)
+    tan            = models.CharField(max_length=10)
+    address        = models.TextField(max_length=500)
+    city           = models.CharField(max_length=100)
+    state          = models.CharField(max_length=100)
+    pin_code       = models.CharField(max_length=6)
+    website        = models.CharField(max_length=255, blank=True)
+    official_phone = models.CharField(max_length=15, blank=True)
+    updated_at     = models.DateTimeField(auto_now=True)
+    updated_by     = models.ForeignKey(
+                         User,
+                         on_delete=models.SET_NULL,
+                         null=True,
+                         blank=True,
+                         related_name='company_updates',
+                     )
+
+    class Meta:
+        db_table = 'hrms_company'
+
+    def __str__(self) -> str:
+        return self.company_name
