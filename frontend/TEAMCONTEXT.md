@@ -274,3 +274,126 @@ Full static announcements page (all styling pure Tailwind, no CSS modules). Colo
 const isActive = pathname === item.path ||
   (item.path !== "/dashboard" && pathname.startsWith(item.path + "/"));
 ```
+
+---
+
+## Session 3 — Rithwika (25 June 2026)
+
+### 1. JWT Login Fix (`lib/clientApi.ts`)
+
+**Problem:** After login, a stale Bearer token was being attached to the `/login/` request itself. Django's `JWTAuthentication` then rejected it with `token_not_valid` even though the view uses `AllowAny`.
+
+**Fix:** Added `AUTH_URLS` list to the Axios request interceptor. The interceptor now skips attaching the `Authorization` header when the request URL ends with any auth endpoint.
+
+```ts
+const AUTH_URLS = ["/login/", "/token/refresh/", "/forgot-password/", "/verify-otp/", "/reset-password/"];
+
+clientApi.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    const isAuthUrl = AUTH_URLS.some(u => config.url?.endsWith(u));
+    if (!isAuthUrl) {
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (token) config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
+  return config;
+});
+```
+
+> **Note:** Only `lib/clientApi.ts` was modified. The Django backend was not touched.
+
+---
+
+### 2. Mobile Responsiveness — Full Application (Hybrid CSS approach)
+
+All responsive changes use a hybrid model: **global CSS classes in `app/globals.css`** for layout-level rules, and **Tailwind responsive prefixes** (`md:`, `sm:`, `lg:`) for component-level overrides.
+
+#### 2a. Login Page (`app/login/page.tsx`)
+- Two-column layout (`grid`) converted to `flex flex-col md:grid` — stacks vertically on mobile
+- Left decorative panel: `hidden md:flex` — hidden on mobile (full screen for the login form)
+- Right panel padding: `px-6 py-8 md:px-10 md:py-12`
+
+#### 2b. Dashboard Shell (`components/dashboard/DashboardShell.tsx`)
+- **Sidebar** converted to a fixed overlay drawer on mobile using CSS `transform: translateX(-100%)` / `translateX(0)`:
+  - `fixed left-0 top-0 w-[220px]` always; `md:relative md:translate-x-0` reverts to normal flow on desktop
+  - `mobileOpen` state toggles `translate-x-0` vs `-translate-x-full`
+  - Semi-transparent backdrop (`fixed inset-0 bg-black/40 md:hidden`) closes drawer on tap
+- **Hamburger button:** `md:hidden` — visible only on mobile
+- **Search bar:** `hidden md:flex` — hidden on mobile header
+- **Header + content padding:** `px-3 md:px-6`, `p-4 md:p-6`
+
+#### 2c. Announcements Page
+- Stats grid, filter tabs (horizontal scroll on mobile), post cards — responsive via Tailwind grid utilities
+
+#### 2d. Branches Page
+- Card grid responsive via Tailwind responsive prefixes
+
+---
+
+### 3. Settings Pages — Mobile Responsiveness + Button Order
+
+All settings sub-pages made mobile-responsive. **Button order rule enforced across all pages: Back button always first, Add button second.**
+
+#### 3a. Departments & Designations (`app/dashboard/settings/departments/page.tsx`)
+- **Stats bar:** `grid grid-cols-1 sm:grid-cols-3` with shared background and `gap: 1` separator trick
+- **Two-panel layout:** `flex flex-col md:grid` with `gridTemplateColumns: "320px 1fr"`
+- **Mobile panel navigation pattern:**
+  - List panel: `className={selected ? "hidden md:block" : "block"}` — hides when detail is open
+  - No-selection placeholder: `hidden md:flex` — never shown on mobile (list takes its place)
+  - Detail panel: `block md:block` — shown when selected
+  - Mobile-only "← Back to Departments" button inside detail panel (`md:hidden`)
+- **Hero header actions** (`dept-hero-row` / `dept-hero-actions` CSS classes):
+  - On mobile → `flex-direction: column`; Edit + Add Designation buttons stretch to full width
+- **Designations grid:** `repeat(auto-fill, minmax(min(210px, 100%), 1fr))`
+- **Back button added** to page header (was missing)
+
+#### 3b. Roles & Permissions (`app/dashboard/settings/permissions/page.tsx`)
+- Button order was already correct (Back → Add Role) ✓
+- Tables already wrapped in `.table-wrap` with `overflow-x: auto` ✓
+
+#### 3c. Email Templates (`app/dashboard/settings/email-templates/page.tsx`)
+- Button order fixed: Back (ghost) → Add Template (filled)
+- Cards grid: `grid grid-cols-1 sm:grid-cols-2` (was fixed 2-col inline style)
+- **`EditTemplateModal.tsx`** — editor + tags sidebar layout:
+  - Was: `gridTemplateColumns: "1fr 200px"` (gave editor only ~160px on iPhone SE)
+  - Now: `.email-editor-grid` CSS class — switches to `flex flex-col` on mobile
+  - Editor panel gets `.email-editor-left` class; Tags sidebar gets `.email-tags-sidebar` class (max 130px, scrollable on mobile)
+
+#### 3d. SMTP Settings (`app/dashboard/settings/smtp/page.tsx`)
+- Button order fixed: Back (ghost) → Add SMTP (filled)
+- Cards grid: `grid grid-cols-1 lg:grid-cols-2`
+- **`SmtpModal.tsx`** — form fields grid:
+  - Was: `style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}` (2-col always, unoverrideable)
+  - Now: `.smtp-form-grid` CSS class — collapses to single column on `≤768px`
+
+---
+
+### 4. CSS Classes Added to `app/globals.css`
+
+| Class | Purpose |
+|-------|---------|
+| `.smtp-form-grid` | 2-col form grid (SMTP modal) → 1-col on mobile |
+| `.email-editor-grid` | Side-by-side editor+tags → stacked column on mobile |
+| `.email-editor-left` | Editor left panel — removes right border on mobile |
+| `.email-tags-sidebar` | Tags right panel — max 130px scrollable on mobile |
+| `.dept-hero-row` | Departments hero header row → column on mobile |
+| `.dept-hero-actions` | Action buttons in hero → full-width stretch on mobile |
+
+Responsive breakpoint for all new layout classes: `max-width: 768px` (inside existing `@media` block).
+
+---
+
+### Key Files Changed (25 June 2026)
+
+| File | Change |
+|------|--------|
+| `lib/clientApi.ts` | Skip Bearer token for auth URLs in request interceptor |
+| `app/login/page.tsx` | Mobile responsive — left panel hidden, form stacks vertically |
+| `components/dashboard/DashboardShell.tsx` | Mobile sidebar overlay drawer, hamburger toggle, responsive padding |
+| `app/globals.css` | New CSS classes + responsive overrides for modal grids and dept hero |
+| `app/dashboard/settings/departments/page.tsx` | Two-panel mobile nav, hero action fix, Back button added, responsive grids |
+| `app/dashboard/settings/permissions/page.tsx` | No changes needed (already correct) |
+| `app/dashboard/settings/email-templates/page.tsx` | Button order fixed, cards grid responsive |
+| `app/dashboard/settings/email-templates/_components/EditTemplateModal.tsx` | Editor+tags layout responsive (`email-editor-grid`) |
+| `app/dashboard/settings/smtp/page.tsx` | Button order fixed, cards grid responsive |
+| `app/dashboard/settings/smtp/_components/SmtpModal.tsx` | Form grid responsive (`smtp-form-grid`) |
