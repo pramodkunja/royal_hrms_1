@@ -503,3 +503,116 @@ CORS_ALLOW_ALL_ORIGINS = True   # NOT CORS_ALLOWED_ORIGINS = ['*'] — that brea
 - **CORS pattern** — use `CORS_ALLOW_ALL_ORIGINS = True` in settings.py. Never set `CORS_ALLOWED_ORIGINS = ['*']` — the wildcard string is rejected by django-cors-headers at startup.
 - **Audit workflow** — every new module that has admin write operations should get `AuditLog.objects.create()` calls. Notify Surya when a new backend module is added and audit coverage will be dropped in.
 - **Cross-app AuditLog import in branch** — `from apps.accounts.models import AuditLog` in `apps/branch/views.py` is safe (no circular dependency — accounts doesn't import branch).
+
+---
+
+## Session 3 — Safura Samreen (25 June 2026)
+
+**Branch:** `Frontend/Email-Document`
+**Commits:** `8999189` · `e7bdcac` · `b4835df`
+
+---
+
+### 7. Email Templates — Bug Fixes & Enhancements
+
+#### Bug fixes
+
+**Attachments payload was empty (`attachments: {}` or `[{}, {}]`)**
+- Root cause: Axios 1.x has an instance-level `Content-Type: application/json` header that prevents it from auto-detecting `FormData`, so it serialised files to empty objects instead.
+- Fix 1 — `lib/clientApi.ts`: added request interceptor that deletes `Content-Type` when `config.data instanceof FormData`, letting the browser set `multipart/form-data` with the correct boundary.
+- Fix 2 — `page.tsx`: removed the `buildPayload()` helper that branched between JSON and FormData. Both `handleCreate` and `handleUpdate` now always build `FormData` inline.
+
+**`available_variables` sent as a nested JSON string**
+- The list API returns it as `string | string[]` inconsistently.
+- Fix: `parseAvailableVars(val)` added to `_data.ts` — handles both formats. Sent to backend as `JSON.stringify(array)` inside FormData.
+
+**Existing attachments not shown when opening the edit modal**
+- Cause: the list endpoint omits `attachments` for performance.
+- Fix: `EditTemplateModal` fetches `GET /api/settings/email-templates/{id}/` on mount and sets `existingAttachments` state. Existing chips use solid blue border + paperclip icon; new pending files use dashed border + upload icon.
+- Removed attachments are tracked in `removedAttachmentIds[]` and `DELETE`d via `Promise.allSettled` in `handleSave` before calling `onSave`.
+
+**`display_name` required error when creating a category**
+- Was only sending `{ name: slug }`. Fix: now sends `{ name: toSlug(displayName), display_name: displayName }`.
+
+**Chevron arrow rendered outside the category input box**
+- The inner wrapper div was missing `width: "100%"`. Added to both the wrapper `div` and the `input`.
+
+#### New features
+
+**Inline category creation in the combobox**
+- When the typed text doesn't match any existing category, a "+ Create new category" option appears at the bottom of the dropdown.
+- On click: `handleCreateCategory` POSTs `{ name, display_name }` to `EMAIL_TEMPLATE_CATEGORIES`, appends the new item to `categories[]`, and selects it.
+- `catCreating` boolean shows a spinner during the POST.
+- `onMouseDown → e.preventDefault()` on all dropdown options prevents blur before click registers.
+
+**Full responsive layout**
+
+*`page.tsx` (card list):*
+- Card grid: 1 col (< 560 px) → 2 col (560–1099 px) → 3 col (≥ 1100 px)
+- Toast: `left: 8px; right: 8px` on mobile (≤ 480 px)
+- Search bar: full-width on mobile
+
+*`EditTemplateModal.tsx` (editor modal):*
+- **Mobile (≤ 640 px):** modal goes full-screen (`100vw × 100dvh`, `border-radius: 0`); a 3-tab bar appears — **Editor / Preview / Variables** — only the active column is visible.
+- **Tablet (641–1023 px):** editor + sidebar (200 px); preview column hidden.
+- **Desktop (≥ 1024 px):** original 3-column grid `1fr 1fr 180px` unchanged.
+- CSS classes `et-modal-wrap`, `et-modal-grid`, `et-col-editor`, `et-col-preview`, `et-col-sidebar`, `et-tab-bar`, `et-tab-active` drive all breakpoint logic via `!important` overrides.
+
+#### Files changed
+| File | What |
+|---|---|
+| `lib/clientApi.ts` | Request interceptor: delete `Content-Type` when body is `FormData` |
+| `settings/email-templates/_data.ts` | Added `ApiAttachment`, `emailTemplateAttachmentDetail()`, `parseAvailableVars()` |
+| `settings/email-templates/page.tsx` | Always FormData; responsive CSS; 3-col grid |
+| `settings/email-templates/_components/EditTemplateModal.tsx` | Existing attachments, inline category creation, chevron fix, mobile tabs, responsive CSS |
+
+---
+
+### 8. Document Center — New Page (`app/dashboard/documents/`)
+
+Full page at route `/dashboard/documents` wired to the real backend API.
+
+#### File structure
+```
+documents/
+  _data.ts                  ← API endpoints, types, file-type meta, validation helpers
+  page.tsx                  ← main page (stats, list, upload, delete, preview logic)
+  _components/
+    DocPreviewBody.tsx      ← in-app document renderer (PDF, images, DOCX, XLSX, TXT/CSV)
+```
+
+#### API endpoints used
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/api/documents/stats/` | Live counts: total, by category |
+| `GET` | `/api/documents/` | List — query params: `category`, `search` |
+| `POST` | `/api/documents/` | Upload (`multipart/form-data`) |
+| `DELETE` | `/api/documents/{id}/` | Soft delete |
+
+#### Features
+- **Stats row** — 4 live-count cards (Total Documents, Policies, Forms, Templates)
+- **Filter tabs + debounced search** — pill tabs + search, both as server-side query params. Search debounced 400 ms.
+- **Document grid** — `.doc-grid` / `.doc-tile` / `.doc-icon` CSS classes. Responsive: `auto-fill minmax(220px, 1fr)`.
+- **Detail modal** — file preview banner, metadata rows, Delete · Close · Preview · Download.
+- **Upload modal** — drag-and-drop zone, auto-fills name from filename, category select, description.
+- **In-app preview** — PDF via blob URL → iframe; JPG/PNG → img; TXT/CSV → pre; DOCX → `docx-preview`; XLSX → SheetJS; PPT → download prompt.
+
+#### Key bug fixes during build
+- **PDF preview 401** — MinIO uses bucket-level ACL not JWT. Removed `Authorization` header from media fetches.
+- **PDF downloading instead of previewing** — MinIO sets `Content-Disposition: attachment`. Fix: fetch as ArrayBuffer → Blob → `URL.createObjectURL()`.
+- **File picker not showing PDFs on Windows** — `accept` now includes both MIME types and extensions.
+
+#### New packages installed
+| Package | Version | Purpose |
+|---|---|---|
+| `docx-preview` | `^0.3.7` | Client-side DOCX → HTML rendering |
+| `xlsx` | `^0.18.5` | Client-side XLSX/XLS → HTML table rendering |
+
+---
+
+## Key Notes for Next Developer (Safura Session 3)
+
+- **MinIO media files** — never send the Django JWT token to `file_url` (MinIO endpoint). Use plain `fetch(url)` without `Authorization` header.
+- **Axios 1.x FormData bug** — the clientApi interceptor in `lib/clientApi.ts` now deletes `Content-Type` when body is `FormData`. This must stay or file uploads will break silently.
+- **`available_variables`** — backend returns it as either `string[]` or a JSON-stringified string. Always use `parseAvailableVars()` from `_data.ts` when reading this field.
+- **Email template list API** — omits `attachments` per template. Always fetch the detail endpoint `/settings/email-templates/{id}/` when you need attachments.
