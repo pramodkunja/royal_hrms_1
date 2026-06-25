@@ -34,6 +34,9 @@ class Permission(models.Model):
     class Meta:
         db_table = 'hrms_permissions'
         ordering = ['module', 'action']
+        indexes = [
+            models.Index(fields=['module', 'action'], name='permission_module_action_idx'),
+        ]
 
     def __str__(self) -> str:
         return self.codename
@@ -111,6 +114,11 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     class Meta:
         db_table = 'hrms_users'
+        indexes = [
+            models.Index(fields=['role', 'is_active'],  name='user_role_active_idx'),
+            models.Index(fields=['department'],          name='user_department_idx'),
+            models.Index(fields=['designation'],         name='user_designation_idx'),
+        ]
 
     def __str__(self) -> str:
         return self.email
@@ -372,22 +380,26 @@ class SMTPSettings(models.Model):
 
 # ─── Email Templates ──────────────────────────────────────────────────────────
 
+class EmailTemplateCategory(models.Model):
+    name         = models.CharField(max_length=50, unique=True)
+    display_name = models.CharField(max_length=100)
+    is_builtin   = models.BooleanField(default=False)
+    order        = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        db_table = 'hrms_email_template_categories'
+        ordering = ['order', 'display_name']
+
+    def __str__(self) -> str:
+        return self.display_name
+
+
 class EmailTemplate(models.Model):
-   
-    class TemplateType(models.TextChoices):
-        WISH         = 'wish',         'Wish'
-        REMINDER     = 'reminder',     'Reminder'
-        NOTIFICATION = 'notification', 'Notification'
-        DOCUMENT     = 'document',     'Document'
 
     name                = models.CharField(max_length=100, unique=True)
     display_name        = models.CharField(max_length=200)
     description         = models.CharField(max_length=500, blank=True)
-    template_type       = models.CharField(
-                              max_length=20,
-                              choices=TemplateType.choices,
-                              default=TemplateType.NOTIFICATION,
-                          )
+    template_type       = models.CharField(max_length=50, default='notification')
     subject             = models.CharField(max_length=500)
     body                = models.TextField()
     is_active           = models.BooleanField(default=True)
@@ -413,13 +425,14 @@ class EmailTemplate(models.Model):
         return self.display_name
 
     def render(self, context: dict) -> tuple[str, str]:
-
         subject = self.subject
         body    = self.body
         for key, value in context.items():
+            # Strip CR/LF to prevent SMTP header injection via subject line
+            safe_value  = str(value).replace('\r', '').replace('\n', ' ')
             placeholder = '{' + key + '}'
-            subject     = subject.replace(placeholder, str(value))
-            body        = body.replace(placeholder, str(value))
+            subject     = subject.replace(placeholder, safe_value)
+            body        = body.replace(placeholder, safe_value)
         return subject, body
 
 
@@ -454,3 +467,98 @@ class Company(models.Model):
 
     def __str__(self) -> str:
         return self.company_name
+
+
+# ─── Document Center ──────────────────────────────────────────────────────────
+
+class Document(models.Model):
+    CATEGORY_POLICY   = 'policy'
+    CATEGORY_FORM     = 'form'
+    CATEGORY_TEMPLATE = 'template'
+    CATEGORY_OTHER    = 'other'
+    CATEGORY_CHOICES  = [
+        (CATEGORY_POLICY,   'Policy'),
+        (CATEGORY_FORM,     'Form'),
+        (CATEGORY_TEMPLATE, 'Template'),
+        (CATEGORY_OTHER,    'Other'),
+    ]
+
+    MIME_TO_TYPE = {
+        'application/pdf':                                                            'PDF',
+        'application/msword':                                                         'DOC',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document':   'DOCX',
+        'application/vnd.ms-excel':                                                   'XLS',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':         'XLSX',
+        'application/vnd.ms-powerpoint':                                              'PPT',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PPTX',
+        'image/jpeg': 'JPG',
+        'image/png':  'PNG',
+        'text/plain': 'TXT',
+        'text/csv':   'CSV',
+    }
+    ALLOWED_MIME_TYPES = set(MIME_TO_TYPE.keys())
+    MAX_FILE_SIZE      = 25 * 1024 * 1024   # 25 MB
+
+    title       = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default='')
+    category    = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default=CATEGORY_OTHER)
+    file        = models.FileField(upload_to='documents/%Y/%m/')
+    file_name   = models.CharField(max_length=255)
+    file_type   = models.CharField(max_length=10)       # PDF / DOCX / XLSX …
+    file_size   = models.PositiveBigIntegerField()       # bytes
+    branch      = models.ForeignKey(
+                      'branch.Branch',
+                      on_delete=models.SET_NULL,
+                      null=True, blank=True,
+                      related_name='documents',
+                  )
+    uploaded_by = models.ForeignKey(
+                      User,
+                      on_delete=models.SET_NULL,
+                      null=True,
+                      related_name='uploaded_documents',
+                  )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
+    is_active   = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'hrms_documents'
+        ordering = ['-uploaded_at']
+        indexes  = [
+            models.Index(fields=['category'],    name='doc_category_idx'),
+            models.Index(fields=['branch'],      name='doc_branch_idx'),
+            models.Index(fields=['uploaded_at'], name='doc_uploaded_at_idx'),
+        ]
+
+    def __str__(self) -> str:
+        return self.title
+
+
+class EmailTemplateAttachment(models.Model):
+    ALLOWED_MIME_TYPES = {
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }
+
+    template    = models.ForeignKey(EmailTemplate, on_delete=models.CASCADE, related_name='attachments')
+    file        = models.FileField(upload_to='email_template_attachments/')
+    filename    = models.CharField(max_length=255)
+    mime_type   = models.CharField(max_length=100)
+    size        = models.PositiveIntegerField(help_text='File size in bytes')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='uploaded_template_attachments',
+    )
+
+    class Meta:
+        db_table = 'hrms_email_template_attachments'
+        ordering = ['uploaded_at']
+
+    def __str__(self) -> str:
+        return self.filename

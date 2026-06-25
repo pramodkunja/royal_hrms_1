@@ -6,7 +6,8 @@ from collections import defaultdict
 
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.db.models import F, Q
+from django.db.models.deletion import ProtectedError
+from django.db.models import Count, F, Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -22,7 +23,10 @@ from apps.accounts.models import (
     Company,
     Department,
     Designation,
+    Document,
     EmailTemplate,
+    EmailTemplateAttachment,
+    EmailTemplateCategory,
     OTPVerification,
     PasswordResetToken,
     Permission,
@@ -36,6 +40,9 @@ from apps.accounts.serializers import (
     CompanySerializer,
     DepartmentSerializer,
     DesignationSerializer,
+    DocumentSerializer,
+    EmailTemplateAttachmentSerializer,
+    EmailTemplateCategorySerializer,
     EmailTemplatePreviewSerializer,
     EmailTemplateSerializer,
     ForgotPasswordSerializer,
@@ -48,6 +55,7 @@ from apps.accounts.serializers import (
     SMTPTestSerializer,
     VerifyOTPSerializer,
 )
+from apps.accounts.throttles import ForgotPasswordRateThrottle, LoginRateThrottle, OTPVerifyRateThrottle
 from apps.accounts.tokens import RoleBasedRefreshToken
 from apps.accounts.utils import send_otp_email, send_test_email
 
@@ -105,8 +113,9 @@ class CanManageRoles(BasePermission):
 # ─── Authentication ────────────────────────────────────────────────────────────
 
 class LoginView(APIView):
-    permission_classes = [AllowAny]
-    authentication_classes = []
+    permission_classes      = [AllowAny]
+    authentication_classes  = []
+    throttle_classes        = [LoginRateThrottle]
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -227,6 +236,7 @@ class LogoutView(APIView):
 
 class ForgotPasswordView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes   = [ForgotPasswordRateThrottle]
 
     def post(self, request):
         serializer = ForgotPasswordSerializer(data=request.data, context={})
@@ -261,6 +271,7 @@ class ForgotPasswordView(APIView):
 
 class VerifyOTPView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes   = [OTPVerifyRateThrottle]
 
     def post(self, request):
         serializer = VerifyOTPSerializer(data=request.data)
@@ -379,7 +390,11 @@ class RoleListCreateView(APIView):
     permission_classes = [IsAuthenticated, CanManageRoles]
 
     def get(self, request):
-        roles = Role.objects.prefetch_related('role_permissions__permission', 'users').all()
+        roles = (
+            Role.objects
+            .prefetch_related('role_permissions__permission')
+            .annotate(active_user_count=Count('users', filter=Q(users__is_active=True)))
+        )
         return success('Roles retrieved successfully.', data=RoleSerializer(roles, many=True).data)
 
     def post(self, request):
@@ -416,8 +431,9 @@ class RoleDetailView(APIView):
         try:
             return (
                 Role.objects
-                    .prefetch_related('role_permissions__permission', 'users')
-                    .get(pk=pk)
+                .prefetch_related('role_permissions__permission')
+                .annotate(active_user_count=Count('users', filter=Q(users__is_active=True)))
+                .get(pk=pk)
             )
         except Role.DoesNotExist:
             return None
@@ -474,7 +490,7 @@ class RoleDetailView(APIView):
         AuditLog.objects.create(
             user=request.user, action='role_updated', module='accounts',
             object_id=str(updated_role.id),
-            changes=dict(request.data),
+            changes={k: v for k, v in request.data.items() if not hasattr(v, 'read')},
             ip_address=get_client_ip(request),
         )
         logger.info('Role "%s" partially updated by %s', updated_role.name, request.user.email)
@@ -495,7 +511,13 @@ class RoleDetailView(APIView):
             )
 
         role_name = role.name
-        role.delete()
+        try:
+            role.delete()
+        except ProtectedError:
+            return error(
+                f'Cannot delete role "{role_name}" — it is referenced by other records.',
+                http_status=status.HTTP_409_CONFLICT,
+            )
 
         AuditLog.objects.create(
             user=request.user, action='role_deleted', module='accounts',
@@ -593,7 +615,14 @@ class PermissionDetailView(APIView):
             return error('Permission not found.', http_status=status.HTTP_404_NOT_FOUND)
 
         codename = perm.codename
-        perm.delete()
+        try:
+            perm.delete()
+        except ProtectedError:
+            return error(
+                f'Cannot delete permission "{codename}" — it is assigned to one or more roles. '
+                'Remove it from all roles first.',
+                http_status=status.HTTP_409_CONFLICT,
+            )
 
         AuditLog.objects.create(
             user=request.user, action='permission_deleted', module='accounts',
@@ -613,16 +642,41 @@ class DepartmentListCreateView(APIView):
         qs = Department.objects.prefetch_related('designations').all()
         if is_active := request.query_params.get('is_active'):
             qs = qs.filter(is_active=is_active.lower() == 'true')
+
+        # Single query for all user/role data across departments — avoids N+1
+        dept_users = (
+            User.objects
+            .filter(is_active=True)
+            .exclude(department='')
+            .values('department', 'role__name', 'role__display_name')
+        )
+        emp_counts: dict = defaultdict(int)
+        dept_roles: dict = defaultdict(set)
+        for u in dept_users:
+            emp_counts[u['department']] += 1
+            if u['role__name']:
+                dept_roles[u['department']].add((u['role__name'], u['role__display_name']))
+
+        ctx = {
+            'emp_counts': dict(emp_counts),
+            'dept_roles': {k: sorted(v, key=lambda x: x[1]) for k, v in dept_roles.items()},
+        }
         return success(
             'Departments retrieved successfully.',
-            data=DepartmentSerializer(qs, many=True).data,
+            data=DepartmentSerializer(qs, many=True, context=ctx).data,
         )
 
     def post(self, request):
         serializer = DepartmentSerializer(data=request.data)
         if not serializer.is_valid():
             return error(_first_error(serializer.errors), data=serializer.errors)
-        dept = serializer.save()
+        try:
+            dept = serializer.save()
+        except IntegrityError:
+            return error(
+                f"Department '{serializer.validated_data['name']}' already exists.",
+                http_status=status.HTTP_409_CONFLICT,
+            )
         AuditLog.objects.create(
             user=request.user, action='dept_created', module='accounts',
             object_id=str(dept.pk), changes={'name': dept.name},
@@ -657,7 +711,13 @@ class DepartmentDetailView(APIView):
         serializer = DepartmentSerializer(dept, data=request.data)
         if not serializer.is_valid():
             return error(_first_error(serializer.errors), data=serializer.errors)
-        updated = serializer.save()
+        try:
+            updated = serializer.save()
+        except IntegrityError:
+            return error(
+                f"Department '{serializer.validated_data.get('name', '')}' already exists.",
+                http_status=status.HTTP_409_CONFLICT,
+            )
         AuditLog.objects.create(
             user=request.user, action='dept_updated', module='accounts',
             object_id=str(updated.pk), changes={'name': updated.name},
@@ -672,7 +732,13 @@ class DepartmentDetailView(APIView):
         serializer = DepartmentSerializer(dept, data=request.data, partial=True)
         if not serializer.is_valid():
             return error(_first_error(serializer.errors), data=serializer.errors)
-        updated = serializer.save()
+        try:
+            updated = serializer.save()
+        except IntegrityError:
+            return error(
+                f"Department '{serializer.validated_data.get('name', '')}' already exists.",
+                http_status=status.HTTP_409_CONFLICT,
+            )
         AuditLog.objects.create(
             user=request.user, action='dept_updated', module='accounts',
             object_id=str(updated.pk), changes={'name': updated.name},
@@ -691,12 +757,18 @@ class DepartmentDetailView(APIView):
                 http_status=status.HTTP_400_BAD_REQUEST,
             )
         name = dept.name
+        try:
+            dept.delete()
+        except ProtectedError:
+            return error(
+                f'Cannot delete department "{name}" — it is referenced by other records.',
+                http_status=status.HTTP_409_CONFLICT,
+            )
         AuditLog.objects.create(
             user=request.user, action='dept_deleted', module='accounts',
             object_id=str(dept.pk), changes={'name': name},
             ip_address=get_client_ip(request),
         )
-        dept.delete()
         return success(f'Department "{name}" deleted successfully.')
 
 
@@ -706,6 +778,12 @@ class DesignationListCreateView(APIView):
     def get(self, request):
         qs = Designation.objects.select_related('department').all()
         if dept_id := request.query_params.get('department'):
+            try:
+                dept_id = int(dept_id)
+            except (TypeError, ValueError):
+                return error('department filter must be a valid integer ID.')
+            if not Department.objects.filter(pk=dept_id).exists():
+                return error('Department not found.', http_status=status.HTTP_404_NOT_FOUND)
             qs = qs.filter(department_id=dept_id)
         return success(
             'Designations retrieved successfully.',
@@ -716,7 +794,13 @@ class DesignationListCreateView(APIView):
         serializer = DesignationSerializer(data=request.data)
         if not serializer.is_valid():
             return error(_first_error(serializer.errors), data=serializer.errors)
-        desig = serializer.save()
+        try:
+            desig = serializer.save()
+        except IntegrityError:
+            return error(
+                f"Designation '{serializer.validated_data['name']}' already exists in this department.",
+                http_status=status.HTTP_409_CONFLICT,
+            )
         AuditLog.objects.create(
             user=request.user, action='designation_created', module='accounts',
             object_id=str(desig.pk),
@@ -739,6 +823,12 @@ class DesignationDetailView(APIView):
         except Designation.DoesNotExist:
             return None
 
+    def get(self, request, pk: int):
+        desig = self._get(pk)
+        if not desig:
+            return error('Designation not found.', http_status=status.HTTP_404_NOT_FOUND)
+        return success('Designation retrieved successfully.', data=DesignationSerializer(desig).data)
+
     def put(self, request, pk: int):
         desig = self._get(pk)
         if not desig:
@@ -746,7 +836,13 @@ class DesignationDetailView(APIView):
         serializer = DesignationSerializer(desig, data=request.data)
         if not serializer.is_valid():
             return error(_first_error(serializer.errors), data=serializer.errors)
-        updated = serializer.save()
+        try:
+            updated = serializer.save()
+        except IntegrityError:
+            return error(
+                f"Designation '{serializer.validated_data.get('name', '')}' already exists in this department.",
+                http_status=status.HTTP_409_CONFLICT,
+            )
         AuditLog.objects.create(
             user=request.user, action='designation_updated', module='accounts',
             object_id=str(updated.pk),
@@ -762,7 +858,13 @@ class DesignationDetailView(APIView):
         serializer = DesignationSerializer(desig, data=request.data, partial=True)
         if not serializer.is_valid():
             return error(_first_error(serializer.errors), data=serializer.errors)
-        updated = serializer.save()
+        try:
+            updated = serializer.save()
+        except IntegrityError:
+            return error(
+                f"Designation '{serializer.validated_data.get('name', '')}' already exists in this department.",
+                http_status=status.HTTP_409_CONFLICT,
+            )
         AuditLog.objects.create(
             user=request.user, action='designation_updated', module='accounts',
             object_id=str(updated.pk),
@@ -775,14 +877,28 @@ class DesignationDetailView(APIView):
         desig = self._get(pk)
         if not desig:
             return error('Designation not found.', http_status=status.HTTP_404_NOT_FOUND)
+        active_users = User.objects.filter(designation=desig.name, is_active=True).count()
+        if active_users:
+            return error(
+                f'Cannot delete designation "{desig.name}" — '
+                f'{active_users} active employee(s) hold this designation. '
+                'Reassign them first.',
+                http_status=status.HTTP_409_CONFLICT,
+            )
         name = desig.name
+        try:
+            desig.delete()
+        except ProtectedError:
+            return error(
+                f'Cannot delete designation "{name}" — it is referenced by other records.',
+                http_status=status.HTTP_409_CONFLICT,
+            )
         AuditLog.objects.create(
             user=request.user, action='designation_deleted', module='accounts',
             object_id=str(desig.pk),
             changes={'name': name, 'department': desig.department.name},
             ip_address=get_client_ip(request),
         )
-        desig.delete()
         return success(f'Designation "{name}" deleted successfully.')
 
 
@@ -838,7 +954,7 @@ class SMTPSettingsDetailView(APIView):
 
     def _get_or_404(self, pk: int) -> SMTPSettings | None:
         try:
-            return SMTPSettings.objects.get(pk=pk)
+            return SMTPSettings.objects.select_related('updated_by').get(pk=pk)
         except SMTPSettings.DoesNotExist:
             return None
 
@@ -962,17 +1078,105 @@ class SMTPTestEmailView(APIView):
 
 # ─── Email Templates ──────────────────────────────────────────────────────────
 
+class EmailTemplateCategoryListCreateView(APIView):
+    permission_classes = [IsAuthenticated, CanManageRoles]
+
+    def get(self, request):
+        cats = EmailTemplateCategory.objects.all()
+        counts = dict(
+            EmailTemplate.objects
+            .values('template_type')
+            .annotate(n=Count('id'))
+            .values_list('template_type', 'n')
+        )
+        return success(
+            'Categories retrieved successfully.',
+            data=EmailTemplateCategorySerializer(
+                cats, many=True, context={'template_counts': counts}
+            ).data,
+        )
+
+    def post(self, request):
+        serializer = EmailTemplateCategorySerializer(data=request.data)
+        if not serializer.is_valid():
+            return error(_first_error(serializer.errors), data=serializer.errors)
+        try:
+            cat = serializer.save(is_builtin=False)
+        except IntegrityError:
+            return error(
+                f"Category '{serializer.validated_data['name']}' already exists.",
+                http_status=status.HTTP_409_CONFLICT,
+            )
+        logger.info('Email template category "%s" created by %s', cat.name, request.user.email)
+        return success('Category created successfully.', data=EmailTemplateCategorySerializer(cat).data, http_status=status.HTTP_201_CREATED)
+
+
+class EmailTemplateCategoryDetailView(APIView):
+    permission_classes = [IsAuthenticated, CanManageRoles]
+
+    def _get_category(self, pk: int) -> EmailTemplateCategory | None:
+        try:
+            return EmailTemplateCategory.objects.get(pk=pk)
+        except EmailTemplateCategory.DoesNotExist:
+            return None
+
+    def get(self, request, pk):
+        cat = self._get_category(pk)
+        if not cat:
+            return error('Category not found.', http_status=status.HTTP_404_NOT_FOUND)
+        return success('Category retrieved successfully.', data=EmailTemplateCategorySerializer(cat).data)
+
+    def patch(self, request, pk):
+        cat = self._get_category(pk)
+        if not cat:
+            return error('Category not found.', http_status=status.HTTP_404_NOT_FOUND)
+        if cat.is_builtin:
+            return error('Built-in categories cannot be modified.', http_status=status.HTTP_403_FORBIDDEN)
+        serializer = EmailTemplateCategorySerializer(cat, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return error(_first_error(serializer.errors), data=serializer.errors)
+        updated = serializer.save()
+        return success('Category updated successfully.', data=EmailTemplateCategorySerializer(updated).data)
+
+    def delete(self, request, pk):
+        cat = self._get_category(pk)
+        if not cat:
+            return error('Category not found.', http_status=status.HTTP_404_NOT_FOUND)
+        if cat.is_builtin:
+            return error('Built-in categories cannot be deleted.', http_status=status.HTTP_403_FORBIDDEN)
+        if EmailTemplate.objects.filter(template_type=cat.name).exists():
+            return error(
+                f'Cannot delete "{cat.display_name}" — templates are assigned to it. Reassign them first.',
+                http_status=status.HTTP_409_CONFLICT,
+            )
+        cat.delete()
+        logger.info('Email template category "%s" deleted by %s', cat.name, request.user.email)
+        return success(f'Category "{cat.display_name}" deleted successfully.')
+
+
 class EmailTemplateListCreateView(APIView):
    
     permission_classes = [IsAuthenticated, CanManageRoles]
 
     def get(self, request):
-        templates = EmailTemplate.objects.select_related('updated_by').all()
+        templates = (
+            EmailTemplate.objects
+            .select_related('updated_by')
+            .prefetch_related('attachments')
+            .all()
+        )
+        category_map = dict(
+            EmailTemplateCategory.objects.values_list('name', 'display_name')
+        )
+        ser_context = {'request': request, 'category_map': category_map}
         grouped: dict[str, list] = defaultdict(list)
         for tpl in templates:
-            grouped[tpl.template_type].append(EmailTemplateSerializer(tpl).data)
+            grouped[tpl.template_type].append(
+                EmailTemplateSerializer(tpl, context=ser_context).data
+            )
         return success('Email templates retrieved successfully.', data=dict(grouped))
-
+    
+    
     def post(self, request):
         serializer = EmailTemplateSerializer(data=request.data)
         if not serializer.is_valid():
@@ -1001,8 +1205,18 @@ class EmailTemplateListCreateView(APIView):
 
 
 class EmailTemplateDetailView(APIView):
-    
+
     permission_classes = [IsAuthenticated, CanManageRoles]
+
+    _ALLOWED_MIME = {
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }
+    _MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 
     def _get_template(self, pk: int) -> EmailTemplate | None:
         try:
@@ -1015,6 +1229,40 @@ class EmailTemplateDetailView(APIView):
         if not tpl:
             return error('Email template not found.', http_status=status.HTTP_404_NOT_FOUND)
         return success('Email template retrieved successfully.', data=EmailTemplateSerializer(tpl).data)
+
+    def post(self, request, pk):
+        tpl = self._get_template(pk)
+        if not tpl:
+            return error('Email template not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        file = (
+            request.FILES.get('attachments')
+            or request.FILES.get('file')
+            or (list(request.FILES.values())[0] if request.FILES else None)
+        )
+        if not file:
+            return error('No file provided.')
+        if file.content_type not in self._ALLOWED_MIME:
+            return error(
+                f'File type "{file.content_type}" is not allowed. '
+                'Allowed: images (jpg/png/gif/webp), PDF, Word, Excel.',
+            )
+        if file.size > self._MAX_BYTES:
+            return error('File size must not exceed 10 MB.')
+
+        att = EmailTemplateAttachment.objects.create(
+            template=tpl,
+            file=file,
+            filename=file.name,
+            mime_type=file.content_type,
+            size=file.size,
+            uploaded_by=request.user,
+        )
+        return success(
+            'Attachment uploaded successfully.',
+            data=EmailTemplateAttachmentSerializer(att, context={'request': request}).data,
+            http_status=status.HTTP_201_CREATED,
+        )
 
     def put(self, request, pk):
         tpl = self._get_template(pk)
@@ -1058,18 +1306,63 @@ class EmailTemplateDetailView(APIView):
                 http_status=status.HTTP_409_CONFLICT,
             )
 
+        # Process any files uploaded alongside the template fields
+        files = request.FILES.getlist('attachments') or request.FILES.getlist('file')
+        if not files:
+            files = list(request.FILES.values())
+
+        for f in files:
+            logger.info(
+                'Template "%s" attachment received: name=%s mime=%s size=%d',
+                updated.name, f.name, f.content_type, f.size,
+            )
+            if f.content_type not in self._ALLOWED_MIME:
+                logger.warning('Attachment "%s" rejected — MIME type "%s" not allowed.', f.name, f.content_type)
+                continue
+            if f.size > self._MAX_BYTES:
+                logger.warning('Attachment "%s" rejected — size %d exceeds 10 MB limit.', f.name, f.size)
+                continue
+            EmailTemplateAttachment.objects.create(
+                template=updated,
+                file=f,
+                filename=f.name,
+                mime_type=f.content_type,
+                size=f.size,
+                uploaded_by=request.user,
+            )
+            logger.info('Attachment "%s" saved for template "%s".', f.name, updated.name)
+
         AuditLog.objects.create(
             user=request.user, action='email_template_updated', module='settings',
-            object_id=str(updated.id), changes=dict(request.data),
+            object_id=str(updated.id),
+            changes={k: v for k, v in request.data.items() if not hasattr(v, 'read')},
             ip_address=get_client_ip(request),
         )
         logger.info('Email template "%s" partially updated by %s', updated.name, request.user.email)
-        return success('Email template updated successfully.', data=EmailTemplateSerializer(updated).data)
+
+        # Re-fetch from DB so the response includes freshly saved attachments
+        fresh = (
+            EmailTemplate.objects
+            .prefetch_related('attachments')
+            .get(pk=updated.pk)
+        )
+        return success('Email template updated successfully.', data=EmailTemplateSerializer(fresh).data)
 
     def delete(self, request, pk):
         tpl = self._get_template(pk)
         if not tpl:
             return error('Email template not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        attachment_id = request.query_params.get('attachment_id')
+        if attachment_id:
+            try:
+                att = tpl.attachments.get(pk=attachment_id)
+            except EmailTemplateAttachment.DoesNotExist:
+                return error('Attachment not found.', http_status=status.HTTP_404_NOT_FOUND)
+            with transaction.atomic():
+                att.delete()
+                att.file.delete(save=False)
+            return success('Attachment deleted successfully.')
 
         if tpl.is_builtin:
             return error(
@@ -1094,7 +1387,58 @@ class EmailTemplatePreviewView(APIView):
 
     permission_classes = [IsAuthenticated, CanManageRoles]
 
+    def _get_template(self, pk):
+        try:
+            return (
+                EmailTemplate.objects
+                .prefetch_related('attachments')
+                .get(pk=pk)
+            )
+        except EmailTemplate.DoesNotExist:
+            return None
+
     def post(self, request, pk):
+        tpl = self._get_template(pk)
+        if not tpl:
+            return error('Email template not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        serializer = EmailTemplatePreviewSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error(_first_error(serializer.errors), data=serializer.errors)
+
+        context                         = serializer.validated_data.get('context', {})
+        rendered_subject, rendered_body = tpl.render(context)
+
+        attachments = EmailTemplateAttachmentSerializer(
+            tpl.attachments.all(), many=True, context={'request': request}
+        ).data
+
+        return success('Preview generated.', data={
+            'template_name':       tpl.name,
+            'subject':             rendered_subject,
+            'body':                rendered_body,
+            'available_variables': tpl.available_variables,
+            'attachments':         attachments,
+        })
+
+    def get(self, request, pk):
+        tpl = self._get_template(pk)
+        if not tpl:
+            return error('Email template not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        attachments = EmailTemplateAttachmentSerializer(
+            tpl.attachments.all(), many=True, context={'request': request}
+        ).data
+
+        return success('Template details retrieved.', data={
+            'template_name':       tpl.name,
+            'subject':             tpl.subject,
+            'body':                tpl.body,
+            'available_variables': tpl.available_variables,
+            'attachments':         attachments,
+        })
+    
+    def put(self, request, pk):
         try:
             tpl = EmailTemplate.objects.get(pk=pk)
         except EmailTemplate.DoesNotExist:
@@ -1107,11 +1451,256 @@ class EmailTemplatePreviewView(APIView):
         context                         = serializer.validated_data.get('context', {})
         rendered_subject, rendered_body = tpl.render(context)
 
-        return success('Preview generated.', data={
-            'template_name':       tpl.name,
-            'subject':             rendered_subject,
-            'body':                rendered_body,
-            'available_variables': tpl.available_variables,
+        # Update the template with the rendered content
+        tpl.subject = rendered_subject
+        tpl.body    = rendered_body
+        tpl.save(update_fields=['subject', 'body'])
+
+        AuditLog.objects.create(
+            user=request.user, action='email_template_preview_updated', module='settings',
+            object_id=str(tpl.id),
+            changes={'subject': rendered_subject, 'body': rendered_body},
+            ip_address=get_client_ip(request),
+        )
+        logger.info('Email template "%s" preview updated by %s', tpl.name, request.user.email)
+        return success('Email template preview updated successfully.', data={
+            'template_name': tpl.name,
+            'subject':       rendered_subject,
+            'body':          rendered_body,
+        })
+        
+    def delete(self, request, pk):
+        try:
+            tpl = EmailTemplate.objects.get(pk=pk)
+        except EmailTemplate.DoesNotExist:
+            return error('Email template not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        if tpl.is_builtin:
+            return error(
+                f'"{tpl.display_name}" is a built-in template and cannot be deleted. '
+                'You may disable it instead by setting is_active to false.',
+                http_status=status.HTTP_403_FORBIDDEN,
+            )
+
+        name = tpl.name
+        tpl.delete()
+
+        AuditLog.objects.create(
+            user=request.user, action='email_template_deleted', module='settings',
+            changes={'name': name},
+            ip_address=get_client_ip(request),
+        )
+        logger.info('Email template "%s" deleted by %s', name, request.user.email)
+        return success(f'Email template "{name}" deleted successfully.')
+
+# ─── Document Center ───────────────────────────────────────────────────────────
+
+def _can_manage_docs(user) -> bool:
+    """Only hr_admin and system_admin may upload / edit / delete documents."""
+    return bool(user and user.role and user.role.name in ('hr_admin', 'system_admin'))
+
+
+class DocumentListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = (
+            Document.objects
+            .select_related('uploaded_by', 'branch')
+            .filter(is_active=True)
+        )
+
+        # --- filter: category ---
+        if category := request.query_params.get('category', '').strip():
+            valid = {c for c, _ in Document.CATEGORY_CHOICES}
+            if category not in valid:
+                return error(f'Invalid category. Choose from: {", ".join(sorted(valid))}.')
+            qs = qs.filter(category=category)
+
+        # --- filter: branch ---
+        if branch_raw := request.query_params.get('branch', '').strip():
+            try:
+                branch_id = int(branch_raw)
+                if branch_id <= 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                return error('branch filter must be a positive integer ID.')
+            qs = qs.filter(branch_id=branch_id)
+
+        # --- filter: file_type (PDF, DOCX, …) ---
+        if file_type := request.query_params.get('file_type', '').strip().upper():
+            allowed_types = set(Document.MIME_TO_TYPE.values())
+            if file_type not in allowed_types:
+                return error(
+                    f'Invalid file_type. Choose from: {", ".join(sorted(allowed_types))}.'
+                )
+            qs = qs.filter(file_type=file_type)
+
+        # --- filter: search ---
+        if search := request.query_params.get('search', '').strip():
+            if len(search) > 100:
+                return error('Search query must be under 100 characters.')
+            qs = qs.filter(
+                Q(title__icontains=search) | Q(description__icontains=search)
+            )
+
+        return success(
+            'Documents retrieved successfully.',
+            data=DocumentSerializer(qs, many=True, context={'request': request}).data,
+        )
+
+    def post(self, request):
+        if not _can_manage_docs(request.user):
+            return error(
+                'You do not have permission to upload documents.',
+                http_status=status.HTTP_403_FORBIDDEN,
+            )
+        if 'file' not in request.data:
+            return error('file is required.')
+        serializer = DocumentSerializer(data=request.data, context={'request': request})
+        if not serializer.is_valid():
+            return error(_first_error(serializer.errors), data=serializer.errors)
+        uploaded_file = serializer.validated_data['file']
+        try:
+            doc = serializer.save(
+                uploaded_by=request.user,
+                file_name=uploaded_file.name,
+                file_type=Document.MIME_TO_TYPE.get(uploaded_file.content_type, 'FILE'),
+                file_size=uploaded_file.size,
+                is_active=True,
+            )
+        except Exception as exc:
+            logger.error('Document upload failed for %s: %s', request.user.email, exc, exc_info=True)
+            return error('Failed to save document. Please try again.')
+        try:
+            AuditLog.objects.create(
+                user=request.user, action='document_uploaded', module='documents',
+                object_id=str(doc.id),
+                changes={'title': doc.title, 'category': doc.category, 'file': doc.file_name},
+                ip_address=get_client_ip(request),
+            )
+        except Exception:
+            logger.warning('AuditLog write failed for document_uploaded id=%s', doc.id)
+        logger.info('Document "%s" uploaded by %s', doc.title, request.user.email)
+        return success(
+            'Document uploaded successfully.',
+            data=DocumentSerializer(doc, context={'request': request}).data,
+            http_status=status.HTTP_201_CREATED,
+        )
+
+
+class DocumentDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_doc(self, pk: int):
+        try:
+            return (
+                Document.objects
+                .select_related('uploaded_by', 'branch')
+                .get(pk=pk, is_active=True)
+            )
+        except Document.DoesNotExist:
+            return None
+
+    def get(self, request, pk: int):
+        doc = self._get_doc(pk)
+        if not doc:
+            return error('Document not found.', http_status=status.HTTP_404_NOT_FOUND)
+        return success(
+            'Document retrieved successfully.',
+            data=DocumentSerializer(doc, context={'request': request}).data,
+        )
+
+    def patch(self, request, pk: int):
+        if not _can_manage_docs(request.user):
+            return error('You do not have permission to update documents.', http_status=status.HTTP_403_FORBIDDEN)
+        doc = self._get_doc(pk)
+        if not doc:
+            return error('Document not found.', http_status=status.HTTP_404_NOT_FOUND)
+        if not request.data:
+            return error('No fields provided to update.')
+        serializer = DocumentSerializer(doc, data=request.data, partial=True, context={'request': request})
+        if not serializer.is_valid():
+            return error(_first_error(serializer.errors), data=serializer.errors)
+        if not serializer.validated_data:
+            return error('No valid fields provided to update.')
+        new_file = serializer.validated_data.get('file')
+        old_file = doc.file if new_file else None
+        file_meta = {}
+        if new_file:
+            file_meta = {
+                'file_name': new_file.name,
+                'file_type': Document.MIME_TO_TYPE.get(new_file.content_type, 'FILE'),
+                'file_size': new_file.size,
+            }
+        try:
+            updated = serializer.save(**file_meta)
+        except Exception as exc:
+            logger.error('Document update failed pk=%s: %s', pk, exc, exc_info=True)
+            return error('Failed to update document. Please try again.')
+        if old_file:
+            try:
+                old_file.delete(save=False)
+            except Exception:
+                logger.warning('Failed to delete old file from storage for document id=%s', updated.id)
+        try:
+            AuditLog.objects.create(
+                user=request.user, action='document_updated', module='documents',
+                object_id=str(updated.id),
+                changes={k: v for k, v in request.data.items() if not hasattr(v, 'read')},
+                ip_address=get_client_ip(request),
+            )
+        except Exception:
+            logger.warning('AuditLog write failed for document_updated id=%s', updated.id)
+        logger.info('Document "%s" updated by %s', updated.title, request.user.email)
+        return success(
+            'Document updated successfully.',
+            data=DocumentSerializer(updated, context={'request': request}).data,
+        )
+
+    def delete(self, request, pk: int):
+        if not _can_manage_docs(request.user):
+            return error('You do not have permission to delete documents.', http_status=status.HTTP_403_FORBIDDEN)
+        doc = self._get_doc(pk)
+        if not doc:
+            return error('Document not found.', http_status=status.HTTP_404_NOT_FOUND)
+        title = doc.title
+        try:
+            doc.is_active = False
+            doc.save(update_fields=['is_active', 'updated_at'])
+        except Exception as exc:
+            logger.error('Document soft-delete failed pk=%s: %s', pk, exc, exc_info=True)
+            return error('Failed to delete document. Please try again.')
+        try:
+            AuditLog.objects.create(
+                user=request.user, action='document_deleted', module='documents',
+                object_id=str(doc.id),
+                changes={'title': title},
+                ip_address=get_client_ip(request),
+            )
+        except Exception:
+            logger.warning('AuditLog write failed for document_deleted id=%s', doc.id)
+        logger.info('Document "%s" soft-deleted by %s', title, request.user.email)
+        return success(f'Document "{title}" deleted successfully.')
+
+
+class DocumentStatsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        rows = (
+            Document.objects
+            .filter(is_active=True)
+            .values('category')
+            .annotate(n=Count('id'))
+        )
+        by_category = {row['category']: row['n'] for row in rows}
+        return success('Document statistics retrieved.', data={
+            'total': sum(by_category.values()),
+            'by_category': {
+                cat: by_category.get(cat, 0)
+                for cat, _ in Document.CATEGORY_CHOICES
+            },
         })
 
 

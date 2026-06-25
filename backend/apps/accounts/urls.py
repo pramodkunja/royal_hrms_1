@@ -6,6 +6,9 @@ from apps.accounts.views import (
     DepartmentListCreateView,
     DesignationDetailView,
     DesignationListCreateView,
+    DocumentDetailView,
+    DocumentListCreateView,
+    DocumentStatsView,
     LoginView,
     LogoutView,
     TokenRefreshAPIView,
@@ -21,6 +24,8 @@ from apps.accounts.views import (
     SMTPSettingsDetailView,
     SMTPActivateView,
     SMTPTestEmailView,
+    EmailTemplateCategoryListCreateView,
+    EmailTemplateCategoryDetailView,
     EmailTemplateListCreateView,
     EmailTemplateDetailView,
     EmailTemplatePreviewView,
@@ -62,8 +67,17 @@ urlpatterns = [
     path('settings/smtp/<int:pk>/activate/',  SMTPActivateView.as_view(),           name='smtp-activate'),
     path('settings/smtp/test/',               SMTPTestEmailView.as_view(),          name='smtp-test'),
 
+    # Email Template Categories (dynamic headings)
+    path('settings/email-template-categories/',          EmailTemplateCategoryListCreateView.as_view(), name='email-template-category-list'),
+    path('settings/email-template-categories/<int:pk>/', EmailTemplateCategoryDetailView.as_view(),     name='email-template-category-detail'),
+
     # Email Templates
-    path('settings/email-templates/',                   EmailTemplateListCreateView.as_view(), name='email-template-list'),
-    path('settings/email-templates/<int:pk>/',          EmailTemplateDetailView.as_view(),     name='email-template-detail'),
-    path('settings/email-templates/<int:pk>/preview/',  EmailTemplatePreviewView.as_view(),    name='email-template-preview'),
+    path('settings/email-templates/',              EmailTemplateListCreateView.as_view(), name='email-template-list'),
+    path('settings/email-templates/<int:pk>/',     EmailTemplateDetailView.as_view(),     name='email-template-detail'),
+    path('settings/email-templates/<int:pk>/preview/', EmailTemplatePreviewView.as_view(), name='email-template-preview'),
+
+    # Document Center
+    path('documents/',              DocumentListCreateView.as_view(), name='document-list'),
+    path('documents/stats/',        DocumentStatsView.as_view(),      name='document-stats'),
+    path('documents/<int:pk>/',     DocumentDetailView.as_view(),     name='document-detail'),
 ]
