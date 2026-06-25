@@ -91,9 +91,15 @@ export default function DashboardShell({
       {/* ══════════════════ SIDEBAR ══════════════════ */}
       <aside
         className={[
-          "flex-shrink-0 bg-white flex flex-col overflow-hidden transition-[width] duration-200 z-[100] h-screen",
+          "bg-white flex flex-col overflow-hidden z-[200] h-screen",
           "border-r border-[var(--outline-v)]",
-          collapsed ? "w-14" : "w-[220px]",
+          // Mobile: fixed overlay drawer, slides in/out via transform
+          "fixed left-0 top-0 w-[220px]",
+          "transition-transform duration-200",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+          // Desktop: part of the normal flow, width-transitions
+          "md:relative md:translate-x-0 md:flex-shrink-0 md:transition-[width]",
+          collapsed ? "md:w-14" : "md:w-[220px]",
         ].join(" ")}
       >
         {/* Sidebar header */}
@@ -192,7 +198,7 @@ export default function DashboardShell({
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
         {/* Top header */}
-        <header className="h-14 px-6 flex items-center gap-4 bg-white border-b border-[var(--outline-v)] flex-shrink-0">
+        <header className="h-14 px-3 md:px-6 flex items-center gap-2 md:gap-4 bg-white border-b border-[var(--outline-v)] flex-shrink-0">
 
           {/* Mobile menu toggle */}
           <button
@@ -208,7 +214,7 @@ export default function DashboardShell({
 
           <div className="flex items-center gap-2">
             {/* Search bar */}
-            <div className="flex items-center gap-2 px-3 py-2 border-[1.5px] border-[var(--outline-v)] rounded-lg bg-[var(--bg)] min-w-[240px]">
+            <div className="hidden md:flex items-center gap-2 px-3 py-2 border-[1.5px] border-[var(--outline-v)] rounded-lg bg-[var(--bg)] min-w-[240px]">
               <i className="ti ti-search text-base text-[var(--outline)]" />
               <input
                 type="text"
@@ -253,7 +259,7 @@ export default function DashboardShell({
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto p-6 bg-[var(--bg)]">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-[var(--bg)]">
           {children}
         </main>
       </div>

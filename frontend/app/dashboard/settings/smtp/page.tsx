@@ -177,11 +177,11 @@ export default function SmtpSettingsPage() {
           <div className="page-sub">Configure outgoing mail servers for transactional emails</div>
         </div>
         <div className="page-actions">
-          <button className="btn btn-filled btn-sm" onClick={() => setEditing("add")} style={{ gap: 6 }} suppressHydrationWarning>
-            <i className="ti ti-plus" /> Add SMTP
-          </button>
           <button className="btn btn-ghost" onClick={() => router.push("/dashboard/settings")} suppressHydrationWarning>
             <i className="ti ti-arrow-left" /> Back
+          </button>
+          <button className="btn btn-filled btn-sm" onClick={() => setEditing("add")} style={{ gap: 6 }} suppressHydrationWarning>
+            <i className="ti ti-plus" /> Add SMTP
           </button>
         </div>
       </div>
@@ -226,7 +226,7 @@ export default function SmtpSettingsPage() {
 
       {/* Cards grid */}
       {!loading && !error && entries.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {entries.map(entry => (
             <div key={entry.id} className="card" style={{
               padding: 0, overflow: "hidden", display: "flex", flexDirection: "column",
@@ -251,7 +251,7 @@ export default function SmtpSettingsPage() {
 
               {/* Fields */}
               <div style={{ flex: 1, padding: "20px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 24px" }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: "14px 24px" }}>
                   {FIELDS(entry).map(row => (
                     <div key={row.label} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
                       <i className={`ti ${row.icon}`} style={{ fontSize: 13, color: "var(--outline)", marginTop: 2, flexShrink: 0 }} />

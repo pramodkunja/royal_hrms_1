@@ -1505,6 +1505,40 @@ body.dark-mode {
 }
 
 /* ============================================================
+   SMTP MODAL FORM GRID
+   ============================================================ */
+.smtp-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 24px;
+}
+
+/* ============================================================
+   EMAIL TEMPLATE EDITOR LAYOUT (editor + tags sidebar)
+   ============================================================ */
+.email-editor-grid {
+  display: grid;
+  grid-template-columns: 1fr 200px;
+}
+
+/* ============================================================
+   DEPARTMENTS HERO HEADER ROW
+   ============================================================ */
+.dept-hero-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.dept-hero-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+/* ============================================================
    RESPONSIVE
    ============================================================ */
 @media (max-width: 768px) {
@@ -1531,12 +1565,42 @@ body.dark-mode {
     width: 100%;
   }
 
+  .page-actions .btn {
+    flex: 1;
+    justify-content: center;
+  }
+
   .dash-greeting {
-    padding: 18px 20px;
+    padding: 18px 16px;
   }
 
   .dash-greeting h1 {
-    font-size: 20px;
+    font-size: 18px;
+  }
+
+  .dash-greeting p {
+    font-size: 12px;
+  }
+
+  .dash-greeting-stats {
+    gap: 16px;
+    margin-top: 12px;
+  }
+
+  .dgs-val {
+    font-size: 18px;
+  }
+
+  .dgs-lbl {
+    font-size: 10px;
+  }
+
+  .health-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .card-body {
+    padding: 16px;
   }
 
   .modal {
@@ -1548,20 +1612,161 @@ body.dark-mode {
     width: 95vw;
   }
 
+  .modal-body {
+    padding: 16px;
+  }
+
   .toast-container {
     bottom: 80px;
     right: 12px;
     left: 12px;
+  }
+
+  .qa-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .bday-card {
+    flex-wrap: wrap;
+  }
+
+  .tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tab {
+    flex-shrink: 0;
+    padding: 8px 14px;
+  }
+
+  /* Settings pages */
+  .settings-cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-cats {
+    gap: 4px;
+  }
+
+  .settings-cat-pill {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  /* Ensure tables always scroll horizontally */
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* SMTP form grid → single column on mobile */
+  .smtp-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Email template editor → stack editor above tags on mobile */
+  .email-editor-grid {
+    display: flex;
+    flex-direction: column;
+  }
+  .email-editor-left {
+    border-right: none !important;
+    border-bottom: 1px solid var(--outline-v);
+    min-height: 260px;
+  }
+  .email-tags-sidebar {
+    max-height: 130px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  /* Departments hero header → stack actions below dept info */
+  .dept-hero-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .dept-hero-actions {
+    width: 100%;
+    flex-shrink: unset;
+  }
+  .dept-hero-actions .btn {
+    flex: 1;
+    justify-content: center;
   }
 }
 
 @media (max-width: 480px) {
   .stats-grid {
     grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .stat-card {
+    padding: 14px;
+  }
+
+  .stat-value {
+    font-size: 20px;
   }
 
   .doc-grid {
     grid-template-columns: 1fr;
+  }
+
+  .dash-greeting {
+    padding: 14px;
+  }
+
+  .dash-greeting h1 {
+    font-size: 16px;
+  }
+
+  .dash-greeting-stats {
+    gap: 12px;
+  }
+
+  .dgs-val {
+    font-size: 16px;
+  }
+
+  .health-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .qa-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .qa-tile {
+    padding: 12px 8px;
+  }
+
+  .qa-label {
+    font-size: 11px;
+  }
+
+  .page-title {
+    font-size: 18px;
+  }
+
+  .card-header {
+    padding: 12px 16px;
+  }
+
+  .card-body {
+    padding: 12px;
+  }
+
+  .modal-header,
+  .modal-footer {
+    padding: 14px 16px;
+  }
+
+  .modal-body {
+    padding: 14px 16px;
   }
 }
 

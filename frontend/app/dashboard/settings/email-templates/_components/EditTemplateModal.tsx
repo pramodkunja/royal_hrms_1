@@ -150,10 +150,10 @@ export default function EditTemplateModal({ template, saving, onClose, onSave }:
         </div>
 
         {/* ── Editor + sidebar ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 200px", flex: 1, minHeight: 0, overflow: "hidden" }}>
+        <div className="email-editor-grid" style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
 
           {/* Left: fields + editor */}
-          <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", borderRight: "1px solid var(--outline-v)" }}>
+          <div className="email-editor-left" style={{ display: "flex", flexDirection: "column", overflow: "hidden", borderRight: "1px solid var(--outline-v)" }}>
             <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
 
               {/* Display Name + slug — add mode only */}
@@ -264,7 +264,7 @@ export default function EditTemplateModal({ template, saving, onClose, onSave }:
           </div>
 
           {/* Right: variable tags sidebar */}
-          <div style={{ overflowY: "auto", background: "var(--bg-low)" }}>
+          <div className="email-tags-sidebar" style={{ overflowY: "auto", background: "var(--bg-low)" }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: "var(--outline)", letterSpacing: "0.08em", textTransform: "uppercase", padding: "14px 14px 10px" }}>
               {isAddMode ? "Common Tags" : "Available Tags"}
             </div>

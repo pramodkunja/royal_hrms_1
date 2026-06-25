@@ -27,8 +27,11 @@ const clientApi = axios.create({
 // ── Request: attach access token ──────────────────────────────────────────────
 clientApi.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
-    const token = localStorage.getItem(TOKEN_KEY);
-    if (token) config.headers.Authorization = `Bearer ${token}`;
+    const isAuthUrl = AUTH_URLS.some(u => config.url?.endsWith(u));
+    if (!isAuthUrl) {
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (token) config.headers.Authorization = `Bearer ${token}`;
+    }
   }
   return config;
 });
