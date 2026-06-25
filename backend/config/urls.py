@@ -7,6 +7,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('apps.accounts.urls')),
     path('api/branch/', include('apps.branch.urls')),
+    path('api/announcements/', include('apps.announcements.urls')),
 ]
 
 if settings.DEBUG:

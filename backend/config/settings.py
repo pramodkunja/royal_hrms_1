@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'apps.accounts',
     'apps.branch',
+    'apps.announcements',
 ]
 
 MIDDLEWARE = [
