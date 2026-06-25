@@ -61,21 +61,21 @@ export interface RecruitmentStats {
 // ─── API helpers ──────────────────────────────────────────────────────────────
 
 export const RECRUITMENT_API = {
-  stats:       () => clientApi.get<{ data: RecruitmentStats }>("/api/recruitment/candidates/stats/"),
+  stats:       () => clientApi.get<{ data: RecruitmentStats }>("/recruitment/candidates/stats/"),
   list:        (params?: { status?: string; search?: string }) =>
-                 clientApi.get<{ data: Candidate[] }>("/api/recruitment/candidates/", { params }),
+                 clientApi.get<{ data: Candidate[] }>("/recruitment/candidates/", { params }),
   create:      (body: Partial<Candidate>) =>
-                 clientApi.post<{ data: Candidate }>("/api/recruitment/candidates/", body),
+                 clientApi.post<{ data: Candidate }>("/recruitment/candidates/", body),
   detail:      (id: number) =>
-                 clientApi.get<{ data: Candidate }>(`/api/recruitment/candidates/${id}/`),
+                 clientApi.get<{ data: Candidate }>(`/recruitment/candidates/${id}/`),
   setStatus:   (id: number, body: { status: CandidateStatus; remarks?: string }) =>
-                 clientApi.patch<{ data: Candidate }>(`/api/recruitment/candidates/${id}/status/`, body),
+                 clientApi.patch<{ data: Candidate }>(`/recruitment/candidates/${id}/status/`, body),
   hrDecision:  (id: number, body: { decision: "approve" | "reject"; remarks?: string }) =>
-                 clientApi.patch<{ data: Candidate }>(`/api/recruitment/candidates/${id}/hr-decision/`, body),
+                 clientApi.patch<{ data: Candidate }>(`/recruitment/candidates/${id}/hr-decision/`, body),
   reviewList:  () =>
-                 clientApi.get<{ data: Candidate[] }>("/api/recruitment/candidates/review/"),
+                 clientApi.get<{ data: Candidate[] }>("/recruitment/candidates/review/"),
   emailLogs:   (params?: { search?: string }) =>
-                 clientApi.get<{ data: CandidateEmail[] }>("/api/recruitment/emails/", { params }),
+                 clientApi.get<{ data: CandidateEmail[] }>("/recruitment/emails/", { params }),
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

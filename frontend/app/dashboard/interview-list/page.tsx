@@ -80,7 +80,7 @@ function AddCandidateModal({ onClose, onSaved }: AddModalProps) {
   }
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 560 }}>
         <div className="modal-header">
           <div className="modal-title">Add Candidate to Interview List</div>
@@ -169,7 +169,7 @@ function MarkCandidateModal({ candidate, targetStatus, onClose, onConfirmed }: M
   const isSelect = targetStatus === "selected";
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 500 }}>
         <div className="modal-header">
           <div className="modal-title">{isSelect ? "Select" : "Reject"} Candidate — {candidate.name}</div>
@@ -189,7 +189,7 @@ function MarkCandidateModal({ candidate, targetStatus, onClose, onConfirmed }: M
             <textarea className="field-input" rows={3} placeholder="Add interview notes..." value={remarks} onChange={e => setRemarks(e.target.value)} />
           </div>
           <div className="settings-card">
-            <div className="settings-card-title"><i className="ti ti-mail" style={{ marginRight: 6 }} />Email Preview</div>
+            <div className="settings-card-title flex items-center gap-2"><i className="ti ti-mail" />Email Preview</div>
             <div style={{ fontSize: 12, color: "var(--on-variant)" }}><strong>To:</strong> {candidate.email}</div>
             <div style={{ fontSize: 12, color: "var(--on-variant)" }}>
               <strong>Subject:</strong> {isSelect ? `You've been selected for ${candidate.position_applied}` : `Regarding your application for ${candidate.position_applied}`}
@@ -226,14 +226,14 @@ function LogsModal({ candidate, onClose }: { candidate: Candidate; onClose: () =
   }, [candidate]);
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 480 }}>
         <div className="modal-header">
           <div className="modal-title">Activity Log — {candidate.name}</div>
           <button className="modal-close" onClick={onClose}><i className="ti ti-x" /></button>
         </div>
         <div className="modal-body">
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, paddingBottom: 16, borderBottom: "1px solid var(--outline-v)" }}>
+          <div className="flex-row mb-16 pb-4 border-b border-[var(--outline-v)]">
             <Avatar name={candidate.name} size={40} />
             <div>
               <div style={{ fontSize: 15, fontWeight: 600 }}>{candidate.name}</div>
@@ -242,9 +242,9 @@ function LogsModal({ candidate, onClose }: { candidate: Candidate; onClose: () =
             </div>
           </div>
           {loading ? (
-            <div style={{ textAlign: "center", padding: 24 }}><i className="ti ti-loader-2 spin" style={{ fontSize: 24 }} /></div>
+            <div className="text-center py-6"><i className="ti ti-loader-2 spin text-2xl" /></div>
           ) : logs.length === 0 ? (
-            <p style={{ color: "var(--on-variant)", textAlign: "center" }}>No activity yet.</p>
+            <p className="text-center text-[var(--on-variant)]">No activity yet.</p>
           ) : (
             <div className="timeline">
               {logs.map(l => (
@@ -289,16 +289,21 @@ export default function InterviewListPage() {
     setLoading(true);
     setError("");
     try {
-      const [cRes, sRes] = await Promise.all([
-        RECRUITMENT_API.list({ search: q || undefined, status: s || undefined }),
-        RECRUITMENT_API.stats(),
-      ]);
-      setCandidates(cRes.data.data);
-      setStats(sRes.data.data);
+      const cRes = await RECRUITMENT_API.list({ search: q || undefined, status: s || undefined });
+      const raw  = cRes.data?.data;
+      setCandidates(Array.isArray(raw) ? raw : []);
     } catch {
       setError("Failed to load candidates.");
+      setCandidates([]);
     } finally {
       setLoading(false);
+    }
+    // Stats are non-blocking — failure doesn't break the page
+    try {
+      const sRes = await RECRUITMENT_API.stats();
+      setStats(sRes.data?.data ?? null);
+    } catch {
+      // silently ignore — stats are cosmetic
     }
   }, []);
 
@@ -328,10 +333,10 @@ export default function InterviewListPage() {
   }
 
   const statCards = [
-    { label: "Total",    value: stats?.total    ?? "—", icon: "ti-users",       color: "var(--primary)" },
-    { label: "Pending",  value: stats?.pending  ?? "—", icon: "ti-clock",       color: "var(--warn)" },
-    { label: "Selected", value: stats?.selected ?? "—", icon: "ti-user-check",  color: "var(--success)" },
-    { label: "Rejected", value: stats?.rejected ?? "—", icon: "ti-user-x",      color: "var(--error)" },
+    { label: "Total",    value: stats?.total    ?? "—", icon: "ti-users",       iconCls: "si-primary" },
+    { label: "Pending",  value: stats?.pending  ?? "—", icon: "ti-clock",       iconCls: "si-warn" },
+    { label: "Selected", value: stats?.selected ?? "—", icon: "ti-user-check",  iconCls: "si-success" },
+    { label: "Rejected", value: stats?.rejected ?? "—", icon: "ti-user-x",      iconCls: "si-error" },
   ];
 
   return (
@@ -350,18 +355,12 @@ export default function InterviewListPage() {
       </div>
 
       {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
+      <div className="stats-grid">
         {statCards.map(s => (
-          <div key={s.label} className="card" style={{ padding: "16px 20px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 8, background: `${s.color}18`, display: "flex", alignItems: "center", justifyContent: "center", color: s.color }}>
-                <i className={`ti ${s.icon}`} style={{ fontSize: 18 }} />
-              </div>
-              <div>
-                <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1 }}>{s.value}</div>
-                <div style={{ fontSize: 11, color: "var(--on-variant)", marginTop: 2 }}>{s.label}</div>
-              </div>
-            </div>
+          <div key={s.label} className="stat-card">
+            <div className={`stat-icon ${s.iconCls}`}><i className={`ti ${s.icon}`} /></div>
+            <div className="stat-label">{s.label}</div>
+            <div className="stat-value">{s.value}</div>
           </div>
         ))}
       </div>
@@ -399,8 +398,8 @@ export default function InterviewListPage() {
 
         <div className="table-wrap">
           {loading ? (
-            <div style={{ padding: 40, textAlign: "center" }}><i className="ti ti-loader-2 spin" style={{ fontSize: 28 }} /></div>
-          ) : candidates.length === 0 ? (
+            <div className="text-center py-10"><i className="ti ti-loader-2 spin text-3xl" /></div>
+          ) : !Array.isArray(candidates) || candidates.length === 0 ? (
             <div className="empty-state"><i className="ti ti-users" /><h3>No candidates found</h3><p>Add a candidate or adjust your filters.</p></div>
           ) : (
             <table>
@@ -418,20 +417,20 @@ export default function InterviewListPage() {
                 {candidates.map(c => (
                   <tr key={c.id}>
                     <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div className="flex items-center gap-3">
                         <Avatar name={c.name} size={32} />
                         <div>
                           <strong>{c.name}</strong>
-                          <div style={{ fontSize: 11, color: "var(--on-variant)" }}>{c.email}</div>
+                          <div className="text-xs text-[var(--on-variant)]">{c.email}</div>
                         </div>
                       </div>
                     </td>
                     <td>{c.position_applied}</td>
                     <td>{fmtDate(c.interview_date)}</td>
-                    <td><span style={{ fontSize: 12 }}>{MODE_LABELS[c.interview_mode]}</span></td>
+                    <td><span className="text-xs">{MODE_LABELS[c.interview_mode]}</span></td>
                     <td><StatusBadge status={c.status} /></td>
                     <td>
-                      <div style={{ display: "flex", gap: 6 }}>
+                      <div className="flex items-center gap-2">
                         <button className="btn btn-ghost btn-sm" onClick={() => setLogsFor(c)}>
                           <i className="ti ti-history" /> Logs
                         </button>

@@ -33,11 +33,11 @@ def _get_ip(request):
 
 
 def ok(message, data=None, http_status=status.HTTP_200_OK):
-    return Response({'status': 'success', 'message': message, 'data': data or {}}, status=http_status)
+    return Response({'status': 'success', 'message': message, 'data': data if data is not None else {}}, status=http_status)
 
 
 def err(message, data=None, http_status=status.HTTP_400_BAD_REQUEST):
-    return Response({'status': 'error', 'message': message, 'data': data or {}}, status=http_status)
+    return Response({'status': 'error', 'message': message, 'data': data if data is not None else {}}, status=http_status)
 
 
 _DENIED = 'You do not have permission to perform this action.'

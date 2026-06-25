@@ -58,7 +58,7 @@ function HRDecisionModal({ candidate, decision, onClose, onDone }: HRModalProps)
   }
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 480 }}>
         <div className="modal-header">
           <div className="modal-title">{isApprove ? "Approve & Onboard" : "Request Revision"} — {candidate.name}</div>
@@ -128,20 +128,19 @@ function CandidateAccordionItem({ candidate: initial, onDecision }: AccordionIte
   const mockDocs = ["Aadhaar Card", "PAN Card", "Degree Certificate", "Offer Letter Signed", "Photograph"];
 
   return (
-    <div className="accordion-item" style={{ marginBottom: 12 }}>
+    <div className="accordion-item mb-12">
       {/* Header */}
       <div
         className={`accordion-header ${open ? "open" : ""}`}
         onClick={() => setOpen(o => !o)}
-        style={{ cursor: "pointer" }}
       >
         <Avatar name={c.name} size={32} />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 500 }}>{c.name}</div>
-          <div style={{ fontSize: 12, color: "var(--on-variant)" }}>{c.position_applied} • Applied {fmtDate(c.interview_date)}</div>
+        <div className="flex-1">
+          <div className="text-sm font-medium">{c.name}</div>
+          <div className="text-xs text-[var(--on-variant)]">{c.position_applied} • Applied {fmtDate(c.interview_date)}</div>
         </div>
         {badge}
-        <i className={`ti ti-chevron-down accordion-toggle ${open ? "rotated" : ""}`} style={{ transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }} />
+        <i className={`ti ti-chevron-down accordion-toggle ${open ? "rotated" : ""}`} />
       </div>
 
       {/* Body */}
@@ -154,25 +153,25 @@ function CandidateAccordionItem({ candidate: initial, onDecision }: AccordionIte
               <div className="grid-2 mb-16">
                 <div>
                   <div className="settings-card-title mb-8">Personal Details</div>
-                  <div style={{ fontSize: 13, lineHeight: 2, color: "var(--on-variant)" }}>
-                    <strong style={{ color: "var(--on-bg)" }}>Full Name:</strong> {c.name}<br />
-                    <strong style={{ color: "var(--on-bg)" }}>Email:</strong> {c.email}<br />
-                    <strong style={{ color: "var(--on-bg)" }}>Phone:</strong> {c.phone || "—"}<br />
-                    <strong style={{ color: "var(--on-bg)" }}>Position:</strong> {c.position_applied}
+                  <div className="text-[13px] leading-loose text-[var(--on-variant)]">
+                    <strong className="text-[var(--on-bg)]">Full Name:</strong> {c.name}<br />
+                    <strong className="text-[var(--on-bg)]">Email:</strong> {c.email}<br />
+                    <strong className="text-[var(--on-bg)]">Phone:</strong> {c.phone || "—"}<br />
+                    <strong className="text-[var(--on-bg)]">Position:</strong> {c.position_applied}
                   </div>
                 </div>
                 <div>
                   <div className="settings-card-title mb-8">Uploaded Documents</div>
                   {mockDocs.map(d => (
-                    <div key={d} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid var(--outline-v)" }}>
-                      <i className="ti ti-file-check" style={{ color: "var(--success)" }} />
-                      <span style={{ fontSize: 13 }}>{d}</span>
+                    <div key={d} className="flex items-center gap-2 py-1.5 border-b border-[var(--outline-v)]">
+                      <i className="ti ti-file-check text-[var(--success)]" />
+                      <span className="text-[13px]">{d}</span>
                       <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }}><i className="ti ti-eye" /></button>
                     </div>
                   ))}
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
+              <div className="flex items-end flex-wrap gap-3">
                 <button className="btn btn-danger" onClick={() => onDecision(c, "reject")}>
                   <i className="ti ti-refresh" /> Request Revision
                 </button>
@@ -201,8 +200,8 @@ function CandidateAccordionItem({ candidate: initial, onDecision }: AccordionIte
 
           {/* ── Activity log ── */}
           {c.logs && c.logs.length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <div className="settings-card-title mb-8"><i className="ti ti-history" style={{ marginRight: 4 }} />Activity Log</div>
+            <div className="mt-16">
+              <div className="settings-card-title flex items-center gap-1 mb-8"><i className="ti ti-history" />Activity Log</div>
               <div className="timeline">
                 {c.logs.map((l: CandidateLog) => (
                   <div key={l.id} className="tl-item">
@@ -236,7 +235,8 @@ export default function CandidateReviewPage() {
     setError("");
     try {
       const res = await RECRUITMENT_API.reviewList();
-      setCandidates(res.data.data);
+      const raw = res.data?.data;
+      setCandidates(Array.isArray(raw) ? raw : []);
     } catch {
       setError("Failed to load candidates for review.");
     } finally {
@@ -270,23 +270,17 @@ export default function CandidateReviewPage() {
       </div>
 
       {/* Stats row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
+      <div className="stats-grid">
         {[
-          { label: "Total Selected",     value: candidates.length, icon: "ti-users",      color: "var(--primary)" },
-          { label: "Pending Review",      value: pendingReview,     icon: "ti-eye",        color: "var(--warn)" },
-          { label: "Awaiting Submission", value: awaitingSubmit,    icon: "ti-clock",      color: "var(--outline)" },
-          { label: "Approved",            value: approved,          icon: "ti-user-check", color: "var(--success)" },
+          { label: "Total Selected",     value: candidates.length, icon: "ti-users",      iconCls: "si-primary" },
+          { label: "Pending Review",      value: pendingReview,     icon: "ti-eye",        iconCls: "si-warn" },
+          { label: "Awaiting Submission", value: awaitingSubmit,    icon: "ti-clock",      iconCls: "si-info" },
+          { label: "Approved",            value: approved,          icon: "ti-user-check", iconCls: "si-success" },
         ].map(s => (
-          <div key={s.label} className="card" style={{ padding: "16px 20px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 8, background: `${s.color}18`, display: "flex", alignItems: "center", justifyContent: "center", color: s.color }}>
-                <i className={`ti ${s.icon}`} style={{ fontSize: 18 }} />
-              </div>
-              <div>
-                <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1 }}>{s.value}</div>
-                <div style={{ fontSize: 11, color: "var(--on-variant)", marginTop: 2 }}>{s.label}</div>
-              </div>
-            </div>
+          <div key={s.label} className="stat-card">
+            <div className={`stat-icon ${s.iconCls}`}><i className={`ti ${s.icon}`} /></div>
+            <div className="stat-label">{s.label}</div>
+            <div className="stat-value">{s.value}</div>
           </div>
         ))}
       </div>
@@ -295,8 +289,8 @@ export default function CandidateReviewPage() {
       {error && <div className="alert alert-error mb-16"><i className="ti ti-alert-circle" /><div>{error}</div></div>}
 
       {loading ? (
-        <div style={{ padding: 60, textAlign: "center" }}><i className="ti ti-loader-2 spin" style={{ fontSize: 32 }} /></div>
-      ) : candidates.length === 0 ? (
+        <div className="text-center py-16"><i className="ti ti-loader-2 spin text-3xl" /></div>
+      ) : !Array.isArray(candidates) || candidates.length === 0 ? (
         <div className="empty-state">
           <i className="ti ti-user-check" />
           <h3>No pending reviews</h3>
