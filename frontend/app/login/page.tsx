@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import clientApi from "@/lib/clientApi";
 import { saveAuth } from "@/lib/auth";
@@ -30,7 +29,6 @@ const inputCls = "w-full px-3 py-[10px] border-[1.5px] border-[var(--outline-v)]
 const submitCls = "w-full py-[11px] bg-[#1e4e8c] text-white rounded-[var(--radius)] text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer border-none font-[inherit] disabled:opacity-70 disabled:cursor-not-allowed hover:bg-[#163d6e] transition-colors";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -54,8 +52,9 @@ export default function LoginPage() {
         permissions: d.user.permissions ?? [],
       };
       saveAuth(d.access_token, user, d.refresh_token);
-      router.push("/dashboard");
-      router.refresh();
+      // Full-page navigation — clears the Next.js client RSC cache so a stale
+      // session from a previous user (e.g. system_admin) cannot bleed through.
+      window.location.href = "/dashboard";
     } catch (err) {
       const { message } = err as { message: string };
       setError(message || "Login failed. Please check your credentials.");
@@ -73,7 +72,7 @@ export default function LoginPage() {
 
         {/* ── Left Panel ── */}
         <div className="relative min-w-0 overflow-hidden">
-          <Image src="/login.jpg" alt="Royal HRMS" fill style={{ objectFit: "cover" }} priority />
+          <Image src="/login.jpg" alt="Royal HRMS" fill sizes="(max-width: 768px) 100vw, 60vw" style={{ objectFit: "cover" }} priority />
         </div>
 
         {/* ── Right Panel ── */}
