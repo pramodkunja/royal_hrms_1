@@ -274,3 +274,232 @@ Full static announcements page (all styling pure Tailwind, no CSS modules). Colo
 const isActive = pathname === item.path ||
   (item.path !== "/dashboard" && pathname.startsWith(item.path + "/"));
 ```
+
+---
+
+## Session 3 — Rithwika (25 June 2026)
+
+### 1. JWT Login Fix (`lib/clientApi.ts`)
+
+**Problem:** After login, a stale Bearer token was being attached to the `/login/` request itself. Django's `JWTAuthentication` then rejected it with `token_not_valid` even though the view uses `AllowAny`.
+
+**Fix:** Added `AUTH_URLS` list to the Axios request interceptor. The interceptor now skips attaching the `Authorization` header when the request URL ends with any auth endpoint.
+
+```ts
+const AUTH_URLS = ["/login/", "/token/refresh/", "/forgot-password/", "/verify-otp/", "/reset-password/"];
+
+clientApi.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    const isAuthUrl = AUTH_URLS.some(u => config.url?.endsWith(u));
+    if (!isAuthUrl) {
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (token) config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
+  return config;
+});
+```
+
+> **Note:** Only `lib/clientApi.ts` was modified. The Django backend was not touched.
+
+---
+
+### 2. Mobile Responsiveness — Full Application (Hybrid CSS approach)
+
+All responsive changes use a hybrid model: **global CSS classes in `app/globals.css`** for layout-level rules, and **Tailwind responsive prefixes** (`md:`, `sm:`, `lg:`) for component-level overrides.
+
+#### 2a. Login Page (`app/login/page.tsx`)
+- Two-column layout (`grid`) converted to `flex flex-col md:grid` — stacks vertically on mobile
+- Left decorative panel: `hidden md:flex` — hidden on mobile (full screen for the login form)
+- Right panel padding: `px-6 py-8 md:px-10 md:py-12`
+
+#### 2b. Dashboard Shell (`components/dashboard/DashboardShell.tsx`)
+- **Sidebar** converted to a fixed overlay drawer on mobile using CSS `transform: translateX(-100%)` / `translateX(0)`:
+  - `fixed left-0 top-0 w-[220px]` always; `md:relative md:translate-x-0` reverts to normal flow on desktop
+  - `mobileOpen` state toggles `translate-x-0` vs `-translate-x-full`
+  - Semi-transparent backdrop (`fixed inset-0 bg-black/40 md:hidden`) closes drawer on tap
+- **Hamburger button:** `md:hidden` — visible only on mobile
+- **Search bar:** `hidden md:flex` — hidden on mobile header
+- **Header + content padding:** `px-3 md:px-6`, `p-4 md:p-6`
+
+#### 2c. Announcements Page
+- Stats grid, filter tabs (horizontal scroll on mobile), post cards — responsive via Tailwind grid utilities
+
+#### 2d. Branches Page
+- Card grid responsive via Tailwind responsive prefixes
+
+---
+
+### 3. Settings Pages — Mobile Responsiveness + Button Order
+
+All settings sub-pages made mobile-responsive. **Button order rule enforced across all pages: Back button always first, Add button second.**
+
+#### 3a. Departments & Designations (`app/dashboard/settings/departments/page.tsx`)
+- **Stats bar:** `grid grid-cols-1 sm:grid-cols-3` with shared background and `gap: 1` separator trick
+- **Two-panel layout:** `flex flex-col md:grid` with `gridTemplateColumns: "320px 1fr"`
+- **Mobile panel navigation pattern:**
+  - List panel: `className={selected ? "hidden md:block" : "block"}` — hides when detail is open
+  - No-selection placeholder: `hidden md:flex` — never shown on mobile (list takes its place)
+  - Detail panel: `block md:block` — shown when selected
+  - Mobile-only "← Back to Departments" button inside detail panel (`md:hidden`)
+- **Hero header actions** (`dept-hero-row` / `dept-hero-actions` CSS classes):
+  - On mobile → `flex-direction: column`; Edit + Add Designation buttons stretch to full width
+- **Designations grid:** `repeat(auto-fill, minmax(min(210px, 100%), 1fr))`
+- **Back button added** to page header (was missing)
+
+#### 3b. Roles & Permissions (`app/dashboard/settings/permissions/page.tsx`)
+- Button order was already correct (Back → Add Role) ✓
+- Tables already wrapped in `.table-wrap` with `overflow-x: auto` ✓
+
+#### 3c. Email Templates (`app/dashboard/settings/email-templates/page.tsx`)
+- Button order fixed: Back (ghost) → Add Template (filled)
+- Cards grid: `grid grid-cols-1 sm:grid-cols-2` (was fixed 2-col inline style)
+- **`EditTemplateModal.tsx`** — editor + tags sidebar layout:
+  - Was: `gridTemplateColumns: "1fr 200px"` (gave editor only ~160px on iPhone SE)
+  - Now: `.email-editor-grid` CSS class — switches to `flex flex-col` on mobile
+  - Editor panel gets `.email-editor-left` class; Tags sidebar gets `.email-tags-sidebar` class (max 130px, scrollable on mobile)
+
+#### 3d. SMTP Settings (`app/dashboard/settings/smtp/page.tsx`)
+- Button order fixed: Back (ghost) → Add SMTP (filled)
+- Cards grid: `grid grid-cols-1 lg:grid-cols-2`
+- **`SmtpModal.tsx`** — form fields grid:
+  - Was: `style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}` (2-col always, unoverrideable)
+  - Now: `.smtp-form-grid` CSS class — collapses to single column on `≤768px`
+
+---
+
+### 4. CSS Classes Added to `app/globals.css`
+
+| Class | Purpose |
+|-------|---------|
+| `.smtp-form-grid` | 2-col form grid (SMTP modal) → 1-col on mobile |
+| `.email-editor-grid` | Side-by-side editor+tags → stacked column on mobile |
+| `.email-editor-left` | Editor left panel — removes right border on mobile |
+| `.email-tags-sidebar` | Tags right panel — max 130px scrollable on mobile |
+| `.dept-hero-row` | Departments hero header row → column on mobile |
+| `.dept-hero-actions` | Action buttons in hero → full-width stretch on mobile |
+
+Responsive breakpoint for all new layout classes: `max-width: 768px` (inside existing `@media` block).
+
+---
+
+### Key Files Changed (25 June 2026)
+
+| File | Change |
+|------|--------|
+| `lib/clientApi.ts` | Skip Bearer token for auth URLs in request interceptor |
+| `app/login/page.tsx` | Mobile responsive — left panel hidden, form stacks vertically |
+| `components/dashboard/DashboardShell.tsx` | Mobile sidebar overlay drawer, hamburger toggle, responsive padding |
+| `app/globals.css` | New CSS classes + responsive overrides for modal grids and dept hero |
+| `app/dashboard/settings/departments/page.tsx` | Two-panel mobile nav, hero action fix, Back button added, responsive grids |
+| `app/dashboard/settings/permissions/page.tsx` | No changes needed (already correct) |
+| `app/dashboard/settings/email-templates/page.tsx` | Button order fixed, cards grid responsive |
+| `app/dashboard/settings/email-templates/_components/EditTemplateModal.tsx` | Editor+tags layout responsive (`email-editor-grid`) |
+| `app/dashboard/settings/smtp/page.tsx` | Button order fixed, cards grid responsive |
+| `app/dashboard/settings/smtp/_components/SmtpModal.tsx` | Form grid responsive (`smtp-form-grid`) |
+
+---
+
+## Surya — Backend + Settings Modules (24–25 June 2026)
+
+### What I Built
+
+#### 1. Company Information Module (full stack)
+
+**Backend** (`backend/apps/accounts/`)
+- `models.py` — Added `Company` model (singleton, `db_table = 'hrms_company'`): `company_name`, `trade_name`, `logo` (ImageField), `gstin`, `cin`, `pan`, `tan`, `address`, `city`, `state`, `pin_code`, `website`, `official_phone`, `updated_at`, `updated_by` FK
+- `migrations/0013_add_company.py` — new migration; depends on `0012_add_department_designation`
+- `serializers.py` — `CompanySerializer` with `logo_url` (absolute URL via `request.build_absolute_uri`), regex validators for GSTIN/CIN/PAN/TAN/PIN/phone
+- `views.py` — `CompanyRetrieveUpdateView`: GET returns existing record or `{}`, PUT for hr_admin/system_admin, handles logo upload/replace/remove with `remove_logo=true` flag, `transaction.atomic()`, audit log on save
+- `urls.py` — `path('settings/company/', CompanyRetrieveUpdateView.as_view(), name='company')`
+- `requirements.txt` — added `Pillow==10.4.0` (required for ImageField)
+- `config/urls.py` — added `static(MEDIA_URL, document_root=MEDIA_ROOT)` for DEBUG media serving
+
+**Frontend** (`frontend/app/dashboard/settings/company/page.tsx`)
+- 4-section form: Branding (logo preview 80×80 + upload/change/remove + company_name + trade_name), Legal & Statutory (GSTIN/CIN/PAN/TAN 2-col grid), Registered Address (textarea + 3-col: city/state-select/pin_code), Contact (website/phone 2-col)
+- State dropdown: 28 states + 8 UTs hardcoded
+- Client-side validation mirrors backend regex
+- Logo upload uses FormData with `headers: { 'Content-Type': undefined }` (lets browser set multipart boundary — do not set it manually on axios)
+- Logo removal sends `remove_logo=true` in FormData (can't send `null` via FormData reliably)
+
+#### 2. Audit Log Module (full stack)
+
+**Backend** — `AuditLog` model already existed. Added logging coverage to all admin write operations:
+
+| Module | Actions logged |
+|--------|---------------|
+| `accounts` | departments (create/update/delete), designations (create/update/delete) |
+| `branch` | branches (create/update/delete) |
+| `company` | company info (updated) |
+
+- `apps/accounts/views.py` — added `AuditLog.objects.create()` to Department + Designation views
+- `apps/branch/views.py` — added `from apps.accounts.models import AuditLog`, local `_get_ip(request)` helper, audit create calls in BranchListCreateView + BranchDetailView
+- `serializers.py` — `AuditLogSerializer` with `actor_name`, `actor_email`, `actor_role` as SerializerMethodFields
+- `views.py` — `AuditLogListView`: GET only, `CanManageRoles`, filters by module/action/search (icontains on name+email)/date_from/date_to, Django `Paginator` 25/page (max 100), returns `{ count, page, page_size, total_pages, results }`
+- `urls.py` — `path('settings/audit/', AuditLogListView.as_view(), name='audit-log-list')`
+
+**Frontend** (`frontend/app/dashboard/settings/audit/page.tsx`)
+- Filters: Module dropdown, date-range pickers (default last 30 days → today), actor search (submit on Enter or button)
+- Table: Timestamp (date + time stacked), Actor (name + email + role badge), Module chip, Action badge, IP in `<code>`
+- Action badge colors: `badge-success` (_created), `badge-error` (_deleted), `badge-warn` (_updated), `badge-info` (login/_activated), `badge-neutral` (logout), `badge-primary` (password*)
+- Module chip colors: `badge-primary` (accounts), `badge-warn` (settings), `badge-info` (company), `badge-success` (branch)
+- Pagination: Prev/Next + numbered pills (±2 from current page)
+- Auto-fetch on module/date change; search only fires on submit
+
+#### 3. Settings Page Routing Update
+
+`frontend/app/dashboard/settings/page.tsx` — added to `ITEM_ROUTES`:
+```ts
+company: "/dashboard/settings/company",
+audit:   "/dashboard/settings/audit",
+```
+
+#### 4. CORS + ALLOWED_HOSTS (backend only)
+
+`backend/config/settings.py`:
+```python
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
+CORS_ALLOW_ALL_ORIGINS = True   # NOT CORS_ALLOWED_ORIGINS = ['*'] — that breaks django-cors-headers
+```
+`backend/.env` — changed `ALLOWED_HOSTS` to `*`, removed the stale `CORS_ALLOWED_ORIGINS= "*"` line.
+
+---
+
+### API Endpoints Added
+
+| Method | Endpoint | Used for |
+|--------|----------|----------|
+| `GET` | `/api/settings/company/` | Load company record (returns `{}` if none yet) |
+| `PUT` | `/api/settings/company/` | Save/update company info (multipart/form-data for logo) |
+| `GET` | `/api/settings/audit/` | Paginated audit log — params: `module`, `action`, `search`, `date_from`, `date_to`, `page`, `page_size` |
+
+---
+
+### Key Files Changed / Created
+
+| File | What |
+|------|------|
+| `backend/apps/accounts/models.py` | Added `Company` model |
+| `backend/apps/accounts/migrations/0013_add_company.py` | New migration |
+| `backend/apps/accounts/serializers.py` | Added `CompanySerializer`, `AuditLogSerializer` |
+| `backend/apps/accounts/views.py` | Added audit logging to dept/designation views, `CompanyRetrieveUpdateView`, `AuditLogListView` |
+| `backend/apps/accounts/urls.py` | Added company + audit routes |
+| `backend/apps/branch/views.py` | Added `AuditLog` import + audit logging to all branch write views |
+| `backend/config/urls.py` | Added media file serving for DEBUG |
+| `backend/config/settings.py` | `CORS_ALLOW_ALL_ORIGINS = True`, `ALLOWED_HOSTS = env.list(...)` |
+| `backend/requirements.txt` | Added `Pillow==10.4.0` |
+| `frontend/app/dashboard/settings/company/page.tsx` | New — Company Info settings page |
+| `frontend/app/dashboard/settings/audit/page.tsx` | New — Audit Log viewer |
+| `frontend/app/dashboard/settings/page.tsx` | Updated — added company + audit routes |
+
+---
+
+### Notes for Next Developer
+
+- **Company is a singleton** — one record ever. Views use `Company.objects.first()`, never `Company.objects.get(id=...)`. Never create a second record.
+- **Logo field needs Pillow** — `pip install Pillow==10.4.0`. Without it Django throws `fields.E210` and won't start.
+- **Logo FormData upload** — use `headers: { 'Content-Type': undefined }` in the axios request config (not `'multipart/form-data'`). Setting it manually breaks the multipart boundary.
+- **Logo removal** — send `remove_logo=true` as a FormData string field. View handles deletion via `instance.logo.delete(save=False)` then `instance.save(update_fields=['logo'])`.
+- **CORS pattern** — use `CORS_ALLOW_ALL_ORIGINS = True` in settings.py. Never set `CORS_ALLOWED_ORIGINS = ['*']` — the wildcard string is rejected by django-cors-headers at startup.
+- **Audit workflow** — every new module that has admin write operations should get `AuditLog.objects.create()` calls. Notify Surya when a new backend module is added and audit coverage will be dropped in.
+- **Cross-app AuditLog import in branch** — `from apps.accounts.models import AuditLog` in `apps/branch/views.py` is safe (no circular dependency — accounts doesn't import branch).
