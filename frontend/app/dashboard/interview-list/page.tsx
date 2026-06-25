@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Candidate,
   CandidateStatus,
+  InterviewMode,
   RECRUITMENT_API,
   RecruitmentStats,
   fmtDate,
@@ -50,7 +51,10 @@ interface AddModalProps {
 }
 
 function AddCandidateModal({ onClose, onSaved }: AddModalProps) {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    name: string; email: string; phone: string; position_applied: string;
+    interview_date: string; interview_mode: InterviewMode; notes: string;
+  }>({
     name: "", email: "", phone: "", position_applied: "",
     interview_date: "", interview_mode: "in_person", notes: "",
   });
