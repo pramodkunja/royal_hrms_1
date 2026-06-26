@@ -10,6 +10,7 @@ import {
   fmtDateTime,
   initials,
 } from "../interview-list/_data";
+import { HRDecisionModal } from "./HRDecisionModal";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -27,83 +28,6 @@ const LOG_ICON: Record<LogType, string> = {
   info:    "ti-info-circle",
   warn:    "ti-alert-triangle",
 };
-
-// ─── HR Decision Modal ────────────────────────────────────────────────────────
-
-interface HRModalProps {
-  candidate: Candidate;
-  decision:  "approve" | "reject";
-  onClose:   () => void;
-  onDone:    (updated: Candidate) => void;
-}
-
-function HRDecisionModal({ candidate, decision, onClose, onDone }: HRModalProps) {
-  const [remarks, setRemarks] = useState("");
-  const [saving,  setSaving]  = useState(false);
-  const [error,   setError]   = useState("");
-  const isApprove = decision === "approve";
-
-  async function handleConfirm() {
-    setSaving(true);
-    setError("");
-    try {
-      const res = await RECRUITMENT_API.hrDecision(candidate.id, { decision, remarks });
-      onDone(res.data.data);
-    } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg || "Action failed.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 480 }}>
-        <div className="modal-header">
-          <div className="modal-title">{isApprove ? "Approve & Onboard" : "Request Revision"} — {candidate.name}</div>
-          <button className="modal-close" onClick={onClose}><i className="ti ti-x" /></button>
-        </div>
-        <div className="modal-body">
-          {error && <div className="alert alert-error mb-16"><i className="ti ti-alert-circle" /><div>{error}</div></div>}
-          <div className={`alert ${isApprove ? "alert-success" : "alert-warn"} mb-16`}>
-            <i className={`ti ${isApprove ? "ti-check" : "ti-alert-triangle"}`} />
-            <div>
-              {isApprove
-                ? <>Approving <strong>{candidate.name}</strong> will onboard them as an employee and send a welcome email.</>
-                : <>A revision request will be sent to <strong>{candidate.name}</strong> to resubmit their details.</>
-              }
-            </div>
-          </div>
-          <div className="field-group">
-            <label className="field-label">HR Remarks {isApprove ? "(optional)" : "(required)"}</label>
-            <input
-              className="field-input"
-              placeholder={isApprove ? "Any onboarding notes…" : "Specify what needs to be corrected…"}
-              value={remarks}
-              onChange={e => setRemarks(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="modal-footer">
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button
-            className={`btn ${isApprove ? "btn-success" : "btn-danger"}`}
-            onClick={handleConfirm}
-            disabled={saving || (!isApprove && !remarks.trim())}
-          >
-            {saving
-              ? <><i className="ti ti-loader-2 spin" /> Processing…</>
-              : isApprove
-                ? <><i className="ti ti-check" /> Approve & Onboard</>
-                : <><i className="ti ti-alert-triangle" /> Request Revision</>
-            }
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Candidate Accordion Item ─────────────────────────────────────────────────
 

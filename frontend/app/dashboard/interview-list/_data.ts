@@ -51,6 +51,15 @@ export interface CandidateEmail {
   candidate_position: string;
 }
 
+export interface EmailTemplate {
+  id:                  number;
+  name:                string;
+  display_name:        string;
+  subject:             string;
+  body:                string;
+  available_variables: string[];
+}
+
 export interface RecruitmentStats {
   total:          number;
   pending:        number;
@@ -80,11 +89,18 @@ export const RECRUITMENT_API = {
     clientApi.get<{ data: Candidate }>(API.recruitment.detail(id)),
   setStatus:   (id: number, body: { status: CandidateStatus; remarks?: string }) =>
     clientApi.patch<{ data: Candidate }>(API.recruitment.status(id), body),
-  hrDecision:  (id: number, body: { decision: "approve" | "reject"; remarks?: string }) =>
+  hrDecision:  (id: number, body: {
+    decision:       "approve" | "reject";
+    remarks?:       string;
+    template_name?: string;
+    extra_context?: Record<string, string>;
+  }) =>
     clientApi.patch<{ data: Candidate }>(API.recruitment.hrDecision(id), body),
-  reviewList:  () =>
+  reviewList:     () =>
     clientApi.get<{ data: PaginatedCandidates }>(API.recruitment.review),
-  emailLogs:   (params?: { search?: string }) =>
+  emailTemplates: () =>
+    clientApi.get<{ data: EmailTemplate[] }>(API.recruitment.emailTemplates),
+  emailLogs:      (params?: { search?: string }) =>
     clientApi.get<{ data: CandidateEmail[] }>(API.recruitment.emailLogs, { params }),
 };
 

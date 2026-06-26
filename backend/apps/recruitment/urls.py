@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     CandidateDetailView,
     CandidateEmailLogView,
+    CandidateEmailTemplatesView,
     CandidateHRDecisionView,
     CandidateListCreateView,
     CandidateReviewListView,
@@ -17,5 +18,6 @@ urlpatterns = [
     path('candidates/<int:pk>/',              CandidateDetailView.as_view(),      name='candidate-detail'),
     path('candidates/<int:pk>/status/',       CandidateStatusView.as_view(),      name='candidate-status'),
     path('candidates/<int:pk>/hr-decision/',  CandidateHRDecisionView.as_view(),  name='candidate-hr-decision'),
+    path('email-templates/',                  CandidateEmailTemplatesView.as_view(), name='recruitment-email-templates'),
     path('emails/',                           CandidateEmailLogView.as_view(),    name='candidate-email-logs'),
 ]

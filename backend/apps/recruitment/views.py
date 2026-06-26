@@ -32,21 +32,25 @@ _DENIED = 'You do not have permission to perform this action.'
 
 # ─── Email helper ─────────────────────────────────────────────────────────────
 
-def _send_candidate_email(candidate, template_slug, actor):
+def _send_candidate_email(candidate, template_slug, actor, extra_context=None):
     company      = Company.objects.first()
     company_name = company.name if company else ''
     subject      = f'Your application update — {candidate.position_applied}'
     sent_status  = CandidateEmail.STATUS_FAILED
 
+    context = {
+        'candidate_name': candidate.name,
+        'position':       candidate.position_applied,
+        'company_name':   company_name,
+    }
+    if extra_context:
+        context.update(extra_context)
+
     try:
         send_template_email(
             recipient_email=candidate.email,
             template_name=template_slug,
-            context={
-                'candidate_name': candidate.name,
-                'position':       candidate.position_applied,
-                'company_name':   company_name,
-            },
+            context=context,
         )
         sent_status = CandidateEmail.STATUS_SENT
         logger.info('Sent %s email to %s for candidate %s', template_slug, candidate.email, candidate.id)
@@ -229,6 +233,17 @@ class CandidateHRDecisionView(APIView):
         actor_name = request.user.full_name or request.user.email
 
         if decision == 'approve':
+            # Template selection: default to welcome_employee if not specified
+            template_name = (request.data.get('template_name') or 'welcome_employee').strip()
+
+            # Sanitize extra_context: only string-keyed, identifier-named entries
+            raw_extra = request.data.get('extra_context') or {}
+            extra_context = {}
+            if isinstance(raw_extra, dict):
+                for k, v in raw_extra.items():
+                    if isinstance(k, str) and k.isidentifier() and len(k) <= 100:
+                        extra_context[k] = str(v)[:2000]
+
             candidate.hr_approved = True
             candidate.save(update_fields=['hr_approved', 'updated_at'])
             CandidateLog.objects.create(
@@ -237,12 +252,12 @@ class CandidateHRDecisionView(APIView):
                 title='HR Approved — Onboarded as Employee',
                 description=f'Approved by {actor_name}. {remarks}'.strip('. '),
             )
-            _send_candidate_email(candidate, 'welcome_employee', request.user)
+            _send_candidate_email(candidate, template_name, request.user, extra_context)
             CandidateLog.objects.create(
                 candidate=candidate,
                 log_type=CandidateLog.TYPE_SUCCESS,
-                title='Welcome Employee email sent',
-                description='Using template: Welcome Employee',
+                title='Onboarding email sent',
+                description=f'Using template: {template_name}',
             )
             msg = f'{candidate.name} approved and onboarded!'
         else:
@@ -338,3 +353,21 @@ class CandidateStatsView(APIView):
             'selected': selected, 'rejected': rejected,
             'pending_review': pending_review,
         })
+
+
+# ─── Available email templates for recruitment emails ─────────────────────────
+
+class CandidateEmailTemplatesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _has_perm(request.user, 'recruitment.view'):
+            return error(_DENIED, http_status=status.HTTP_403_FORBIDDEN)
+
+        templates = list(
+            EmailTemplate.objects
+            .filter(is_active=True)
+            .order_by('template_type', 'display_name')
+            .values('id', 'name', 'display_name', 'subject', 'body', 'available_variables')
+        )
+        return success('Email templates retrieved.', data=templates)

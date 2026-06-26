@@ -1,0 +1,230 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Candidate, EmailTemplate, RECRUITMENT_API } from "../interview-list/_data";
+
+// Variables auto-filled from candidate data — not shown as manual inputs
+const AUTO_KEYS = new Set(["candidate_name", "position", "company_name"]);
+
+interface Props {
+  candidate: Candidate;
+  decision:  "approve" | "reject";
+  onClose:   () => void;
+  onDone:    (updated: Candidate) => void;
+}
+
+export function HRDecisionModal({ candidate, decision, onClose, onDone }: Props) {
+  const isApprove = decision === "approve";
+
+  const [remarks,          setRemarks]          = useState("");
+  const [saving,           setSaving]           = useState(false);
+  const [apiError,         setApiError]         = useState("");
+  const [templates,        setTemplates]        = useState<EmailTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
+  const [extraVars,        setExtraVars]        = useState<Record<string, string>>({});
+
+  // Fetch templates when modal opens for approval
+  useEffect(() => {
+    if (!isApprove) return;
+    setLoadingTemplates(true);
+    RECRUITMENT_API.emailTemplates()
+      .then(r => {
+        const list = r.data?.data ?? [];
+        setTemplates(list);
+        if (list.length > 0) setSelectedTemplate(list[0]);
+      })
+      .catch(() => setApiError("Could not load email templates."))
+      .finally(() => setLoadingTemplates(false));
+  }, [isApprove]);
+
+  // When template changes, reset manual variable inputs for non-auto variables
+  useEffect(() => {
+    if (!selectedTemplate) { setExtraVars({}); return; }
+    const manual: Record<string, string> = {};
+    for (const v of (selectedTemplate.available_variables ?? [])) {
+      if (!AUTO_KEYS.has(v)) manual[v] = "";
+    }
+    setExtraVars(manual);
+  }, [selectedTemplate]);
+
+  function renderPreview(text: string): string {
+    const ctx: Record<string, string> = {
+      candidate_name: candidate.name,
+      position:       candidate.position_applied,
+      company_name:   "[Company Name]",
+      ...extraVars,
+    };
+    let out = text;
+    for (const [k, v] of Object.entries(ctx)) {
+      out = out.replaceAll(`{${k}}`, v || `[${k}]`);
+    }
+    return out;
+  }
+
+  async function handleConfirm() {
+    setSaving(true);
+    setApiError("");
+    try {
+      const body: {
+        decision:       "approve" | "reject";
+        remarks?:       string;
+        template_name?: string;
+        extra_context?: Record<string, string>;
+      } = { decision, remarks };
+
+      if (isApprove && selectedTemplate) {
+        body.template_name = selectedTemplate.name;
+        body.extra_context = extraVars;
+      }
+
+      const res = await RECRUITMENT_API.hrDecision(candidate.id, body);
+      onDone(res.data.data);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setApiError(msg || "Action failed.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const hasUnfilledVars = Object.values(extraVars).some(v => !v.trim());
+
+  return (
+    <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: isApprove ? 680 : 480 }}>
+        <div className="modal-header">
+          <div className="modal-title">
+            {isApprove ? "Approve & Onboard" : "Request Revision"} — {candidate.name}
+          </div>
+          <button className="modal-close" onClick={onClose}><i className="ti ti-x" /></button>
+        </div>
+
+        <div className="modal-body">
+          {apiError && (
+            <div className="alert alert-error mb-16">
+              <i className="ti ti-alert-circle" /><div>{apiError}</div>
+            </div>
+          )}
+
+          {/* ── Approve: template selection + preview ── */}
+          {isApprove && (
+            <>
+              <div className="field-group mb-16">
+                <label className="field-label">Email Template *</label>
+                {loadingTemplates ? (
+                  <div className="text-sm text-[var(--on-variant)]">
+                    <i className="ti ti-loader-2 spin" /> Loading templates…
+                  </div>
+                ) : (
+                  <select
+                    className="field-input field-select"
+                    value={selectedTemplate?.name ?? ""}
+                    onChange={e =>
+                      setSelectedTemplate(templates.find(t => t.name === e.target.value) ?? null)
+                    }
+                  >
+                    {templates.length === 0 && (
+                      <option value="">No active templates — create one in Settings → Email Templates</option>
+                    )}
+                    {templates.map(t => (
+                      <option key={t.name} value={t.name}>{t.display_name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Manual inputs for template variables not auto-filled */}
+              {Object.keys(extraVars).length > 0 && (
+                <div className="settings-card mb-16">
+                  <div className="settings-card-title mb-8">Fill in template variables</div>
+                  <div className="form-row cols-2">
+                    {Object.keys(extraVars).map(key => (
+                      <div key={key} className="field-group">
+                        <label className="field-label">
+                          {key.replace(/_/g, " ")} <span className="text-[var(--error)]">*</span>
+                        </label>
+                        <input
+                          className="field-input"
+                          placeholder={`Enter ${key.replace(/_/g, " ")}`}
+                          value={extraVars[key]}
+                          onChange={e => setExtraVars(prev => ({ ...prev, [key]: e.target.value }))}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Live email preview */}
+              {selectedTemplate && (
+                <div className="settings-card mb-16">
+                  <div className="settings-card-title mb-8">
+                    <i className="ti ti-mail" /> Email Preview
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--on-variant)", marginBottom: 4 }}>
+                    <strong>To:</strong> {candidate.email}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--on-variant)", marginBottom: 12 }}>
+                    <strong>Subject:</strong> {renderPreview(selectedTemplate.subject)}
+                  </div>
+                  <iframe
+                    srcDoc={renderPreview(selectedTemplate.body)}
+                    sandbox="allow-same-origin"
+                    style={{ width: "100%", height: 220, border: "1px solid var(--outline-v)", borderRadius: 6 }}
+                    title="Email body preview"
+                  />
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── Reject: simple confirmation ── */}
+          {!isApprove && (
+            <div className="alert alert-warn mb-16">
+              <i className="ti ti-alert-triangle" />
+              <div>
+                A revision request will be sent to <strong>{candidate.name}</strong> to resubmit
+                their details.
+              </div>
+            </div>
+          )}
+
+          {/* Remarks */}
+          <div className="field-group">
+            <label className="field-label">
+              {isApprove ? "HR Remarks (optional)" : "Revision notes (required)"}
+            </label>
+            <input
+              className="field-input"
+              placeholder={isApprove ? "Any onboarding notes…" : "Specify what needs to be corrected…"}
+              value={remarks}
+              onChange={e => setRemarks(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button
+            className={`btn ${isApprove ? "btn-success" : "btn-danger"}`}
+            onClick={handleConfirm}
+            disabled={
+              saving ||
+              (!isApprove && !remarks.trim()) ||
+              (isApprove && (!selectedTemplate || hasUnfilledVars))
+            }
+          >
+            {saving ? (
+              <><i className="ti ti-loader-2 spin" /> Processing…</>
+            ) : isApprove ? (
+              <><i className="ti ti-check" /> Approve & Send Email</>
+            ) : (
+              <><i className="ti ti-alert-triangle" /> Request Revision</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
