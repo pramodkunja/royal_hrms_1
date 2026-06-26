@@ -53,4 +53,14 @@ export const API = {
     audit:   "/settings/audit/",
     company: "/settings/company/",
   },
+
+  recruitment: {
+    candidates: "/recruitment/candidates/",
+    stats:      "/recruitment/candidates/stats/",
+    review:     "/recruitment/candidates/review/",
+    detail:     (id: number) => `/recruitment/candidates/${id}/`,
+    status:     (id: number) => `/recruitment/candidates/${id}/status/`,
+    hrDecision: (id: number) => `/recruitment/candidates/${id}/hr-decision/`,
+    emailLogs:  "/recruitment/emails/",
+  },
 } as const;

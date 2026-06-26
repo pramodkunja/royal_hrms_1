@@ -295,7 +295,7 @@ export default function InterviewListPage() {
     try {
       const cRes = await RECRUITMENT_API.list({ search: q || undefined, status: s || undefined });
       const raw  = cRes.data?.data;
-      setCandidates(Array.isArray(raw) ? raw : []);
+      setCandidates(Array.isArray(raw?.results) ? raw.results : []);
     } catch {
       setError("Failed to load candidates.");
       setCandidates([]);

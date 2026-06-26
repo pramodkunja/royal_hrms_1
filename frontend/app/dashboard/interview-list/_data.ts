@@ -1,4 +1,5 @@
 import clientApi from "@/lib/clientApi";
+import { API } from "@/lib/api/endpoints";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,24 +59,33 @@ export interface RecruitmentStats {
   pending_review: number;
 }
 
+export interface PaginatedCandidates {
+  count:       number;
+  page:        number;
+  page_size:   number;
+  total_pages: number;
+  results:     Candidate[];
+}
+
 // ─── API helpers ──────────────────────────────────────────────────────────────
 
 export const RECRUITMENT_API = {
-  stats:       () => clientApi.get<{ data: RecruitmentStats }>("/recruitment/candidates/stats/"),
+  stats:       () =>
+    clientApi.get<{ data: RecruitmentStats }>(API.recruitment.stats),
   list:        (params?: { status?: string; search?: string }) =>
-                 clientApi.get<{ data: Candidate[] }>("/recruitment/candidates/", { params }),
+    clientApi.get<{ data: PaginatedCandidates }>(API.recruitment.candidates, { params }),
   create:      (body: Partial<Candidate>) =>
-                 clientApi.post<{ data: Candidate }>("/recruitment/candidates/", body),
+    clientApi.post<{ data: Candidate }>(API.recruitment.candidates, body),
   detail:      (id: number) =>
-                 clientApi.get<{ data: Candidate }>(`/recruitment/candidates/${id}/`),
+    clientApi.get<{ data: Candidate }>(API.recruitment.detail(id)),
   setStatus:   (id: number, body: { status: CandidateStatus; remarks?: string }) =>
-                 clientApi.patch<{ data: Candidate }>(`/recruitment/candidates/${id}/status/`, body),
+    clientApi.patch<{ data: Candidate }>(API.recruitment.status(id), body),
   hrDecision:  (id: number, body: { decision: "approve" | "reject"; remarks?: string }) =>
-                 clientApi.patch<{ data: Candidate }>(`/recruitment/candidates/${id}/hr-decision/`, body),
+    clientApi.patch<{ data: Candidate }>(API.recruitment.hrDecision(id), body),
   reviewList:  () =>
-                 clientApi.get<{ data: Candidate[] }>("/recruitment/candidates/review/"),
+    clientApi.get<{ data: PaginatedCandidates }>(API.recruitment.review),
   emailLogs:   (params?: { search?: string }) =>
-                 clientApi.get<{ data: CandidateEmail[] }>("/recruitment/emails/", { params }),
+    clientApi.get<{ data: CandidateEmail[] }>(API.recruitment.emailLogs, { params }),
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

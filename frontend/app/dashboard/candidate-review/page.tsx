@@ -236,7 +236,7 @@ export default function CandidateReviewPage() {
     try {
       const res = await RECRUITMENT_API.reviewList();
       const raw = res.data?.data;
-      setCandidates(Array.isArray(raw) ? raw : []);
+      setCandidates(Array.isArray(raw?.results) ? raw.results : []);
     } catch {
       setError("Failed to load candidates for review.");
     } finally {
