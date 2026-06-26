@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import clientApi from "@/lib/clientApi";
+import { API } from "@/lib/api/endpoints";
 import AddRoleModal  from "./_components/AddRoleModal";
 import EditRoleModal from "./_components/EditRoleModal";
 import {
@@ -35,8 +36,8 @@ export default function RolesPermissionsPage() {
     setError(null);
     try {
       const [rolesRes, permsRes] = await Promise.all([
-        clientApi.get("/roles/"),
-        clientApi.get("/permissions/"),
+        clientApi.get(API.roles.list),
+        clientApi.get(API.permissions.list),
       ]);
       setRoles(rolesRes.data.data ?? []);
       setPermissionsMap(permsRes.data.data ?? {});
@@ -53,13 +54,13 @@ export default function RolesPermissionsPage() {
   async function addRole(form: RoleForm) {
     setSaving(true);
     try {
-      await clientApi.post("/roles/", {
+      await clientApi.post(API.roles.list, {
         name:                slugifyName(form.display_name),
         display_name:        form.display_name,
         is_active:           true,
         permission_codenames: form.permission_codenames,
       });
-      const res = await clientApi.get("/roles/");
+      const res = await clientApi.get(API.roles.list);
       setRoles(res.data.data ?? []);
       setShowAddModal(false);
     } catch (err: unknown) {
@@ -76,13 +77,13 @@ export default function RolesPermissionsPage() {
     if (!editingRole) return;
     setSaving(true);
     try {
-      await clientApi.put(`/roles/${editingRole.id}/`, {
+      await clientApi.put(API.roles.detail(editingRole.id), {
         name:                editingRole.name,       // slug is immutable
         display_name:        form.display_name,
         is_active:           editingRole.is_active,  // toggle handles this separately
         permission_codenames: form.permission_codenames,
       });
-      const res = await clientApi.get("/roles/");
+      const res = await clientApi.get(API.roles.list);
       setRoles(res.data.data ?? []);
       setEditingRole(null);
     } catch (err: unknown) {
@@ -98,7 +99,7 @@ export default function RolesPermissionsPage() {
   async function toggleActive(role: ApiRole) {
     setTogglingId(role.id);
     try {
-      await clientApi.patch(`/roles/${role.id}/`, { is_active: !role.is_active });
+      await clientApi.patch(API.roles.detail(role.id), { is_active: !role.is_active });
       setRoles(prev =>
         prev.map(r => r.id === role.id ? { ...r, is_active: !r.is_active } : r)
       );

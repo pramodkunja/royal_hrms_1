@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import clientApi from "@/lib/clientApi";
+import { API } from "@/lib/api/endpoints";
 import {
   fullName,
   initials,
@@ -103,7 +104,7 @@ export default function EmployeesPage() {
     setLoading(true);
     setFetchError("");
     try {
-      const { data } = await clientApi.get<{ data: ApiEmployee[] }>("/employees/");
+      const { data } = await clientApi.get<{ data: ApiEmployee[] }>(API.employees.list);
       setEmployees((data.data ?? []).map(apiToEmployee));
     } catch {
       setFetchError("Could not load employees. Please refresh.");

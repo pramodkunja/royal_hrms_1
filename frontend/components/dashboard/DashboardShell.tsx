@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import type { SessionPayload } from "@/lib/session";
-import { clearAuth, getStoredRefreshToken } from "@/lib/auth";
+import { clearAuth } from "@/lib/auth";
 import clientApi, { markIntentionalLogout } from "@/lib/clientApi";
+import { API } from "@/lib/api/endpoints";
 import {
   buildNav, isSection,
   type NavItem,
@@ -66,8 +67,8 @@ export default function DashboardShell({
   async function handleLogout() {
     markIntentionalLogout(); // suppress session:expired overlay for in-flight 401s
     try {
-      const refreshToken = getStoredRefreshToken();
-      if (refreshToken) await clientApi.post("/logout/", { refresh_token: refreshToken });
+      // The httpOnly refresh token cookie is sent automatically via withCredentials.
+      await clientApi.post(API.auth.logout, {});
     } catch { /* proceed */ }
     clearAuth();
     router.push("/login");

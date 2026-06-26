@@ -47,3 +47,15 @@ frontend/yarn-debug.log*
 frontend/yarn-error.log*
 frontend/eslint_output.txt
 frontend/lint_output.txt
+
+# ── Catch-all additions ────────────────────────────────────────────────────────
+logs/
+*.log
+__pycache__/
+node_modules/
+.next/
+*.bak
+eslint_output.txt
+lint_output.txt
+dist/
+build/

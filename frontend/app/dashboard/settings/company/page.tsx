@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import clientApi from "@/lib/clientApi";
+import { API } from "@/lib/api/endpoints";
 
 // ─── Indian states / UTs ──────────────────────────────────────────────────────
 
@@ -105,7 +106,7 @@ export default function CompanyInfoPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await clientApi.get("/settings/company/");
+        const res = await clientApi.get(API.settings.company);
         const d: CompanyData = res.data?.data ?? {};
         if (d.id) {
           setForm({
@@ -198,7 +199,7 @@ export default function CompanyInfoPage() {
         fd.append("remove_logo", "true");
       }
 
-      const res = await clientApi.put("/settings/company/", fd, {
+      const res = await clientApi.put(API.settings.company, fd, {
         headers: { "Content-Type": undefined },
       });
       const saved: CompanyData = res.data?.data ?? {};

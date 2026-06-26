@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import clientApi from "@/lib/clientApi";
+import { API } from "@/lib/api/endpoints";
 import type { SessionPayload } from "@/lib/session";
 
 const DOCUMENTS = ["Aadhaar Card", "PAN Card", "Degree Certificate", "Offer Letter"];
@@ -50,7 +51,7 @@ export default function ProfileClient({ session }: { session: SessionPayload }) 
     if (newPwd === oldPwd)     { setPwdError("New password must differ from current."); return; }
     setPwdLoading(true);
     try {
-      await clientApi.post("/change-password/", { old_password: oldPwd, new_password: newPwd, confirm_password: confirmPwd });
+      await clientApi.post(API.auth.changePassword, { old_password: oldPwd, new_password: newPwd, confirm_password: confirmPwd });
       setPwdSuccess(true);
       setOldPwd(""); setNewPwd(""); setConfirmPwd("");
       showToast("Password changed successfully");

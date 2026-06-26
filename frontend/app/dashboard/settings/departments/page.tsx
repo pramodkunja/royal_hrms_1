@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import clientApi from "@/lib/clientApi";
+import { API } from "@/lib/api/endpoints";
 
 interface RoleInfo    { name: string; display_name: string }
 interface Department  {
@@ -63,7 +64,7 @@ export default function DepartmentsPage() {
   async function loadDepartments() {
     setLoading(true); setPageError(null);
     try {
-      const res = await clientApi.get("/departments/");
+      const res = await clientApi.get(API.departments.list);
       const raw = res.data?.data;
       const data: Department[] = Array.isArray(raw) ? raw : [];
       setDepartments(data);
@@ -79,7 +80,7 @@ export default function DepartmentsPage() {
   async function loadDesignations(id: number) {
     setDesigLoading(true);
     try {
-      const res = await clientApi.get(`/designations/?department=${id}`);
+      const res = await clientApi.get(API.designations.list, { params: { department: id } });
       const raw = res.data?.data;
       setDesignations(Array.isArray(raw) ? raw : []);
     } catch { setDesignations([]); }
@@ -111,9 +112,9 @@ export default function DepartmentsPage() {
     setSaving(true); setSaveError(null);
     try {
       if (deptModal === "edit" && editingDept)
-        await clientApi.put(`/departments/${editingDept.id}/`, deptForm);
+        await clientApi.put(API.departments.detail(editingDept.id), deptForm);
       else
-        await clientApi.post("/departments/", deptForm);
+        await clientApi.post(API.departments.list, deptForm);
       setDeptModal(null);
       await loadDepartments();
     } catch (e: unknown) {
@@ -123,7 +124,7 @@ export default function DepartmentsPage() {
   async function deleteDept(d: Department) {
     if (!window.confirm(`Delete "${d.name}"? This cannot be undone.`)) return;
     try {
-      await clientApi.delete(`/departments/${d.id}/`);
+      await clientApi.delete(API.departments.detail(d.id));
       if (selected?.id === d.id) setSelected(null);
       await loadDepartments();
     } catch (e: unknown) {
@@ -149,9 +150,9 @@ export default function DepartmentsPage() {
     setSaving(true); setSaveError(null);
     try {
       if (desigModal === "edit" && editingDesig)
-        await clientApi.put(`/designations/${editingDesig.id}/`, desigForm);
+        await clientApi.put(API.designations.detail(editingDesig.id), desigForm);
       else
-        await clientApi.post("/designations/", { ...desigForm, department: selected!.id });
+        await clientApi.post(API.designations.list, { ...desigForm, department: selected!.id });
       setDesigModal(null);
       await Promise.all([loadDesignations(selected!.id), loadDepartments()]);
     } catch (e: unknown) {
@@ -161,7 +162,7 @@ export default function DepartmentsPage() {
   async function deleteDesig(d: Designation) {
     if (!window.confirm(`Delete designation "${d.name}"?`)) return;
     try {
-      await clientApi.delete(`/designations/${d.id}/`);
+      await clientApi.delete(API.designations.detail(d.id));
       await Promise.all([loadDesignations(selected!.id), loadDepartments()]);
     } catch (e: unknown) {
       setPageError((e as { message?: string }).message ?? "Failed to delete.");

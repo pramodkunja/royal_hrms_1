@@ -2,7 +2,7 @@
 import axios from "axios";
 import type { AxiosError, InternalAxiosRequestConfig } from "axios";
 import { API_URL, API_BASE } from "./config";
-import { TOKEN_KEY, REFRESH_KEY, clearAuth, updateTokens } from "./auth";
+import { clearAuth } from "./auth";
 
 // Endpoints that must never trigger a silent refresh on 401
 const AUTH_URLS = [
@@ -22,38 +22,32 @@ const clientApi = axios.create({
   baseURL: `${API_URL}${API_BASE}`,
   timeout: 15000,
   headers: { "Content-Type": "application/json" },
+  withCredentials: true,
 });
 
-// ── Request: attach access token + fix FormData Content-Type ─────────────────
+// ── Request: fix FormData Content-Type ────────────────────────────────────────
 clientApi.interceptors.request.use((config) => {
   // When the body is FormData, remove the default Content-Type so the browser
   // can set multipart/form-data with the correct boundary automatically.
   if (config.data instanceof FormData) {
     delete config.headers["Content-Type"];
   }
-
-  const isAuthUrl = AUTH_URLS.some(u => config.url?.endsWith(u));
-  if (!isAuthUrl && typeof window !== "undefined") {
-    const token = localStorage.getItem(TOKEN_KEY);
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-  }
   return config;
 });
 
 // ── Refresh mutex — one in-flight refresh, others queue ───────────────────────
 let isRefreshing = false;
-type QueueItem = { resolve: (token: string) => void; reject: (err: unknown) => void };
+type QueueItem = { resolve: () => void; reject: (err: unknown) => void };
 let refreshQueue: QueueItem[] = [];
 
-function flushQueue(err: unknown, token: string | null) {
+function flushQueue(err: unknown, succeeded: boolean) {
   refreshQueue.forEach(({ resolve, reject }) =>
-    token ? resolve(token) : reject(err)
+    succeeded ? resolve() : reject(err)
   );
   refreshQueue = [];
 }
 
 function dispatchSessionExpired() {
-  // Reset mutex first so no further refresh attempts are made
   isRefreshing = false;
   refreshQueue = [];
   clearAuth();
@@ -80,29 +74,12 @@ clientApi.interceptors.response.use(
       return Promise.reject(normaliseError(err));
     }
 
-    // Cross-tab sync: another tab may have already refreshed the token.
-    // If the stored token differs from what we sent, that means a newer token
-    // exists — just retry with it instead of starting another refresh.
-    if (typeof window !== "undefined") {
-      const sentToken    = (original.headers.Authorization as string | undefined)
-        ?.replace("Bearer ", "");
-      const currentToken = localStorage.getItem(TOKEN_KEY);
-      if (currentToken && currentToken !== sentToken) {
-        original._retry = true;
-        original.headers.Authorization = `Bearer ${currentToken}`;
-        return clientApi(original);
-      }
-    }
-
     // Queue behind an in-flight refresh
     if (isRefreshing) {
-      original._retry = true; // prevent re-entry if the retry itself 401s
+      original._retry = true;
       return new Promise((resolve, reject) => {
         refreshQueue.push({
-          resolve: (newToken) => {
-            original.headers.Authorization = `Bearer ${newToken}`;
-            resolve(clientApi(original));
-          },
+          resolve: () => resolve(clientApi(original)),
           reject,
         });
       });
@@ -111,36 +88,18 @@ clientApi.interceptors.response.use(
     original._retry = true;
     isRefreshing = true;
 
-    const storedRefresh = typeof window !== "undefined"
-      ? localStorage.getItem(REFRESH_KEY)
-      : null;
-
-    if (!storedRefresh) {
-      // No refresh token stored — nothing to attempt
-      dispatchSessionExpired();
-      return Promise.reject(normaliseError(err));
-    }
-
     try {
-      const { data } = await axios.post<{
-        data: { access_token: string; refresh_token?: string };
-      }>(
+      // The httpOnly refresh token cookie is sent automatically via withCredentials.
+      await axios.post(
         `${API_URL}${API_BASE}/token/refresh/`,
-        { refresh_token: storedRefresh },
-        { headers: { "Content-Type": "application/json" } }
+        {},
+        { withCredentials: true, headers: { "Content-Type": "application/json" } }
       );
 
-      const newAccess  = data.data.access_token;
-      const newRefresh = data.data.refresh_token;
-
-      updateTokens(newAccess, newRefresh);
-      flushQueue(null, newAccess);
-
-      original.headers.Authorization = `Bearer ${newAccess}`;
+      flushQueue(null, true);
       return clientApi(original);
     } catch (refreshErr) {
-      // Refresh token itself is expired or blacklisted
-      flushQueue(refreshErr, null);
+      flushQueue(refreshErr, false);
       dispatchSessionExpired();
       return Promise.reject(normaliseError(refreshErr));
     } finally {

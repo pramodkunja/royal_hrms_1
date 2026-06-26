@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import clientApi from "@/lib/clientApi";
+import { API } from "@/lib/api/endpoints";
 import { getStoredUser } from "@/lib/auth";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -186,7 +187,7 @@ export default function AnnouncementsPage() {
     try {
       const params: Record<string, string> = { page: String(pg), page_size: "10" };
       if (cat) params.category = cat;
-      const res = await clientApi.get("/announcements/", { params });
+      const res = await clientApi.get(API.announcements.list, { params });
       setMeta(res.data?.data ?? null);
     } catch (e: unknown) {
       setPageErr((e as { message?: string }).message ?? "Failed to load announcements.");
@@ -202,8 +203,8 @@ export default function AnnouncementsPage() {
   // Fetch departments + branches once for modal dropdowns
   useEffect(() => {
     if (!canPost) return;
-    clientApi.get("/departments/").then(r => setDepartments(r.data?.data ?? [])).catch(() => {});
-    clientApi.get("/branch/branches/").then(r => setBranches(r.data?.data ?? [])).catch(() => {});
+    clientApi.get(API.departments.list).then(r => setDepartments(r.data?.data ?? [])).catch(() => {});
+    clientApi.get(API.branches.list).then(r => setBranches(r.data?.data ?? [])).catch(() => {});
   }, [canPost]);
 
   // Track views once per card per session (non-authors only)
@@ -212,7 +213,7 @@ export default function AnnouncementsPage() {
     meta.results.forEach(ann => {
       const key = viewKey(ann.id);
       if (!localStorage.getItem(key) && ann.posted_by !== currentUser?.userId) {
-        clientApi.post(`/announcements/${ann.id}/view/`).then(() => {
+        clientApi.post(API.announcements.view(ann.id)).then(() => {
           localStorage.setItem(key, "1");
         }).catch(() => {});
       }
@@ -300,9 +301,9 @@ export default function AnnouncementsPage() {
       };
 
       if (editTarget) {
-        await clientApi.put(`/announcements/${editTarget.id}/`, payload);
+        await clientApi.put(API.announcements.detail(editTarget.id), payload);
       } else {
-        await clientApi.post("/announcements/", payload);
+        await clientApi.post(API.announcements.list, payload);
       }
 
       closeModal();
@@ -321,7 +322,7 @@ export default function AnnouncementsPage() {
     if (deleteId == null) return;
     setDeleting(true);
     try {
-      await clientApi.delete(`/announcements/${deleteId}/`);
+      await clientApi.delete(API.announcements.detail(deleteId));
       setDeleteId(null);
       // If we delete the last item on a page > 1, go back one page
       const remaining = (meta?.results.length ?? 1) - 1;
@@ -354,7 +355,7 @@ export default function AnnouncementsPage() {
       };
     });
     try {
-      await clientApi.post(`/announcements/${ann.id}/react/`);
+      await clientApi.post(API.announcements.react(ann.id));
     } catch {
       // Rollback on error
       fetchAnnouncements(page, category);

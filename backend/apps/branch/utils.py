@@ -114,7 +114,6 @@ CITY_CODE_MAP = {
     'meerut': 'MRT',
     'prayagraj': 'ALD',
     'allahabad': 'ALD',
-    'ghaziabad': 'GZB',
     'bareilly': 'BRL',
     'moradabad': 'MRD',
     'gorakhpur': 'GKP',
@@ -234,8 +233,6 @@ CITY_CODE_MAP = {
     'kargil': 'KGL',
     # Sikkim
     'gangtok': 'GTK',
-    # Andhra Pradesh extras
-    'nellore': 'NLR',
 }
 
 

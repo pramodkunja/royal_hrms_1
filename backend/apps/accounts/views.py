@@ -8,6 +8,7 @@ from collections import defaultdict
 import cloudinary.utils
 import requests as http_req
 
+from django.conf import settings
 from django.core import signing
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
@@ -20,6 +21,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from core.responses import error, first_error, get_client_ip, success
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -68,38 +70,6 @@ from apps.accounts.utils import send_otp_email, send_test_email
 logger = logging.getLogger('accounts')
 
 
-# ─── Response helpers ──────────────────────────────────────────────────────────
-
-def success(message: str, data: dict | list | None = None, http_status: int = status.HTTP_200_OK) -> Response:
-    return Response(
-        {'status': 'success', 'message': message, 'data': data if data is not None else {}},
-        status=http_status,
-    )
-
-
-def error(message: str, data: dict | None = None, http_status: int = status.HTTP_400_BAD_REQUEST) -> Response:
-    return Response(
-        {'status': 'error', 'message': message, 'data': data if data is not None else {}},
-        status=http_status,
-    )
-
-
-def _first_error(serializer_errors: dict) -> str:
-    """Extract the first human-readable error message from a serializer's errors dict."""
-    for field_errors in serializer_errors.values():
-        if isinstance(field_errors, list) and field_errors:
-            return str(field_errors[0])
-        if isinstance(field_errors, str):
-            return field_errors
-    return 'Validation error.'
-
-
-def get_client_ip(request) -> str:
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
-    if x_forwarded_for:
-        return x_forwarded_for.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR') or '0.0.0.0'
-
 
 def _has_perm(user, codename: str) -> bool:
     if not user or not user.role:
@@ -137,6 +107,7 @@ def _employee_dict(user: User) -> dict:
     }
 
 
+
 # ─── Custom permissions ────────────────────────────────────────────────────────
 
 class CanManageRoles(BasePermission):
@@ -162,7 +133,7 @@ class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         email    = serializer.validated_data['email']
         password = serializer.validated_data['password']
@@ -215,9 +186,7 @@ class LoginView(APIView):
             if user.role else []
         )
 
-        return success('Login successful.', data={
-            'access_token':  str(refresh.access_token),
-            'refresh_token': str(refresh),
+        resp = success('Login successful.', data={
             'user': {
                 'id':                  str(user.id),
                 'email':               user.email,
@@ -232,48 +201,64 @@ class LoginView(APIView):
                 'permissions':         permissions,
             },
         })
+        resp.set_cookie(
+            'royal_access_token', str(refresh.access_token),
+            max_age=900, httponly=True, secure=not settings.DEBUG, samesite='Lax',
+        )
+        resp.set_cookie(
+            'royal_refresh_token', str(refresh),
+            max_age=604800, httponly=True, secure=not settings.DEBUG, samesite='Lax',
+        )
+        return resp
 
 
 class TokenRefreshAPIView(APIView):
-    """Silent token refresh. Accepts { refresh_token } → returns { access_token, refresh_token }."""
+    """Silent token refresh. Reads the httpOnly refresh cookie → sets new httpOnly cookies."""
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def post(self, request):
-        refresh_str = request.data.get('refresh_token')
+        refresh_str = request.COOKIES.get('royal_refresh_token')
         if not refresh_str:
-            return error('refresh_token is required.')
+            return error('Session expired. Please log in again.', http_status=status.HTTP_401_UNAUTHORIZED)
         serializer = TokenRefreshSerializer(data={'refresh': refresh_str})
         try:
             serializer.is_valid(raise_exception=True)
         except (TokenError, InvalidToken):
             return error('Token is invalid or expired.', http_status=status.HTTP_401_UNAUTHORIZED)
-        payload = {'access_token': serializer.validated_data['access']}
+        resp = success('Token refreshed successfully.', data={})
+        resp.set_cookie(
+            'royal_access_token', serializer.validated_data['access'],
+            max_age=900, httponly=True, secure=not settings.DEBUG, samesite='Lax',
+        )
         if 'refresh' in serializer.validated_data:
-            payload['refresh_token'] = serializer.validated_data['refresh']
-        return success('Token refreshed successfully.', data=payload)
+            resp.set_cookie(
+                'royal_refresh_token', serializer.validated_data['refresh'],
+                max_age=604800, httponly=True, secure=not settings.DEBUG, samesite='Lax',
+            )
+        return resp
 
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        serializer = LogoutSerializer(data=request.data)
-        if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
-
-        try:
-            token = RefreshToken(serializer.validated_data['refresh_token'])
-            token.blacklist()
-        except TokenError:
-            return error('Invalid or already expired refresh token.')
+        refresh_str = request.COOKIES.get('royal_refresh_token')
+        if refresh_str:
+            try:
+                RefreshToken(refresh_str).blacklist()
+            except TokenError:
+                pass  # Already expired — proceed with logout
 
         AuditLog.objects.create(
             user=request.user, action='logout', module='accounts',
             ip_address=get_client_ip(request),
         )
         logger.info('User %s logged out', request.user.email)
-        return success('Logged out successfully.')
+        resp = success('Logged out successfully.')
+        resp.delete_cookie('royal_access_token', path='/')
+        resp.delete_cookie('royal_refresh_token', path='/')
+        return resp
 
 
 class ForgotPasswordView(APIView):
@@ -283,7 +268,7 @@ class ForgotPasswordView(APIView):
     def post(self, request):
         serializer = ForgotPasswordSerializer(data=request.data, context={})
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         user = serializer.context.get('user')
         if not user:
@@ -318,7 +303,7 @@ class VerifyOTPView(APIView):
     def post(self, request):
         serializer = VerifyOTPSerializer(data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         email     = serializer.validated_data['email']
         otp_input = serializer.validated_data['otp']
@@ -365,7 +350,7 @@ class ResetPasswordView(APIView):
     def post(self, request):
         serializer = ResetPasswordSerializer(data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         reset_token_id = serializer.validated_data['reset_token']
         new_password   = serializer.validated_data['new_password']
@@ -405,7 +390,7 @@ class ChangePasswordView(APIView):
     def post(self, request):
         serializer = ChangePasswordSerializer(data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         user         = request.user
         old_password = serializer.validated_data['old_password']
@@ -432,17 +417,32 @@ class RoleListCreateView(APIView):
     permission_classes = [IsAuthenticated, CanManageRoles]
 
     def get(self, request):
-        roles = (
+        qs = (
             Role.objects
             .prefetch_related('role_permissions__permission')
             .annotate(active_user_count=Count('users', filter=Q(users__is_active=True)))
         )
-        return success('Roles retrieved successfully.', data=RoleSerializer(roles, many=True).data)
+        try:
+            page_num  = max(1, int(request.query_params.get('page', 1)))
+            page_size = min(50, max(1, int(request.query_params.get('page_size', 10))))
+        except (ValueError, TypeError):
+            page_num, page_size = 1, 10
+
+        paginator = Paginator(qs, page_size)
+        page_obj  = paginator.get_page(page_num)
+
+        return success('Roles retrieved successfully.', data={
+            'count':       paginator.count,
+            'page':        page_obj.number,
+            'page_size':   page_size,
+            'total_pages': paginator.num_pages,
+            'results':     RoleSerializer(page_obj.object_list, many=True).data,
+        })
 
     def post(self, request):
         serializer = RoleSerializer(data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         try:
             role = serializer.save()
@@ -493,7 +493,7 @@ class RoleDetailView(APIView):
 
         serializer = RoleSerializer(role, data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         try:
             updated_role = serializer.save()
@@ -519,7 +519,7 @@ class RoleDetailView(APIView):
 
         serializer = RoleSerializer(role, data=request.data, partial=True)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         try:
             updated_role = serializer.save()
@@ -586,7 +586,7 @@ class PermissionListView(APIView):
     def post(self, request):
         serializer = PermissionSerializer(data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         try:
             permission = serializer.save()
@@ -632,7 +632,7 @@ class PermissionDetailView(APIView):
 
         serializer = PermissionSerializer(perm, data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         try:
             updated = serializer.save()
@@ -711,7 +711,7 @@ class DepartmentListCreateView(APIView):
     def post(self, request):
         serializer = DepartmentSerializer(data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
         try:
             dept = serializer.save()
         except IntegrityError:
@@ -752,7 +752,7 @@ class DepartmentDetailView(APIView):
             return error('Department not found.', http_status=status.HTTP_404_NOT_FOUND)
         serializer = DepartmentSerializer(dept, data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
         try:
             updated = serializer.save()
         except IntegrityError:
@@ -773,7 +773,7 @@ class DepartmentDetailView(APIView):
             return error('Department not found.', http_status=status.HTTP_404_NOT_FOUND)
         serializer = DepartmentSerializer(dept, data=request.data, partial=True)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
         try:
             updated = serializer.save()
         except IntegrityError:
@@ -835,7 +835,7 @@ class DesignationListCreateView(APIView):
     def post(self, request):
         serializer = DesignationSerializer(data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
         try:
             desig = serializer.save()
         except IntegrityError:
@@ -877,7 +877,7 @@ class DesignationDetailView(APIView):
             return error('Designation not found.', http_status=status.HTTP_404_NOT_FOUND)
         serializer = DesignationSerializer(desig, data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
         try:
             updated = serializer.save()
         except IntegrityError:
@@ -899,7 +899,7 @@ class DesignationDetailView(APIView):
             return error('Designation not found.', http_status=status.HTTP_404_NOT_FOUND)
         serializer = DesignationSerializer(desig, data=request.data, partial=True)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
         try:
             updated = serializer.save()
         except IntegrityError:
@@ -962,7 +962,7 @@ class SMTPSettingsListCreateView(APIView):
     def post(self, request):
         serializer = SMTPSettingsSerializer(data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         try:
             instance = serializer.save(updated_by=request.user)
@@ -1019,7 +1019,7 @@ class SMTPSettingsDetailView(APIView):
 
         serializer = SMTPSettingsSerializer(cfg, data=request.data, partial=partial)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         # Preserve stored password when not re-submitted
         if not serializer.validated_data.get('password'):
@@ -1101,7 +1101,7 @@ class SMTPTestEmailView(APIView):
     def post(self, request):
         serializer = SMTPTestSerializer(data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         try:
             send_test_email(
@@ -1141,7 +1141,7 @@ class EmailTemplateCategoryListCreateView(APIView):
     def post(self, request):
         serializer = EmailTemplateCategorySerializer(data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
         try:
             cat = serializer.save(is_builtin=False)
         except IntegrityError:
@@ -1176,7 +1176,7 @@ class EmailTemplateCategoryDetailView(APIView):
             return error('Built-in categories cannot be modified.', http_status=status.HTTP_403_FORBIDDEN)
         serializer = EmailTemplateCategorySerializer(cat, data=request.data, partial=True)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
         updated = serializer.save()
         return success('Category updated successfully.', data=EmailTemplateCategorySerializer(updated).data)
 
@@ -1222,7 +1222,7 @@ class EmailTemplateListCreateView(APIView):
     def post(self, request):
         serializer = EmailTemplateSerializer(data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         try:
             template = serializer.save(is_builtin=False, updated_by=request.user)
@@ -1250,14 +1250,6 @@ class EmailTemplateDetailView(APIView):
 
     permission_classes = [IsAuthenticated, CanManageRoles]
 
-    _ALLOWED_MIME = {
-        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-        'application/pdf',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    }
     _MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 
     def _get_template(self, pk: int) -> EmailTemplate | None:
@@ -1284,7 +1276,7 @@ class EmailTemplateDetailView(APIView):
         )
         if not file:
             return error('No file provided.')
-        if file.content_type not in self._ALLOWED_MIME:
+        if file.content_type not in EmailTemplateAttachment.ALLOWED_MIME_TYPES:
             return error(
                 f'File type "{file.content_type}" is not allowed. '
                 'Allowed: images (jpg/png/gif/webp), PDF, Word, Excel.',
@@ -1313,7 +1305,7 @@ class EmailTemplateDetailView(APIView):
 
         serializer = EmailTemplateSerializer(tpl, data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         try:
             updated = serializer.save(updated_by=request.user)
@@ -1338,7 +1330,7 @@ class EmailTemplateDetailView(APIView):
 
         serializer = EmailTemplateSerializer(tpl, data=request.data, partial=True)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         try:
             updated = serializer.save(updated_by=request.user)
@@ -1446,7 +1438,7 @@ class EmailTemplatePreviewView(APIView):
 
         serializer = EmailTemplatePreviewSerializer(data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         context                         = serializer.validated_data.get('context', {})
         rendered_subject, rendered_body = tpl.render(context)
@@ -1488,7 +1480,7 @@ class EmailTemplatePreviewView(APIView):
 
         serializer = EmailTemplatePreviewSerializer(data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         context                         = serializer.validated_data.get('context', {})
         rendered_subject, rendered_body = tpl.render(context)
@@ -1601,7 +1593,7 @@ class DocumentListCreateView(APIView):
             return error('file is required.')
         serializer = DocumentSerializer(data=request.data, context={'request': request})
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
         uploaded_file = serializer.validated_data['file']
         try:
             doc = serializer.save(
@@ -1718,7 +1710,7 @@ class DocumentDetailView(APIView):
             return error('No fields provided to update.')
         serializer = DocumentSerializer(doc, data=request.data, partial=True, context={'request': request})
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
         if not serializer.validated_data:
             return error('No valid fields provided to update.')
         new_file = serializer.validated_data.get('file')
@@ -1832,7 +1824,7 @@ class CompanyRetrieveUpdateView(APIView):
                 context={'request': request},
             )
             if not serializer.is_valid():
-                return error(_first_error(serializer.errors), data=serializer.errors)
+                return error(first_error(serializer.errors), data=serializer.errors)
 
             # Replace old logo file when a new one is uploaded
             if not is_new and 'logo' in request.FILES and company.logo:
@@ -1984,10 +1976,9 @@ class EmployeeListCreateView(APIView):
                     f'<p>You will be asked to change your password on first login.</p>'
                     f'<p>— Royal HRMS Team</p>'
                 ),
-                fail_silently=True,
             )
         except Exception as exc:
-            logger.warning('Welcome email failed for %s: %s', email, exc)
+            logger.error('Welcome email failed for %s: %s', email, exc)
 
         logger.info('Employee %s (%s) created by %s', employee_id, email, request.user.email)
         return success(

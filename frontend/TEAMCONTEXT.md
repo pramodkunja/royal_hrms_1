@@ -459,7 +459,7 @@ audit:   "/dashboard/settings/audit",
 `backend/config/settings.py`:
 ```python
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
-CORS_ALLOW_ALL_ORIGINS = True   # NOT CORS_ALLOWED_ORIGINS = ['*'] — that breaks django-cors-headers
+CORS_ALLOWED_ORIGINS = ["http://localhost:3000"]   # list specific domains — never use CORS_ALLOW_ALL_ORIGINS = True
 ```
 `backend/.env` — changed `ALLOWED_HOSTS` to `*`, removed the stale `CORS_ALLOWED_ORIGINS= "*"` line.
 
@@ -486,7 +486,7 @@ CORS_ALLOW_ALL_ORIGINS = True   # NOT CORS_ALLOWED_ORIGINS = ['*'] — that brea
 | `backend/apps/accounts/urls.py` | Added company + audit routes |
 | `backend/apps/branch/views.py` | Added `AuditLog` import + audit logging to all branch write views |
 | `backend/config/urls.py` | Added media file serving for DEBUG |
-| `backend/config/settings.py` | `CORS_ALLOW_ALL_ORIGINS = True`, `ALLOWED_HOSTS = env.list(...)` |
+| `backend/config/settings.py` | `CORS_ALLOWED_ORIGINS = [...]` (specific domains only), `ALLOWED_HOSTS = env.list(...)` |
 | `backend/requirements.txt` | Added `Pillow==10.4.0` |
 | `frontend/app/dashboard/settings/company/page.tsx` | New — Company Info settings page |
 | `frontend/app/dashboard/settings/audit/page.tsx` | New — Audit Log viewer |
@@ -500,7 +500,7 @@ CORS_ALLOW_ALL_ORIGINS = True   # NOT CORS_ALLOWED_ORIGINS = ['*'] — that brea
 - **Logo field needs Pillow** — `pip install Pillow==10.4.0`. Without it Django throws `fields.E210` and won't start.
 - **Logo FormData upload** — use `headers: { 'Content-Type': undefined }` in the axios request config (not `'multipart/form-data'`). Setting it manually breaks the multipart boundary.
 - **Logo removal** — send `remove_logo=true` as a FormData string field. View handles deletion via `instance.logo.delete(save=False)` then `instance.save(update_fields=['logo'])`.
-- **CORS pattern** — use `CORS_ALLOW_ALL_ORIGINS = True` in settings.py. Never set `CORS_ALLOWED_ORIGINS = ['*']` — the wildcard string is rejected by django-cors-headers at startup.
+- **CORS pattern** — never use `CORS_ALLOW_ALL_ORIGINS = True` in any environment. Always use `CORS_ALLOWED_ORIGINS = ["http://localhost:3000", "https://yourdomain.com"]` with an explicit list of allowed origins. Setting `CORS_ALLOWED_ORIGINS = ['*']` is also invalid — django-cors-headers rejects the wildcard string at startup.
 - **Audit workflow** — every new module that has admin write operations should get `AuditLog.objects.create()` calls. Notify Surya when a new backend module is added and audit coverage will be dropped in.
 - **Cross-app AuditLog import in branch** — `from apps.accounts.models import AuditLog` in `apps/branch/views.py` is safe (no circular dependency — accounts doesn't import branch).
 

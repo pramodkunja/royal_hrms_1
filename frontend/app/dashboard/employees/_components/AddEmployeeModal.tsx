@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import clientApi from "@/lib/clientApi";
+import { API } from "@/lib/api/endpoints";
 
 /* ── Types ────────────────────────────────────────────────────── */
 interface ApiRole   { id: number; name: string; display_name: string }
@@ -103,9 +104,9 @@ export default function AddEmployeeModal({
   /* fetch roles, departments, branches on mount */
   useEffect(() => {
     Promise.all([
-      clientApi.get<{ data: ApiRole[]   }>("/roles/"),
-      clientApi.get<{ data: ApiDept[]   }>("/departments/"),
-      clientApi.get<{ data: ApiBranch[] }>("/branches/"),
+      clientApi.get<{ data: ApiRole[]   }>(API.roles.list),
+      clientApi.get<{ data: ApiDept[]   }>(API.departments.list),
+      clientApi.get<{ data: ApiBranch[] }>(API.employees.branches),
     ])
       .then(([r, d, b]) => {
         setRoles(r.data.data.filter(x => x.name !== "system_admin"));
@@ -119,7 +120,7 @@ export default function AddEmployeeModal({
   /* fetch designations whenever department changes */
   useEffect(() => {
     if (!form.department) { setDesigs([]); return; }
-    clientApi.get<{ data: ApiDesig[] }>("/designations/")
+    clientApi.get<{ data: ApiDesig[] }>(API.designations.list)
       .then(r => setDesigs(r.data.data.filter(d => d.department_name === form.department)))
       .catch(() => setDesigs([]));
   }, [form.department]);
@@ -155,7 +156,7 @@ export default function AddEmployeeModal({
     setApiErr("");
     try {
       const { data } = await clientApi.post<{ message: string; data: Record<string, unknown> }>(
-        "/employees/",
+        API.employees.list,
         { ...form, role: Number(form.role) },
       );
       setDone(data.message || "Employee added successfully.");

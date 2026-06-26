@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import clientApi from "@/lib/clientApi";
+import { API } from "@/lib/api/endpoints";
 
 export default function ChangePasswordForm() {
   const [oldPwd,     setOldPwd]     = useState("");
@@ -23,7 +24,7 @@ export default function ChangePasswordForm() {
     if (newPwd === oldPwd)     { setError("New password must differ from the current one."); return; }
     setLoading(true);
     try {
-      await clientApi.post("/change-password/", { old_password: oldPwd, new_password: newPwd, confirm_password: confirmPwd });
+      await clientApi.post(API.auth.changePassword, { old_password: oldPwd, new_password: newPwd, confirm_password: confirmPwd });
       setSuccess(true);
       setOldPwd(""); setNewPwd(""); setConfirmPwd("");
     } catch (err) {

@@ -19,7 +19,7 @@ class CandidateEmailSerializer(serializers.ModelSerializer):
 
     def get_sent_by_name(self, obj):
         if obj.sent_by:
-            return obj.sent_by.get_full_name() or obj.sent_by.email
+            return obj.sent_by.full_name or obj.sent_by.email
         return ''
 
     # Extra read-only fields that join candidate data for the email logs page
@@ -44,17 +44,17 @@ class CandidateListSerializer(serializers.ModelSerializer):
 
     def get_interviewer_name(self, obj):
         if obj.interviewer:
-            return obj.interviewer.get_full_name() or obj.interviewer.email
+            return obj.interviewer.full_name or obj.interviewer.email
         return ''
 
     def get_added_by_name(self, obj):
         if obj.added_by:
-            return obj.added_by.get_full_name() or obj.added_by.email
+            return obj.added_by.full_name or obj.added_by.email
         return ''
 
     def get_referral_by_name(self, obj):
         if obj.referral_by:
-            return obj.referral_by.get_full_name() or obj.referral_by.email
+            return obj.referral_by.full_name or obj.referral_by.email
         return ''
 
 

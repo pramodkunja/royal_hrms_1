@@ -10,43 +10,14 @@ from rest_framework import status
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from core.responses import error, first_error, get_client_ip, success
 
 from apps.accounts.models import AuditLog
 from apps.announcements.models import Announcement, AnnouncementReaction
 from apps.announcements.serializers import AnnouncementSerializer, AnnouncementWriteSerializer
 
-logger = logging.getLogger('accounts')
+logger = logging.getLogger(__name__)
 
-# ─── Helpers ──────────────────────────────────────────────────────────────────
-
-def success(message: str, data=None, http_status: int = status.HTTP_200_OK) -> Response:
-    return Response(
-        {'status': 'success', 'message': message, 'data': data if data is not None else {}},
-        status=http_status,
-    )
-
-
-def error(message: str, data=None, http_status: int = status.HTTP_400_BAD_REQUEST) -> Response:
-    return Response(
-        {'status': 'error', 'message': message, 'data': data if data is not None else {}},
-        status=http_status,
-    )
-
-
-def _first_error(errors: dict) -> str:
-    for field_errors in errors.values():
-        if isinstance(field_errors, list) and field_errors:
-            return str(field_errors[0])
-        if isinstance(field_errors, str):
-            return field_errors
-    return 'Validation error.'
-
-
-def _get_ip(request) -> str | None:
-    xff = request.META.get('HTTP_X_FORWARDED_FOR')
-    if xff:
-        return xff.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR')
 
 
 # ─── Permission ───────────────────────────────────────────────────────────────
@@ -209,7 +180,7 @@ class AnnouncementListCreateView(APIView):
     def post(self, request):
         serializer = AnnouncementWriteSerializer(data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         data = serializer.validated_data
         announcement = Announcement.objects.create(
@@ -231,7 +202,7 @@ class AnnouncementListCreateView(APIView):
             object_id  = str(announcement.pk),
             changes    = {'title': announcement.title, 'category': announcement.category,
                           'visibility': announcement.visibility},
-            ip_address = _get_ip(request),
+            ip_address = get_client_ip(request),
         )
 
         if announcement.send_email:
@@ -264,7 +235,7 @@ class AnnouncementDetailView(APIView):
         ann        = self._get_object(request, pk)
         serializer = AnnouncementWriteSerializer(data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
 
         data = serializer.validated_data
         ann.title             = data['title']
@@ -284,7 +255,7 @@ class AnnouncementDetailView(APIView):
             object_id  = str(ann.pk),
             changes    = {'title': ann.title, 'category': ann.category,
                           'visibility': ann.visibility},
-            ip_address = _get_ip(request),
+            ip_address = get_client_ip(request),
         )
 
         out = AnnouncementSerializer(ann, context={'request': request})
@@ -303,7 +274,7 @@ class AnnouncementDetailView(APIView):
             module     = 'announcements',
             object_id  = str(ann_id),
             changes    = {'title': ann_title},
-            ip_address = _get_ip(request),
+            ip_address = get_client_ip(request),
         )
 
         return success('Announcement deleted.', http_status=status.HTTP_204_NO_CONTENT)

@@ -2,7 +2,7 @@ from django.db import transaction
 from rest_framework import serializers
 
 from apps.branch.models import Branch, City, State
-from apps.branch.utils import generate_branch_code, get_city_prefix
+from apps.branch.utils import generate_branch_code
 
 
 class StateSerializer(serializers.ModelSerializer):
@@ -59,26 +59,8 @@ class BranchSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         city = validated_data['city']
-        prefix = get_city_prefix(city.name)
         with transaction.atomic():
-            existing = set(
-                Branch.objects
-                .select_for_update()
-                .filter(branch_code__startswith=prefix)
-                .values_list('branch_code', flat=True)
-            )
-            if prefix not in existing:
-                branch_code = prefix
-            else:
-                max_num = max(
-                    (
-                        int(code[len(prefix) + 1:])
-                        for code in existing
-                        if code.startswith(prefix + '-') and code[len(prefix) + 1:].isdigit()
-                    ),
-                    default=0,
-                )
-                branch_code = f"{prefix}-{max_num + 1:02d}"
+            branch_code = generate_branch_code(city.name)
             return Branch.objects.create(branch_code=branch_code, **validated_data)
 
     def update(self, instance, validated_data):

@@ -15,5 +15,9 @@ class RoleBasedRefreshToken(RefreshToken):
         token['department']           = user.department or ''
         token['branch']               = user.branch or ''
         token['must_change_password'] = user.must_change_password
+        token['permissions'] = (
+            [rp.permission.codename for rp in user.role.role_permissions.all()]
+            if user.role else []
+        )
 
         return token
