@@ -1027,7 +1027,7 @@ class SMTPSettingsDetailView(APIView):
 
         msg = f'SMTP configuration "{name}" deleted.'
         if was_active:
-            msg += ' No SMTP config is currently active — outgoing emails will fall back to .env settings.'
+            msg += ' No SMTP config is currently active — outgoing emails will fail until another config is activated.'
         return success(msg)
 
 

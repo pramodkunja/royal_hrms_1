@@ -22,33 +22,35 @@ def generate_otp(length: int = 6) -> str:
 
 # ─── SMTP connection ──────────────────────────────────────────────────────────
 
-def _get_smtp_connection() -> tuple[object | None, str]:
-   
-    try:
-        from apps.accounts.models import SMTPSettings  # avoid circular import
-        smtp = SMTPSettings.get_active()
-        if smtp:
-            connection = get_connection(
-                backend='django.core.mail.backends.smtp.EmailBackend',
-                host=smtp.host,
-                port=smtp.port,
-                username=smtp.username,
-                password=smtp.password,
-                use_tls=smtp.use_tls,
-                fail_silently=False,
-            )
-            from_email = (
-                f'{smtp.sender_name} <{smtp.from_email}>'
-                if smtp.sender_name
-                else smtp.from_email
-            )
-            return connection, from_email
-    except Exception as exc:
-        logger.warning(
-            'Could not load active SMTP settings from DB — falling back to .env: %s', exc
-        )
+def _get_smtp_connection() -> tuple[object, str]:
+    """Return (connection, from_email) using the active SMTPSettings row.
 
-    return None, settings.DEFAULT_FROM_EMAIL
+    Raises RuntimeError if no active config exists — callers must handle this
+    and return an appropriate error to the user.
+    """
+    from apps.accounts.models import SMTPSettings  # avoid circular import
+
+    smtp = SMTPSettings.get_active()
+    if not smtp:
+        raise RuntimeError(
+            'No active SMTP configuration found. '
+            'Add and activate one in Settings → SMTP.'
+        )
+    connection = get_connection(
+        backend='django.core.mail.backends.smtp.EmailBackend',
+        host=smtp.host,
+        port=smtp.port,
+        username=smtp.username,
+        password=smtp.password,
+        use_tls=smtp.use_tls,
+        fail_silently=False,
+    )
+    from_email = (
+        f'{smtp.sender_name} <{smtp.from_email}>'
+        if smtp.sender_name
+        else smtp.from_email
+    )
+    return connection, from_email
 
 
 # ─── Email helpers ────────────────────────────────────────────────────────────
