@@ -43,6 +43,7 @@ interface BranchDistribution {
 }
 
 type Envelope<T> = { status: string; message: string; data: T };
+type Paginated<T> = { count: number; page: number; page_size: number; total_pages: number; results: T[] };
 
 export default function BranchManagement() {
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -79,7 +80,7 @@ export default function BranchManagement() {
     setError(null);
     try {
       const [branchesRes, statsRes, distRes, statesRes] = await Promise.all([
-        clientApi.get<Envelope<Branch[]>>(API.branches.list),
+        clientApi.get<Envelope<Paginated<Branch>>>(API.branches.list),
         clientApi.get<Envelope<BranchStats>>(API.branches.stats),
         clientApi.get<Envelope<BranchDistribution[]>>(API.branches.distribution),
         clientApi.get<Envelope<StateObj[]>>(API.branches.states),
