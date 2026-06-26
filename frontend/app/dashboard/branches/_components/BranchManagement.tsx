@@ -84,7 +84,7 @@ export default function BranchManagement() {
         clientApi.get<Envelope<BranchDistribution[]>>(API.branches.distribution),
         clientApi.get<Envelope<StateObj[]>>(API.branches.states),
       ]);
-      setBranches(branchesRes.data.data ?? []);
+      setBranches(branchesRes.data.data?.results ?? []);
       setStats(statsRes.data.data ?? { total_branches: 0, total_employees: 0, total_active_branches: 0, total_inactive_branches: 0, total_cities: 0 });
       setDistribution(distRes.data.data ?? []);
       setStates(statesRes.data.data ?? []);
