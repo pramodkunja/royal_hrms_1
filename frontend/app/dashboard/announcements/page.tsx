@@ -412,13 +412,12 @@ export default function AnnouncementsPage() {
       </div>
 
       {/* ── Category filter tabs ─────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+      <div className="ann-filter-bar">
         {FILTERS.map(f => (
           <button
             key={f.value}
             onClick={() => { setCategory(f.value); setPage(1); }}
             className={`btn ${category === f.value ? "btn-filled" : "btn-ghost"}`}
-            style={{ fontSize: 13 }}
             suppressHydrationWarning
           >
             {f.label}
@@ -454,7 +453,7 @@ export default function AnnouncementsPage() {
 
       {/* ── Announcement cards ───────────────────────────────────────────── */}
       {!loading && meta && meta.results.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className="ann-cards-list">
           {meta.results.map(ann => {
             const av    = avatarColor(ann.posted_by_name);
             const isExp = expanded.has(ann.id);
@@ -573,11 +572,11 @@ export default function AnnouncementsPage() {
 
       {/* ── Pagination ───────────────────────────────────────────────────── */}
       {meta && meta.total_pages > 1 && (
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20, padding: "8px 0" }}>
-          <span style={{ fontSize: 12, color: "var(--on-variant)" }}>
+        <div className="ann-pagination">
+          <span className="ann-pagination-info">
             Page {meta.page} of {meta.total_pages}
           </span>
-          <div style={{ display: "flex", gap: 6 }}>
+          <div className="ann-page-btns">
             <button className="btn btn-ghost btn-sm" disabled={meta.page <= 1} onClick={() => setPage(p => p - 1)} suppressHydrationWarning>
               <i className="ti ti-chevron-left" /> Prev
             </button>

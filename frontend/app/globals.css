@@ -1522,6 +1522,363 @@ textarea.field-input {
 }
 
 /* ============================================================
+   LOGIN PAGE LAYOUT
+   ============================================================ */
+
+/* ── Desktop (default — two-column: image | form) ── */
+.login-page-root {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #fff;
+}
+
+.login-layout {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  width: 100%;
+  height: 100%;
+}
+
+.login-image-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.login-form-panel {
+  background: #fff;
+  padding: 48px 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow-y: auto;
+}
+
+.login-form-inner {
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+/* ── Login: guaranteed input style (no Tailwind purge risk) ── */
+.login-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1.5px solid var(--outline-v);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  color: var(--on-bg);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.login-input:focus {
+  border-color: var(--primary);
+  background: #fff;
+}
+
+.login-input-pwd {
+  padding-right: 46px;
+}
+
+/* ── Login: guaranteed submit button style ── */
+.login-submit-btn {
+  width: 100%;
+  padding: 14px 20px;
+  background: #1e4e8c;
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.15s;
+}
+
+.login-submit-btn:hover {
+  background: #163d6e;
+}
+
+.login-submit-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* ── Forgot-password "Back to Sign In" button ── */
+.forgot-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  margin-bottom: 24px;
+  border: 1.5px solid var(--outline-v);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--on-variant);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.forgot-back-btn:hover {
+  background: var(--bg-low);
+  border-color: var(--outline);
+  color: var(--on-bg);
+}
+
+.forgot-back-arrow {
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* ── Login: brand icon ── */
+.login-brand-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.login-brand-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: rgba(30, 78, 140, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+
+/* ── Login: typography ── */
+.login-title {
+  font-size: 24px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 6px;
+  color: var(--on-bg);
+  letter-spacing: -0.01em;
+}
+
+.login-subtitle {
+  font-size: 13px;
+  text-align: center;
+  margin-bottom: 28px;
+  color: var(--on-variant);
+}
+
+/* ── Login: error banner ── */
+.login-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--error-c);
+  color: var(--error);
+  border: 1px solid #ffb3ae;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+/* ── Login: form field wrappers ── */
+.login-field {
+  margin-bottom: 16px;
+}
+
+.login-field-pwd {
+  margin-bottom: 24px;
+}
+
+/* ── Login: labels ── */
+.login-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: var(--on-bg);
+}
+
+.login-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+/* ── Login: forgot password inline link-button ── */
+.login-forgot-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+  font-family: inherit;
+}
+
+.login-forgot-btn:hover {
+  text-decoration: underline;
+}
+
+/* ── Login: password input wrapper + eye toggle ── */
+.login-pwd-wrap {
+  position: relative;
+}
+
+.login-pwd-toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px;
+  color: var(--outline);
+}
+
+/* ── Login: cover image ── */
+.login-image {
+  object-fit: cover;
+}
+
+/* ── Login: footer text ── */
+.login-footer-text {
+  font-size: 11px;
+  text-align: center;
+  margin-top: 20px;
+  color: var(--outline);
+}
+
+/* ── Login: button spinner ── */
+.login-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  display: inline-block;
+  flex-shrink: 0;
+  animation: spin 0.7s linear infinite;
+}
+
+/* ── Mobile: single column, content always fully visible ── */
+@media (max-width: 768px) {
+  /* Remove the fixed viewport lock on mobile so content is never clipped */
+  .login-page-root {
+    width: 100%;
+    height: auto;
+    min-height: 100svh;   /* svh = small viewport height, excludes mobile browser chrome */
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .login-layout {
+    grid-template-columns: 1fr;   /* single column */
+    height: auto;
+    min-height: 100svh;
+  }
+
+  /* No image on mobile — pure form */
+  .login-image-panel {
+    display: none;
+  }
+
+  /* Use flex-start + padding on inner div instead of justify-content:center
+     so content can never be clipped at the bottom on small viewports */
+  .login-form-panel {
+    justify-content: flex-start;
+    align-items: center;
+    padding: 0 24px;
+    min-height: 100svh;
+    overflow-y: auto;
+  }
+
+  .login-form-inner {
+    max-width: 100%;
+    width: 100%;
+    padding-top: 48px;
+    padding-bottom: 40px;
+  }
+}
+
+@media (max-width: 400px) {
+  .login-form-panel {
+    padding: 0 20px;
+  }
+
+  .login-form-inner {
+    padding-top: 40px;
+    padding-bottom: 32px;
+  }
+}
+
+/* ============================================================
+   EMPLOYEE PROFILE LAYOUT (sidebar + form, collapses on mobile)
+   ============================================================ */
+.profile-layout {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.profile-sidebar-col {
+  width: 220px;
+  flex-shrink: 0;
+}
+
+.profile-main-col {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .profile-layout {
+    flex-direction: column;
+  }
+
+  .profile-sidebar-col {
+    width: 100%;
+  }
+
+  /* Make sidebar items scroll horizontally on mobile */
+  .profile-sidebar-col nav {
+    position: static !important; /* disable sticky on mobile */
+    padding: 4px 8px;
+  }
+
+  .profile-sidebar-col nav ul {
+    flex-direction: row !important;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    gap: 4px;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+
+  .profile-sidebar-col nav ul li {
+    flex-shrink: 0;
+  }
+
+  .profile-sidebar-col nav ul li button {
+    padding: 6px 12px !important;
+  }
+}
+
+/* ============================================================
    DARK MODE
    ============================================================ */
 body.dark-mode {
@@ -1587,6 +1944,63 @@ body.dark-mode {
 }
 
 /* ============================================================
+   ANNOUNCEMENT LAYOUT UTILITIES
+   ============================================================ */
+
+/* Category filter tabs bar */
+.ann-filter-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+/* List of announcement cards */
+.ann-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Inner padding for each announcement card */
+.ann-card-body {
+  padding: 16px 20px;
+}
+
+/* Footer row inside each card (reactions, views) */
+.ann-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--outline-v);
+  flex-wrap: wrap;
+}
+
+/* Pagination row */
+.ann-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  padding: 8px 0;
+  flex-wrap: wrap;
+}
+
+.ann-pagination-info {
+  font-size: 12px;
+  color: var(--on-variant);
+}
+
+.ann-page-btns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ============================================================
    RESPONSIVE
    ============================================================ */
 @media (max-width: 768px) {
@@ -1611,10 +2025,46 @@ body.dark-mode {
 
   .page-actions {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .page-actions .btn {
     flex: 1;
+    justify-content: center;
+  }
+
+  /* card-header: title + filter-bar stack vertically on mobile */
+  .card-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .card-header .filter-bar {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .card-header .filter-bar .field-select,
+  .card-header .filter-bar select {
+    flex: 1;
+    min-width: 0;
+    width: auto !important;
+  }
+
+  .card-header .filter-bar .search-bar {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Announcement category filter — buttons wrap and share space */
+  .ann-filter-bar .btn {
+    flex: 1;
+    min-width: 80px;
+    justify-content: center;
+  }
+
+  /* Announcement pagination — center on small screens */
+  .ann-pagination {
     justify-content: center;
   }
 
@@ -1742,6 +2192,27 @@ body.dark-mode {
   .dept-hero-actions .btn {
     flex: 1;
     justify-content: center;
+  }
+
+  /* Filter bars → wrap and full-width on mobile */
+  .filter-bar {
+    gap: 6px;
+  }
+
+  .filter-bar .btn,
+  .filter-bar select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Drawer → full width on mobile */
+  .drawer {
+    width: 100vw;
+  }
+
+  /* Grid layouts */
+  .module-grid {
+    grid-template-columns: 1fr 1fr;
   }
 }
 
