@@ -177,6 +177,14 @@ CORS_ALLOWED_ORIGINS = [
 CORS_ALLOW_CREDENTIALS = True
 CORS_PREFLIGHT_MAX_AGE = 86400
 
+if DEBUG:
+    # Dev-only: allow any localhost port (Flutter web) and any 192.168.x.x port
+    # (local network devices). Not active in production — CORS_ALLOWED_ORIGINS only.
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r'^http://localhost(:\d+)?$',
+        r'^http://192\.168\.\d+\.\d+(:\d+)?$',
+    ]
+
 # ─── Upload limits ────────────────────────────────────────────────────────────
 DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024   # 5 MB JSON body
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB files
