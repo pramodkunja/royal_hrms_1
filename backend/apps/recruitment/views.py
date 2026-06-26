@@ -76,11 +76,17 @@ class CandidateListCreateView(APIView):
         if not _has_perm(request.user, 'recruitment.view'):
             return error(_DENIED, http_status=status.HTTP_403_FORBIDDEN)
 
-        qs = Candidate.objects.select_related('interviewer', 'referral_by', 'added_by').all()
+        qs = Candidate.objects.select_related('interviewer', 'referral_by', 'added_by', 'branch').all()
 
         if s := request.query_params.get('status'):
             if s in {Candidate.STATUS_PENDING, Candidate.STATUS_SELECTED, Candidate.STATUS_REJECTED}:
                 qs = qs.filter(status=s)
+
+        if b := request.query_params.get('branch'):
+            try:
+                qs = qs.filter(branch_id=int(b))
+            except (ValueError, TypeError):
+                pass
 
         if q := request.query_params.get('search'):
             qs = qs.filter(name__icontains=q) | qs.filter(email__icontains=q) | qs.filter(position_applied__icontains=q)
@@ -174,6 +180,10 @@ class CandidateStatusView(APIView):
             return error(f'Candidate is already {candidate.status}.')
 
         remarks = request.data.get('remarks', '')
+
+        default_slug  = 'selection' if new_status == 'selected' else 'rejection'
+        template_slug = (request.data.get('template_name') or default_slug).strip()
+
         candidate.status = new_status
         candidate.save(update_fields=['status', 'updated_at'])
 
@@ -186,15 +196,15 @@ class CandidateStatusView(APIView):
             description=f'By {actor_name}. {remarks}'.strip('. '),
         )
 
-        # Send automated email
-        template_slug = 'selection' if new_status == 'selected' else 'rejection'
-        email_status  = _send_candidate_email(candidate, template_slug, request.user)
+        email_status = _send_candidate_email(candidate, template_slug, request.user)
 
         CandidateLog.objects.create(
             candidate=candidate,
-            log_type=CandidateLog.TYPE_SUCCESS if email_status == 'sent' else CandidateLog.TYPE_WARN,
-            title=f'{"Selection" if new_status == "selected" else "Rejection"} email sent',
-            description=f'Using template: Interview {new_status.title()}',
+            log_type=CandidateLog.TYPE_SUCCESS if email_status == CandidateEmail.STATUS_SENT else CandidateLog.TYPE_WARN,
+            title=(f'{"Selection" if new_status == "selected" else "Rejection"} email sent'
+                   if email_status == CandidateEmail.STATUS_SENT
+                   else 'Email failed — check SMTP settings'),
+            description=f'Using template: {template_slug}',
         )
 
         AuditLog.objects.create(

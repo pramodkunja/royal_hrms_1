@@ -143,13 +143,55 @@ def send_test_email(recipient_email: str, smtp_config: dict) -> None:
     msg.send(fail_silently=False)
 
 
+def _company_email_wrapper(body: str, company_name: str, logo_url: str,
+                           website: str, address: str) -> str:
+    """Wrap an email body HTML with a branded company header and footer."""
+    logo_html = (
+        f'<img src="{logo_url}" alt="{company_name}" '
+        f'style="max-height:70px;max-width:220px;object-fit:contain;" />'
+        if logo_url
+        else f'<span style="font-size:18px;font-weight:700;color:#1a1a2e;">{company_name}</span>'
+    )
+    footer_parts = [p for p in [website, address] if p]
+    footer_text  = ' &nbsp;|&nbsp; '.join(footer_parts) if footer_parts else company_name
+
+    return f"""
+<div style="background:#f4f4f7;padding:32px 0;font-family:Arial,Helvetica,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff;
+              border-radius:8px;overflow:hidden;
+              box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+
+    <!-- Header -->
+    <div style="background:#ffffff;text-align:center;
+                padding:28px 40px 20px;
+                border-bottom:3px solid #4f46e5;">
+      {logo_html}
+    </div>
+
+    <!-- Body -->
+    <div style="padding:32px 40px;color:#333333;line-height:1.7;font-size:15px;">
+      {body}
+    </div>
+
+    <!-- Footer -->
+    <div style="background:#f8f8fb;text-align:center;
+                padding:16px 24px;font-size:12px;color:#888888;
+                border-top:1px solid #eeeeee;">
+      {footer_text}
+    </div>
+
+  </div>
+</div>
+"""
+
+
 def send_template_email(
     recipient_email: str,
     template_name: str,
     context: dict,
 ) -> None:
 
-    from apps.accounts.models import EmailTemplate  # avoid circular import
+    from apps.accounts.models import Company, EmailTemplate  # avoid circular import
 
     try:
         tpl = EmailTemplate.objects.prefetch_related('attachments').get(
@@ -161,6 +203,21 @@ def send_template_email(
         )
 
     subject, html_body = tpl.render(context)
+
+    # Wrap with company branding
+    company      = Company.objects.first()
+    company_name = company.company_name if company else ''
+    logo_url     = company.logo.url     if (company and company.logo) else ''
+    website      = company.website      if company else ''
+    address_parts = [p for p in [
+        getattr(company, 'address', ''),
+        getattr(company, 'city', ''),
+        getattr(company, 'state', ''),
+    ] if p] if company else []
+    address = ', '.join(address_parts)
+
+    html_body = _company_email_wrapper(html_body, company_name, logo_url, website, address)
+
     connection, from_email = _get_smtp_connection()
 
     msg = _build_message(

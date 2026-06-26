@@ -15,12 +15,21 @@ export interface CandidateLog {
   created_at:  string;
 }
 
+export interface Branch {
+  id:          number;
+  branch_name: string;
+  branch_code: string;
+  status:      string;
+}
+
 export interface Candidate {
   id:                       number;
   name:                     string;
   email:                    string;
   phone:                    string;
   position_applied:         string;
+  branch:                   number | null;
+  branch_name:              string;
   interview_date:           string | null;
   interviewer:              number | null;
   interviewer_name:         string;
@@ -82,13 +91,13 @@ export interface PaginatedCandidates {
 export const RECRUITMENT_API = {
   stats:       () =>
     clientApi.get<{ data: RecruitmentStats }>(API.recruitment.stats),
-  list:        (params?: { status?: string; search?: string }) =>
+  list:        (params?: { status?: string; search?: string; branch?: number }) =>
     clientApi.get<{ data: PaginatedCandidates }>(API.recruitment.candidates, { params }),
   create:      (body: Partial<Candidate>) =>
     clientApi.post<{ data: Candidate }>(API.recruitment.candidates, body),
   detail:      (id: number) =>
     clientApi.get<{ data: Candidate }>(API.recruitment.detail(id)),
-  setStatus:   (id: number, body: { status: CandidateStatus; remarks?: string }) =>
+  setStatus:   (id: number, body: { status: CandidateStatus; remarks?: string; template_name?: string }) =>
     clientApi.patch<{ data: Candidate }>(API.recruitment.status(id), body),
   hrDecision:  (id: number, body: {
     decision:       "approve" | "reject";

@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API } from "@/lib/api/endpoints";
+import { buildEmailPreview, CompanyInfo, renderTemplateVars } from "@/lib/emailPreview";
 import { Candidate, EmailTemplate, RECRUITMENT_API } from "../interview-list/_data";
+import clientApi from "@/lib/clientApi";
 
-// Variables auto-filled from candidate data — not shown as manual inputs
 const AUTO_KEYS = new Set(["candidate_name", "position", "company_name"]);
 
 interface Props {
@@ -23,19 +25,24 @@ export function HRDecisionModal({ candidate, decision, onClose, onDone }: Props)
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
   const [extraVars,        setExtraVars]        = useState<Record<string, string>>({});
+  const [company,          setCompany]          = useState<CompanyInfo | null>(null);
 
-  // Fetch templates when modal opens for approval
+  // Fetch templates + company info when modal opens for approval
   useEffect(() => {
     if (!isApprove) return;
     setLoadingTemplates(true);
-    RECRUITMENT_API.emailTemplates()
-      .then(r => {
-        const grouped: Record<string, EmailTemplate[]> = r.data?.data ?? {};
+    Promise.all([
+      RECRUITMENT_API.emailTemplates(),
+      clientApi.get<{ data: CompanyInfo }>(API.settings.company),
+    ])
+      .then(([tplRes, coRes]) => {
+        const grouped: Record<string, EmailTemplate[]> = tplRes.data?.data ?? {};
         const list: EmailTemplate[] = ([] as EmailTemplate[])
           .concat(...Object.values(grouped))
           .filter(t => t.is_active);
         setTemplates(list);
         if (list.length > 0) setSelectedTemplate(list[0]);
+        setCompany(coRes.data?.data ?? null);
       })
       .catch(() => setApiError("Could not load email templates."))
       .finally(() => setLoadingTemplates(false));
@@ -51,18 +58,19 @@ export function HRDecisionModal({ candidate, decision, onClose, onDone }: Props)
     setExtraVars(manual);
   }, [selectedTemplate]);
 
-  function renderPreview(text: string): string {
-    const ctx: Record<string, string> = {
+  function previewVars(): Record<string, string> {
+    return {
       candidate_name: candidate.name,
       position:       candidate.position_applied,
-      company_name:   "[Company Name]",
+      company_name:   company?.company_name ?? '[Company]',
       ...extraVars,
     };
-    let out = text;
-    for (const [k, v] of Object.entries(ctx)) {
-      out = out.replaceAll(`{${k}}`, v || `[${k}]`);
-    }
-    return out;
+  }
+
+  function previewHtml(): string {
+    if (!selectedTemplate) return "";
+    const body = renderTemplateVars(selectedTemplate.body, previewVars());
+    return buildEmailPreview(body, company);
   }
 
   async function handleConfirm() {
@@ -95,7 +103,7 @@ export function HRDecisionModal({ candidate, decision, onClose, onDone }: Props)
 
   return (
     <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: isApprove ? 680 : 480 }}>
+      <div className="modal" style={{ maxWidth: isApprove ? 700 : 480 }}>
         <div className="modal-header">
           <div className="modal-title">
             {isApprove ? "Approve & Onboard" : "Request Revision"} — {candidate.name}
@@ -137,7 +145,7 @@ export function HRDecisionModal({ candidate, decision, onClose, onDone }: Props)
                 )}
               </div>
 
-              {/* Manual inputs for template variables not auto-filled */}
+              {/* Manual inputs for non-auto variables */}
               {Object.keys(extraVars).length > 0 && (
                 <div className="settings-card mb-16">
                   <div className="settings-card-title mb-8">Fill in template variables</div>
@@ -159,22 +167,29 @@ export function HRDecisionModal({ candidate, decision, onClose, onDone }: Props)
                 </div>
               )}
 
-              {/* Live email preview */}
+              {/* Full email preview with company branding */}
               {selectedTemplate && (
                 <div className="settings-card mb-16">
                   <div className="settings-card-title mb-8">
                     <i className="ti ti-mail" /> Email Preview
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--on-variant)", marginBottom: 4 }}>
+                  <div style={{ fontSize: 12, color: "var(--on-variant)", marginBottom: 2 }}>
                     <strong>To:</strong> {candidate.email}
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--on-variant)", marginBottom: 12 }}>
-                    <strong>Subject:</strong> {renderPreview(selectedTemplate.subject)}
+                  <div style={{ fontSize: 12, color: "var(--on-variant)", marginBottom: 10 }}>
+                    <strong>Subject:</strong>{" "}
+                    {renderTemplateVars(selectedTemplate.subject, previewVars())}
                   </div>
                   <iframe
-                    srcDoc={renderPreview(selectedTemplate.body)}
+                    srcDoc={previewHtml()}
                     sandbox="allow-same-origin"
-                    style={{ width: "100%", height: 220, border: "1px solid var(--outline-v)", borderRadius: 6 }}
+                    style={{
+                      width: "100%",
+                      height: 340,
+                      border: "1px solid var(--outline-v)",
+                      borderRadius: 6,
+                      display: "block",
+                    }}
                     title="Email body preview"
                   />
                 </div>
