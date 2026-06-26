@@ -161,11 +161,11 @@ export default function EmailTemplatesPage() {
           <div className="page-sub">Customize transactional email messages sent by Royal HRMS</div>
         </div>
         <div className="page-actions">
-          <button className="btn btn-filled btn-sm" onClick={() => setEditing("add")} style={{ gap: 6 }} suppressHydrationWarning>
-            <i className="ti ti-plus" /> Add Template
-          </button>
           <button className="btn btn-ghost" onClick={() => router.push("/dashboard/settings")} suppressHydrationWarning>
             <i className="ti ti-arrow-left" /> Back
+          </button>
+          <button className="btn btn-filled btn-sm" onClick={() => setEditing("add")} suppressHydrationWarning>
+            <i className="ti ti-plus" /> Add Template
           </button>
         </div>
       </div>

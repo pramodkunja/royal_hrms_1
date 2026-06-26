@@ -20,7 +20,7 @@ I worked on the **Royal HRMS** frontend — a Next.js 16 (App Router) HR managem
 
 ## What I Built
 
-### 1. Dashboard Shell — Sidebar + Navbar (`components/dashboard/DashboardShell.tsx`)
+### 1. Dashboard Shell — Sidebar + Navbar (`components/dashboard/DashboardShell.tsx`)ZZZZZZZZZ
 
 - Sidebar with collapsible width (220 px → 56 px), logo, nav items with section labels, user card at the bottom
 - **Permission-based navigation** (industry standard) — sidebar items are driven entirely by `user.permissions[]` returned at login. No role-to-nav mapping, no extra API calls after login.
@@ -653,7 +653,7 @@ Developed full employee management screens wired to the backend API.
 
 ---
 
-## Session 5 — G.Durga Prasad (26 June 2026)
+## Session 5a — G.Durga Prasad (26 June 2026)
 
 **Branch:** `Backend/Email-Document`
 
@@ -760,3 +760,171 @@ settings: {
 - **Branch filter uses `page_size=100`** — assumes no company will have more than 100 active branches. Increase if needed.
 - **`emailTemplates()` returns grouped data** — `Record<string, EmailTemplate[]>`. Always flatten before use: `([] as EmailTemplate[]).concat(...Object.values(grouped)).filter(t => t.is_active)`.
 - **API.recruitment.emailTemplates is gone** — any code referencing it will break; use `API.settings.emailTemplates` instead.
+
+---
+
+## Session 5b — Rithwika (26 June 2026)
+
+**Branch:** `Frontend/responsiveness`
+
+---
+
+### 1. Login Page — Full Redesign & CSS Migration (`app/login/page.tsx`)
+
+Rewrote the login page from scratch to match the reference design and fix a critical mobile bug.
+
+**Bug fixed — Sign In button invisible on iPhone SE (375×667)**
+- Root cause: `justify-content: center` on a flex container with `overflow: hidden` clips overflowing bottom content. On small viewports the Sign In button was below the fold and inaccessible.
+- Fix: switched mobile layout to `justify-content: flex-start` with `padding-top` on the inner wrapper, allowing natural scroll without clipping.
+
+**Design implemented (reference image):**
+- Crown icon (`👑`) in a soft navy box
+- "Welcome back" heading + subtitle
+- Email field, Password field with eye toggle
+- Password label row — label left, "Forgot password?" right
+- Full-width dark navy Sign In button
+- Footer text
+
+**Two-column desktop / single-column mobile layout:**
+- Desktop: CSS grid `1.2fr 1fr` — decorative image left, form right
+- Mobile (`≤ 768px`): image panel hidden, form takes full screen with natural scroll (`min-height: 100svh`)
+
+**Inline CSS eliminated:** Every `style={{}}` object replaced with a named CSS class in `globals.css`. Zero inline styles remain in `page.tsx`.
+
+---
+
+### 2. ForgotPasswordForm — Full Rewrite (`components/auth/ForgotPasswordForm.tsx`)
+
+Replaced Tailwind arbitrary-value const strings with guaranteed CSS classes.
+
+**Problem:** `inputCls` and `submitCls` const strings contained arbitrary Tailwind values (`border-[1.5px]`, `py-[14px]`, `bg-[#1e4e8c]`, `rounded-[var(--radius-lg)]`). Tailwind v2 without JIT mode purges these because they are defined in `const` strings, not directly on JSX elements — so inputs and buttons were rendering unstyled.
+
+**Fix:** Replaced `inputCls` → `className="login-input"` and `submitCls` → `className="login-submit-btn"` using the guaranteed CSS classes already defined in `globals.css`.
+
+**Multi-step flow (unchanged functionally):**
+1. `email` step — enter registered email → sends OTP
+2. `otp` step — verify 6-digit code
+3. `reset` step — set + confirm new password
+4. `done` step — success state with Back to Sign In button
+
+All three form handlers updated from deprecated `React.FormEvent` → `React.SyntheticEvent<HTMLFormElement>`.
+
+---
+
+### 3. CSS Classes Added to `app/globals.css`
+
+#### Login page layout classes (all new)
+
+| Class | Purpose |
+|-------|---------|
+| `.login-page-root` | Root container — desktop: `100vh` locked; mobile: natural scroll |
+| `.login-layout` | CSS grid — desktop: `1.2fr 1fr`; mobile: single column |
+| `.login-image-panel` | Left decorative image panel — hidden on mobile |
+| `.login-form-panel` | Right form panel — `justify-content: center` desktop; `flex-start` mobile |
+| `.login-form-inner` | Inner form wrapper — `max-width: 400px`, centered |
+| `.login-input` | Input field — `1.5px` border, CSS variable border color, focus state |
+| `.login-input-pwd` | Password input — adds `padding-right: 46px` for eye toggle |
+| `.login-submit-btn` | Sign In button — `#1e4e8c` background, hover/disabled states |
+| `.forgot-back-btn` | "Back to Sign In" bordered button |
+| `.forgot-back-arrow` | Arrow icon inside back button |
+
+#### Login element classes (moved from inline styles)
+
+| Class | Replaces |
+|-------|---------|
+| `.login-brand-wrap` | Crown icon flex wrapper |
+| `.login-brand-icon` | Crown icon box (56×56, rounded, navy tint bg) |
+| `.login-title` | `<h2>` — 24px, bold, centered |
+| `.login-subtitle` | Subtitle `<p>` — 13px, muted |
+| `.login-error-banner` | Error alert row |
+| `.login-field` | Email field wrapper (margin-bottom: 16px) |
+| `.login-field-pwd` | Password field wrapper (margin-bottom: 24px) |
+| `.login-label` | Input label — 14px, medium weight |
+| `.login-label-row` | Label + "Forgot password?" flex row |
+| `.login-forgot-btn` | "Forgot password?" text button |
+| `.login-pwd-wrap` | `position: relative` wrapper for password + toggle |
+| `.login-pwd-toggle` | Eye toggle — absolute positioned inside input |
+| `.login-image` | `object-fit: cover` on the Next.js Image |
+| `.login-footer-text` | Footer caption — 11px, centered |
+| `.login-spinner` | Animated spinner inside Sign In button |
+
+#### Announcement layout classes (all new)
+
+| Class | Purpose |
+|-------|---------|
+| `.ann-filter-bar` | Category filter tab bar — flex, wraps on mobile |
+| `.ann-cards-list` | Announcement cards flex column |
+| `.ann-card-body` | Card inner padding (16px 20px) |
+| `.ann-card-footer` | Reactions / views footer row |
+| `.ann-pagination` | Pagination row — space-between; wraps + centers on mobile |
+| `.ann-pagination-info` | "Page X of Y" text |
+| `.ann-page-btns` | Prev / numbered / Next button row |
+
+#### Responsive section additions (`@media max-width: 768px`)
+
+| Selector | What changes |
+|----------|-------------|
+| `.card-header` | `flex-wrap: wrap; gap: 10px` — filter bar drops below title |
+| `.card-header .filter-bar` | `width: 100%; flex-wrap: wrap` — full width on mobile |
+| `.card-header .filter-bar select` | `flex: 1; width: auto !important` — overrides inline `width: 140` |
+| `.card-header .filter-bar .search-bar` | `flex: 1; min-width: 0` |
+| `.ann-filter-bar .btn` | `flex: 1; min-width: 80px; justify-content: center` |
+| `.ann-pagination` | `justify-content: center` |
+| `.page-actions` | Added `flex-wrap: wrap` so Back + primary button never overflow |
+
+---
+
+### 4. Announcements Page — Inline Styles → CSS Classes (`app/dashboard/announcements/page.tsx`)
+
+Replaced three `style={{}}` blocks with named CSS classes per CLAUDE.md hybrid model:
+
+| Before | After |
+|--------|-------|
+| `style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:20 }}` | `className="ann-filter-bar"` |
+| `style={{ display:"flex", flexDirection:"column", gap:16 }}` | `className="ann-cards-list"` |
+| `style={{ display:"flex", justifyContent:"space-between", … }}` | `className="ann-pagination"` + `"ann-pagination-info"` + `"ann-page-btns"` |
+
+---
+
+### 5. Email Templates — Button Order Fix (`app/dashboard/settings/email-templates/page.tsx`)
+
+Fixed button order in the page header actions bar to match the project-wide convention:
+
+```
+Before: [ Add Template ]  [ Back ]
+After:  [ Back ]  [ Add Template ]
+```
+
+---
+
+### Mobile Responsiveness Coverage (26 June 2026)
+
+Pages confirmed responsive after this session's CSS additions:
+
+| Page | Responsive via |
+|------|---------------|
+| Login | `.login-page-root` / `.login-layout` mobile overrides (768px + 400px) |
+| Dashboard | `.stats-grid`, `.module-grid`, `.dash-greeting` — existing rules |
+| Announcements | `.ann-filter-bar`, `.ann-cards-list`, `.ann-pagination` (new); `.stats-grid`, `.page-header` (existing) |
+| Interview List | `.table-wrap` overflow-x scroll, `.filter-bar`, `.card-header` stacking (new) |
+| Candidate Review | `.grid-2`, `.stats-grid`, `.accordion-*` — existing rules |
+| Email Logs | `.page-header`, `.empty-state` — existing rules |
+| Employees | Tailwind `flex-wrap` on filter bar + `overflow-x-auto` on table wrapper |
+| Branches | Delegates to `BranchManagement` component with responsive CSS |
+| Settings — Company | `.form-row.cols-2/3` → 1-col, existing rules |
+| Settings — Departments | Two-panel mobile nav from Session 3 (unchanged) |
+| Settings — SMTP | `grid-cols-1 lg:grid-cols-2` + `.smtp-form-grid` from Session 3 |
+| Settings — Email Templates | `et-cards-grid` responsive + button order fixed this session |
+| Settings — Audit | `.card-header` stacking (new), filter form wraps via `flex-wrap` |
+
+---
+
+### Key Files Changed (26 June 2026)
+
+| File | Change |
+|------|--------|
+| `app/login/page.tsx` | Full redesign — zero inline styles, all CSS classes, mobile-safe layout |
+| `components/auth/ForgotPasswordForm.tsx` | Replaced Tailwind arbitrary-value consts with `.login-input` / `.login-submit-btn` CSS classes |
+| `app/globals.css` | 28 new CSS classes (login element + announcement layout); responsive section extended |
+| `app/dashboard/announcements/page.tsx` | 3 inline flex style blocks replaced with CSS classes |
+| `app/dashboard/settings/email-templates/page.tsx` | Button order: Back first, Add Template second |
