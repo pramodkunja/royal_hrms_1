@@ -14,7 +14,7 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
   "/dashboard/email-logs":       "recruitment.view",
   "/dashboard/employees":        "employees.view",
   "/dashboard/org-chart":        "employees.view",
-  "/dashboard/branches":         "settings.view",
+  "/dashboard/branches":         "branches.view",
   "/dashboard/attendance":       "attendance.view",
   "/dashboard/payroll":          "payroll.view",
   "/dashboard/my-payslip":       "payroll.view",

@@ -17,6 +17,7 @@ interface LoginApiResponse {
       email:       string;
       full_name:   string;
       role:        string;
+      branch:      string;
       permissions: string[];
     };
   };
@@ -49,6 +50,7 @@ export default function LoginPage() {
         email:       d.user.email,
         name:        d.user.full_name,
         role:        d.user.role,
+        branch:      d.user.branch ?? "",
         permissions: d.user.permissions ?? [],
       };
       saveAuth(user);

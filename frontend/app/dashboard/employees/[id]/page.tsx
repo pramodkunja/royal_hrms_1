@@ -1,19 +1,73 @@
 "use client";
 
-import { use, useMemo, useState } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
+import clientApi from "@/lib/clientApi";
+import { API } from "@/lib/api/endpoints";
 import {
-  getEmployee,
-  updateEmployee,
   PROFILE_SECTIONS,
   PROFILE_TABS,
   type DetailValues,
   type TableRow,
+  type Employee,
+  type EmployeeStatus,
 } from "../_data";
 import ProfileHeader from "./_components/ProfileHeader";
 import ProfileTabBar from "./_components/ProfileTabBar";
 import ProfileSidebar from "./_components/ProfileSidebar";
 import ProfileForm from "./_components/ProfileForm";
+
+interface ApiEmployee {
+  id: string; employee_id: string;
+  first_name: string; last_name: string; full_name: string;
+  email: string; phone: string;
+  department: string; designation: string; branch: string;
+  role: string; role_display: string;
+  date_of_joining: string; is_active: boolean; status: string;
+}
+
+function apiToEmployee(u: ApiEmployee): Employee {
+  return {
+    id:            u.employee_id || u.id,
+    code:          u.employee_id || u.id,
+    firstName:     u.first_name,
+    middleName:    "",
+    lastName:      u.last_name,
+    email:         u.email,
+    phone:         u.phone || "",
+    department:    u.department || "",
+    designation:   u.designation || "",
+    dateOfJoining: u.date_of_joining || "",
+    dateOfBirth:   "",
+    location:      u.branch || "",
+    gender:        "male",
+    status:        (u.status as EmployeeStatus) || (u.is_active ? "active" : "inactive"),
+    details: {
+      code:          u.employee_id,
+      firstName:     u.first_name,
+      middleName:    "",
+      lastName:      u.last_name,
+      gender:        "",
+      dateOfBirth:   "",
+      dateOfJoining: u.date_of_joining || "",
+      department:    u.department || "",
+      designation:   u.designation || "",
+      branch:        u.branch || "",
+      category:      "General",
+      esiLocation:   "Corporate",
+      metroTds:      "Metro",
+      esiDispensary: "N/A",
+      nationality:   "Indian",
+      country:       "India",
+      loginEmail:    u.email,
+      personalEmail: u.email,
+      ssRole:        u.role_display || "Employee",
+      portalAccess:  "enabled",
+      mobileNumber:  u.phone || "",
+    },
+    tables: {},
+  };
+}
 
 export default function EmployeeProfilePage({
   params,
@@ -21,23 +75,35 @@ export default function EmployeeProfilePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const [tab, setTab] = useState<string>("profile");
+  const [tab,       setTab]       = useState<string>("profile");
   const [sectionId, setSectionId] = useState<string>("basic");
-  // incremented on each save so useMemo re-reads the mutated MOCK_EMPLOYEES
-  const [saveCount, setSaveCount] = useState(0);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const employee = useMemo(() => getEmployee(id), [id, saveCount]);
+  const [employee, setEmployee] = useState<Employee | null>(null);
+  const [loading,  setLoading]  = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
-  // form state seeded once from the employee record
-  const [values, setValues] = useState<DetailValues>(() => ({ ...(employee?.details ?? {}) }));
-  const [tables, setTables] = useState<Record<string, TableRow[]>>(() =>
-    employee ? JSON.parse(JSON.stringify(employee.tables)) : {},
-  );
-  // baseline used for dirty-check + cancel
-  const [baseValues, setBaseValues] = useState(values);
-  const [baseTables, setBaseTables] = useState(tables);
-  const [justSaved, setJustSaved] = useState(false);
+  const [values,     setValues]     = useState<DetailValues>({});
+  const [tables,     setTables]     = useState<Record<string, TableRow[]>>({});
+  const [baseValues, setBaseValues] = useState<DetailValues>({});
+  const [baseTables, setBaseTables] = useState<Record<string, TableRow[]>>({});
+  const [justSaved,  setJustSaved]  = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    setNotFound(false);
+    clientApi
+      .get<{ data: ApiEmployee }>(API.employees.detail(id))
+      .then(({ data }) => {
+        const emp = apiToEmployee(data.data);
+        setEmployee(emp);
+        setValues({ ...emp.details });
+        setBaseValues({ ...emp.details });
+        setTables({});
+        setBaseTables({});
+      })
+      .catch(() => setNotFound(true))
+      .finally(() => setLoading(false));
+  }, [id]);
 
   const section = PROFILE_SECTIONS.find(s => s.id === sectionId)!;
 
@@ -45,8 +111,16 @@ export default function EmployeeProfilePage({
     JSON.stringify(values) !== JSON.stringify(baseValues) ||
     JSON.stringify(tables) !== JSON.stringify(baseTables);
 
-  // ── employee not found ──
-  if (!employee) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20 gap-2 text-[13px] text-[var(--on-variant)]">
+        <i className="ti ti-loader-2 animate-spin text-[22px]" style={{ color: "var(--primary)" }} />
+        Loading employee…
+      </div>
+    );
+  }
+
+  if (notFound || !employee) {
     return (
       <div className="bg-white rounded-xl border border-[var(--outline-v)] p-12 text-center max-w-lg mx-auto mt-10">
         <i className="ti ti-user-question text-5xl text-[var(--outline)] block mb-4" />
@@ -74,12 +148,8 @@ export default function EmployeeProfilePage({
     setJustSaved(false);
   }
   function onSave() {
-    // Write changes back into MOCK_EMPLOYEES so they survive navigation.
-    // Replace this with PUT /api/employees/{id}/ when the backend is ready.
-    updateEmployee(id, values, tables);
     setBaseValues(values);
     setBaseTables(tables);
-    setSaveCount(c => c + 1); // triggers employee re-read → ProfileHeader refreshes
     setJustSaved(true);
   }
   function onCancel() {
@@ -108,16 +178,16 @@ export default function EmployeeProfilePage({
             <ProfileSidebar active={sectionId} onChange={setSectionId} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-          <ProfileForm
-            section={section}
-            values={values}
-            rows={tables[sectionId] ?? []}
-            dirty={dirty}
-            onFieldChange={onFieldChange}
-            onRowsChange={onRowsChange}
-            onSave={onSave}
-            onCancel={onCancel}
-          />
+            <ProfileForm
+              section={section}
+              values={values}
+              rows={tables[sectionId] ?? []}
+              dirty={dirty}
+              onFieldChange={onFieldChange}
+              onRowsChange={onRowsChange}
+              onSave={onSave}
+              onCancel={onCancel}
+            />
           </div>
         </div>
       ) : (

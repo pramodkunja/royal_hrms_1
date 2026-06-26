@@ -10,6 +10,7 @@ export interface UserInfo {
   email:       string;
   name:        string;
   role:        string;
+  branch:      string;
   permissions: string[];
 }
 

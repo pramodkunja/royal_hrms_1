@@ -1,6 +1,8 @@
 from django.urls import path
 from apps.accounts.views import (
     AuditLogListView,
+    EmployeeCodeSettingsView,
+    EmployeeDetailView,
     CompanyRetrieveUpdateView,
     DepartmentDetailView,
     DepartmentListCreateView,
@@ -43,7 +45,8 @@ urlpatterns = [
     path('change-password/', ChangePasswordView.as_view(),  name='change-password'),
 
     # Employees
-    path('employees/', EmployeeListCreateView.as_view(), name='employee-list-create'),
+    path('employees/',                      EmployeeListCreateView.as_view(), name='employee-list-create'),
+    path('employees/<str:employee_id>/',    EmployeeDetailView.as_view(),     name='employee-detail'),
 
     # Organisation structure
     path('departments/',           DepartmentListCreateView.as_view(), name='department-list'),
@@ -60,7 +63,8 @@ urlpatterns = [
     path('permissions/<int:pk>/', PermissionDetailView.as_view(), name='permission-detail'),
 
     # Company (singleton)
-    path('settings/company/', CompanyRetrieveUpdateView.as_view(), name='company'),
+    path('settings/company/',       CompanyRetrieveUpdateView.as_view(),  name='company'),
+    path('settings/employee-code/', EmployeeCodeSettingsView.as_view(),   name='employee-code-settings'),
 
     # Audit Log (read-only)
     path('settings/audit/', AuditLogListView.as_view(), name='audit-log-list'),

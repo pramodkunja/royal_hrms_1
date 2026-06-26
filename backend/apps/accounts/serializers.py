@@ -21,6 +21,7 @@ from apps.accounts.models import (
     EmailTemplate,
     EmailTemplateAttachment,
     EmailTemplateCategory,
+    EmployeeCodeSettings,
     Permission,
     Role,
     RolePermission,
@@ -742,3 +743,27 @@ class DocumentSerializer(serializers.ModelSerializer):
             if not Branch.objects.filter(pk=branch.pk).exists():
                 raise serializers.ValidationError({'branch': 'Selected branch does not exist.'})
         return attrs
+
+
+# ─── Employee Code Settings ───────────────────────────────────────────────────
+
+class EmployeeCodeSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = EmployeeCodeSettings
+        fields = ['prefix', 'padding', 'next_sequence']
+
+    def validate_prefix(self, value):
+        value = value.strip().upper()
+        if not value.isalpha():
+            raise serializers.ValidationError('Prefix must contain letters only.')
+        return value
+
+    def validate_padding(self, value):
+        if not 3 <= value <= 8:
+            raise serializers.ValidationError('Padding must be between 3 and 8.')
+        return value
+
+    def validate_next_sequence(self, value):
+        if value < 1:
+            raise serializers.ValidationError('Starting number must be at least 1.')
+        return value

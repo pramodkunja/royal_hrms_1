@@ -14,6 +14,7 @@ const SETTINGS_ITEMS = [
   { id: "email-templates",    cat: "comm",    icon: "ti-mail",            iconClass: "sc-comm",    label: "Email Templates",     desc: "Customize all transactional emails" },
   { id: "smtp",               cat: "comm",    icon: "ti-server",          iconClass: "sc-comm",    label: "SMTP Settings",       desc: "Outgoing email server configuration" },
   { id: "notifications",      cat: "comm",    icon: "ti-bell",            iconClass: "sc-comm",    label: "Notifications",       desc: "In-app and email notification preferences" },
+  { id: "employee-code",      cat: "company", icon: "ti-id-badge",        iconClass: "sc-company", label: "Employee ID Format",  desc: "Prefix, padding, and starting number for employee codes" },
   { id: "audit",              cat: "system",  icon: "ti-history",         iconClass: "sc-system",  label: "Audit Log",           desc: "View all system actions and changes" },
 ] as const;
 
@@ -34,6 +35,7 @@ const ITEM_ROUTES: Record<string, string> = {
   smtp:              "/dashboard/settings/smtp",
   "email-templates": "/dashboard/settings/email-templates",
   audit:             "/dashboard/settings/audit",
+  "employee-code":   "/dashboard/settings/employee-code",
 };
 
 export default function SettingsPage() {

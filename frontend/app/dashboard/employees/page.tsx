@@ -4,13 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import clientApi from "@/lib/clientApi";
 import { API } from "@/lib/api/endpoints";
+import { getStoredUser } from "@/lib/auth";
 import {
   fullName,
   initials,
   formatDate,
   deptTint,
   avatarColor,
-  TINTS,
   type Employee,
   type EmployeeStatus,
 } from "./_data";
@@ -72,11 +72,14 @@ function apiToEmployee(u: ApiEmployee): Employee {
 }
 
 const STATUS_FILTERS: { value: "all" | EmployeeStatus; label: string }[] = [
-  { value: "all",         label: "All Status"  },
-  { value: "active",      label: "Active"      },
-  { value: "onboarding",  label: "Onboarding"  },
-  { value: "inactive",    label: "Inactive"    },
+  { value: "all",        label: "All Status"  },
+  { value: "active",     label: "Active"      },
+  { value: "onboarding", label: "Onboarding"  },
+  { value: "inactive",   label: "Inactive"    },
 ];
+
+const SEL_CLS =
+  "px-3.5 py-2.5 pr-9 rounded-lg border border-[var(--outline-v)] bg-white text-[13px] font-medium text-[var(--on-bg)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(30,78,140,0.12)] transition-colors appearance-none bg-no-repeat cursor-pointer";
 
 const SEL_STYLE = {
   backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%237c8aa3' stroke-width='2'><path d='M4 6l4 4 4-4'/></svg>\")",
@@ -84,21 +87,19 @@ const SEL_STYLE = {
 };
 
 export default function EmployeesPage() {
-  const router = useRouter();
+  const router     = useRouter();
+  const storedUser = getStoredUser();
+  const isAdmin    = storedUser?.role === "system_admin";
+  const userBranch = storedUser?.branch ?? "";
 
-  const [employees,   setEmployees]   = useState<Employee[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [fetchError,  setFetchError]  = useState("");
-  const [search,      setSearch]      = useState("");
-  const [dept,        setDept]        = useState("all");
-  const [status,      setStatus]      = useState<"all" | EmployeeStatus>("all");
-  const [showModal,   setShowModal]   = useState(false);
-
-  /* unique departments from the loaded list */
-  const deptOptions = useMemo(
-    () => [...new Set(employees.map(e => e.department).filter(Boolean))].sort(),
-    [employees],
-  );
+  const [employees,  setEmployees]  = useState<Employee[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [fetchError, setFetchError] = useState("");
+  const [search,     setSearch]     = useState("");
+  const [branch,     setBranch]     = useState("all");
+  const [dept,       setDept]       = useState("all");
+  const [status,     setStatus]     = useState<"all" | EmployeeStatus>("all");
+  const [showModal,  setShowModal]  = useState(false);
 
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
@@ -115,6 +116,16 @@ export default function EmployeesPage() {
 
   useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
 
+  /* derive unique branches + departments from loaded data */
+  const branchOptions = useMemo(
+    () => [...new Set(employees.map(e => e.location).filter(Boolean))].sort(),
+    [employees],
+  );
+  const deptOptions = useMemo(
+    () => [...new Set(employees.map(e => e.department).filter(Boolean))].sort(),
+    [employees],
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return employees.filter(e => {
@@ -124,23 +135,25 @@ export default function EmployeesPage() {
         e.email.toLowerCase().includes(q) ||
         e.code.toLowerCase().includes(q) ||
         e.designation.toLowerCase().includes(q);
+      const matchesBranch = branch === "all" || e.location === branch;
       const matchesDept   = dept   === "all" || e.department === dept;
       const matchesStatus = status === "all" || e.status === status;
-      return matchesQ && matchesDept && matchesStatus;
+      return matchesQ && matchesBranch && matchesDept && matchesStatus;
     });
-  }, [employees, search, dept, status]);
+  }, [employees, search, branch, dept, status]);
 
   const stats = useMemo(() => {
-    const active     = employees.filter(e => e.status === "active").length;
-    const onboarding = employees.filter(e => e.status === "onboarding").length;
-    const depts      = new Set(employees.map(e => e.department)).size;
+    const source     = branch === "all" ? employees : employees.filter(e => e.location === branch);
+    const active     = source.filter(e => e.status === "active").length;
+    const onboarding = source.filter(e => e.status === "onboarding").length;
+    const depts      = new Set(source.map(e => e.department)).size;
     return [
-      { label: "Total Employees", value: employees.length, icon: "ti-users",      tint: "primary"  as const },
-      { label: "Active",          value: active,           icon: "ti-user-check", tint: "success"  as const },
-      { label: "Onboarding",      value: onboarding,       icon: "ti-user-plus",  tint: "warn"     as const },
-      { label: "Departments",     value: depts,            icon: "ti-building",   tint: "info"     as const },
+      { label: "Total Employees", value: source.length, icon: "ti-users",      tint: "primary" as const },
+      { label: "Active",          value: active,         icon: "ti-user-check", tint: "success" as const },
+      { label: "Onboarding",      value: onboarding,     icon: "ti-user-plus",  tint: "warn"    as const },
+      { label: "Departments",     value: depts,          icon: "ti-building",   tint: "info"    as const },
     ];
-  }, [employees]);
+  }, [employees, branch]);
 
   function open(id: string) {
     router.push(`/dashboard/employees/${id}`);
@@ -152,11 +165,18 @@ export default function EmployeesPage() {
       <div className="page-header">
         <div>
           <div className="page-title">Employees</div>
-          <div className="page-sub">All active and onboarding employees</div>
+          <div className="page-sub">
+            {isAdmin
+              ? "All employees across all branches"
+              : userBranch
+                ? `${userBranch} — your branch`
+                : "All active and onboarding employees"
+            }
+          </div>
         </div>
         <button onClick={() => setShowModal(true)} suppressHydrationWarning
-          className="btn btn-primary flex items-center gap-2">
-          <i className="ti ti-plus text-[15px]" />
+          className="btn btn-filled" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <i className="ti ti-plus" style={{ fontSize: 15 }} />
           Add Employee
         </button>
       </div>
@@ -170,9 +190,9 @@ export default function EmployeesPage() {
               <div className="stat-value">{st.value}</div>
             </div>
             <div className={`stat-icon ${
-              st.tint === "primary"  ? "si-primary"  :
-              st.tint === "success"  ? "si-success"  :
-              st.tint === "warn"     ? "si-warn"      :
+              st.tint === "primary" ? "si-primary" :
+              st.tint === "success" ? "si-success" :
+              st.tint === "warn"    ? "si-warn"    :
               "si-info"
             }`}>
               <i className={`ti ${st.icon}`} />
@@ -183,23 +203,70 @@ export default function EmployeesPage() {
 
       {/* ── Filters ── */}
       <div className="flex items-center gap-3 flex-wrap mb-4">
+        {/* Search */}
         <div className="relative flex-1 min-w-[220px] max-w-[360px]">
           <i className="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-[var(--outline)] text-[15px]" />
-          <input type="text" placeholder="Search employees..." value={search}
-            onChange={e => setSearch(e.target.value)} suppressHydrationWarning
-            className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-[var(--outline-v)] bg-white text-[13px] text-[var(--on-bg)] placeholder:text-[var(--outline)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(30,78,140,0.12)] transition-colors" />
+          <input
+            type="text"
+            placeholder="Search employees..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            suppressHydrationWarning
+            className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-[var(--outline-v)] bg-white text-[13px] text-[var(--on-bg)] placeholder:text-[var(--outline)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(30,78,140,0.12)] transition-colors"
+          />
         </div>
 
-        <select value={dept} onChange={e => setDept(e.target.value)} suppressHydrationWarning
-          className="px-3.5 py-2.5 pr-9 rounded-lg border border-[var(--outline-v)] bg-white text-[13px] font-medium text-[var(--on-bg)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(30,78,140,0.12)] transition-colors appearance-none bg-no-repeat cursor-pointer"
-          style={SEL_STYLE}>
+        {/* Branch — system_admin sees switcher, hr_admin sees fixed label */}
+        {isAdmin ? (
+          <select
+            value={branch}
+            onChange={e => { setBranch(e.target.value); setDept("all"); }}
+            suppressHydrationWarning
+            className={SEL_CLS}
+            style={SEL_STYLE}
+          >
+            <option value="all">All Branches</option>
+            {branchOptions.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+        ) : userBranch ? (
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "9px 14px",
+            borderRadius: 8,
+            border: "1px solid var(--outline-v)",
+            background: "var(--bg-low)",
+            fontSize: 13,
+            fontWeight: 600,
+            color: "var(--on-bg)",
+            whiteSpace: "nowrap",
+          }}>
+            <i className="ti ti-building" style={{ fontSize: 13, color: "var(--primary)" }} />
+            {userBranch}
+          </div>
+        ) : null}
+
+        {/* Department */}
+        <select
+          value={dept}
+          onChange={e => setDept(e.target.value)}
+          suppressHydrationWarning
+          className={SEL_CLS}
+          style={SEL_STYLE}
+        >
           <option value="all">All Departments</option>
           {deptOptions.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
 
-        <select value={status} onChange={e => setStatus(e.target.value as "all" | EmployeeStatus)} suppressHydrationWarning
-          className="px-3.5 py-2.5 pr-9 rounded-lg border border-[var(--outline-v)] bg-white text-[13px] font-medium text-[var(--on-bg)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(30,78,140,0.12)] transition-colors appearance-none bg-no-repeat cursor-pointer"
-          style={SEL_STYLE}>
+        {/* Status */}
+        <select
+          value={status}
+          onChange={e => setStatus(e.target.value as "all" | EmployeeStatus)}
+          suppressHydrationWarning
+          className={SEL_CLS}
+          style={SEL_STYLE}
+        >
           {STATUS_FILTERS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
       </div>
@@ -222,10 +289,10 @@ export default function EmployeesPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse min-w-[860px]">
+            <table className="w-full border-collapse min-w-[900px]">
               <thead>
                 <tr className="bg-[var(--bg-low)] border-b border-[var(--outline-v)]">
-                  {["Employee", "Department", "Designation", "Date of Joining", "Status", "Actions"].map(h => (
+                  {["Employee", "Branch", "Department", "Designation", "Date of Joining", "Status", "Actions"].map(h => (
                     <th key={h}
                       className="text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--on-variant)] px-5 py-3 whitespace-nowrap">
                       {h}
@@ -236,7 +303,7 @@ export default function EmployeesPage() {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-14 text-center">
+                    <td colSpan={7} className="px-5 py-14 text-center">
                       <i className="ti ti-users-group text-4xl text-[var(--outline)] block mb-3" />
                       <p className="text-[13px] text-[var(--on-variant)]">No employees match your filters.</p>
                     </td>
@@ -253,6 +320,15 @@ export default function EmployeesPage() {
                             <div className="text-[12px] text-[var(--on-variant)] truncate">{e.email}</div>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-[13px] text-[var(--on-bg)] whitespace-nowrap">
+                        {e.location
+                          ? <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                              <i className="ti ti-building" style={{ fontSize: 12, color: "var(--outline)" }} />
+                              {e.location}
+                            </span>
+                          : <span className="text-[var(--outline)]">—</span>
+                        }
                       </td>
                       <td className="px-5 py-3.5 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] font-medium ${deptTint(e.department).bg} ${deptTint(e.department).text}`}>

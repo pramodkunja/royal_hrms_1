@@ -471,6 +471,49 @@ class Company(models.Model):
         return self.company_name
 
 
+# ─── Employee Code Settings (singleton) ──────────────────────────────────────
+
+class EmployeeCodeSettings(models.Model):
+    """Singleton row (pk=1) that governs how employee IDs are generated."""
+    prefix        = models.CharField(max_length=10, default='RSS')
+    padding       = models.PositiveSmallIntegerField(default=5)
+    next_sequence = models.PositiveIntegerField(default=1)
+    updated_at    = models.DateTimeField(auto_now=True)
+    updated_by    = models.ForeignKey(
+                        User,
+                        on_delete=models.SET_NULL,
+                        null=True,
+                        blank=True,
+                        related_name='employee_code_updates',
+                    )
+
+    class Meta:
+        db_table = 'hrms_employee_code_settings'
+
+    def __str__(self) -> str:
+        return f'{self.prefix} (next: {self.next_sequence})'
+
+    @classmethod
+    def get(cls) -> 'EmployeeCodeSettings':
+        obj, _ = cls.objects.get_or_create(
+            pk=1,
+            defaults={'prefix': 'RSS', 'padding': 5, 'next_sequence': 1},
+        )
+        return obj
+
+    @classmethod
+    @transaction.atomic
+    def generate_employee_id(cls) -> str:
+        """Atomically read-and-increment the sequence; return the formatted ID."""
+        cfg = cls.objects.select_for_update().get_or_create(
+            pk=1,
+            defaults={'prefix': 'RSS', 'padding': 5, 'next_sequence': 1},
+        )[0]
+        employee_id = f'{cfg.prefix}{str(cfg.next_sequence).zfill(cfg.padding)}'
+        cls.objects.filter(pk=1).update(next_sequence=F('next_sequence') + 1)
+        return employee_id
+
+
 # ─── Document Center ──────────────────────────────────────────────────────────
 
 class Document(models.Model):

@@ -35,6 +35,7 @@ from apps.accounts.models import (
     EmailTemplate,
     EmailTemplateAttachment,
     EmailTemplateCategory,
+    EmployeeCodeSettings,
     OTPVerification,
     PasswordResetToken,
     Permission,
@@ -53,6 +54,7 @@ from apps.accounts.serializers import (
     EmailTemplateCategorySerializer,
     EmailTemplatePreviewSerializer,
     EmailTemplateSerializer,
+    EmployeeCodeSettingsSerializer,
     ForgotPasswordSerializer,
     LoginSerializer,
     LogoutSerializer,
@@ -187,6 +189,8 @@ class LoginView(APIView):
         )
 
         resp = success('Login successful.', data={
+            'access':  str(refresh.access_token),
+            'refresh': str(refresh),
             'user': {
                 'id':                  str(user.id),
                 'email':               user.email,
@@ -229,7 +233,10 @@ class TokenRefreshAPIView(APIView):
     authentication_classes = []
 
     def post(self, request):
-        refresh_str = request.COOKIES.get('royal_refresh_token')
+        refresh_str = (
+            request.COOKIES.get('royal_refresh_token')
+            or request.data.get('refresh')
+        )
         if not refresh_str:
             return error('Session expired. Please log in again.', http_status=status.HTTP_401_UNAUTHORIZED)
         serializer = TokenRefreshSerializer(data={'refresh': refresh_str})
@@ -1884,6 +1891,11 @@ class EmployeeListCreateView(APIView):
             .order_by('-date_joined')
         )
 
+        # hr_admin is always scoped to their own branch — cannot be overridden by query params
+        role_name = request.user.role.name if request.user.role else ''
+        if role_name == 'hr_admin':
+            qs = qs.filter(branch=request.user.branch)
+
         search = request.query_params.get('search', '').strip()
         dept   = request.query_params.get('department', '').strip()
         if search:
@@ -1941,8 +1953,7 @@ class EmployeeListCreateView(APIView):
         import secrets, string as _string
         temp_password = ''.join(secrets.choice(_string.ascii_letters + _string.digits) for _ in range(12))
 
-        count       = User.objects.count() + 1
-        employee_id = f'RSS{str(count).zfill(5)}'
+        employee_id = EmployeeCodeSettings.generate_employee_id()
         full_name   = f'{first_name} {last_name}'
 
         with transaction.atomic():
@@ -1999,6 +2010,19 @@ class EmployeeListCreateView(APIView):
         )
 
 
+class EmployeeDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, employee_id: str):
+        if not _has_perm(request.user, 'employees.view'):
+            return error('You do not have permission to perform this action.', http_status=status.HTTP_403_FORBIDDEN)
+        try:
+            user = User.objects.select_related('role').get(employee_id=employee_id)
+        except User.DoesNotExist:
+            return error('Employee not found.', http_status=status.HTTP_404_NOT_FOUND)
+        return success('Employee retrieved.', data=_employee_dict(user))
+
+
 class AuditLogListView(APIView):
     permission_classes = [IsAuthenticated, CanManageRoles]
 
@@ -2042,3 +2066,29 @@ class AuditLogListView(APIView):
             'total_pages': paginator.num_pages,
             'results':     serializer.data,
         })
+
+
+class EmployeeCodeSettingsView(APIView):
+    permission_classes = [IsAuthenticated, CanManageRoles]
+
+    def get(self, request):
+        cfg = EmployeeCodeSettings.get()
+        return success('Employee code settings retrieved.', data=EmployeeCodeSettingsSerializer(cfg).data)
+
+    @transaction.atomic
+    def put(self, request):
+        cfg = EmployeeCodeSettings.objects.select_for_update().get_or_create(pk=1)[0]
+        serializer = EmployeeCodeSettingsSerializer(cfg, data=request.data, partial=False)
+        if not serializer.is_valid():
+            return error('Please fix the errors below.', data=serializer.errors)
+        serializer.save(updated_by=request.user)
+        AuditLog.objects.create(
+            user=request.user,
+            action='employee_code_settings_updated',
+            module='accounts',
+            object_id='1',
+            changes=dict(serializer.validated_data),
+            ip_address=get_client_ip(request),
+        )
+        logger.info('Employee code settings updated by %s', request.user.email)
+        return success('Employee code settings updated.', data=serializer.data)

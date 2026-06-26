@@ -37,7 +37,8 @@ export const API = {
 
   employees: {
     list:    "/employees/",
-    branches: "/branches/",
+    detail:  (id: string) => `/employees/${id}/`,
+    branches: "/branch/branches/",
   },
 
   roles: {
@@ -50,7 +51,8 @@ export const API = {
   },
 
   settings: {
-    audit:   "/settings/audit/",
-    company: "/settings/company/",
+    audit:        "/settings/audit/",
+    company:      "/settings/company/",
+    employeeCode: "/settings/employee-code/",
   },
 } as const;
