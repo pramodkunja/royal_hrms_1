@@ -34,7 +34,7 @@ _DENIED = 'You do not have permission to perform this action.'
 
 def _send_candidate_email(candidate, template_slug, actor, extra_context=None):
     company      = Company.objects.first()
-    company_name = company.name if company else ''
+    company_name = company.company_name if company else ''
     subject      = f'Your application update — {candidate.position_applied}'
     sent_status  = CandidateEmail.STATUS_FAILED
 
@@ -252,11 +252,15 @@ class CandidateHRDecisionView(APIView):
                 title='HR Approved — Onboarded as Employee',
                 description=f'Approved by {actor_name}. {remarks}'.strip('. '),
             )
-            _send_candidate_email(candidate, template_name, request.user, extra_context)
+            email_status = _send_candidate_email(candidate, template_name, request.user, extra_context)
             CandidateLog.objects.create(
                 candidate=candidate,
-                log_type=CandidateLog.TYPE_SUCCESS,
-                title='Onboarding email sent',
+                log_type=(CandidateLog.TYPE_SUCCESS
+                          if email_status == CandidateEmail.STATUS_SENT
+                          else CandidateLog.TYPE_WARN),
+                title=('Onboarding email sent'
+                       if email_status == CandidateEmail.STATUS_SENT
+                       else 'Onboarding email failed — check SMTP settings'),
                 description=f'Using template: {template_name}',
             )
             msg = f'{candidate.name} approved and onboarded!'
