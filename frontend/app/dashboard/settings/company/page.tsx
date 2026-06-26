@@ -246,12 +246,6 @@ export default function CompanyInfoPage() {
           <button className="btn btn-ghost" onClick={() => router.push("/dashboard/settings")}>
             <i className="ti ti-arrow-left" /> Back
           </button>
-          <button className="btn btn-filled" onClick={handleSave} disabled={saving}>
-            {saving
-              ? <><i className="ti ti-loader-2" style={{ animation: "spin 1s linear infinite" }} /> Saving…</>
-              : <><i className="ti ti-device-floppy" /> Save Changes</>
-            }
-          </button>
         </div>
       </div>
 
