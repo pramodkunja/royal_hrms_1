@@ -650,3 +650,113 @@ Developed full employee management screens wired to the backend API.
 
 - Added `"/dashboard/employees/new": "Add New Employee"` to `PAGE_TITLES`
 - Dynamic fallback: `pathname.startsWith("/dashboard/employees/")` → `"Employee Profile"`
+
+---
+
+## Session 5 — G.Durga Prasad (26 June 2026)
+
+**Branch:** `Backend/Email-Document`
+
+### 1. Recruitment Module — Interview List Page
+
+Full interview list page at `/dashboard/interview-list` wired to the backend API. Page was refactored from a single 482-line file to a 245-line orchestrator + 3 extracted modal files.
+
+#### File structure
+```
+interview-list/
+  _data.ts                ← types, API helpers, format utilities
+  page.tsx                ← orchestrator (245 lines): state, fetching, layout, table
+  AddCandidateModal.tsx   ← add candidate form with branch selection
+  MarkCandidateModal.tsx  ← select/reject modal with template picker + email preview
+  LogsModal.tsx           ← candidate event log viewer
+```
+
+#### `_data.ts` types added / updated
+- `Branch` interface: `{ id, branch_name, branch_code, status }`
+- `Candidate` interface: added `branch: number | null`, `branch_name: string`
+- `EmailTemplate` interface: added `is_active: boolean`
+- `emailTemplates()` — moved from `API.recruitment.emailTemplates` to `API.settings.emailTemplates`; return type `Record<string, EmailTemplate[]>`
+- `RECRUITMENT_API.list` params: added `branch?: number`
+
+#### `page.tsx` features
+- **Stats cards** — total / pending / selected / rejected from `/api/recruitment/stats/`
+- **Branch filter dropdown** — building icon, "All Branches" default, shows `Branch Name (CODE)` options
+- **Branch table column** — badge for each candidate's assigned branch
+- **Dynamic subtitle** — changes to "Showing candidates for [Branch Name]" when a branch is selected
+- **Dynamic empty state** — message changes based on active branch filter
+- Branches fetched once on mount from `GET /api/branch/branches/?status=active&page_size=100`
+- `fetchAll(q, s, b)` accepts optional branch param; called on search/status/branch change
+
+### 2. `AddCandidateModal.tsx` — Required Branch Selection
+
+- Required `Branch` dropdown fetched from `GET /api/branch/branches/?status=active&page_size=100` on mount
+- Client-side validation: "Please select a branch." if no branch selected before submit
+- Submits `branch: Number(form.branch)` with candidate payload
+
+### 3. `MarkCandidateModal.tsx` — Template Picker + Email Preview
+
+- Template dropdown pre-selects `selection` / `rejection` by default based on target status
+- Fetches templates + company info in parallel via `Promise.all([emailTemplates(), companyInfo()])`
+- Flattens grouped template response: `([] as EmailTemplate[]).concat(...Object.values(grouped)).filter(t => t.is_active)`
+- Live email preview rendered in a 640 × 340 iframe using `buildEmailPreview` from `lib/emailPreview.ts`
+- `previewVars()` replaces `{candidate_name}`, `{position}`, `{company_name}` in template body/subject
+- Sends `template_name` slug with the `setStatus` PATCH call
+
+### 4. `lib/emailPreview.ts` — NEW FILE
+
+Shared utility for building branded email HTML previews in the browser — mirrors `_company_email_wrapper` in the backend.
+
+```typescript
+export interface CompanyInfo {
+  company_name: string; logo: string; logo_url: string;
+  website: string; official_phone: string;
+  address: string; city: string; state: string;
+}
+export function renderTemplateVars(text: string, vars: Record<string, string>): string
+export function buildEmailPreview(body: string, company: CompanyInfo | null): string
+// Header: logo only (falls back to company name text if no logo); Footer: website | city, state
+```
+
+Used by both `MarkCandidateModal` (interview list) and `HRDecisionModal` (candidate review).
+
+### 5. `HRDecisionModal.tsx` — Company Branding Added
+
+- Added `company: CompanyInfo | null` state
+- Fetches company info in parallel with templates via `Promise.all`
+- Replaced inline `renderPreview` with `buildEmailPreview(body, company)` from `lib/emailPreview.ts`
+- iframe height 340px, modal maxWidth 700px
+
+### 6. `lib/api/endpoints.ts` — emailTemplates moved
+
+`emailTemplates` endpoint moved from `API.recruitment` to `API.settings`:
+```typescript
+settings: {
+  audit:          "/settings/audit/",
+  company:        "/settings/company/",
+  emailTemplates: "/settings/email-templates/",   // ← moved here
+},
+// API.recruitment.emailTemplates removed
+```
+
+**Why:** Accounts app owns the `EmailTemplate` model and its CRUD endpoint. Recruitment app was maintaining a duplicate read endpoint. Single source of truth — all consumers now use `API.settings.emailTemplates`.
+
+### Key Files Changed / Created
+
+| File | Change |
+|------|--------|
+| `lib/api/endpoints.ts` | `emailTemplates` moved from `recruitment` to `settings` |
+| `lib/emailPreview.ts` | **NEW** — `buildEmailPreview`, `renderTemplateVars`, `CompanyInfo` |
+| `app/dashboard/interview-list/_data.ts` | Added `Branch`, `is_active` on `EmailTemplate`, branch list param, `emailTemplates` → `API.settings` |
+| `app/dashboard/interview-list/page.tsx` | Refactored 482 → 245 lines; branch filter dropdown; branch table column; dynamic subtitle/empty state |
+| `app/dashboard/interview-list/AddCandidateModal.tsx` | **NEW** (extracted) — branch required dropdown, validation, submit |
+| `app/dashboard/interview-list/MarkCandidateModal.tsx` | **NEW** (extracted) — template picker, live preview iframe, `buildEmailPreview` |
+| `app/dashboard/interview-list/LogsModal.tsx` | **NEW** (extracted) — no logic changes |
+| `app/dashboard/candidate-review/HRDecisionModal.tsx` | Company info fetch, `buildEmailPreview` from shared utility |
+
+### Notes for Next Developer
+
+- **Email preview and actual sent emails must stay in sync** — when editing the branding in `_company_email_wrapper` (`backend/apps/accounts/utils.py`), mirror the same change in `buildEmailPreview` (`frontend/lib/emailPreview.ts`).
+- **Template slugs matter** — `MarkCandidateModal` pre-selects `selection` / `rejection`. These slugs must exist in `EmailTemplate` DB records with `is_active=True`. If you add new default slugs, update the modal default.
+- **Branch filter uses `page_size=100`** — assumes no company will have more than 100 active branches. Increase if needed.
+- **`emailTemplates()` returns grouped data** — `Record<string, EmailTemplate[]>`. Always flatten before use: `([] as EmailTemplate[]).concat(...Object.values(grouped)).filter(t => t.is_active)`.
+- **API.recruitment.emailTemplates is gone** — any code referencing it will break; use `API.settings.emailTemplates` instead.

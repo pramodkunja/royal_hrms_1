@@ -31,11 +31,13 @@ class CandidateListSerializer(serializers.ModelSerializer):
     interviewer_name = serializers.SerializerMethodField()
     added_by_name    = serializers.SerializerMethodField()
     referral_by_name = serializers.SerializerMethodField()
+    branch_name      = serializers.SerializerMethodField()
 
     class Meta:
         model  = Candidate
         fields = [
             'id', 'name', 'email', 'phone', 'position_applied',
+            'branch', 'branch_name',
             'interview_date', 'interviewer', 'interviewer_name', 'interview_mode',
             'notes', 'status', 'referral_by', 'referral_by_name',
             'details_filled', 'hr_approved', 'portal_credentials_sent',
@@ -57,6 +59,9 @@ class CandidateListSerializer(serializers.ModelSerializer):
             return obj.referral_by.full_name or obj.referral_by.email
         return ''
 
+    def get_branch_name(self, obj):
+        return obj.branch.branch_name if obj.branch else ''
+
 
 class CandidateDetailSerializer(CandidateListSerializer):
     logs = CandidateLogSerializer(many=True, read_only=True)
@@ -70,5 +75,5 @@ class CandidateCreateSerializer(serializers.ModelSerializer):
         model  = Candidate
         fields = [
             'name', 'email', 'phone', 'position_applied',
-            'interview_date', 'interviewer', 'interview_mode', 'notes',
+            'branch', 'interview_date', 'interviewer', 'interview_mode', 'notes',
         ]

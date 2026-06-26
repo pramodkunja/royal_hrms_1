@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.db import models
 
+from apps.branch.models import Branch
+
 
 class Candidate(models.Model):
     MODE_IN_PERSON  = 'in_person'
@@ -25,6 +27,12 @@ class Candidate(models.Model):
     email            = models.EmailField()
     phone            = models.CharField(max_length=20, blank=True)
     position_applied = models.CharField(max_length=200)
+    branch           = models.ForeignKey(
+                           Branch,
+                           on_delete=models.SET_NULL,
+                           null=True, blank=True,
+                           related_name='candidates',
+                       )
     interview_date   = models.DateField(null=True, blank=True)
     interviewer      = models.ForeignKey(
                            settings.AUTH_USER_MODEL,

@@ -4,11 +4,10 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 from rest_framework.views import APIView
 from core.responses import error, first_error, get_client_ip, success
 
-from apps.accounts.models import AuditLog, Company, EmailTemplate
+from apps.accounts.models import AuditLog, Company
 from apps.accounts.utils import send_template_email
 from .models import Candidate, CandidateEmail, CandidateLog
 from .serializers import (
@@ -32,21 +31,25 @@ _DENIED = 'You do not have permission to perform this action.'
 
 # ─── Email helper ─────────────────────────────────────────────────────────────
 
-def _send_candidate_email(candidate, template_slug, actor):
+def _send_candidate_email(candidate, template_slug, actor, extra_context=None):
     company      = Company.objects.first()
-    company_name = company.name if company else ''
+    company_name = company.company_name if company else ''
     subject      = f'Your application update — {candidate.position_applied}'
     sent_status  = CandidateEmail.STATUS_FAILED
+
+    context = {
+        'candidate_name': candidate.name,
+        'position':       candidate.position_applied,
+        'company_name':   company_name,
+    }
+    if extra_context:
+        context.update(extra_context)
 
     try:
         send_template_email(
             recipient_email=candidate.email,
             template_name=template_slug,
-            context={
-                'candidate_name': candidate.name,
-                'position':       candidate.position_applied,
-                'company_name':   company_name,
-            },
+            context=context,
         )
         sent_status = CandidateEmail.STATUS_SENT
         logger.info('Sent %s email to %s for candidate %s', template_slug, candidate.email, candidate.id)
@@ -73,11 +76,17 @@ class CandidateListCreateView(APIView):
         if not _has_perm(request.user, 'recruitment.view'):
             return error(_DENIED, http_status=status.HTTP_403_FORBIDDEN)
 
-        qs = Candidate.objects.select_related('interviewer', 'referral_by', 'added_by').all()
+        qs = Candidate.objects.select_related('interviewer', 'referral_by', 'added_by', 'branch').all()
 
         if s := request.query_params.get('status'):
             if s in {Candidate.STATUS_PENDING, Candidate.STATUS_SELECTED, Candidate.STATUS_REJECTED}:
                 qs = qs.filter(status=s)
+
+        if b := request.query_params.get('branch'):
+            try:
+                qs = qs.filter(branch_id=int(b))
+            except (ValueError, TypeError):
+                pass
 
         if q := request.query_params.get('search'):
             qs = qs.filter(name__icontains=q) | qs.filter(email__icontains=q) | qs.filter(position_applied__icontains=q)
@@ -171,6 +180,10 @@ class CandidateStatusView(APIView):
             return error(f'Candidate is already {candidate.status}.')
 
         remarks = request.data.get('remarks', '')
+
+        default_slug  = 'selection' if new_status == 'selected' else 'rejection'
+        template_slug = (request.data.get('template_name') or default_slug).strip()
+
         candidate.status = new_status
         candidate.save(update_fields=['status', 'updated_at'])
 
@@ -183,15 +196,15 @@ class CandidateStatusView(APIView):
             description=f'By {actor_name}. {remarks}'.strip('. '),
         )
 
-        # Send automated email
-        template_slug = 'selection' if new_status == 'selected' else 'rejection'
-        email_status  = _send_candidate_email(candidate, template_slug, request.user)
+        email_status = _send_candidate_email(candidate, template_slug, request.user)
 
         CandidateLog.objects.create(
             candidate=candidate,
-            log_type=CandidateLog.TYPE_SUCCESS if email_status == 'sent' else CandidateLog.TYPE_WARN,
-            title=f'{"Selection" if new_status == "selected" else "Rejection"} email sent',
-            description=f'Using template: Interview {new_status.title()}',
+            log_type=CandidateLog.TYPE_SUCCESS if email_status == CandidateEmail.STATUS_SENT else CandidateLog.TYPE_WARN,
+            title=(f'{"Selection" if new_status == "selected" else "Rejection"} email sent'
+                   if email_status == CandidateEmail.STATUS_SENT
+                   else 'Email failed — check SMTP settings'),
+            description=f'Using template: {template_slug}',
         )
 
         AuditLog.objects.create(
@@ -229,6 +242,17 @@ class CandidateHRDecisionView(APIView):
         actor_name = request.user.full_name or request.user.email
 
         if decision == 'approve':
+            # Template selection: default to welcome_employee if not specified
+            template_name = (request.data.get('template_name') or 'welcome_employee').strip()
+
+            # Sanitize extra_context: only string-keyed, identifier-named entries
+            raw_extra = request.data.get('extra_context') or {}
+            extra_context = {}
+            if isinstance(raw_extra, dict):
+                for k, v in raw_extra.items():
+                    if isinstance(k, str) and k.isidentifier() and len(k) <= 100:
+                        extra_context[k] = str(v)[:2000]
+
             candidate.hr_approved = True
             candidate.save(update_fields=['hr_approved', 'updated_at'])
             CandidateLog.objects.create(
@@ -237,12 +261,16 @@ class CandidateHRDecisionView(APIView):
                 title='HR Approved — Onboarded as Employee',
                 description=f'Approved by {actor_name}. {remarks}'.strip('. '),
             )
-            _send_candidate_email(candidate, 'welcome_employee', request.user)
+            email_status = _send_candidate_email(candidate, template_name, request.user, extra_context)
             CandidateLog.objects.create(
                 candidate=candidate,
-                log_type=CandidateLog.TYPE_SUCCESS,
-                title='Welcome Employee email sent',
-                description='Using template: Welcome Employee',
+                log_type=(CandidateLog.TYPE_SUCCESS
+                          if email_status == CandidateEmail.STATUS_SENT
+                          else CandidateLog.TYPE_WARN),
+                title=('Onboarding email sent'
+                       if email_status == CandidateEmail.STATUS_SENT
+                       else 'Onboarding email failed — check SMTP settings'),
+                description=f'Using template: {template_name}',
             )
             msg = f'{candidate.name} approved and onboarded!'
         else:
@@ -338,3 +366,4 @@ class CandidateStatsView(APIView):
             'selected': selected, 'rejected': rejected,
             'pending_review': pending_review,
         })
+

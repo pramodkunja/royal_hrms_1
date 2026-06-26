@@ -92,6 +92,9 @@ HRMS/
 | `branch_cities` | Cities per state (cascading dropdown source) |
 | `branch_branches` | Company branches with auto-generated branch codes |
 | `hrms_documents` | Document Center — files stored on Cloudinary (added 2026-06-25) |
+| `hrms_candidates` | Interview list candidates with branch FK, status, and interview details |
+| `hrms_candidate_logs` | Per-candidate event log (created, status changed, email sent/failed) |
+| `hrms_candidate_emails` | Email send records — template used, status (sent/failed), recipient |
 
 ---
 
@@ -430,12 +433,27 @@ On validation errors, `data` contains field-level detail:
       - `DocumentDetailView._stream_file()` uses `cloudinary.utils.private_download_url()` (API key + secret) to fetch the file server-side, then streams it to the browser — bypasses all CDN restrictions
       - `DocumentSerializer.get_file_url` now returns `http://…/api/documents/{id}/?t=<token>` — plain `fetch()` from the frontend works without an Authorization header
 
+- [x] **Recruitment app (`apps/recruitment/`)** — 2026-06-26 G.Durga Prasad
+  - [x] `Candidate` model (`hrms_candidates`) — branch FK (SET_NULL), status choices, interview details
+  - [x] `CandidateLog` model (`hrms_candidate_logs`) — per-candidate event log (info/success/warn/error)
+  - [x] `CandidateEmail` model (`hrms_candidate_emails`) — email send records with sent/failed status
+  - [x] Candidate CRUD: list (search, status filter, branch filter, pagination), create, detail
+  - [x] `CandidateStatusView` — PATCH to mark selected/rejected; sends branded email via template
+  - [x] `CandidateHRDecisionView` — PATCH approve/reject selected candidates; sends welcome email
+  - [x] `CandidateReviewListView` — list of selected candidates awaiting HR decision
+  - [x] `CandidateEmailLogView` — email send history with search
+  - [x] `CandidateStatsView` — total, pending, selected, rejected, pending_review counts
+  - [x] Branch filter on candidate list: `?branch=<id>` query param
+  - [x] Duplicate `email-templates` endpoint removed from recruitment — accounts endpoint used instead
+  - [x] `EmailTemplateListCreateView` GET opened to all `IsAuthenticated` users (POST still requires `CanManageRoles`)
+  - [x] **Email branding** — `_company_email_wrapper` in `accounts/utils.py` wraps every sent email with company logo header + footer (website/address); logo-only header (no name text)
+  - [x] `send_template_email` fix — raises `LookupError` when template slug not found (previously returned `None` silently, causing incorrect `STATUS_SENT` logging)
+
 ### Planned (next modules)
 - [ ] Employee management (profiles, departments)
 - [ ] Attendance module
 - [ ] Leave management
 - [ ] Payroll
-- [ ] Recruitment
 - [ ] Expenses
 - [ ] Announcements
 - [ ] Notifications
@@ -443,6 +461,76 @@ On validation errors, `data` contains field-level detail:
 ---
 
 ## Session Log
+
+### 2026-06-26 — Recruitment Module + Email Branding
+
+**Who:** G.Durga Prasad
+
+#### 1. Recruitment app (`apps/recruitment/`) — full feature
+
+Three models created and migrated:
+
+| Model | Table | Purpose |
+|-------|-------|---------|
+| `Candidate` | `hrms_candidates` | Interview candidates — branch FK (SET_NULL), status, interview mode, notes |
+| `CandidateLog` | `hrms_candidate_logs` | Per-candidate event timeline (info / success / warn / error) |
+| `CandidateEmail` | `hrms_candidate_emails` | Email delivery records — template slug, status (sent/failed), recipient |
+
+**Migration:** `apps/recruitment/migrations/0002_add_branch_to_candidate.py` — adds nullable `branch` FK (SET_NULL) to `hrms_candidates` referencing `branch_branches`.
+
+**Serializers:**
+- `CandidateListSerializer` — `branch_name`, `interviewer_name`, `added_by_name`, `referral_by_name` as `SerializerMethodField`
+- `CandidateCreateSerializer` — includes `branch` field
+- `CandidateDetailSerializer` — extends list serializer with nested `logs`
+- `CandidateEmailSerializer` — `candidate_name`, `candidate_position` from related candidate
+
+**Views (`apps/recruitment/views.py`):**
+- `CandidateListCreateView` — GET with search / status / branch filters + paginated; `select_related('branch')` for join
+- `CandidateDetailView` — GET single candidate with logs
+- `CandidateStatusView` — PATCH to mark selected/rejected; optional `template_name` param; sends branded email; logs both status change and email result
+- `CandidateHRDecisionView` — PATCH approve/reject; approve sends `welcome_employee` email (or custom template); sanitizes `extra_context`
+- `CandidateReviewListView` — GET selected candidates for HR review
+- `CandidateEmailLogView` — GET email send history with search
+- `CandidateStatsView` — GET counts (total, pending, selected, rejected, pending_review)
+
+**URLs (`apps/recruitment/urls.py`):** all wired under `/api/recruitment/`
+
+#### 2. Duplicate endpoint removal
+
+`CandidateEmailTemplatesView` was a read-only duplicate of the accounts email-templates endpoint. Removed entirely:
+- Deleted `CandidateEmailTemplatesView` class from `views.py`
+- Removed `path('email-templates/', ...)` from `urls.py`
+- `EmailTemplateListCreateView` in `accounts/views.py` — `permission_classes` changed from `[IsAuthenticated, CanManageRoles]` to `[IsAuthenticated]`; `CanManageRoles` guard moved inside `post()` only
+
+#### 3. Email branding — `_company_email_wrapper`
+
+Added to `apps/accounts/utils.py`:
+
+```python
+def _company_email_wrapper(body, company_name, logo_url, website, address):
+    # Header: logo only (falls back to company name text if no logo URL)
+    # Footer: website | address
+```
+
+`send_template_email` now:
+1. Fetches `Company.objects.first()` for branding data
+2. Wraps every rendered template body with `_company_email_wrapper` before sending
+3. Raises `LookupError` (instead of returning `None` silently) when template slug not found — prevents incorrect `STATUS_SENT` logging in `_send_candidate_email`
+
+#### 4. Recruitment API endpoints
+
+| Method | Endpoint | Permission |
+|--------|----------|------------|
+| GET | `/api/recruitment/candidates/` | `recruitment.view` |
+| POST | `/api/recruitment/candidates/` | `recruitment.create` |
+| GET | `/api/recruitment/candidates/{id}/` | `recruitment.view` |
+| PATCH | `/api/recruitment/candidates/{id}/status/` | `recruitment.edit` |
+| PATCH | `/api/recruitment/candidates/{id}/hr-decision/` | `recruitment.approve` |
+| GET | `/api/recruitment/candidates/review/` | `recruitment.view` |
+| GET | `/api/recruitment/emails/` | `recruitment.view` |
+| GET | `/api/recruitment/stats/` | `recruitment.view` |
+
+---
 
 ### 2026-06-25 — Document Center + Cloudinary Integration
 
