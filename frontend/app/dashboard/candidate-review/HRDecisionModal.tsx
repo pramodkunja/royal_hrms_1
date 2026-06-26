@@ -30,7 +30,10 @@ export function HRDecisionModal({ candidate, decision, onClose, onDone }: Props)
     setLoadingTemplates(true);
     RECRUITMENT_API.emailTemplates()
       .then(r => {
-        const list = r.data?.data ?? [];
+        const grouped: Record<string, EmailTemplate[]> = r.data?.data ?? {};
+        const list: EmailTemplate[] = ([] as EmailTemplate[])
+          .concat(...Object.values(grouped))
+          .filter(t => t.is_active);
         setTemplates(list);
         if (list.length > 0) setSelectedTemplate(list[0]);
       })

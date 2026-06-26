@@ -50,18 +50,18 @@ export const API = {
   },
 
   settings: {
-    audit:   "/settings/audit/",
-    company: "/settings/company/",
+    audit:          "/settings/audit/",
+    company:        "/settings/company/",
+    emailTemplates: "/settings/email-templates/",
   },
 
   recruitment: {
-    candidates:     "/recruitment/candidates/",
-    stats:          "/recruitment/candidates/stats/",
-    review:         "/recruitment/candidates/review/",
-    detail:         (id: number) => `/recruitment/candidates/${id}/`,
-    status:         (id: number) => `/recruitment/candidates/${id}/status/`,
-    hrDecision:     (id: number) => `/recruitment/candidates/${id}/hr-decision/`,
-    emailTemplates: "/recruitment/email-templates/",
-    emailLogs:      "/recruitment/emails/",
+    candidates: "/recruitment/candidates/",
+    stats:      "/recruitment/candidates/stats/",
+    review:     "/recruitment/candidates/review/",
+    detail:     (id: number) => `/recruitment/candidates/${id}/`,
+    status:     (id: number) => `/recruitment/candidates/${id}/status/`,
+    hrDecision: (id: number) => `/recruitment/candidates/${id}/hr-decision/`,
+    emailLogs:  "/recruitment/emails/",
   },
 } as const;

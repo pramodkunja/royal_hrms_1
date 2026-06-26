@@ -58,6 +58,7 @@ export interface EmailTemplate {
   subject:             string;
   body:                string;
   available_variables: string[];
+  is_active:           boolean;
 }
 
 export interface RecruitmentStats {
@@ -99,7 +100,7 @@ export const RECRUITMENT_API = {
   reviewList:     () =>
     clientApi.get<{ data: PaginatedCandidates }>(API.recruitment.review),
   emailTemplates: () =>
-    clientApi.get<{ data: EmailTemplate[] }>(API.recruitment.emailTemplates),
+    clientApi.get<{ data: Record<string, EmailTemplate[]> }>(API.settings.emailTemplates),
   emailLogs:      (params?: { search?: string }) =>
     clientApi.get<{ data: CandidateEmail[] }>(API.recruitment.emailLogs, { params }),
 };

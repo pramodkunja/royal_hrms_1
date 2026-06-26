@@ -4,11 +4,10 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 from rest_framework.views import APIView
 from core.responses import error, first_error, get_client_ip, success
 
-from apps.accounts.models import AuditLog, Company, EmailTemplate
+from apps.accounts.models import AuditLog, Company
 from apps.accounts.utils import send_template_email
 from .models import Candidate, CandidateEmail, CandidateLog
 from .serializers import (
@@ -358,20 +357,3 @@ class CandidateStatsView(APIView):
             'pending_review': pending_review,
         })
 
-
-# ─── Available email templates for recruitment emails ─────────────────────────
-
-class CandidateEmailTemplatesView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        if not _has_perm(request.user, 'recruitment.view'):
-            return error(_DENIED, http_status=status.HTTP_403_FORBIDDEN)
-
-        templates = list(
-            EmailTemplate.objects
-            .filter(is_active=True)
-            .order_by('template_type', 'display_name')
-            .values('id', 'name', 'display_name', 'subject', 'body', 'available_variables')
-        )
-        return success('Email templates retrieved.', data=templates)

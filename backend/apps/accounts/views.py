@@ -1208,8 +1208,8 @@ class EmailTemplateCategoryDetailView(APIView):
 
 
 class EmailTemplateListCreateView(APIView):
-   
-    permission_classes = [IsAuthenticated, CanManageRoles]
+
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         templates = (
@@ -1231,6 +1231,10 @@ class EmailTemplateListCreateView(APIView):
     
     
     def post(self, request):
+        if not CanManageRoles().has_permission(request, self):
+            return error('You do not have permission to perform this action.',
+                         http_status=status.HTTP_403_FORBIDDEN)
+
         serializer = EmailTemplateSerializer(data=request.data)
         if not serializer.is_valid():
             return error(first_error(serializer.errors), data=serializer.errors)
