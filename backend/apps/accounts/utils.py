@@ -156,12 +156,9 @@ def send_template_email(
             name=template_name, is_active=True
         )
     except EmailTemplate.DoesNotExist:
-        logger.warning(
-            'Email template "%s" not found or inactive — skipping send to %s.',
-            template_name,
-            recipient_email,
+        raise LookupError(
+            f'Email template "{template_name}" not found or inactive.'
         )
-        return
 
     subject, html_body = tpl.render(context)
     connection, from_email = _get_smtp_connection()
