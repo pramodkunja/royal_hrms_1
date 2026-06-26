@@ -1,5 +1,6 @@
 import logging
 
+from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from django.db.models.deletion import ProtectedError
@@ -7,6 +8,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from core.responses import error, first_error, get_client_ip, success
 
 from apps.accounts.models import AuditLog
 from apps.branch.models import Branch, City, State
@@ -16,41 +18,11 @@ from apps.branch.utils import generate_branch_code
 logger = logging.getLogger('branch')
 
 
-def _get_ip(request):
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        return x_forwarded_for.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR') or '0.0.0.0'
-
-
 def _has_perm(user, codename):
     """Return True if the authenticated user's role carries the given permission codename."""
     if not user or not user.role:
         return False
     return user.role.role_permissions.filter(permission__codename=codename).exists()
-
-
-def success(message, data=None, http_status=status.HTTP_200_OK):
-    return Response(
-        {'status': 'success', 'message': message, 'data': data if data is not None else {}},
-        status=http_status,
-    )
-
-
-def error(message, data=None, http_status=status.HTTP_400_BAD_REQUEST):
-    return Response(
-        {'status': 'error', 'message': message, 'data': data if data is not None else {}},
-        status=http_status,
-    )
-
-
-def _first_error(serializer_errors: dict) -> str:
-    for field_errors in serializer_errors.values():
-        if isinstance(field_errors, list) and field_errors:
-            return str(field_errors[0])
-        if isinstance(field_errors, str):
-            return field_errors
-    return 'Validation error.'
 
 
 _PERM_DENIED = 'You do not have permission to perform this action.'
@@ -130,14 +102,30 @@ class BranchListCreateView(APIView):
                 qs = qs.filter(city_id=int(city_id))
             except (TypeError, ValueError):
                 return error('city filter must be a valid integer ID.')
-        return success('Branches retrieved successfully.', data=BranchSerializer(qs, many=True).data)
+
+        try:
+            page_num  = max(1, int(request.query_params.get('page', 1)))
+            page_size = min(50, max(1, int(request.query_params.get('page_size', 10))))
+        except (ValueError, TypeError):
+            page_num, page_size = 1, 10
+
+        paginator = Paginator(qs, page_size)
+        page_obj  = paginator.get_page(page_num)
+
+        return success('Branches retrieved successfully.', data={
+            'count':       paginator.count,
+            'page':        page_obj.number,
+            'page_size':   page_size,
+            'total_pages': paginator.num_pages,
+            'results':     BranchSerializer(page_obj.object_list, many=True).data,
+        })
 
     def post(self, request):
         if not _has_perm(request.user, 'branches.create'):
             return error(_PERM_DENIED, http_status=status.HTTP_403_FORBIDDEN)
         serializer = BranchSerializer(data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
         try:
             branch = serializer.save()
         except IntegrityError:
@@ -149,7 +137,7 @@ class BranchListCreateView(APIView):
             user=request.user, action='branch_created', module='branch',
             object_id=str(branch.pk),
             changes={'branch_code': branch.branch_code, 'branch_name': branch.branch_name},
-            ip_address=_get_ip(request),
+            ip_address=get_client_ip(request),
         )
         logger.info('Branch "%s" created by %s', branch.branch_code, request.user.email)
         return success(
@@ -184,7 +172,7 @@ class BranchDetailView(APIView):
             return error('Branch not found.', http_status=status.HTTP_404_NOT_FOUND)
         serializer = BranchSerializer(branch, data=request.data)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
         try:
             updated = serializer.save()
         except IntegrityError:
@@ -196,7 +184,7 @@ class BranchDetailView(APIView):
             user=request.user, action='branch_updated', module='branch',
             object_id=str(updated.pk),
             changes={'branch_code': updated.branch_code, 'branch_name': updated.branch_name},
-            ip_address=_get_ip(request),
+            ip_address=get_client_ip(request),
         )
         logger.info('Branch "%s" updated by %s', updated.branch_code, request.user.email)
         return success('Branch updated successfully.', data=BranchSerializer(updated).data)
@@ -209,7 +197,7 @@ class BranchDetailView(APIView):
             return error('Branch not found.', http_status=status.HTTP_404_NOT_FOUND)
         serializer = BranchSerializer(branch, data=request.data, partial=True)
         if not serializer.is_valid():
-            return error(_first_error(serializer.errors), data=serializer.errors)
+            return error(first_error(serializer.errors), data=serializer.errors)
         try:
             updated = serializer.save()
         except IntegrityError:
@@ -221,7 +209,7 @@ class BranchDetailView(APIView):
             user=request.user, action='branch_updated', module='branch',
             object_id=str(updated.pk),
             changes={'branch_code': updated.branch_code, 'branch_name': updated.branch_name},
-            ip_address=_get_ip(request),
+            ip_address=get_client_ip(request),
         )
         logger.info('Branch "%s" patched by %s', updated.branch_code, request.user.email)
         return success('Branch updated successfully.', data=BranchSerializer(updated).data)
@@ -245,7 +233,7 @@ class BranchDetailView(APIView):
             user=request.user, action='branch_deleted', module='branch',
             object_id=str(branch.pk),
             changes={'branch_code': code, 'branch_name': branch.branch_name},
-            ip_address=_get_ip(request),
+            ip_address=get_client_ip(request),
         )
         logger.info('Branch "%s" deleted by %s', code, request.user.email)
         return success(f'Branch "{code}" deleted successfully.')

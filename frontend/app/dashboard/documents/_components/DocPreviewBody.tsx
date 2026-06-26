@@ -174,9 +174,15 @@ export default function DocPreviewBody({ doc, blobUrl, textContent, loading, err
   );
 
   // PDF — blob URL in iframe
+  // #toolbar=0&navpanes=0 suppresses the browser's native PDF toolbar and
+  // side panel (Chrome/Edge); Firefox uses PDF.js which ignores these params
+  // but also shows a minimal UI by default.
   if (ft === "PDF" && blobUrl) return (
-    <iframe src={blobUrl} title={doc.title}
-      style={{ flex: 1, width: "100%", border: "none", display: "block" }} />
+    <iframe
+      src={`${blobUrl}#toolbar=0&navpanes=0&view=FitH`}
+      title={doc.title}
+      style={{ flex: 1, width: "100%", border: "none", display: "block" }}
+    />
   );
 
   // Images — blob URL in img

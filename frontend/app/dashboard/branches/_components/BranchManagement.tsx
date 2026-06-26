@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import clientApi from "@/lib/clientApi";
+import { API } from "@/lib/api/endpoints";
 
 interface StateObj {
   id: number;
@@ -41,6 +42,8 @@ interface BranchDistribution {
   employees:   number;
 }
 
+type Envelope<T> = { status: string; message: string; data: T };
+
 export default function BranchManagement() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [stats, setStats] = useState<BranchStats>({ total_branches: 0, total_employees: 0, total_active_branches: 0, total_inactive_branches: 0, total_cities: 0 });
@@ -71,38 +74,37 @@ export default function BranchManagement() {
     is_headquarter: false,
   });
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const [branchesRes, statsRes, distRes, statesRes] = await Promise.all([
-        clientApi.get("/branch/branches/"),
-        clientApi.get("/branch/branches/stats/"),
-        clientApi.get("/branch/branches/distribution/"),
-        clientApi.get("/branch/states/"),
+        clientApi.get<Envelope<Branch[]>>(API.branches.list),
+        clientApi.get<Envelope<BranchStats>>(API.branches.stats),
+        clientApi.get<Envelope<BranchDistribution[]>>(API.branches.distribution),
+        clientApi.get<Envelope<StateObj[]>>(API.branches.states),
       ]);
-      setBranches(branchesRes.data?.data ?? []);
-      setStats(statsRes.data?.data ?? { total_branches: 0, total_employees: 0, total_active_branches: 0, total_inactive_branches: 0, total_cities: 0 });
-      setDistribution(distRes.data?.data ?? []);
-      setStates(statesRes.data?.data ?? []);
+      setBranches(branchesRes.data.data ?? []);
+      setStats(statsRes.data.data ?? { total_branches: 0, total_employees: 0, total_active_branches: 0, total_inactive_branches: 0, total_cities: 0 });
+      setDistribution(distRes.data.data ?? []);
+      setStates(statesRes.data.data ?? []);
     } catch (err: unknown) {
       const e = err as { message?: string };
       setError(e.message ?? "Failed to load branch data.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   useEffect(() => {
     if (editForm.state) {
       setCitiesLoading(true);
       setCities([]);
-      clientApi.get(`/branch/states/${editForm.state}/cities/`)
+      clientApi.get(API.branches.cities(editForm.state))
         .then(res => setCities(res.data?.data ?? []))
         .catch(() => setCities([]))
         .finally(() => setCitiesLoading(false));
@@ -115,7 +117,7 @@ export default function BranchManagement() {
     if (modalMode === "add" && editForm.city) {
       setCodeLoading(true);
       setEditForm(prev => ({ ...prev, branch_code: "" }));
-      clientApi.get(`/branch/branches/preview-code/?city_id=${editForm.city}`)
+      clientApi.get(API.branches.previewCode, { params: { city_id: editForm.city } })
         .then(res => {
           const d = res.data?.data ?? res.data;
           setEditForm(prev => ({ ...prev, branch_code: d?.branch_code ?? "" }));
@@ -156,9 +158,9 @@ export default function BranchManagement() {
     setSaving(true);
     try {
       if (modalMode === "edit") {
-        await clientApi.put(`/branch/branches/${editForm.id}/`, payload);
+        await clientApi.put(API.branches.detail(editForm.id), payload);
       } else {
-        await clientApi.post("/branch/branches/", payload);
+        await clientApi.post(API.branches.list, payload);
       }
       setModalMode(null);
       fetchData();
@@ -191,7 +193,7 @@ export default function BranchManagement() {
   const handleDelete = async (id: number) => {
     if (!window.confirm("Are you sure you want to delete this branch?")) return;
     try {
-      await clientApi.delete(`/branch/branches/${id}/`);
+      await clientApi.delete(API.branches.detail(id));
       fetchData();
     } catch (err: unknown) {
       const e = err as { message?: string };

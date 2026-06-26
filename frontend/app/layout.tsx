@@ -1,6 +1,13 @@
 import type { Metadata } from "next";
+import { Poppins } from "next/font/google";
 import "./globals.css";
 import SessionExpiredOverlay from "@/components/SessionExpiredOverlay";
+
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Royal HRMS",
@@ -13,14 +20,12 @@ export default function RootLayout({
   return (
     <html lang="en" style={{ height: "100%" }} suppressHydrationWarning>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css"
         />
       </head>
-      <body style={{ minHeight: "100vh" }} suppressHydrationWarning>
+      <body className={poppins.className} style={{ minHeight: "100vh" }} suppressHydrationWarning>
         {children}
         <SessionExpiredOverlay />
       </body>

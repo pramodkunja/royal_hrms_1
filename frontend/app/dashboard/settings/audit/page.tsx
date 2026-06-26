@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import clientApi from "@/lib/clientApi";
+import { API } from "@/lib/api/endpoints";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -110,7 +111,7 @@ export default function AuditLogPage() {
       if (dateFrom) params.date_from = dateFrom;
       if (dateTo)   params.date_to   = dateTo;
 
-      const res = await clientApi.get('/settings/audit/', { params });
+      const res = await clientApi.get(API.settings.audit, { params });
       setPageData(res.data?.data ?? null);
     } catch (err: unknown) {
       const e = err as { message?: string };

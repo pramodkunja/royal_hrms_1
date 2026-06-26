@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.branch',
     'apps.announcements',
+    'apps.recruitment',
 ]
 
 MIDDLEWARE = [
@@ -127,7 +128,7 @@ else:
 # ─── DRF ─────────────────────────────────────────────────────────────────────
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'apps.accounts.authentication.CookieJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -164,8 +165,20 @@ OTP_MAX_ATTEMPTS = 5
 LOGIN_MAX_ATTEMPTS = 5
 LOGIN_LOCKOUT_MINUTES = 30
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    # TODO: add production domain, e.g. "https://royalhrms.com"
+]
+CORS_ALLOW_CREDENTIALS = True
 CORS_PREFLIGHT_MAX_AGE = 86400
+
+if DEBUG:
+    # Dev-only: allow any localhost port (Flutter web) and any 192.168.x.x port
+    # (local network devices). Not active in production — CORS_ALLOWED_ORIGINS only.
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r'^http://localhost(:\d+)?$',
+        r'^http://192\.168\.\d+\.\d+(:\d+)?$',
+    ]
 
 # ─── Upload limits ────────────────────────────────────────────────────────────
 DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024   # 5 MB JSON body
