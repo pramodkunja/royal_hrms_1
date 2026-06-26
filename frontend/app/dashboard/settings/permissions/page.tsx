@@ -39,7 +39,7 @@ export default function RolesPermissionsPage() {
         clientApi.get(API.roles.list),
         clientApi.get(API.permissions.list),
       ]);
-      setRoles(rolesRes.data.data ?? []);
+      setRoles(rolesRes.data.data?.results ?? []);
       setPermissionsMap(permsRes.data.data ?? {});
     } catch (err: unknown) {
       const e = err as { message?: string };
@@ -61,7 +61,7 @@ export default function RolesPermissionsPage() {
         permission_codenames: form.permission_codenames,
       });
       const res = await clientApi.get(API.roles.list);
-      setRoles(res.data.data ?? []);
+      setRoles(res.data.data?.results ?? []);
       setShowAddModal(false);
     } catch (err: unknown) {
       const e = err as { message?: string };
@@ -84,7 +84,7 @@ export default function RolesPermissionsPage() {
         permission_codenames: form.permission_codenames,
       });
       const res = await clientApi.get(API.roles.list);
-      setRoles(res.data.data ?? []);
+      setRoles(res.data.data?.results ?? []);
       setEditingRole(null);
     } catch (err: unknown) {
       const e = err as { message?: string };
