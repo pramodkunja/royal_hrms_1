@@ -23,7 +23,10 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
   "/dashboard/documents":        "documents.view",
   "/dashboard/reports":          "reports.view",
   "/dashboard/audit":            "audit.view",
-  "/dashboard/settings":         "settings.view",
+  "/dashboard/settings":                      "settings.view",
+  "/dashboard/settings/leave-policy":        "settings.view",
+  "/dashboard/settings/leave-credit-rules":  "settings.view",
+  "/dashboard/settings/holiday-calendar":    "settings.view",
 };
 
 function decodeJwtPayload(token: string): Record<string, unknown> {
