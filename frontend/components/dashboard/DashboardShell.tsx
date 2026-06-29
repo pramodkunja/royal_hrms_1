@@ -16,27 +16,27 @@ function initials(name: string) {
 }
 
 const PAGE_TITLES: Record<string, string> = {
-  "/dashboard":                          "Dashboard",
-  "/dashboard/settings":                 "Settings",
-  "/dashboard/profile":                  "My Profile",
-  "/dashboard/settings/permissions":     "Roles & Permissions",
-  "/dashboard/employees":                "Employees",
-  "/dashboard/employees/new":            "Add New Employee",
-  "/dashboard/attendance":               "Attendance & Time",
-  "/dashboard/payroll":                  "Payroll Management",
-  "/dashboard/leave":                    "Leave Management",
-  "/dashboard/expenses":                 "Expense Claims",
-  "/dashboard/documents":                "Document Center",
-  "/dashboard/separation":               "Separation & FnF",
-  "/dashboard/interview-list":           "Interview List",
-  "/dashboard/candidate-review":         "Candidate Review",
-  "/dashboard/email-logs":               "Email Logs",
-  "/dashboard/org-chart":               "Organisation Chart",
-  "/dashboard/announcements":            "Announcements",
-  "/dashboard/my-payslip":              "My Payslips",
-  "/dashboard/my-requests":             "My Requests",
-  "/dashboard/approvals":               "Team Approvals",
-  "/dashboard/branches":                "Branch Management",
+  "/dashboard": "Dashboard",
+  "/dashboard/settings": "Settings",
+  "/dashboard/profile": "My Profile",
+  "/dashboard/settings/permissions": "Roles & Permissions",
+  "/dashboard/employees": "Employees",
+  "/dashboard/employees/new": "Add New Employee",
+  "/dashboard/attendance": "Attendance & Time",
+  "/dashboard/payroll": "Payroll Management",
+  "/dashboard/leave": "Leave Management",
+  "/dashboard/expenses": "Expense Claims",
+  "/dashboard/documents": "Document Center",
+  "/dashboard/separation": "Separation & FnF",
+  "/dashboard/interview-list": "Interview List",
+  "/dashboard/candidate-review": "Candidate Review",
+  "/dashboard/email-logs": "Email Logs",
+  "/dashboard/org-chart": "Organisation Chart",
+  "/dashboard/announcements": "Announcements",
+  "/dashboard/my-payslip": "My Payslips",
+  "/dashboard/my-requests": "My Requests",
+  "/dashboard/approvals": "Team Approvals",
+  "/dashboard/branches": "Branch Management",
 };
 
 
@@ -47,15 +47,15 @@ export default function DashboardShell({
   session: SessionPayload;
   children: React.ReactNode;
 }) {
-  const router   = useRouter();
+  const router = useRouter();
   const pathname = usePathname();
 
-  const [collapsed,  setCollapsed]  = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [darkMode,   setDarkMode]   = useState(false);
-  const [searchVal,  setSearchVal]  = useState("");
+  const [darkMode, setDarkMode] = useState(false);
+  const [searchVal, setSearchVal] = useState("");
 
-  const pageTitle  = PAGE_TITLES[pathname]
+  const pageTitle = PAGE_TITLES[pathname]
     ?? (pathname.startsWith("/dashboard/employees/") ? "Employee Profile" : "Royal HRMS");
   const visibleNav = buildNav(session.permissions ?? []);
 
@@ -108,9 +108,13 @@ export default function DashboardShell({
         {/* Sidebar header */}
         <div className="h-14 px-3 flex items-center gap-2.5 border-b border-[var(--outline-v)] flex-shrink-0">
           <div className="flex items-center gap-2 flex-1 overflow-hidden">
-            <div className="w-[30px] h-[30px] rounded-[6px] flex items-center justify-center text-sm text-white flex-shrink-0 bg-[var(--primary)]">
-              <i className="ti ti-building-skyscraper" />
-            </div>
+            <img
+              src="/logo.png"
+              alt="Royal HRMS"
+              width={30}
+              height={30}
+              style={{ borderRadius: 6, flexShrink: 0 }}
+            />
             {!collapsed && (
               <span className="text-sm font-bold whitespace-nowrap tracking-tight overflow-hidden text-[var(--on-bg)]">
                 Royal HRMS
