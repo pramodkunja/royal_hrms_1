@@ -8,6 +8,8 @@ from apps.accounts.views import (
     MyProfileView,
     OnboardingApprovalsListView,
     OnboardingApproveView,
+    OnboardingPipelineView,
+    OnboardingStepSaveView,
     SubmitOnboardingView,
     CompanyRetrieveUpdateView,
     DepartmentDetailView,
@@ -56,11 +58,13 @@ urlpatterns = [
     path('employees/<str:employee_id>/',    EmployeeDetailView.as_view(),     name='employee-detail'),
 
     # Onboarding (self-service wizard)
-    path('onboarding/profile/',             EmployeeProfileView.as_view(),          name='onboarding-profile'),
-    path('onboarding/documents/',           EmployeeDocumentView.as_view(),         name='onboarding-documents'),
-    path('onboarding/submit/',              SubmitOnboardingView.as_view(),         name='onboarding-submit'),
-    path('onboarding/approvals/',           OnboardingApprovalsListView.as_view(),  name='onboarding-approvals'),
-    path('onboarding/approvals/<uuid:user_id>/approve/', OnboardingApproveView.as_view(), name='onboarding-approve'),
+    path('onboarding/profile/',                            EmployeeProfileView.as_view(),        name='onboarding-profile'),
+    path('onboarding/profile/step/<int:step>/',            OnboardingStepSaveView.as_view(),     name='onboarding-profile-step'),
+    path('onboarding/documents/',                          EmployeeDocumentView.as_view(),       name='onboarding-documents'),
+    path('onboarding/submit/',                             SubmitOnboardingView.as_view(),       name='onboarding-submit'),
+    path('onboarding/pipeline/',                           OnboardingPipelineView.as_view(),     name='onboarding-pipeline'),
+    path('onboarding/approvals/',                          OnboardingApprovalsListView.as_view(), name='onboarding-approvals'),
+    path('onboarding/approvals/<uuid:user_id>/approve/',   OnboardingApproveView.as_view(),      name='onboarding-approve'),
 
     # Organisation structure
     path('departments/',           DepartmentListCreateView.as_view(), name='department-list'),
@@ -103,3 +107,4 @@ urlpatterns = [
     path('documents/stats/',     DocumentStatsView.as_view(),      name='document-stats'),
     path('documents/<int:pk>/',  DocumentDetailView.as_view(),     name='document-detail'),
 ]
+

@@ -470,6 +470,10 @@ class Company(models.Model):
     pin_code       = models.CharField(max_length=6)
     website        = models.CharField(max_length=255, blank=True)
     official_phone = models.CharField(max_length=15, blank=True)
+    portal_url     = models.CharField(
+                         max_length=255, blank=True,
+                         help_text='Employee onboarding portal URL sent in invitation emails.',
+                     )
     updated_at     = models.DateTimeField(auto_now=True)
     updated_by     = models.ForeignKey(
                          User,
@@ -679,6 +683,15 @@ class EmployeeProfile(models.Model):
 
 # ─── Employee Documents ───────────────────────────────────────────────────────
 
+def _employee_doc_path(instance, filename):
+    import os
+    uid = (
+        getattr(instance.user, 'employee_id', None)
+        or str(instance.user_id)
+    )
+    return os.path.join('employee_documents', str(uid), os.path.basename(filename))
+
+
 class EmployeeDocument(models.Model):
     TYPE_PAN        = 'pan_card'
     TYPE_AADHAAR    = 'aadhaar_card'
@@ -698,7 +711,7 @@ class EmployeeDocument(models.Model):
 
     user          = models.ForeignKey(User, on_delete=models.CASCADE, related_name='employee_documents')
     document_type = models.CharField(max_length=30, choices=TYPE_CHOICES)
-    file          = models.FileField(upload_to='employee_documents/%Y/%m/')
+    file          = models.FileField(upload_to=_employee_doc_path)
     file_name     = models.CharField(max_length=255)
     file_size     = models.PositiveBigIntegerField()
     uploaded_at   = models.DateTimeField(auto_now_add=True)

@@ -22,6 +22,15 @@ class CitySerializer(serializers.ModelSerializer):
 class BranchSerializer(serializers.ModelSerializer):
     state_name = serializers.CharField(source='state.name', read_only=True)
     city_name = serializers.CharField(source='city.name', read_only=True)
+    employees_count = serializers.SerializerMethodField()
+
+    def get_employees_count(self, obj):
+        branch_counts = self.context.get('branch_counts')
+        if branch_counts is not None:
+            return branch_counts.get(obj.branch_name, 0)
+        # Fallback for detail views — single query per branch is acceptable
+        from apps.accounts.models import User
+        return User.objects.filter(branch=obj.branch_name, is_active=True).count()
 
     class Meta:
         model = Branch
@@ -31,7 +40,24 @@ class BranchSerializer(serializers.ModelSerializer):
             'employees_count', 'status', 'is_headquarter',
             'created_at', 'updated_at',
         ]
-        read_only_fields = ['branch_code', 'created_at', 'updated_at']
+        read_only_fields = ['branch_code', 'employees_count', 'created_at', 'updated_at']
+
+    def validate_address(self, value: str) -> str:
+        if value is not None:
+            value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Branch address is required.')
+        if len(value) > 500:
+            raise serializers.ValidationError('Address must be 500 characters or fewer.')
+        return value
+
+    def validate_status(self, value: str) -> str:
+        valid = [choice[0] for choice in Branch.STATUS_CHOICES]
+        if value not in valid:
+            raise serializers.ValidationError(
+                f'Status must be one of: {", ".join(valid)}.'
+            )
+        return value
 
     def validate_branch_name(self, value: str) -> str:
         value = value.strip()
@@ -39,13 +65,6 @@ class BranchSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Branch name must not be blank.')
         if len(value) > 200:
             raise serializers.ValidationError('Branch name must be under 200 characters.')
-        return value
-
-    def validate_employees_count(self, value: int) -> int:
-        if value < 0:
-            raise serializers.ValidationError('Employee count cannot be negative.')
-        if value > 100000:
-            raise serializers.ValidationError('Employee count cannot exceed 100,000.')
         return value
 
     def validate(self, data):

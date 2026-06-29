@@ -245,6 +245,11 @@ class SMTPSettingsSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Port must be between 1 and 65535.')
         return value
 
+    def validate_username(self, value: str) -> str:
+        if not value or not value.strip():
+            raise serializers.ValidationError('SMTP username must not be blank.')
+        return value.strip()
+
     def validate_from_email(self, value: str) -> str:
         if not value.strip():
             raise serializers.ValidationError('From email must not be blank.')
@@ -542,7 +547,7 @@ class CompanySerializer(serializers.ModelSerializer):
             'id', 'company_name', 'trade_name', 'logo', 'logo_url',
             'gstin', 'cin', 'pan', 'tan',
             'address', 'city', 'state', 'pin_code',
-            'website', 'official_phone', 'updated_at',
+            'website', 'official_phone', 'portal_url', 'updated_at',
         ]
         read_only_fields = ['id', 'updated_at', 'logo_url']
         extra_kwargs     = {'logo': {'required': False, 'allow_null': True}}
@@ -552,6 +557,41 @@ class CompanySerializer(serializers.ModelSerializer):
             return None
         request = self.context.get('request')
         return request.build_absolute_uri(obj.logo.url) if request else obj.logo.url
+
+    def validate_company_name(self, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Company name is required.')
+        if len(value) > 255:
+            raise serializers.ValidationError('Company name must be 255 characters or fewer.')
+        return value
+
+    def validate_address(self, value: str) -> str:
+        if value is not None:
+            value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Company address is required.')
+        if len(value) > 500:
+            raise serializers.ValidationError('Address must be 500 characters or fewer.')
+        return value
+
+    def validate_city(self, value: str) -> str:
+        if value is not None:
+            value = value.strip()
+        if not value:
+            raise serializers.ValidationError('City is required.')
+        if len(value) > 100:
+            raise serializers.ValidationError('City must be 100 characters or fewer.')
+        return value
+
+    def validate_state(self, value: str) -> str:
+        if value is not None:
+            value = value.strip()
+        if not value:
+            raise serializers.ValidationError('State is required.')
+        if len(value) > 100:
+            raise serializers.ValidationError('State must be 100 characters or fewer.')
+        return value
 
     def validate_gstin(self, value: str) -> str:
         v = value.strip().upper()
@@ -597,6 +637,14 @@ class CompanySerializer(serializers.ModelSerializer):
         v = value.strip()
         if v and not _PHONE_RE.match(v):
             raise serializers.ValidationError('Enter a valid phone number.')
+        return v
+
+    def validate_portal_url(self, value: str) -> str:
+        if not value:
+            return value
+        v = value.strip()
+        if v and not v.startswith(('http://', 'https://')):
+            raise serializers.ValidationError('Portal URL must start with http:// or https://.')
         return v
 
     def validate_logo(self, value):
@@ -773,6 +821,10 @@ class EmployeeCodeSettingsSerializer(serializers.ModelSerializer):
 
 # ─── Employee Profile (onboarding wizard) ─────────────────────────────────────
 
+_IFSC_RE  = re.compile(r'^[A-Z]{4}0[A-Z0-9]{6}$')
+_PHONE_RE_PROFILE = re.compile(r'^\+?[\d\s\-()\./]{7,20}$')
+
+
 class EmployeeProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model  = EmployeeProfile
@@ -788,19 +840,175 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ('updated_at',)
 
+    def validate_date_of_birth(self, value):
+        if value is None:
+            return value
+        from datetime import date as _date
+        today = _date.today()
+        if value >= today:
+            raise serializers.ValidationError('Date of birth must be in the past.')
+        age = (today - value).days // 365
+        if age < 18:
+            raise serializers.ValidationError('Employee must be at least 18 years old.')
+        if age > 80:
+            raise serializers.ValidationError('Please enter a valid date of birth.')
+        return value
+
     def validate_year_of_passing(self, value):
         if value is not None and not (1950 <= value <= 2099):
             raise serializers.ValidationError('Year of passing must be between 1950 and 2099.')
         return value
 
-    def validate_ifsc_code(self, value):
-        if value and len(value) != 11:
-            raise serializers.ValidationError('IFSC code must be exactly 11 characters.')
-        return value.upper() if value else value
+    def validate_ifsc_code(self, value: str) -> str:
+        if not value:
+            return value
+        value = value.strip().upper()
+        if not _IFSC_RE.match(value):
+            raise serializers.ValidationError(
+                'Enter a valid IFSC code (e.g. SBIN0001234) — '
+                '4 letters, digit 0, then 6 alphanumeric characters.'
+            )
+        return value
 
-    def validate_account_number(self, value):
-        if value and not value.isdigit():
+    def validate_account_number(self, value: str) -> str:
+        if not value:
+            return value
+        value = value.strip()
+        if not value.isdigit():
             raise serializers.ValidationError('Account number must contain digits only.')
+        if not (9 <= len(value) <= 18):
+            raise serializers.ValidationError('Account number must be between 9 and 18 digits.')
+        return value
+
+    def validate_account_holder_name(self, value: str) -> str:
+        if not value:
+            return value
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Account holder name must not be blank.')
+        if len(value) > 150:
+            raise serializers.ValidationError('Account holder name must be 150 characters or fewer.')
+        return value
+
+    def validate_emergency_name(self, value: str) -> str:
+        if not value:
+            return value
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Emergency contact name must not be blank.')
+        if len(value) > 150:
+            raise serializers.ValidationError('Emergency contact name must be 150 characters or fewer.')
+        return value
+
+    def validate_emergency_phone(self, value: str) -> str:
+        if not value:
+            return value
+        value = value.strip()
+        if not _PHONE_RE_PROFILE.match(value):
+            raise serializers.ValidationError(
+                'Enter a valid phone number (digits, spaces, +, -, ( ) allowed).'
+            )
+        return value
+
+    def validate_total_experience_years(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError('Total experience years cannot be negative.')
+        return value
+
+    # ── Step 0 — Personal ─────────────────────────────────────────────────────
+
+    def validate_father_name(self, value: str) -> str:
+        if not value:
+            return value
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Father\'s name must not be blank.')
+        return value
+
+    def validate_current_address(self, value: str) -> str:
+        if not value:
+            return value
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Current address must not be blank.')
+        if len(value) > 1000:
+            raise serializers.ValidationError('Current address must be 1000 characters or fewer.')
+        return value
+
+    def validate_permanent_address(self, value: str) -> str:
+        if not value:
+            return value
+        value = value.strip()
+        if len(value) > 1000:
+            raise serializers.ValidationError('Permanent address must be 1000 characters or fewer.')
+        return value
+
+    # ── Step 1 — Education & Experience ──────────────────────────────────────
+
+    def validate_highest_qualification(self, value: str) -> str:
+        if not value:
+            return value
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Highest qualification must not be blank.')
+        return value
+
+    def validate_institution(self, value: str) -> str:
+        if not value:
+            return value
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Institution name must not be blank.')
+        return value
+
+    def validate_specialization(self, value: str) -> str:
+        if not value:
+            return value
+        return value.strip()
+
+    def validate_previous_employer(self, value: str) -> str:
+        if not value:
+            return value
+        return value.strip()
+
+    def validate_previous_designation(self, value: str) -> str:
+        if not value:
+            return value
+        return value.strip()
+
+    def validate_leaving_reason(self, value: str) -> str:
+        if not value:
+            return value
+        value = value.strip()
+        if len(value) > 2000:
+            raise serializers.ValidationError('Reason for leaving must be 2000 characters or fewer.')
+        return value
+
+    # ── Step 2 — Bank Details ─────────────────────────────────────────────────
+
+    def validate_bank_name(self, value: str) -> str:
+        if not value:
+            return value
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Bank name must not be blank.')
+        return value
+
+    def validate_bank_branch_name(self, value: str) -> str:
+        if not value:
+            return value
+        return value.strip()
+
+    # ── Step 3 — Emergency Contact ────────────────────────────────────────────
+
+    def validate_emergency_relationship(self, value: str) -> str:
+        if not value:
+            return value
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Relationship must not be blank.')
+        if len(value) > 50:
+            raise serializers.ValidationError('Relationship must be 50 characters or fewer.')
         return value
 
 
@@ -833,21 +1041,67 @@ class EmployeeDocumentSerializer(serializers.ModelSerializer):
         return value
 
 
+# ─── Onboarding Pipeline (pending + submitted) ────────────────────────────────
+
+class OnboardingPipelineSerializer(serializers.ModelSerializer):
+    candidate_id     = serializers.SerializerMethodField()
+    position_applied = serializers.SerializerMethodField()
+    candidate_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = User
+        fields = [
+            'id', 'full_name', 'email', 'phone',
+            'onboarding_status', 'date_joined',
+            'candidate_id', 'position_applied', 'candidate_status',
+        ]
+
+    def _candidate(self, obj):
+        return self.context.get('candidates_by_user', {}).get(obj.pk)
+
+    def get_candidate_id(self, obj):
+        cand = self._candidate(obj)
+        return cand.pk if cand else None
+
+    def get_position_applied(self, obj):
+        cand = self._candidate(obj)
+        return cand.position_applied if cand else ''
+
+    def get_candidate_status(self, obj):
+        cand = self._candidate(obj)
+        return cand.status if cand else ''
+
+
 # ─── Onboarding Approval ──────────────────────────────────────────────────────
 
 class OnboardingApprovalSerializer(serializers.ModelSerializer):
-    role_name    = serializers.CharField(source='role.name',         read_only=True, default='')
-    role_display = serializers.CharField(source='role.display_name', read_only=True, default='')
-    profile      = EmployeeProfileSerializer(read_only=True)
-    documents    = EmployeeDocumentSerializer(source='employee_documents', many=True, read_only=True)
+    role_name        = serializers.CharField(source='role.name',         read_only=True, default='')
+    role_display     = serializers.CharField(source='role.display_name', read_only=True, default='')
+    profile          = EmployeeProfileSerializer(read_only=True)
+    documents        = EmployeeDocumentSerializer(source='employee_documents', many=True, read_only=True)
+    candidate_id     = serializers.SerializerMethodField()
+    position_applied = serializers.SerializerMethodField()
 
     class Meta:
         model  = User
         fields = [
             'id', 'full_name', 'email', 'phone', 'department', 'designation', 'branch',
             'role_name', 'role_display', 'employee_id', 'date_of_joining',
-            'onboarding_status', 'date_joined', 'profile', 'documents',
+            'onboarding_status', 'date_joined',
+            'candidate_id', 'position_applied',
+            'profile', 'documents',
         ]
+
+    def _candidate(self, obj):
+        return self.context.get('candidates_by_user', {}).get(obj.pk)
+
+    def get_candidate_id(self, obj):
+        cand = self._candidate(obj)
+        return cand.pk if cand else None
+
+    def get_position_applied(self, obj):
+        cand = self._candidate(obj)
+        return cand.position_applied if cand else ''
 
 
 # ─── My Profile (authenticated employee view) ─────────────────────────────────
