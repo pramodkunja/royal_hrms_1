@@ -1114,3 +1114,207 @@ On very small phones modals slide up from the bottom (native sheet pattern) inst
 - **Branch filter is client-side only** — branches come from the `branch` field on each expense object. When backend is wired, pass `branch` as a query param to the list endpoint instead of filtering in the client.
 - **`.filter-scroll` class** — add this alongside `.filter-bar` on any filter bar that has 4+ icon+text buttons. Do not apply to bars with plain-text buttons (those wrap fine with `flex: 1`).
 - **Logo file is `/public/logo.svg`** — if the team later replaces it with a PNG (`logo.png`), update the three `src="/logo.svg"` references in `DashboardShell.tsx`, `login/page.tsx`, and `layout.tsx` metadata accordingly.
+
+---
+
+## Session 7 — Surya (29 June 2026)
+
+**Branch:** `demo` (direct — built on top of `66059f1`)
+**Commit:** `66059f1`
+
+---
+
+### Candidate-to-Employee Onboarding Wizard — Full Stack
+
+End-to-end recruitment → onboarding → employee conversion flow. Every user (new or existing) must complete an onboarding wizard on first login. System admin accounts are auto-completed.
+
+---
+
+### 1. Backend — Models (`backend/apps/accounts/models.py`)
+
+- **`User.onboarding_status`** — new field: `pending` (default) / `submitted` / `complete`. All existing users get `pending` on migration; system_admin and superusers get `complete`.
+- **`EmployeeProfile`** — OneToOne to User (`db_table='hrms_employee_profiles'`). Stores personal, education, experience, bank, emergency contact details. IFSC validated to 11 chars, account_number digits-only, year 1950–2099.
+- **`EmployeeDocument`** — FK to User (`db_table='hrms_employee_documents'`). Fields: `document_type` (pan_card/aadhaar_card/degree_certificate/experience_letter), `file`, `file_name`, `uploaded_at`. Validates: PDF/JPG/PNG only, max 5 MB, filename sanitised via `os.path.basename`.
+
+### 2. Backend — Recruitment Model (`backend/apps/recruitment/models.py`)
+
+- **Pipeline stages expanded:** `pending → screening → interview_scheduled → interview_done → selected → offer_sent → rejected → converted`
+- **`portal_user`** — ForeignKey to User (`null=True`), links the candidate to their created portal account.
+- **`portal_credentials_sent`** — BooleanField, set to True when portal login is issued.
+
+### 3. Backend — Migrations
+
+| Migration | What |
+|-----------|------|
+| `accounts/0021_onboarding_models.py` | Schema: `onboarding_status` on User; `EmployeeProfile`; `EmployeeDocument` |
+| `accounts/0022_seed_system_admin_onboarding.py` | Data: set `onboarding_status='complete'` for system_admin + superusers |
+| `accounts/0023_onboarding_permission_and_portal_template.py` | Data: creates `onboarding.approve` permission; assigns to `hr_admin` + `system_admin`; seeds `portal_invite` email template |
+| `recruitment/0003_candidate_portal_user.py` | Schema: adds `portal_user` FK + `portal_credentials_sent` + new pipeline statuses |
+
+### 4. Backend — New Views (`backend/apps/accounts/views.py`)
+
+| View | Method | Permission | What |
+|------|--------|------------|------|
+| `EmployeeProfileView` | GET/PATCH | IsAuthenticated | Get or partial-update own profile. Blocked if `onboarding_status='complete'` |
+| `EmployeeDocumentView` | GET/POST | IsAuthenticated | List own docs. POST replaces existing doc of same type |
+| `SubmitOnboardingView` | POST | IsAuthenticated | Sets `onboarding_status='submitted'` |
+| `OnboardingApprovalsListView` | GET | `onboarding.approve` | Paginated list of users with `onboarding_status='submitted'`. `hr_admin` excludes other hr_admins and system_admins |
+| `OnboardingApproveView` | POST | `onboarding.approve` | Approve (sets `complete`, auto-converts candidate → employee if no role/employee_id) or reject (resets to `pending`) |
+
+**Auto-conversion logic (on approve):**
+```python
+needs_conversion = not target.role and not target.employee_id
+if needs_conversion:
+    target.role        = Role.objects.get(name='employee')
+    target.employee_id = EmployeeCodeSettings.generate_employee_id()
+    target.date_of_joining = tz.now().date()
+```
+Also sets linked `Candidate.status='converted'` and `hr_approved=True`.
+
+### 5. Backend — `SendPortalLoginView` (`backend/apps/recruitment/views.py`)
+
+New view at `POST /recruitment/candidates/<pk>/send-portal-login/`.
+
+- Requires `recruitment.edit` permission
+- Candidate must be at `selected` or `interview_done` status
+- Creates `User` with 12-char temp password (`secrets.choice`), `must_change_password=True`, `onboarding_status='pending'`
+- Sets `candidate.portal_user`, `portal_credentials_sent=True`, `status='offer_sent'`
+- Sends `portal_invite` email template with: `candidate_name`, `position`, `company_name`, `login_email`, `temp_password`, `portal_url`
+
+### 6. Backend — New URL Routes
+
+```python
+# accounts/urls.py
+path('onboarding/profile/',                           EmployeeProfileView.as_view())
+path('onboarding/documents/',                         EmployeeDocumentView.as_view())
+path('onboarding/submit/',                            SubmitOnboardingView.as_view())
+path('onboarding/approvals/',                         OnboardingApprovalsListView.as_view())
+path('onboarding/approvals/<uuid:user_id>/approve/',  OnboardingApproveView.as_view())
+
+# recruitment/urls.py
+path('candidates/<int:pk>/send-portal-login/',        SendPortalLoginView.as_view())
+```
+
+### 7. Frontend — Onboarding Wizard (`frontend/app/onboarding/page.tsx`)
+
+Standalone 5-tab wizard at `/onboarding` (outside dashboard layout).
+
+| Tab | Fields |
+|-----|--------|
+| Personal | DOB, Gender, Marital Status, Father Name, Blood Group, Current + Permanent Address |
+| Education & Experience | Qualification, Specialization, Institution, Year, Total Experience, Prev Employer, Designation, Leaving Reason |
+| Bank Details | Account Holder, Account Type, Account Number, IFSC, Bank Name, Branch Name |
+| Emergency Contact | Name, Relationship, Phone, Email |
+| Documents | PAN Card, Aadhaar Card, Degree Certificate, Experience Letter — PDF/JPG/PNG ≤5 MB each |
+
+- **Save & Continue** — PATCHes `/onboarding/profile/` on every tab advance
+- **Save Draft** — saves without advancing
+- **Submit for Approval** — POSTs `/onboarding/submit/` then calls `setOnboardingStatus('submitted')` to update the cookie
+- **Submitted screen** — shows if `onboarding_status === 'submitted'`, blocks re-submission
+- CSS classes: `.onboarding-root`, `.onboarding-header`, `.onboarding-steps`, `.onboarding-step--active`, `.onboarding-step--done`, `.onboarding-card`, `.field-group-row`
+
+### 8. Frontend — Onboarding Approvals Queue (`frontend/app/dashboard/onboarding-approvals/page.tsx`)
+
+Visible only to `hr_admin` and `system_admin` (gated by `onboarding.approve` permission in both proxy and navConfig).
+
+- Uses `useFetch` hook for paginated list (`/onboarding/approvals/?page=N&page_size=20`)
+- Table: Name, Email, Role (badge), Branch, Docs uploaded count, Joined date, Review button
+- **Review drawer** — shows full profile (Personal, Education, Bank with account number masked to last 4 digits `••••XXXX`, Emergency Contact, Documents)
+- **Approve** → `POST /onboarding/approvals/<userId>/approve/` with `{ decision: "approve" }`
+- **Send Back for Corrections** → same endpoint with `{ decision: "reject" }`, remarks optional
+
+### 9. Frontend — `useFetch` Hook (`frontend/hooks/useFetch.ts`)
+
+**NEW** — required by CLAUDE.md but was missing from the codebase.
+
+```typescript
+export function useFetch<T>(url: string | null): { data: T | null; loading: boolean; error: string | null; refetch: () => void }
+```
+
+- Uses a `counter` ref to cancel stale responses (race condition safe)
+- Extracts from the standard API envelope (`r.data?.data ?? r.data`)
+- All pages that need polling should use this instead of `useState + useEffect + try/catch`
+
+### 10. Frontend — Interview List Updates (`frontend/app/dashboard/interview-list/`)
+
+**`_data.ts`:**
+- `CandidateStatus` expanded to 8 values: `pending | screening | interview_scheduled | interview_done | selected | offer_sent | rejected | converted`
+- `portal_user: string | null` added to `Candidate` interface
+- `sendPortalLogin(id)` added to `RECRUITMENT_API`
+
+**`page.tsx`:**
+- `STATUS_META` map — each status has a `label`, badge CSS class, and icon
+- Status filter dropdown shows all 8 pipeline stages
+- Actions column logic:
+  - Pre-selection stages (`pending/screening/interview_scheduled/interview_done`) → Select ✓ + Reject ✗ buttons
+  - `selected` + `portal_credentials_sent=false` → **Send Login** button (calls `sendPortalLogin`)
+  - `offer_sent` or `selected + credentials_sent` → "Login Sent" badge
+  - `converted` → "Employee" badge
+- Portal success/error banners dismiss with ✕
+
+### 11. Frontend — Auth + Proxy + Nav
+
+**`lib/auth.ts`:** Added `onboarding_status: string` to `UserInfo`; added `setOnboardingStatus(newStatus)` helper.
+
+**`lib/api/endpoints.ts`:** Added `recruitment.sendPortalLogin` and full `onboarding` section.
+
+**`proxy.ts`:** Onboarding gate — authenticated users with `onboarding_status !== 'complete'` are redirected to `/onboarding`; fully onboarded users redirected away from `/onboarding`. Fixed: unauthenticated users can no longer access `/onboarding` without login.
+
+**`lib/navConfig.ts`:** "Onboarding Queue" nav item added to HR Ops section, gated by `onboarding.approve`.
+
+**`app/login/page.tsx`:** After login, redirects to `/onboarding` if `onboarding_status !== 'complete'`, else `/dashboard`.
+
+---
+
+### Full Flow
+
+```
+Candidate added → Mark Selected (email) → "Send Login" button → portal_invite email
+  → Candidate logs in → proxy redirects to /onboarding
+  → Fills 5-tab wizard → Submit for Approval
+  → Appears in HR's Onboarding Queue (/dashboard/onboarding-approvals)
+  → HR reviews + Approves
+  → Auto-converted: role='employee', employee_id generated, candidate.status='converted'
+  → onboarding_status='complete' → next login goes to /dashboard
+```
+
+Direct HR-created employees follow the same wizard flow. HR admin wizards must be approved by system_admin.
+
+---
+
+### Key Files Changed / Created (Session 7)
+
+| File | What |
+|------|------|
+| `backend/apps/accounts/models.py` | `onboarding_status` on User; `EmployeeProfile`; `EmployeeDocument` |
+| `backend/apps/accounts/serializers.py` | `EmployeeProfileSerializer`, `EmployeeDocumentSerializer`, `OnboardingApprovalSerializer` |
+| `backend/apps/accounts/views.py` | 5 new onboarding views; login response includes `onboarding_status` |
+| `backend/apps/accounts/urls.py` | 5 onboarding routes |
+| `backend/apps/accounts/migrations/0021–0023` | Schema + seed migrations |
+| `backend/apps/recruitment/models.py` | 8-stage pipeline; `portal_user` FK; `portal_credentials_sent` |
+| `backend/apps/recruitment/views.py` | `SendPortalLoginView`; `CandidateStatusView` accepts all pipeline stages |
+| `backend/apps/recruitment/urls.py` | `send-portal-login` route |
+| `backend/apps/recruitment/migrations/0003` | Schema migration |
+| `frontend/app/onboarding/page.tsx` | **NEW** — 5-tab onboarding wizard |
+| `frontend/app/dashboard/onboarding-approvals/page.tsx` | **NEW** — approval queue with review drawer |
+| `frontend/hooks/useFetch.ts` | **NEW** — generic fetch hook with race-condition safety |
+| `frontend/app/dashboard/interview-list/_data.ts` | 8-stage `CandidateStatus`; `portal_user`; `sendPortalLogin` API |
+| `frontend/app/dashboard/interview-list/page.tsx` | `STATUS_META` badges; portal login button; full pipeline filter |
+| `frontend/lib/auth.ts` | `onboarding_status` in `UserInfo`; `setOnboardingStatus()` |
+| `frontend/lib/api/endpoints.ts` | `onboarding.*` endpoints; `recruitment.sendPortalLogin` |
+| `frontend/lib/navConfig.ts` | Onboarding Queue nav item |
+| `frontend/proxy.ts` | Onboarding gate; auth guard fix for `/onboarding` |
+| `frontend/app/login/page.tsx` | Post-login redirect honours `onboarding_status` |
+| `frontend/app/globals.css` | Onboarding wizard CSS classes |
+
+---
+
+### Notes for Next Developer (Session 7)
+
+- **`onboarding_status` flows through a cookie** — the proxy reads from `royal_hrms_user` (unsigned). Bypassing the cookie only exposes an empty dashboard — all backend endpoints still check the real DB value.
+- **`portal_invite` template** — seeded in DB by migration 0023. Edit it in Settings → Email Templates if the wording needs to change. Variables: `candidate_name`, `position`, `company_name`, `login_email`, `temp_password`, `portal_url`.
+- **`onboarding.approve` permission** — seeded in migration 0023, assigned to `hr_admin` and `system_admin`. Do not remove it — the nav item and all 5 onboarding endpoints check for it.
+- **Approval chain** — `hr_admin` can only approve users with no role or with `role='employee'`. `system_admin` can approve anyone including `hr_admin`. This is enforced in `OnboardingApproveView`.
+- **Employee ID generation** — uses `EmployeeCodeSettings.generate_employee_id()`. Ensure `EmployeeCodeSettings` record exists in Settings → Employee Code before approving the first candidate.
+- **`useFetch` hook** — all new pages that need data fetching must use `useFetch` from `hooks/useFetch.ts`. Never write `useState + useEffect + try/catch` in page components.
+- **Server-side migrations needed on deploy** — run `python manage.py migrate` after pulling. Migrations 0021, 0022, 0023 (accounts) and 0003 (recruitment) must all apply cleanly.
