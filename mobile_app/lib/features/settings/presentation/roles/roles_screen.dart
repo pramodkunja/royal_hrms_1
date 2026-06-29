@@ -33,13 +33,15 @@ class RolesScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: SettingsAppBar(
-        title: 'Roles & Permissions',
-        trailing: IconButton(
-          icon: const Icon(Icons.add_circle_outline, color: AppColors.primary, size: 22),
-          onPressed: () => _openForm(context, ref, null),
-          tooltip: 'Add Role',
-        ),
+      appBar: const SettingsAppBar(title: 'Roles & Permissions'),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _openForm(context, ref, null),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Role',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       body: rolesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -58,7 +60,7 @@ class RolesScreen extends ConsumerWidget {
     if (roles.isEmpty) return _EmptyView(onAdd: () => _openForm(context, ref, null));
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
       children: [
         Text(
           'Control what each role can access across all modules',

@@ -336,14 +336,19 @@ class _AuditCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = _moduleColor(entry.module);
+    final hasFooter = (entry.objectId != null && entry.objectId!.isNotEmpty) ||
+        entry.ipAddress != null;
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
+        border: Border(left: BorderSide(color: accent, width: 3)),
         boxShadow: AppColors.cardShadow,
       ),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -353,61 +358,114 @@ class _AuditCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── Badges + timestamp ───────────────────────────────────
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _Badge(label: entry.module, color: _moduleColor(entry.module)),
-                      const SizedBox(width: 6),
-                      _ActionBadge(action: entry.action),
-                      const Spacer(),
-                      Text(
-                        _formatDate(entry.createdAt),
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.textHint, fontSize: 10,
+                      // Wrap prevents overflow when module/action names are long
+                      Expanded(
+                        child: Wrap(
+                          spacing: 5,
+                          runSpacing: 4,
+                          children: [
+                            _Badge(
+                              label: entry.module,
+                              color: _moduleColor(entry.module),
+                            ),
+                            _ActionBadge(action: entry.action),
+                          ],
                         ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Date + time stacked at the right
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            _formatDate(entry.createdAt),
+                            style: AppTextStyles.caption.copyWith(
+                              color: AppColors.textHint,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            _formatTime(entry.createdAt),
+                            style: AppTextStyles.caption.copyWith(
+                              color: AppColors.textHint,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 7),
+                  // ── Actor ────────────────────────────────────────────────
                   Text(
                     entry.actorName,
                     style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   if (entry.actorRole.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(
                       entry.actorRole,
                       style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                  if (entry.objectId != null && entry.objectId!.isNotEmpty) ...[
+                  // ── Footer: object + IP ──────────────────────────────────
+                  if (hasFooter) ...[
+                    const SizedBox(height: 8),
+                    const Divider(height: 1, color: AppColors.border),
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Icon(Icons.link, size: 12, color: AppColors.textHint),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Object: ${entry.objectId}',
-                          style: AppTextStyles.caption.copyWith(fontSize: 11),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        if (entry.objectId != null && entry.objectId!.isNotEmpty)
+                          Expanded(
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.link_outlined,
+                                  size: 12,
+                                  color: AppColors.textHint,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    'ID: \${entry.objectId}',
+                                    style: AppTextStyles.caption
+                                        .copyWith(fontSize: 11),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (entry.ipAddress != null) ...[
+                          const SizedBox(width: 10),
+                          const Icon(
+                            Icons.router_outlined,
+                            size: 12,
+                            color: AppColors.textHint,
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              entry.ipAddress!,
+                              style: AppTextStyles.caption.copyWith(fontSize: 11),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.access_time_outlined, size: 12, color: AppColors.textHint),
-                      const SizedBox(width: 4),
-                      Text(_formatTime(entry.createdAt), style: AppTextStyles.caption.copyWith(fontSize: 11)),
-                      if (entry.ipAddress != null) ...[
-                        const SizedBox(width: 12),
-                        const Icon(Icons.router_outlined, size: 12, color: AppColors.textHint),
-                        const SizedBox(width: 4),
-                        Text(entry.ipAddress!, style: AppTextStyles.caption.copyWith(fontSize: 11)),
-                      ],
-                    ],
-                  ),
                 ],
               ),
             ),
@@ -430,7 +488,7 @@ class _AuditCard extends StatelessWidget {
   String _formatDate(String iso) {
     try {
       final dt = DateTime.parse(iso).toLocal();
-      return '${dt.day}/${dt.month}/${dt.year}';
+      return '${dt.day} / ${dt.month} / ${dt.year}';
     } catch (_) {
       return '';
     }

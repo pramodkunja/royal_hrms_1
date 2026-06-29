@@ -17,13 +17,15 @@ class SmtpScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: SettingsAppBar(
-        title: 'SMTP Settings',
-        trailing: IconButton(
-          icon: const Icon(Icons.add_circle_outline, color: AppColors.primary, size: 22),
-          onPressed: () => _openForm(context, ref, null),
-          tooltip: 'Add SMTP configuration',
-        ),
+      appBar: const SettingsAppBar(title: 'SMTP Settings'),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _openForm(context, ref, null),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Config',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -39,7 +41,7 @@ class SmtpScreen extends ConsumerWidget {
               if (active != null) _ActiveBanner(entry: active),
               Expanded(
                 child: ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
                   itemCount: list.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 14),
                   itemBuilder: (context, index) => SmtpCard(

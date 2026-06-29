@@ -18,6 +18,7 @@ class DeptFormSheet extends StatefulWidget {
 class _DeptFormSheetState extends State<DeptFormSheet> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _descCtrl;
+  late bool _isActive;
   bool _saving = false;
   String? _nameError;
 
@@ -28,6 +29,7 @@ class _DeptFormSheetState extends State<DeptFormSheet> {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.department?.name ?? '');
     _descCtrl = TextEditingController(text: widget.department?.description ?? '');
+    _isActive = widget.department?.isActive ?? true;
   }
 
   @override
@@ -71,6 +73,11 @@ class _DeptFormSheetState extends State<DeptFormSheet> {
                   maxLines: 3,
                   decoration: _dec('Description (optional)'),
                 ),
+                const SizedBox(height: 12),
+                _StatusToggle(
+                  value: _isActive,
+                  onChanged: (v) => setState(() => _isActive = v),
+                ),
                 const SizedBox(height: 20),
                 FilledButton(
                   onPressed: _saving ? null : _submit,
@@ -110,7 +117,11 @@ class _DeptFormSheetState extends State<DeptFormSheet> {
   );
 
   Future<void> _submit() async {
-    final form = DeptFormData(name: _nameCtrl.text, description: _descCtrl.text);
+    final form = DeptFormData(
+      name: _nameCtrl.text,
+      description: _descCtrl.text,
+      isActive: _isActive,
+    );
     final error = form.validate();
     if (error != null) {
       setState(() => _nameError = error);
@@ -131,6 +142,70 @@ class _DeptFormSheetState extends State<DeptFormSheet> {
         backgroundColor: AppColors.error,
       ));
     }
+  }
+}
+
+// ── Status toggle ─────────────────────────────────────────────────────────────
+
+class _StatusToggle extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _StatusToggle({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: value
+            ? AppColors.success.withValues(alpha: 0.07)
+            : AppColors.background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: value
+              ? AppColors.success.withValues(alpha: 0.40)
+              : AppColors.border,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            value ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+            color: value ? AppColors.success : AppColors.textHint,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Status',
+                  style: AppTextStyles.label.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value ? 'Active — visible across the system' : 'Inactive — hidden from selection',
+                  style: AppTextStyles.caption.copyWith(
+                    color: value ? AppColors.success : AppColors.textHint,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
+            activeTrackColor: AppColors.success,
+          ),
+        ],
+      ),
+    );
   }
 }
 

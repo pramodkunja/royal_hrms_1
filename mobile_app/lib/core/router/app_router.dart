@@ -16,6 +16,10 @@ import '../../features/settings/presentation/departments/departments_screen.dart
 import '../../features/settings/presentation/employee_code/employee_code_screen.dart';
 import '../../features/settings/presentation/roles/roles_screen.dart';
 import '../../features/settings/presentation/audit/audit_screen.dart';
+import '../../features/announcements/presentation/announcements_screen.dart';
+import '../../features/employees/presentation/employees_screen.dart';
+import '../../features/employees/presentation/screens/employee_profile_screen.dart';
+import '../../features/employees/data/models/employee_model.dart';
 
 // ─── Route path constants ─────────────────────────────────────────────────────
 
@@ -34,6 +38,8 @@ class AppRoutes {
   static const String candidateReview = '/dashboard/candidate-review';
   static const String emailLogs       = '/dashboard/email-logs';
   static const String employees       = '/dashboard/employees';
+  static String employeeProfilePath(String employeeId) =>
+      '/dashboard/employees/$employeeId';
   static const String orgChart        = '/dashboard/org-chart';
   static const String branches        = '/dashboard/branches';
   static const String attendance      = '/dashboard/attendance';
@@ -150,9 +156,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           // Announcements
           GoRoute(
             path: AppRoutes.announcements,
-            pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'Announcements', icon: Icons.campaign_outlined),
-            ),
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: AnnouncementsScreen()),
           ),
 
           // Recruitment
@@ -178,9 +183,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           // Workforce
           GoRoute(
             path: AppRoutes.employees,
-            pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'Employees', icon: Icons.badge_outlined),
-            ),
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: EmployeesScreen()),
+            routes: [
+              GoRoute(
+                path: ':employeeId',
+                builder: (context, state) => EmployeeProfileScreen(
+                  employeeId: state.pathParameters['employeeId']!,
+                  initialEmployee: state.extra as EmployeeModel?,
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: AppRoutes.orgChart,

@@ -28,34 +28,22 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: SettingsAppBar(
-        title: 'Company Info',
-        trailing: async.hasValue
-            ? TextButton(
-                onPressed: _saving ? null : _submit,
-                child: _saving
-                    ? const SizedBox(
-                        width: 18, height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-                      )
-                    : Text('Save',
-                        style: AppTextStyles.label.copyWith(
-                          color: AppColors.primary, fontWeight: FontWeight.w700,
-                        )),
-              )
-            : null,
-      ),
+      appBar: const SettingsAppBar(title: 'Company Info'),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => _ErrorView(message: err.toString()),
         data: (company) {
           _draft ??= company;
+          final hasLogo = _logoFile != null || (_draft!.logoUrl?.isNotEmpty ?? false);
           return _Body(
             formKey: _formKey,
             company: _draft!,
             logoFile: _logoFile,
+            isSaving: _saving,
             onChanged: (updated) => setState(() => _draft = updated),
             onLogoTap: _pickLogo,
+            onRemoveLogo: hasLogo ? _removeLogo : null,
+            onSave: _submit,
           );
         },
       ),
@@ -66,6 +54,16 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
     if (picked != null) setState(() => _logoFile = File(picked.path));
+  }
+
+  void _removeLogo() {
+    setState(() {
+      if (_logoFile != null) {
+        _logoFile = null;
+      } else {
+        _draft = _draft!.copyWith(logoUrl: '');
+      }
+    });
   }
 
   Future<void> _submit() async {
@@ -89,15 +87,21 @@ class _Body extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final CompanyModel company;
   final File? logoFile;
+  final bool isSaving;
   final ValueChanged<CompanyModel> onChanged;
   final VoidCallback onLogoTap;
+  final VoidCallback? onRemoveLogo;
+  final VoidCallback onSave;
 
   const _Body({
     required this.formKey,
     required this.company,
     required this.logoFile,
+    required this.isSaving,
     required this.onChanged,
     required this.onLogoTap,
+    this.onRemoveLogo,
+    required this.onSave,
   });
 
   @override
@@ -105,7 +109,7 @@ class _Body extends StatelessWidget {
     return Form(
       key: formKey,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -114,13 +118,62 @@ class _Body extends StatelessWidget {
               logoFile: logoFile,
               companyName: company.companyName,
               onTap: onLogoTap,
+              onRemove: onRemoveLogo,
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
             CompanyFormFields(company: company, onChanged: onChanged),
-            const SizedBox(height: 32),
+            const SizedBox(height: 28),
+            _SaveButton(isSaving: isSaving, onSave: onSave),
+            const SizedBox(height: 8),
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Save button ───────────────────────────────────────────────────────────────
+
+class _SaveButton extends StatelessWidget {
+  final bool isSaving;
+  final VoidCallback onSave;
+  const _SaveButton({required this.isSaving, required this.onSave});
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton(
+      onPressed: isSaving ? null : onSave,
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(double.infinity, 52),
+        backgroundColor: AppColors.primary,
+        disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.55),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        elevation: 0,
+      ),
+      child: isSaving
+          ? const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: Colors.white,
+              ),
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.save_outlined, size: 18, color: Colors.white),
+                const SizedBox(width: 8),
+                Text(
+                  'Save Changes',
+                  style: AppTextStyles.label.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }
@@ -132,92 +185,159 @@ class _LogoSection extends StatelessWidget {
   final File? logoFile;
   final String companyName;
   final VoidCallback onTap;
+  final VoidCallback? onRemove;
 
   const _LogoSection({
     this.currentUrl,
     this.logoFile,
     required this.companyName,
     required this.onTap,
+    this.onRemove,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: AppColors.cardShadow,
       ),
-      child: Row(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
         children: [
-          GestureDetector(
-            onTap: onTap,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.border, width: 1.5),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(13),
-                    child: logoFile != null
-                        ? Image.file(logoFile!, fit: BoxFit.cover)
-                        : (currentUrl != null && currentUrl!.isNotEmpty)
-                            ? Image.network(currentUrl!, fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => _logoPlaceholder(companyName))
-                            : _logoPlaceholder(companyName),
-                  ),
-                ),
-                Positioned(
-                  bottom: -6,
-                  right: -6,
-                  child: Container(
-                    width: 26,
-                    height: 26,
-                    decoration: const BoxDecoration(
-                      color: AppColors.primary,
-                      shape: BoxShape.circle,
+          // Navy gradient banner with centered logo
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 28),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF102C52), AppColors.primary],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Center(
+              child: GestureDetector(
+                onTap: onTap,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 90,
+                      height: 90,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.6),
+                          width: 3,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.18),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(15),
+                        child: logoFile != null
+                            ? Image.file(logoFile!, fit: BoxFit.cover)
+                            : (currentUrl != null && currentUrl!.isNotEmpty)
+                                ? Image.network(currentUrl!, fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => _logoPlaceholder())
+                                : _logoPlaceholder(),
+                      ),
                     ),
-                    child: const Icon(Icons.camera_alt, size: 14, color: Colors.white),
-                  ),
+                    Positioned(
+                      bottom: -5,
+                      right: -5,
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: AppColors.secondary,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(Icons.camera_alt, size: 14, color: Colors.white),
+                      ),
+                    ),
+                    if (onRemove != null)
+                      Positioned(
+                        top: -5,
+                        left: -5,
+                        child: GestureDetector(
+                          onTap: onRemove,
+                          child: Container(
+                            width: 26,
+                            height: 26,
+                            decoration: BoxDecoration(
+                              color: AppColors.error,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.error.withValues(alpha: 0.35),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(Icons.close, size: 13, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // Info row below the banner
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Row(
               children: [
-                Text(
-                  companyName.isNotEmpty ? companyName : 'Your Company',
-                  style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        companyName.isNotEmpty ? companyName : 'Your Company',
+                        style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          const Icon(Icons.touch_app_outlined, size: 13, color: AppColors.textHint),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Tap logo to change',
+                            style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Tap the logo to change it',
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-                ),
-                const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(6),
+                    color: AppColors.primary.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    'JPG, PNG • max 5MB',
+                    'JPG · PNG\nmax 5 MB',
                     style: AppTextStyles.caption.copyWith(
-                      color: AppColors.primary, fontSize: 10,
+                      color: AppColors.primary,
+                      fontSize: 10,
+                      height: 1.5,
                     ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ],
@@ -228,8 +348,8 @@ class _LogoSection extends StatelessWidget {
     );
   }
 
-  Widget _logoPlaceholder(String name) {
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'C';
+  Widget _logoPlaceholder() {
+    final initial = companyName.isNotEmpty ? companyName[0].toUpperCase() : 'C';
     return Container(
       color: AppColors.primary.withValues(alpha: 0.08),
       child: Center(

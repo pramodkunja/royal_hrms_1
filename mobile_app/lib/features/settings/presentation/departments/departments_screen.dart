@@ -6,6 +6,7 @@ import '../../data/models/departments_model.dart';
 import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
 import 'widgets/dept_form_sheet.dart';
+import 'widgets/dept_list_item.dart';
 import 'widgets/desig_form_sheet.dart';
 
 class DepartmentsScreen extends ConsumerStatefulWidget {
@@ -15,70 +16,53 @@ class DepartmentsScreen extends ConsumerStatefulWidget {
   ConsumerState<DepartmentsScreen> createState() => _DepartmentsScreenState();
 }
 
-class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabs;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabs = TabController(length: 2, vsync: this);
-    _tabs.addListener(() => setState(() {}));
-  }
+class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen> {
+  int? _selectedDeptId;
+  final _searchCtrl = TextEditingController();
+  String _query = '';
 
   @override
   void dispose() {
-    _tabs.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final deptsAsync = ref.watch(departmentsProvider);
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: SettingsAppBar(
-        title: 'Depts & Designations',
-        trailing: IconButton(
-          icon: const Icon(Icons.add_circle_outline, color: AppColors.primary, size: 22),
-          onPressed: _onAdd,
-          tooltip: _tabs.index == 0 ? 'Add Department' : 'Add Designation',
-        ),
-        bottom: TabBar(
-          controller: _tabs,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textSecondary,
-          indicatorColor: AppColors.primary,
-          indicatorWeight: 2.5,
-          labelStyle: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600),
-          unselectedLabelStyle: AppTextStyles.label,
-          tabs: const [
-            Tab(text: 'Departments'),
-            Tab(text: 'Designations'),
-          ],
-        ),
+      appBar: const SettingsAppBar(title: 'Depts & Designations'),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _openDeptEdit(null),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Department',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
-      body: TabBarView(
-        controller: _tabs,
-        children: [
-          _DepartmentsTab(
-            onAdd: _onAdd,
-            onEdit: (d) => _openDeptEdit(d),
+      body: deptsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => _ErrorView(message: e.toString()),
+        data: (depts) => _Body(
+          depts: depts,
+          query: _query,
+          searchCtrl: _searchCtrl,
+          selectedDeptId: _selectedDeptId,
+          onQueryChanged: (q) => setState(() => _query = q),
+          onSelectDept: (id) => setState(
+            () => _selectedDeptId = (_selectedDeptId == id) ? null : id,
           ),
-          _DesignationsTab(
-            onAdd: _onAdd,
-            onEdit: (d) => _openDesigEdit(d),
-          ),
-        ],
+          onEditDept: _openDeptEdit,
+          onDeleteDept: _confirmDeleteDept,
+          onAddDesig: (deptId) => _openDesigEdit(null, defaultDeptId: deptId),
+          onEditDesig: (d) => _openDesigEdit(d),
+          onDeleteDesig: _confirmDeleteDesig,
+        ),
       ),
     );
-  }
-
-  void _onAdd() {
-    if (_tabs.index == 0) {
-      _openDeptEdit(null);
-    } else {
-      _openDesigEdit(null);
-    }
   }
 
   Future<void> _openDeptEdit(DepartmentModel? dept) async {
@@ -94,7 +78,7 @@ class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen>
     );
   }
 
-  Future<void> _openDesigEdit(DesignationModel? desig) async {
+  Future<void> _openDesigEdit(DesignationModel? desig, {int? defaultDeptId}) async {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -102,356 +86,281 @@ class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen>
         insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 80),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        child: DesigFormSheet(designation: desig, ref: ref),
+        child: DesigFormSheet(designation: desig, ref: ref, defaultDeptId: defaultDeptId),
       ),
     );
   }
-}
 
-// ── Departments tab ───────────────────────────────────────────────────────────
-
-class _DepartmentsTab extends ConsumerWidget {
-  final VoidCallback onAdd;
-  final ValueChanged<DepartmentModel> onEdit;
-  const _DepartmentsTab({required this.onAdd, required this.onEdit});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(departmentsProvider);
-    return async.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => _ErrorView(message: e.toString()),
-      data: (depts) => depts.isEmpty
-          ? _EmptyView(
-              icon: Icons.account_tree_outlined,
-              label: 'No departments yet',
-              subtitle: 'Add departments to organise your organisation.',
-              onAdd: onAdd,
-            )
-          : Column(
-              children: [
-                _TabSummary(count: depts.length, label: 'department'),
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                    itemCount: depts.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (ctx, i) => _DeptCard(
-                      dept: depts[i],
-                      onEdit: () => onEdit(depts[i]),
-                      onDelete: () => _confirmDelete(ctx, ref, depts[i]),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-    );
-  }
-
-  Future<void> _confirmDelete(
-      BuildContext context, WidgetRef ref, DepartmentModel dept) async {
+  Future<void> _confirmDeleteDept(DepartmentModel dept) async {
     final ok = await _showDeleteDialog(context, dept.name);
-    if (!ok || !context.mounted) return;
+    if (!ok || !mounted) return;
     final error = await ref.read(departmentsProvider.notifier).removeDept(dept.id);
-    if (context.mounted) {
-      _toast(context, error ?? '"${dept.name}" deleted.', error == null);
+    if (mounted) _toast(context, error ?? '"${dept.name}" deleted.', error == null);
+    if (error == null && _selectedDeptId == dept.id) {
+      setState(() => _selectedDeptId = null);
     }
+  }
+
+  Future<void> _confirmDeleteDesig(DesignationModel desig) async {
+    final ok = await _showDeleteDialog(context, desig.name);
+    if (!ok || !mounted) return;
+    final error = await ref.read(designationsProvider.notifier).removeDesig(desig.id);
+    if (mounted) _toast(context, error ?? '"${desig.name}" deleted.', error == null);
   }
 }
 
-// ── Designations tab ──────────────────────────────────────────────────────────
+// ── Body ──────────────────────────────────────────────────────────────────────
 
-class _DesignationsTab extends ConsumerWidget {
-  final VoidCallback onAdd;
-  final ValueChanged<DesignationModel> onEdit;
-  const _DesignationsTab({required this.onAdd, required this.onEdit});
+class _Body extends ConsumerWidget {
+  final List<DepartmentModel> depts;
+  final String query;
+  final TextEditingController searchCtrl;
+  final int? selectedDeptId;
+  final ValueChanged<String> onQueryChanged;
+  final ValueChanged<int> onSelectDept;
+  final ValueChanged<DepartmentModel?> onEditDept;
+  final ValueChanged<DepartmentModel> onDeleteDept;
+  final ValueChanged<int> onAddDesig;
+  final ValueChanged<DesignationModel> onEditDesig;
+  final ValueChanged<DesignationModel> onDeleteDesig;
+
+  const _Body({
+    required this.depts,
+    required this.query,
+    required this.searchCtrl,
+    required this.selectedDeptId,
+    required this.onQueryChanged,
+    required this.onSelectDept,
+    required this.onEditDept,
+    required this.onDeleteDept,
+    required this.onAddDesig,
+    required this.onEditDesig,
+    required this.onDeleteDesig,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(designationsProvider);
-    return async.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => _ErrorView(message: e.toString()),
-      data: (desigs) => desigs.isEmpty
-          ? _EmptyView(
+    final allDesigs = ref.watch(designationsProvider).valueOrNull ?? const [];
+
+    final filtered = query.isEmpty
+        ? depts
+        : depts.where((d) => d.name.toLowerCase().contains(query.toLowerCase())).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _StatsRow(depts: depts, desigCount: allDesigs.length),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+          child: _SearchBar(controller: searchCtrl, onChanged: onQueryChanged),
+        ),
+        Expanded(
+          child: filtered.isEmpty
+              ? _EmptyView(onAdd: () => onEditDept(null))
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 88),
+                  itemCount: filtered.length,
+                  itemBuilder: (_, i) {
+                    final dept = filtered[i];
+                    final deptDesigs = allDesigs
+                        .where((d) => d.departmentId == dept.id)
+                        .toList();
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: DeptListItem(
+                        dept: dept,
+                        isExpanded: selectedDeptId == dept.id,
+                        designations: deptDesigs,
+                        onTap: () => onSelectDept(dept.id),
+                        onEdit: () => onEditDept(dept),
+                        onDelete: () => onDeleteDept(dept),
+                        onAddDesig: () => onAddDesig(dept.id),
+                        onEditDesig: onEditDesig,
+                        onDeleteDesig: onDeleteDesig,
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Stats row ─────────────────────────────────────────────────────────────────
+
+class _StatsRow extends StatelessWidget {
+  final List<DepartmentModel> depts;
+  final int desigCount;
+  const _StatsRow({required this.depts, required this.desigCount});
+
+  @override
+  Widget build(BuildContext context) {
+    final activeDepts = depts.where((d) => d.isActive).length;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: _StatCard(
+              icon: Icons.account_tree_outlined,
+              count: depts.length,
+              label: 'Departments',
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _StatCard(
               icon: Icons.work_outline,
-              label: 'No designations yet',
-              subtitle: 'Add job designations within departments.',
-              onAdd: onAdd,
-            )
-          : Column(
-              children: [
-                _TabSummary(count: desigs.length, label: 'designation'),
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                    itemCount: desigs.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (ctx, i) => _DesigCard(
-                      desig: desigs[i],
-                      onEdit: () => onEdit(desigs[i]),
-                      onDelete: () => _confirmDelete(ctx, ref, desigs[i]),
-                    ),
-                  ),
-                ),
-              ],
+              count: desigCount,
+              label: 'Designations',
+              color: AppColors.success,
             ),
-    );
-  }
-
-  Future<void> _confirmDelete(
-      BuildContext context, WidgetRef ref, DesignationModel desig) async {
-    final ok = await _showDeleteDialog(context, desig.name);
-    if (!ok || !context.mounted) return;
-    final error = await ref.read(designationsProvider.notifier).removeDesig(desig.id);
-    if (context.mounted) {
-      _toast(context, error ?? '"${desig.name}" deleted.', error == null);
-    }
-  }
-}
-
-// ── Cards ─────────────────────────────────────────────────────────────────────
-
-class _DeptCard extends StatelessWidget {
-  final DepartmentModel dept;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  const _DeptCard({required this.dept, required this.onEdit, required this.onDelete});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: AppColors.cardShadow,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  child: const Icon(Icons.account_tree_outlined, color: AppColors.primary, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        dept.name,
-                        style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (dept.description != null && dept.description!.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          dept.description!,
-                          style: AppTextStyles.caption,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                _StatusDot(isActive: dept.isActive),
-                const SizedBox(width: 4),
-                _ActionMenu(onEdit: onEdit, onDelete: onDelete),
-              ],
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _StatCard(
+              icon: Icons.verified_outlined,
+              count: activeDepts,
+              label: 'Active Depts',
+              color: const Color(0xFF7C3AED),
             ),
-            const SizedBox(height: 12),
-            const Divider(height: 1, color: AppColors.border),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                _StatItem(
-                  icon: Icons.work_outline,
-                  value: '${dept.designationCount}',
-                  label: 'designations',
-                  color: const Color(0xFF219653),
-                ),
-                const SizedBox(width: 20),
-                _StatItem(
-                  icon: Icons.people_outline,
-                  value: '${dept.employeeCount}',
-                  label: 'employees',
-                  color: AppColors.primary,
-                ),
-              ],
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _DesigCard extends StatelessWidget {
-  final DesignationModel desig;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  const _DesigCard({required this.desig, required this.onEdit, required this.onDelete});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: AppColors.cardShadow,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: const Color(0xFF219653).withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(11),
-              ),
-              child: const Icon(Icons.work_outline, color: Color(0xFF219653), size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    desig.name,
-                    style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      const Icon(Icons.account_tree_outlined, size: 12, color: AppColors.textHint),
-                      const SizedBox(width: 4),
-                      Text(
-                        desig.departmentName ?? '—',
-                        style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            _StatusDot(isActive: desig.isActive),
-            const SizedBox(width: 4),
-            _ActionMenu(onEdit: onEdit, onDelete: onDelete),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Small helpers ─────────────────────────────────────────────────────────────
-
-class _TabSummary extends StatelessWidget {
+class _StatCard extends StatelessWidget {
+  final IconData icon;
   final int count;
   final String label;
-  const _TabSummary({required this.count, required this.label});
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-    child: Text(
-      '$count $label${count == 1 ? '' : 's'}',
-      style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-    ),
-  );
-}
-
-class _StatusDot extends StatelessWidget {
-  final bool isActive;
-  const _StatusDot({required this.isActive});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: BoxDecoration(
-        color: isActive ? AppColors.success : AppColors.textHint,
-        shape: BoxShape.circle,
-      ),
-    );
-  }
-}
-
-class _StatItem extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final String label;
   final Color color;
-  const _StatItem({
+  const _StatCard({
     required this.icon,
-    required this.value,
+    required this.count,
     required this.label,
     required this.color,
   });
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Icon(icon, size: 13, color: color),
-      const SizedBox(width: 5),
-      Text(
-        '$value $label',
-        style: AppTextStyles.caption.copyWith(color: color, fontWeight: FontWeight.w600),
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
-    ],
-  );
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Tinted icon strip
+          Container(
+            color: color.withValues(alpha: 0.08),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            child: Row(
+              children: [
+                Icon(icon, size: 18, color: color),
+                const Spacer(),
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.40),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Count + label
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                    height: 1.0,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textHint,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _ActionMenu extends StatelessWidget {
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  const _ActionMenu({required this.onEdit, required this.onDelete});
+// ── Search bar ────────────────────────────────────────────────────────────────
+
+class _SearchBar extends StatelessWidget {
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  const _SearchBar({required this.controller, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, size: 18, color: AppColors.textHint),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      onSelected: (v) => v == 'edit' ? onEdit() : onDelete(),
-      itemBuilder: (_) => [
-        const PopupMenuItem(
-          value: 'edit',
-          child: Row(
-            children: [
-              Icon(Icons.edit_outlined, size: 16),
-              SizedBox(width: 10),
-              Text('Edit'),
-            ],
-          ),
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      style: AppTextStyles.body,
+      decoration: InputDecoration(
+        hintText: 'Search departments…',
+        hintStyle: AppTextStyles.body.copyWith(color: AppColors.textHint),
+        prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textHint),
+        suffixIcon: controller.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.close, size: 18, color: AppColors.textHint),
+                onPressed: () {
+                  controller.clear();
+                  onChanged('');
+                },
+              )
+            : null,
+        filled: true,
+        fillColor: AppColors.surface,
+        contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.border),
         ),
-        const PopupMenuItem(
-          value: 'delete',
-          child: Row(
-            children: [
-              Icon(Icons.delete_outline, size: 16, color: AppColors.error),
-              SizedBox(width: 10),
-              Text('Delete', style: TextStyle(color: AppColors.error)),
-            ],
-          ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.border),
         ),
-      ],
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+        ),
+      ),
     );
   }
 }
@@ -459,16 +368,8 @@ class _ActionMenu extends StatelessWidget {
 // ── Empty / Error ─────────────────────────────────────────────────────────────
 
 class _EmptyView extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String subtitle;
   final VoidCallback onAdd;
-  const _EmptyView({
-    required this.icon,
-    required this.label,
-    required this.subtitle,
-    required this.onAdd,
-  });
+  const _EmptyView({required this.onAdd});
 
   @override
   Widget build(BuildContext context) {
@@ -485,17 +386,21 @@ class _EmptyView extends StatelessWidget {
                 color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Icon(icon, size: 36, color: AppColors.primary),
+              child: const Icon(Icons.account_tree_outlined, size: 36, color: AppColors.primary),
             ),
             const SizedBox(height: 16),
-            Text(label, style: AppTextStyles.h4),
+            Text('No departments yet', style: AppTextStyles.h4),
             const SizedBox(height: 6),
-            Text(subtitle, style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
+            Text(
+              'Add departments to organise your company.',
+              style: AppTextStyles.bodySecondary,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: onAdd,
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add'),
+              label: const Text('Add Department'),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -541,7 +446,7 @@ Future<bool> _showDeleteDialog(BuildContext context, String name) async {
     builder: (_) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       title: const Text('Confirm Delete'),
-      content: Text('Delete "$name"? This action cannot be undone.'),
+      content: Text('Delete "$name"? This cannot be undone.'),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),

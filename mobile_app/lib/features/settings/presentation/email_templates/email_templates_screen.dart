@@ -55,13 +55,15 @@ class _EmailTemplatesScreenState extends ConsumerState<EmailTemplatesScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: SettingsAppBar(
-        title: 'Email Templates',
-        trailing: IconButton(
-          icon: const Icon(Icons.add_circle_outline, color: AppColors.primary, size: 22),
-          onPressed: () => _openEditor(context, null),
-          tooltip: 'Add template',
-        ),
+      appBar: const SettingsAppBar(title: 'Email Templates'),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _openEditor(context, null),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Template',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -126,7 +128,7 @@ class _EmailTemplatesScreenState extends ConsumerState<EmailTemplatesScreen> {
     Map<String, List<EmailTemplateModel>> groups,
   ) {
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
       itemCount: keys.length,
       separatorBuilder: (_, __) => const SizedBox(height: 14),
       itemBuilder: (context, index) {

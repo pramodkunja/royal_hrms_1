@@ -81,63 +81,74 @@ class _CompanyFormFieldsState extends State<CompanyFormFields> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _section('Basic Details'),
-        _field(_name,  'Company Name *', validator: _required),
-        _field(_trade, 'Trade Name'),
-
-        _section('Registration Numbers'),
-        _field(_gstin, 'GSTIN *',
-            validator: (v) => _regexVal(v, _gstinRe, 'Enter a valid 15-character GSTIN'),
-            hint: 'e.g. 27AAPFU0939F1ZV'),
-        _field(_cin,   'CIN *',
-            validator: (v) => _regexVal(v, _cinRe, 'Enter a valid CIN'),
-            hint: 'e.g. U74999MH2020PTC123456'),
-        _field(_pan,   'PAN *',
-            validator: (v) => _regexVal(v, _panRe, 'Enter a valid 10-character PAN'),
-            hint: 'e.g. AAPFU0939F'),
-        _field(_tan,   'TAN *',
-            validator: (v) => _regexVal(v, _tanRe, 'Enter a valid 10-character TAN'),
-            hint: 'e.g. MUMO3581G'),
-
-        _section('Address'),
-        _field(_address, 'Street Address *', maxLines: 3, validator: _required),
-        _field(_city,    'City *', validator: _required),
-        _stateDropdown(),
-        _field(_pin, 'PIN Code *',
-            keyboardType: TextInputType.number,
-            validator: (v) => _regexVal(v, _pinRe, 'Must be exactly 6 digits')),
-
-        _section('Contact'),
-        _field(_website, 'Website',
-            keyboardType: TextInputType.url,
-            validator: (v) {
-              if (v == null || v.isEmpty) return null;
-              if (!_urlRe.hasMatch(v)) return 'Must start with http:// or https://';
-              return null;
-            }),
-        _field(_phone, 'Official Phone',
-            keyboardType: TextInputType.phone,
-            validator: (v) {
-              if (v == null || v.isEmpty) return null;
-              if (!_phoneRe.hasMatch(v)) return 'Enter a valid phone number';
-              return null;
-            }),
+        _SectionCard(
+          icon: Icons.business_outlined,
+          title: 'Basic Details',
+          color: AppColors.primary,
+          children: [
+            _field(_name, 'Company Name *', validator: _required),
+            _field(_trade, 'Trade Name'),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          icon: Icons.assignment_outlined,
+          title: 'Registration Numbers',
+          color: const Color(0xFF9C5700),
+          children: [
+            _field(_gstin, 'GSTIN *',
+                validator: (v) => _regexVal(v, _gstinRe, 'Enter a valid 15-character GSTIN'),
+                hint: 'e.g. 27AAPFU0939F1ZV'),
+            _field(_cin, 'CIN *',
+                validator: (v) => _regexVal(v, _cinRe, 'Enter a valid CIN'),
+                hint: 'e.g. U74999MH2020PTC123456'),
+            _field(_pan, 'PAN *',
+                validator: (v) => _regexVal(v, _panRe, 'Enter a valid 10-character PAN'),
+                hint: 'e.g. AAPFU0939F'),
+            _field(_tan, 'TAN *',
+                validator: (v) => _regexVal(v, _tanRe, 'Enter a valid 10-character TAN'),
+                hint: 'e.g. MUMO3581G'),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          icon: Icons.location_on_outlined,
+          title: 'Address',
+          color: AppColors.success,
+          children: [
+            _field(_address, 'Street Address *', maxLines: 3, validator: _required),
+            _field(_city, 'City *', validator: _required),
+            _stateDropdown(),
+            _field(_pin, 'PIN Code *',
+                keyboardType: TextInputType.number,
+                validator: (v) => _regexVal(v, _pinRe, 'Must be exactly 6 digits')),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          icon: Icons.contact_phone_outlined,
+          title: 'Contact',
+          color: const Color(0xFF5B3599),
+          children: [
+            _field(_website, 'Website',
+                keyboardType: TextInputType.url,
+                validator: (v) {
+                  if (v == null || v.isEmpty) return null;
+                  if (!_urlRe.hasMatch(v)) return 'Must start with http:// or https://';
+                  return null;
+                }),
+            _field(_phone, 'Official Phone',
+                keyboardType: TextInputType.phone,
+                validator: (v) {
+                  if (v == null || v.isEmpty) return null;
+                  if (!_phoneRe.hasMatch(v)) return 'Enter a valid phone number';
+                  return null;
+                }),
+          ],
+        ),
       ],
     );
   }
-
-  Widget _section(String title) => Padding(
-    padding: const EdgeInsets.only(top: 20, bottom: 10),
-    child: Text(
-      title.toUpperCase(),
-      style: AppTextStyles.caption.copyWith(
-        color: AppColors.textHint,
-        letterSpacing: 0.9,
-        fontWeight: FontWeight.w700,
-        fontSize: 11,
-      ),
-    ),
-  );
 
   Widget _field(
     TextEditingController controller,
@@ -161,7 +172,7 @@ class _CompanyFormFieldsState extends State<CompanyFormFields> {
           hintText: hint,
           labelStyle: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
           filled: true,
-          fillColor: AppColors.surface,
+          fillColor: AppColors.background,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -192,7 +203,7 @@ class _CompanyFormFieldsState extends State<CompanyFormFields> {
           labelText: 'State / UT *',
           labelStyle: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
           filled: true,
-          fillColor: AppColors.surface,
+          fillColor: AppColors.background,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -223,5 +234,70 @@ class _CompanyFormFieldsState extends State<CompanyFormFields> {
     if (v == null || v.trim().isEmpty) return 'This field is required';
     if (!re.hasMatch(v.trim().toUpperCase())) return msg;
     return null;
+  }
+}
+
+// ── Section card with banner-fused header ─────────────────────────────────────
+
+class _SectionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Color color;
+  final List<Widget> children;
+
+  const _SectionCard({
+    required this.icon,
+    required this.title,
+    required this.color,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            color: color,
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 17),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  title,
+                  style: AppTextStyles.label.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

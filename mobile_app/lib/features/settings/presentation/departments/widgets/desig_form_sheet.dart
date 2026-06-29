@@ -8,8 +8,9 @@ import '../../providers/settings_providers.dart';
 class DesigFormSheet extends StatefulWidget {
   final DesignationModel? designation;
   final WidgetRef ref;
+  final int? defaultDeptId;
 
-  const DesigFormSheet({super.key, this.designation, required this.ref});
+  const DesigFormSheet({super.key, this.designation, required this.ref, this.defaultDeptId});
 
   @override
   State<DesigFormSheet> createState() => _DesigFormSheetState();
@@ -18,6 +19,7 @@ class DesigFormSheet extends StatefulWidget {
 class _DesigFormSheetState extends State<DesigFormSheet> {
   late final TextEditingController _nameCtrl;
   int? _deptId;
+  late bool _isActive;
   bool _saving = false;
   Map<String, String?> _errors = {};
 
@@ -27,7 +29,8 @@ class _DesigFormSheetState extends State<DesigFormSheet> {
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.designation?.name ?? '');
-    _deptId   = widget.designation?.departmentId;
+    _deptId   = widget.designation?.departmentId ?? widget.defaultDeptId;
+    _isActive = widget.designation?.isActive ?? true;
   }
 
   @override
@@ -83,6 +86,11 @@ class _DesigFormSheetState extends State<DesigFormSheet> {
                   loading: () => const LinearProgressIndicator(),
                   error: (_, __) => const SizedBox.shrink(),
                 ),
+                const SizedBox(height: 12),
+                _StatusToggle(
+                  value: _isActive,
+                  onChanged: (v) => setState(() => _isActive = v),
+                ),
                 const SizedBox(height: 20),
                 FilledButton(
                   onPressed: _saving ? null : _submit,
@@ -122,7 +130,7 @@ class _DesigFormSheetState extends State<DesigFormSheet> {
   );
 
   Future<void> _submit() async {
-    final form = DesignationFormData(name: _nameCtrl.text, departmentId: _deptId);
+    final form = DesignationFormData(name: _nameCtrl.text, departmentId: _deptId, isActive: _isActive);
     final validationErrors = form.validate();
     if (validationErrors.isNotEmpty) {
       setState(() => _errors = validationErrors);
@@ -143,6 +151,70 @@ class _DesigFormSheetState extends State<DesigFormSheet> {
         backgroundColor: AppColors.error,
       ));
     }
+  }
+}
+
+// ── Status toggle ─────────────────────────────────────────────────────────────
+
+class _StatusToggle extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _StatusToggle({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: value
+            ? AppColors.success.withValues(alpha: 0.07)
+            : AppColors.background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: value
+              ? AppColors.success.withValues(alpha: 0.40)
+              : AppColors.border,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            value ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+            color: value ? AppColors.success : AppColors.textHint,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Status',
+                  style: AppTextStyles.label.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value ? 'Active — visible across the system' : 'Inactive — hidden from selection',
+                  style: AppTextStyles.caption.copyWith(
+                    color: value ? AppColors.success : AppColors.textHint,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
+            activeTrackColor: AppColors.success,
+          ),
+        ],
+      ),
+    );
   }
 }
 

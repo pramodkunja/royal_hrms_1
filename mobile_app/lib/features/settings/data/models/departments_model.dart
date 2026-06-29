@@ -56,15 +56,20 @@ class DesignationModel {
 class DeptFormData {
   String name;
   String description;
+  bool isActive;
 
-  DeptFormData({this.name = '', this.description = ''});
+  DeptFormData({this.name = '', this.description = '', this.isActive = true});
 
-  factory DeptFormData.fromModel(DepartmentModel model) =>
-      DeptFormData(name: model.name, description: model.description ?? '');
+  factory DeptFormData.fromModel(DepartmentModel model) => DeptFormData(
+    name:        model.name,
+    description: model.description ?? '',
+    isActive:    model.isActive,
+  );
 
   Map<String, dynamic> toJson() => {
     'name':        name,
     'description': description,
+    'is_active':   isActive,
   };
 
   String? validate() {
@@ -76,15 +81,20 @@ class DeptFormData {
 class DesignationFormData {
   String name;
   int? departmentId;
+  bool isActive;
 
-  DesignationFormData({this.name = '', this.departmentId});
+  DesignationFormData({this.name = '', this.departmentId, this.isActive = true});
 
-  factory DesignationFormData.fromModel(DesignationModel model) =>
-      DesignationFormData(name: model.name, departmentId: model.departmentId);
+  factory DesignationFormData.fromModel(DesignationModel model) => DesignationFormData(
+    name:         model.name,
+    departmentId: model.departmentId,
+    isActive:     model.isActive,
+  );
 
   Map<String, dynamic> toJson() => {
     'name':       name,
     'department': departmentId,
+    'is_active':  isActive,
   };
 
   Map<String, String?> validate() {
