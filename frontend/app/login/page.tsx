@@ -13,23 +13,23 @@ interface LoginApiResponse {
   message: string;
   data: {
     user: {
-      id:                string;
-      email:             string;
-      full_name:         string;
-      role:              string;
-      branch:            string;
-      permissions:       string[];
+      id: string;
+      email: string;
+      full_name: string;
+      role: string;
+      branch: string;
+      permissions: string[];
       onboarding_status: string;
     };
   };
 }
 
 export default function LoginPage() {
-  const [email,      setEmail]      = useState("");
-  const [password,   setPassword]   = useState("");
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState("");
-  const [showPwd,    setShowPwd]    = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
 
@@ -41,12 +41,12 @@ export default function LoginPage() {
       const { data } = await clientApi.post<LoginApiResponse>(API.auth.login, { email, password });
       const d = data.data;
       const user: UserInfo = {
-        userId:            d.user.id,
-        email:             d.user.email,
-        name:              d.user.full_name,
-        role:              d.user.role,
-        branch:            d.user.branch ?? "",
-        permissions:       d.user.permissions ?? [],
+        userId: d.user.id,
+        email: d.user.email,
+        name: d.user.full_name,
+        role: d.user.role,
+        branch: d.user.branch ?? "",
+        permissions: d.user.permissions ?? [],
         onboarding_status: d.user.onboarding_status ?? "complete",
       };
       saveAuth(user);
@@ -82,7 +82,9 @@ export default function LoginPage() {
 
             {/* Brand icon */}
             <div className="login-brand-wrap">
-              <div className="login-brand-icon">👑</div>
+              <div className="login-brand-icon">
+                <img src="/logo.png" alt="Royal HRMS" width={42} height={42} style={{ borderRadius: 10 }} />
+              </div>
             </div>
 
             <h2 className="login-title">Welcome back</h2>

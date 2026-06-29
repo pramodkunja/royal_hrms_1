@@ -928,3 +928,189 @@ Pages confirmed responsive after this session's CSS additions:
 | `app/globals.css` | 28 new CSS classes (login element + announcement layout); responsive section extended |
 | `app/dashboard/announcements/page.tsx` | 3 inline flex style blocks replaced with CSS classes |
 | `app/dashboard/settings/email-templates/page.tsx` | Button order: Back first, Add Template second |
+
+---
+
+## Session 6 — Rithwika (29 June 2026)
+
+**Branch:** `frontend/expenses`
+
+---
+
+### 1. Organisation Chart — New Static Page (`app/dashboard/org-chart/`)
+
+Full static org-tree page at `/dashboard/org-chart`.
+
+#### File structure
+```
+org-chart/
+  page.tsx                  ← server component — auth guard → renders OrgChartClient
+  _components/
+    OrgChartClient.tsx      ← tree UI with CSS connector lines
+```
+
+#### Features
+- Root node: Managing Director "Sunil Varghese"
+- Four department columns: HR · Engineering · Finance · IT, each with head card + team-members card
+- Horizontal connector lines built with absolute-positioned divs using `left: isFirst ? "50%" : 0` / `right: isLast ? "50%" : 0` — no JavaScript measurement required
+- `overflow-x: auto` wrapper + `minWidth: 640px` inner container for small screens
+- `.org-mobile-hint` alert banner hidden by default, shown via injected `<style>` on `@media (max-width: 639px)`
+- Auth guard: `getSession()` → redirects to `/login` if unauthenticated
+
+#### Key CSS technique — sibling connector bar
+```tsx
+<div style={{
+  position: "absolute", top: 0,
+  left:  isFirst ? "50%" : 0,
+  right: isLast  ? "50%" : 0,
+  height: 1, background: "var(--outline-v)",
+}} />
+```
+This produces a continuous horizontal line connecting sibling nodes without knowing parent width at render time.
+
+---
+
+### 2. Expense Claims — New Static Page (`app/dashboard/expenses/`)
+
+Full static expense management page at `/dashboard/expenses`.
+
+#### File structure
+```
+expenses/
+  page.tsx                       ← server component — auth guard → renders ExpenseClaims
+  _components/
+    ExpenseClaims.tsx            ← main list + filters + approve/reject flow
+    ExpenseFormModal.tsx         ← "New Expense" submission form
+    ExpenseConfirmModal.tsx      ← approve / reject confirmation dialog
+```
+
+#### Static data (6 expenses totalling ₹67,400)
+| Employee | Branch | Category | Amount | Status |
+|----------|--------|----------|--------|--------|
+| Arjun Mehta | Mumbai | Travel | ₹18,500 | Approved |
+| Arjun Mehta | Mumbai | Meals | ₹6,240 | Approved |
+| Priya Sharma | Bangalore | Equipment | ₹14,999 | Pending |
+| Suresh Kumar | Delhi | Equipment | ₹1,850 | Pending |
+| Meena Iyer | Chennai | Travel | ₹22,300 | Approved |
+| Kavitha Rajan | Hyderabad | Meals | ₹3,511 | Rejected |
+
+#### `ExpenseClaims.tsx` features
+- **Stats row** — Total Claims · Pending (with ₹ sub-value) · Approved (with ₹ sub-value) · Total Amount (auto-formatted with K/L suffix)
+- **Branch dropdown** (`page-actions`, before "+ New Expense" button) — "All Branches" default + per-branch options; two-level filter: branch → category tab
+- **Category filter tabs** — All Claims · Travel · Meals · Equipment · Other; uses `.filter-scroll` class for horizontal scroll on mobile
+- **Approve/Reject buttons** — 36×36 green/red buttons on pending rows; clicking opens a confirmation modal that updates local state on confirm
+- New expenses submitted via form are appended to state (persists for the session)
+
+#### `ExpenseFormModal.tsx` fields
+- Expense Title (required), Amount ₹ (required), Category select (required), Date (required), Description textarea, Receipt upload zone (PDF/JPG/PNG ≤ 5 MB)
+- Blue info banner: "Your expense will be sent to your manager for approval…"
+- Backdrop blur via `.modal-overlay.open` (`backdrop-filter: blur(2px)`)
+
+#### `ExpenseConfirmModal.tsx`
+- Props: `type: "approve" | "reject"`, `expense`, `onConfirm`, `onCancel`
+- Shows expense title + amount in a summary card
+- `btn-success` for approve, `btn-danger` for reject
+
+---
+
+### 3. All Branches Filter — Expense Claims
+
+The existing `ExpenseClaims.tsx` was updated to add branch-level filtering.
+
+- `BRANCHES = ["Mumbai", "Bangalore", "Delhi", "Chennai", "Hyderabad"]`
+- Each expense now carries a `branch` field
+- `activeBranch` state drives the first filter layer; category tab drives the second
+- Branch dropdown placed in `.page-actions` **before** the "+ New Expense" button, per the design spec ("that field must be in top before Search anything field")
+- On mobile, `.page-actions` `flex-wrap: wrap` stacks the dropdown and button vertically, each at full width (`flex: 1` via global CSS rule)
+
+---
+
+### 4. Royal HRMS Logo — SVG Icon + Wired Application-Wide
+
+**Problem:** The sidebar showed a generic `ti-building-skyscraper` icon; the login page showed a `👑` crown emoji; the browser tab showed the default Next.js favicon.
+
+**Solution:** Created a bespoke SVG logo and wired it in three locations + the favicon.
+
+#### `public/logo.svg` (NEW)
+- Dark navy background (`#0c1a2e`) with rounded rect (`rx="18"`)
+- Blue circular ring (the "O" concept from the Royal HRMS brand, `stroke: #2d6bc9`)
+- Three human figures: centre person (head + body in `#5b86c9`) with gold tie polygon (`#c99a2e`); two flanking figures (`#1e4e8c`, 90% opacity)
+- Gold accent bar at the bottom (`#c99a2e`)
+- Renders cleanly at 30×30 (sidebar icon), 42×42 (login brand icon), 16×16 (favicon)
+
+#### Wiring changes
+| Location | Before | After |
+|----------|--------|-------|
+| `components/dashboard/DashboardShell.tsx` | `<div class="bg-primary"><i class="ti ti-building-skyscraper"/></div>` | `<img src="/logo.svg" width={30} height={30} style={{ borderRadius: 6 }}>` |
+| `app/login/page.tsx` | `<div class="login-brand-icon">👑</div>` | `<div class="login-brand-icon"><img src="/logo.svg" width={42} height={42} style={{ borderRadius: 10 }}></div>` |
+| `app/layout.tsx` | No favicon defined | `icons: { icon: "/logo.svg", apple: "/logo.svg" }` in metadata |
+
+> **Note:** `<img>` is used instead of Next.js `<Image>` for SVG — Next.js image optimisation does not benefit SVGs and requires additional configuration. Plain `<img>` with a `/public` path works without any config change.
+
+---
+
+### 5. Mobile Responsiveness — Global CSS Additions (`app/globals.css`)
+
+Three improvements added to the responsive section.
+
+#### `.filter-scroll` (new class — always-on)
+For filter bars with 4+ icon+text buttons that would otherwise be squished by `flex: 1` on mobile.
+
+```css
+.filter-scroll {
+  overflow-x: auto;
+  flex-wrap: nowrap !important;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 3px;
+  scrollbar-width: none;
+}
+.filter-scroll::-webkit-scrollbar { display: none; }
+.filter-scroll .btn {
+  flex-shrink: 0 !important;
+  flex: none !important;
+  white-space: nowrap;
+}
+```
+
+Used on: `ExpenseClaims.tsx` category filter bar (5 icon+text buttons).
+
+#### `page-actions select` on mobile (`@media max-width: 768px`)
+```css
+.page-actions select { flex: 1; min-width: 0; width: auto; }
+```
+Makes branch dropdowns inside `.page-actions` expand to fill available width alongside buttons — consistent with the existing `.page-actions .btn { flex: 1 }` rule.
+
+#### Bottom-sheet modals at `@media max-width: 480px`
+```css
+.modal { width: 100vw; max-height: 96vh; border-bottom-left-radius: 0; border-bottom-right-radius: 0; align-self: flex-end; }
+.modal-overlay.open { align-items: flex-end; }
+```
+On very small phones modals slide up from the bottom (native sheet pattern) instead of floating centred — avoids the modal being clipped by the virtual keyboard.
+
+---
+
+### Key Files Changed / Created (29 June 2026)
+
+| File | What |
+|------|------|
+| `public/logo.svg` | **NEW** — Royal HRMS SVG icon (navy, three-person HR emblem, gold tie + bar) |
+| `app/layout.tsx` | Added `icons: { icon, apple }` to metadata for SVG favicon |
+| `app/login/page.tsx` | Replaced `👑` crown with `<img src="/logo.svg">` inside `.login-brand-icon` |
+| `components/dashboard/DashboardShell.tsx` | Replaced `ti-building-skyscraper` icon div with `<img src="/logo.svg">` at 30×30 |
+| `app/dashboard/org-chart/page.tsx` | **NEW** — auth-guarded server component |
+| `app/dashboard/org-chart/_components/OrgChartClient.tsx` | **NEW** — static org tree with CSS connector lines, overflow-x scroll, mobile hint |
+| `app/dashboard/expenses/page.tsx` | **NEW** — auth-guarded server component |
+| `app/dashboard/expenses/_components/ExpenseClaims.tsx` | **NEW** — stats, branch dropdown, category filter-scroll, list with approve/reject, 6 static expenses |
+| `app/dashboard/expenses/_components/ExpenseFormModal.tsx` | **NEW** — new expense submission form with receipt upload + info banner |
+| `app/dashboard/expenses/_components/ExpenseConfirmModal.tsx` | **NEW** — approve/reject confirmation dialog |
+| `app/globals.css` | Added `.filter-scroll`; `page-actions select → flex:1` on mobile; bottom-sheet modals at ≤480px |
+
+---
+
+### Notes for Next Developer
+
+- **Org chart is fully static** — wire up to a real org API when available. The `DEPARTMENTS` array in `OrgChartClient.tsx` is the single source of truth.
+- **Expenses are fully static** — `INITIAL_EXPENSES` in `ExpenseClaims.tsx` carries all mock data. When wiring to the backend, replace state with `useFetch(API.expenses.list)` and call the PATCH endpoint on approve/reject.
+- **Branch filter is client-side only** — branches come from the `branch` field on each expense object. When backend is wired, pass `branch` as a query param to the list endpoint instead of filtering in the client.
+- **`.filter-scroll` class** — add this alongside `.filter-bar` on any filter bar that has 4+ icon+text buttons. Do not apply to bars with plain-text buttons (those wrap fine with `flex: 1`).
+- **Logo file is `/public/logo.svg`** — if the team later replaces it with a PNG (`logo.png`), update the three `src="/logo.svg"` references in `DashboardShell.tsx`, `login/page.tsx`, and `layout.tsx` metadata accordingly.
