@@ -1,0 +1,3 @@
+[submodule "mobile_app"]
+	path = mobile_app
+	url = https://github.com/pramodkunja/royal_hrms_1.git
