@@ -61,6 +61,9 @@ class ApiConstants {
   // Settings — Audit Log
   static const String settingsAudit = '/settings/audit/';
 
+  // Employees
+  static const String employees = '/employees/';
+
   // Document Center
   static const String documentStats = '/documents/stats/';
   static const String documents = '/documents/';

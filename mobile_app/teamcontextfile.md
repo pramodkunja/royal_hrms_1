@@ -1083,3 +1083,142 @@ mobile_app/
 - [ ] Payroll module
 
 ---
+
+## Session 8 — Organisation Chart Screen + My Profile Screen
+
+**Date:** 2026-06-29
+**Developer:** Vignesh Kumar Saka
+**Branch:** demo
+
+---
+
+### Overview
+
+Two new screens implemented and wired into the router:
+1. **Organisation Chart** — live data from backend employees API, rendered as a mobile tree layout
+2. **My Profile** — static screen matching the web design with 5 card sections
+
+---
+
+### 1. Organisation Chart Screen
+
+#### What Was Built
+A full org chart feature using **clean architecture** (domain / data / presentation layers). No dedicated backend endpoint exists, so the chart is built client-side from the employees list API.
+
+#### How It Works
+- Fetches all employees from `/api/employees/?page_size=200`
+- Fetches company name from `/api/settings/company/`
+- Identifies the Managing Director by designation keywords (`managing director`, `chief executive`, `ceo`, `md`)
+- Groups remaining employees by their `department` text field
+- For each department, picks a head using designation keywords (`manager`, `director`, `head`, `lead`, `admin`, `supervisor`, `chief`)
+- Assigns colors from an 8-color palette cycling by department index
+- Displays MD card at top, then department cards in a tree layout with connector lines
+
+#### Files Created
+```
+mobile_app/lib/features/org_chart/
+  domain/
+    entities/org_chart_entity.dart              OrgMemberEntity, DepartmentNodeEntity, OrgChartEntity
+    repositories/org_chart_repository.dart      abstract interface
+  data/
+    datasources/org_chart_remote_datasource.dart fetchEmployees(), fetchCompanyName()
+    repositories/org_chart_repository_impl.dart  _build(), _isMD(), _isHead(), color palette
+  presentation/
+    providers/org_chart_providers.dart           orgChartProvider (AutoDisposeAsyncNotifier)
+    screens/org_chart_screen.dart               OrgChartScreen, _OrgTree, _DeptRow, _BranchPainter
+    widgets/org_md_card.dart                    Managing Director card
+    widgets/org_dept_card.dart                  Department card with colored accent bar + members
+```
+
+#### Files Modified
+```
+mobile_app/
+  lib/core/constants/api_constants.dart   added: employees = '/employees/'
+  lib/core/router/app_router.dart         wired OrgChartScreen, removed PlaceholderScreen
+```
+
+#### Key Technical Patterns
+- **`_BranchPainter`** (`CustomPainter`): draws vertical line top-to-branch, optional vertical continuation for non-last items, horizontal branch right to card. `branchY = 32.0` aligns with the card's natural top padding.
+- **`IntrinsicHeight` + `Row(crossAxisAlignment: CrossAxisAlignment.stretch)`**: allows variable-height dept cards while tree connector spans full card height.
+- **8-color palette**: Orange, Blue, Green, Purple, Teal, Pink, Blue-grey, Red — cycling by `i % 8` so departments always get distinct colors.
+- **`autoDispose` AsyncNotifier**: provider auto-clears when user leaves the screen — no stale data.
+- **Pull-to-refresh**: `RefreshIndicator` wraps `CustomScrollView`; calls `notifier.refresh()` which sets `AsyncLoading` then re-fetches.
+
+#### Analysis Result
+`flutter analyze lib/features/org_chart/` → **No issues found**
+
+#### Line Counts (all under 300-line rule)
+| File | Lines |
+|------|-------|
+| org_chart_screen.dart | 254 |
+| org_chart_repository_impl.dart | 122 |
+| org_dept_card.dart | 112 |
+| org_chart_remote_datasource.dart | 43 |
+| org_chart_entity.dart | 43 |
+| org_md_card.dart | 47 |
+| org_chart_providers.dart | 29 |
+| org_chart_repository.dart | 5 |
+
+---
+
+### 2. My Profile Screen
+
+#### What Was Built
+A fully static profile screen matching the web UI design with 5 card sections. No API calls — uses static/hardcoded data appropriate for an MVP. `TextEditingController`s are pre-filled with demo values.
+
+#### Screen Sections
+| Section | Content |
+|---|---|
+| **Personal Information** | Circle avatar (initials "SA"), name, username, "Change photo" button, 3 paired field rows: First/Last Name · Email/Phone · Role (read-only) / User ID (read-only) |
+| **Change Password** | Current password field + New/Confirm side-by-side + "Update Password" outlined button |
+| **Address** | Street address (full width) + City/PIN side-by-side + State/Country side-by-side |
+| **Bank Details** | Bank Name/Account Number + IFSC Code/PAN Number |
+| **Documents** | Static list: Aadhaar Card, PAN Card, Degree Certificate, Offer Letter — each with eye icon |
+
+#### Files Created
+```
+mobile_app/lib/features/profile/
+  presentation/
+    screens/profile_screen.dart                  ProfileScreen (StatefulWidget, 258 lines)
+    widgets/profile_widgets.dart                 ProfileSectionCard, ProfileField, ProfileFieldRow, ProfileDocumentItem
+    widgets/profile_sections.dart                ProfileAddressSection, ProfileBankSection, ProfileDocumentsSection
+```
+
+#### Files Modified
+```
+mobile_app/
+  lib/core/router/app_router.dart   wired ProfileScreen at /dashboard/profile, removed PlaceholderScreen
+```
+
+#### Key Technical Patterns
+- **Split into 3 files** to stay under the 300-line rule: main screen (258), shared widgets (190), section widgets (131)
+- **`ProfileSectionCard`**: reusable card wrapper with icon + title header, divider, and padded content — used across all 5 sections
+- **`ProfileFieldRow`**: wraps two `Expanded` fields in a `Row` with 12px gap — used for all paired field layouts
+- **Read-only fields**: `Role` and `User ID` use `readOnly: true` with `AppColors.backgroundLow` fill to visually indicate non-editable
+- **18 `TextEditingController`s** all disposed in a single loop in `dispose()` — no memory leaks
+- **"Save Changes"** button shows a `SnackBar` — placeholder for future API integration
+- **"Update Password"** button is an `OutlinedButton.icon` with primary color border matching web design
+
+#### Analysis Result
+`flutter analyze lib/features/profile/` → **No issues found**
+
+#### Line Counts (all under 300-line rule)
+| File | Lines |
+|------|-------|
+| profile_screen.dart | 258 |
+| profile_widgets.dart | 190 |
+| profile_sections.dart | 131 |
+
+---
+
+### Pending Tasks (updated)
+- [ ] Connect My Profile screen to real API (GET /profile/, PATCH /profile/, POST /change-password/)
+- [ ] Connect Documents section in profile to real employee documents API
+- [ ] Backend team: add `access` token to login + refresh response bodies (from Session 4)
+- [ ] Test Document Center end-to-end: upload a PDF, view detail, preview, delete
+- [ ] Employee module implementation
+- [ ] Attendance module
+- [ ] Leave module
+- [ ] Payroll module
+
+---

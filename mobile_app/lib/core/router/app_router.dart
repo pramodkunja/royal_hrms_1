@@ -18,6 +18,8 @@ import '../../features/settings/presentation/roles/roles_screen.dart';
 import '../../features/settings/presentation/audit/audit_screen.dart';
 import '../../features/branches/presentation/screens/branches_screen.dart';
 import '../../features/documents/presentation/screens/documents_screen.dart';
+import '../../features/org_chart/presentation/screens/org_chart_screen.dart';
+import '../../features/profile/presentation/screens/profile_screen.dart';
 
 // ─── Route path constants ─────────────────────────────────────────────────────
 
@@ -186,9 +188,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.orgChart,
-            pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'Org Chart', icon: Icons.account_tree_outlined),
-            ),
+            pageBuilder: (_, __) => const NoTransitionPage(child: OrgChartScreen()),
           ),
           GoRoute(
             path: AppRoutes.branches,
@@ -255,9 +255,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.profile,
-            pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'My Profile', icon: Icons.account_circle_outlined),
-            ),
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: ProfileScreen()),
           ),
 
           // System
