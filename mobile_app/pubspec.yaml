@@ -1,0 +1,44 @@
+name: mobile_app
+description: "Royal HRMS - Enterprise HR Management System Mobile Application"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.5.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+
+  # Navigation
+  go_router: ^14.6.2
+
+  # Network
+  dio: ^5.7.0
+  dio_cookie_manager: ^3.1.1
+  cookie_jar: ^4.0.8
+
+  # Storage
+  flutter_secure_storage: ^9.2.2
+  path_provider: ^2.1.5
+
+  # Fonts
+  google_fonts: ^6.2.1
+
+  # Connectivity
+  connectivity_plus: ^6.1.1
+
+  # File / Image picking
+  image_picker: ^1.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
