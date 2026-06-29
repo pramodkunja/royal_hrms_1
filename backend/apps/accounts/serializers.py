@@ -22,6 +22,8 @@ from apps.accounts.models import (
     EmailTemplateAttachment,
     EmailTemplateCategory,
     EmployeeCodeSettings,
+    EmployeeDocument,
+    EmployeeProfile,
     Permission,
     Role,
     RolePermission,
@@ -767,3 +769,82 @@ class EmployeeCodeSettingsSerializer(serializers.ModelSerializer):
         if value < 1:
             raise serializers.ValidationError('Starting number must be at least 1.')
         return value
+
+
+# ─── Employee Profile (onboarding wizard) ─────────────────────────────────────
+
+class EmployeeProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = EmployeeProfile
+        fields = [
+            'date_of_birth', 'gender', 'marital_status', 'father_name',
+            'blood_group', 'current_address', 'permanent_address',
+            'highest_qualification', 'institution', 'year_of_passing', 'specialization',
+            'total_experience_years', 'previous_employer', 'previous_designation', 'leaving_reason',
+            'account_number', 'ifsc_code', 'bank_name', 'bank_branch_name',
+            'account_holder_name', 'account_type',
+            'emergency_name', 'emergency_relationship', 'emergency_phone', 'emergency_email',
+            'updated_at',
+        ]
+        read_only_fields = ('updated_at',)
+
+    def validate_year_of_passing(self, value):
+        if value is not None and not (1950 <= value <= 2099):
+            raise serializers.ValidationError('Year of passing must be between 1950 and 2099.')
+        return value
+
+    def validate_ifsc_code(self, value):
+        if value and len(value) != 11:
+            raise serializers.ValidationError('IFSC code must be exactly 11 characters.')
+        return value.upper() if value else value
+
+    def validate_account_number(self, value):
+        if value and not value.isdigit():
+            raise serializers.ValidationError('Account number must contain digits only.')
+        return value
+
+
+# ─── Employee Document ────────────────────────────────────────────────────────
+
+class EmployeeDocumentSerializer(serializers.ModelSerializer):
+    document_type_display = serializers.CharField(source='get_document_type_display', read_only=True)
+
+    class Meta:
+        model  = EmployeeDocument
+        fields = [
+            'id', 'document_type', 'document_type_display',
+            'file', 'file_name', 'file_size', 'uploaded_at',
+        ]
+        read_only_fields = ('id', 'document_type_display', 'file_name', 'file_size', 'uploaded_at')
+
+    def validate_file(self, value):
+        import os
+        if not getattr(value, 'name', None):
+            raise serializers.ValidationError('Uploaded file must have a name.')
+        if value.size == 0:
+            raise serializers.ValidationError('Uploaded file is empty.')
+        if value.content_type not in EmployeeDocument.ALLOWED_MIME_TYPES:
+            raise serializers.ValidationError('Only PDF, JPG, and PNG files are allowed.')
+        if value.size > EmployeeDocument.MAX_FILE_SIZE:
+            raise serializers.ValidationError(
+                f'File size {value.size / (1024 * 1024):.1f} MB exceeds the 5 MB limit.'
+            )
+        value.name = os.path.basename(value.name).strip()
+        return value
+
+
+# ─── Onboarding Approval ──────────────────────────────────────────────────────
+
+class OnboardingApprovalSerializer(serializers.ModelSerializer):
+    role_name    = serializers.CharField(source='role.name',         read_only=True, default='')
+    role_display = serializers.CharField(source='role.display_name', read_only=True, default='')
+    profile      = EmployeeProfileSerializer(read_only=True)
+    documents    = EmployeeDocumentSerializer(source='employee_documents', many=True, read_only=True)
+
+    class Meta:
+        model  = User
+        fields = [
+            'id', 'full_name', 'email', 'phone', 'department', 'designation', 'branch',
+            'role_name', 'role_display', 'employee_id', 'date_of_joining',
+            'onboarding_status', 'date_joined', 'profile', 'documents',
+        ]

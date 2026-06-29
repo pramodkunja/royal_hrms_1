@@ -6,12 +6,13 @@ export const USER_COOKIE = "royal_hrms_user";
 const COOKIE_MAX_AGE = 60 * 60 * 8; // 8 hours
 
 export interface UserInfo {
-  userId:      string;
-  email:       string;
-  name:        string;
-  role:        string;
-  branch:      string;
-  permissions: string[];
+  userId:            string;
+  email:             string;
+  name:              string;
+  role:              string;
+  branch:            string;
+  permissions:       string[];
+  onboarding_status: string;   // 'pending' | 'submitted' | 'complete'
 }
 
 export function saveAuth(user: UserInfo) {
@@ -24,6 +25,11 @@ export function saveAuth(user: UserInfo) {
 export function clearAuth() {
   document.cookie = `${AUTH_COOKIE}=; path=/; max-age=0`;
   document.cookie = `${USER_COOKIE}=; path=/; max-age=0`;
+}
+
+export function setOnboardingStatus(newStatus: string) {
+  const user = getStoredUser();
+  if (user) saveAuth({ ...user, onboarding_status: newStatus });
 }
 
 export function getStoredUser(): UserInfo | null {

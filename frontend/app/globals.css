@@ -2300,3 +2300,19 @@ body.dark-mode {
 .drawer-close:hover { background: var(--bg-mid); color: var(--on-bg); }
 .drawer-body { padding: 24px; flex: 1; overflow-y: auto; }
 .drawer-footer { padding: 16px 24px; border-top: 1px solid var(--outline-v); display: flex; justify-content: flex-end; gap: 10px; background: var(--surface); flex-shrink: 0; }
+
+/* ── Onboarding Wizard ───────────────────────────────────────────────────── */
+.onboarding-root { min-height: 100vh; background: var(--bg-low); display: flex; flex-direction: column; align-items: center; padding: 2rem 1rem 4rem; }
+.onboarding-header { text-align: center; margin-bottom: 1.5rem; }
+.onboarding-title { font-size: 1.5rem; font-weight: 700; color: var(--on-bg); margin-bottom: .25rem; }
+.onboarding-subtitle { color: var(--text-secondary); font-size: .9rem; }
+.onboarding-steps { display: flex; gap: .25rem; margin-bottom: 1.5rem; background: var(--surface); border-radius: 12px; padding: .5rem; box-shadow: 0 1px 4px rgba(0,0,0,.06); max-width: 680px; width: 100%; flex-wrap: wrap; }
+.onboarding-step { flex: 1; min-width: 120px; display: flex; align-items: center; gap: .5rem; padding: .5rem .75rem; border-radius: 8px; border: none; background: transparent; cursor: pointer; color: var(--text-muted); font-size: .82rem; transition: all .15s; }
+.onboarding-step:hover { background: var(--bg-low); color: var(--on-bg); }
+.onboarding-step--active { background: var(--primary-container); color: var(--primary); font-weight: 600; }
+.onboarding-step--done { color: var(--success); }
+.onboarding-step-num { width: 22px; height: 22px; border-radius: 50%; background: currentColor; color: #fff; display: flex; align-items: center; justify-content: center; font-size: .75rem; font-weight: 700; flex-shrink: 0; }
+.onboarding-step--active .onboarding-step-num { background: var(--primary); }
+.onboarding-step--done .onboarding-step-num { background: var(--success); }
+.onboarding-card { background: var(--surface); border-radius: 16px; box-shadow: 0 1px 6px rgba(0,0,0,.08); padding: 2rem; max-width: 680px; width: 100%; }
+.field-group-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 0; }

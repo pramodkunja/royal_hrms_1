@@ -1,4 +1,6 @@
 import logging
+import secrets
+import string
 
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -7,7 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from core.responses import error, first_error, get_client_ip, success
 
-from apps.accounts.models import AuditLog, Company
+from apps.accounts.models import AuditLog, Company, User
 from apps.accounts.utils import send_template_email
 from .models import Candidate, CandidateEmail, CandidateLog
 from .serializers import (
@@ -173,39 +175,50 @@ class CandidateStatusView(APIView):
             return error('Candidate not found.', http_status=status.HTTP_404_NOT_FOUND)
 
         new_status = request.data.get('status')
-        if new_status not in {Candidate.STATUS_SELECTED, Candidate.STATUS_REJECTED}:
-            return error('status must be "selected" or "rejected".')
+        valid_statuses = {
+            Candidate.STATUS_PENDING,
+            Candidate.STATUS_SCREENING,
+            Candidate.STATUS_INTERVIEW_SCHEDULED,
+            Candidate.STATUS_INTERVIEW_DONE,
+            Candidate.STATUS_SELECTED,
+            Candidate.STATUS_REJECTED,
+        }
+        if new_status not in valid_statuses:
+            return error(f'Invalid status. Choose from: {", ".join(sorted(valid_statuses))}.')
 
-        if candidate.status != Candidate.STATUS_PENDING:
-            return error(f'Candidate is already {candidate.status}.')
+        if candidate.status == Candidate.STATUS_CONVERTED:
+            return error('Cannot change status of a converted candidate.')
 
-        remarks = request.data.get('remarks', '')
-
-        default_slug  = 'selection' if new_status == 'selected' else 'rejection'
-        template_slug = (request.data.get('template_name') or default_slug).strip()
+        remarks    = request.data.get('remarks', '')
+        actor_name = request.user.full_name or request.user.email
 
         candidate.status = new_status
         candidate.save(update_fields=['status', 'updated_at'])
 
-        actor_name = request.user.full_name or request.user.email
-
         CandidateLog.objects.create(
             candidate=candidate,
-            log_type=CandidateLog.TYPE_SUCCESS if new_status == 'selected' else CandidateLog.TYPE_ERROR,
-            title=f'Interview conducted — marked as {new_status}',
+            log_type=(CandidateLog.TYPE_SUCCESS
+                      if new_status not in (Candidate.STATUS_REJECTED,)
+                      else CandidateLog.TYPE_ERROR),
+            title=f'Status changed to {new_status.replace("_", " ").title()}',
             description=f'By {actor_name}. {remarks}'.strip('. '),
         )
 
-        email_status = _send_candidate_email(candidate, template_slug, request.user)
-
-        CandidateLog.objects.create(
-            candidate=candidate,
-            log_type=CandidateLog.TYPE_SUCCESS if email_status == CandidateEmail.STATUS_SENT else CandidateLog.TYPE_WARN,
-            title=(f'{"Selection" if new_status == "selected" else "Rejection"} email sent'
-                   if email_status == CandidateEmail.STATUS_SENT
-                   else 'Email failed — check SMTP settings'),
-            description=f'Using template: {template_slug}',
-        )
+        # Send email only for selected or rejected transitions
+        if new_status in (Candidate.STATUS_SELECTED, Candidate.STATUS_REJECTED):
+            default_slug  = 'selection' if new_status == Candidate.STATUS_SELECTED else 'rejection'
+            template_slug = (request.data.get('template_name') or default_slug).strip()
+            email_status  = _send_candidate_email(candidate, template_slug, request.user)
+            CandidateLog.objects.create(
+                candidate=candidate,
+                log_type=(CandidateLog.TYPE_SUCCESS
+                          if email_status == CandidateEmail.STATUS_SENT
+                          else CandidateLog.TYPE_WARN),
+                title=('Notification email sent'
+                       if email_status == CandidateEmail.STATUS_SENT
+                       else 'Email failed — check SMTP settings'),
+                description=f'Template: {template_slug}',
+            )
 
         AuditLog.objects.create(
             user=request.user, action=f'candidate_{new_status}', module='recruitment',
@@ -366,4 +379,102 @@ class CandidateStatsView(APIView):
             'selected': selected, 'rejected': rejected,
             'pending_review': pending_review,
         })
+
+
+# ─── Send Portal Login (candidate onboarding invite) ──────────────────────────
+
+class SendPortalLoginView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        if not _has_perm(request.user, 'recruitment.edit'):
+            return error(_DENIED, http_status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            candidate = Candidate.objects.select_for_update().get(pk=pk)
+        except Candidate.DoesNotExist:
+            return error('Candidate not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        if candidate.status not in (
+            Candidate.STATUS_SELECTED,
+            Candidate.STATUS_INTERVIEW_DONE,
+        ):
+            return error('Candidate must be at least at Interview Done stage before sending portal login.')
+
+        if candidate.portal_credentials_sent and candidate.portal_user_id:
+            return error('Portal login already sent. Use resend if you want to issue new credentials.')
+
+        # Generate a temporary password
+        alphabet = string.ascii_letters + string.digits
+        temp_password = ''.join(secrets.choice(alphabet) for _ in range(12))
+
+        # Create portal user account
+        portal_user = User.objects.create_user(
+            email            = candidate.email,
+            password         = temp_password,
+            full_name        = candidate.name,
+            must_change_password = True,
+            onboarding_status    = User.ONBOARDING_PENDING,
+        )
+
+        candidate.portal_user             = portal_user
+        candidate.portal_credentials_sent = True
+        candidate.status                  = Candidate.STATUS_OFFER_SENT
+        candidate.save(update_fields=['portal_user', 'portal_credentials_sent', 'status', 'updated_at'])
+
+        CandidateLog.objects.create(
+            candidate=candidate,
+            log_type=CandidateLog.TYPE_INFO,
+            title='Portal login sent',
+            description=f'Account created for {candidate.email}. Sent by {request.user.full_name or request.user.email}.',
+        )
+
+        # Send credentials email
+        company      = Company.objects.first()
+        company_name = company.company_name if company else ''
+        context = {
+            'candidate_name': candidate.name,
+            'position':       candidate.position_applied,
+            'company_name':   company_name,
+            'login_email':    candidate.email,
+            'temp_password':  temp_password,
+            'portal_url':     request.data.get('portal_url', 'https://royalhrms.com/login'),
+        }
+        sent_status = CandidateEmail.STATUS_FAILED
+        try:
+            send_template_email(
+                recipient_email=candidate.email,
+                template_name='portal_invite',
+                context=context,
+            )
+            sent_status = CandidateEmail.STATUS_SENT
+        except Exception as exc:
+            logger.exception('Failed to send portal invite to %s: %s', candidate.email, exc)
+
+        CandidateEmail.objects.create(
+            candidate=candidate,
+            template_used='portal_invite',
+            subject=f'Your Portal Login — {company_name}',
+            to_email=candidate.email,
+            status=sent_status,
+            sent_by=request.user,
+        )
+        CandidateLog.objects.create(
+            candidate=candidate,
+            log_type=(CandidateLog.TYPE_SUCCESS
+                      if sent_status == CandidateEmail.STATUS_SENT
+                      else CandidateLog.TYPE_WARN),
+            title=('Portal invite email sent'
+                   if sent_status == CandidateEmail.STATUS_SENT
+                   else 'Portal invite email failed — check SMTP settings'),
+            description=f'To: {candidate.email}',
+        )
+        AuditLog.objects.create(
+            user=request.user, action='portal_login_sent', module='recruitment',
+            object_id=str(candidate.pk),
+            changes={'email': candidate.email},
+            ip_address=get_client_ip(request),
+        )
+        return success('Portal login sent successfully.', data={'email': candidate.email})
 

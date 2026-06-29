@@ -3,9 +3,18 @@ import { API } from "@/lib/api/endpoints";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type CandidateStatus = "pending" | "selected" | "rejected";
-export type InterviewMode   = "in_person" | "video_call" | "phone";
-export type LogType         = "success" | "error" | "info" | "warn";
+export type CandidateStatus =
+  | "pending"
+  | "screening"
+  | "interview_scheduled"
+  | "interview_done"
+  | "selected"
+  | "offer_sent"
+  | "rejected"
+  | "converted";
+
+export type InterviewMode = "in_person" | "video_call" | "phone";
+export type LogType       = "success" | "error" | "info" | "warn";
 
 export interface CandidateLog {
   id:          number;
@@ -41,6 +50,7 @@ export interface Candidate {
   details_filled:           boolean;
   hr_approved:              boolean;
   portal_credentials_sent:  boolean;
+  portal_user:              string | null;
   added_by_name:            string;
   created_at:               string;
   updated_at:               string;
@@ -112,6 +122,8 @@ export const RECRUITMENT_API = {
     clientApi.get<{ data: Record<string, EmailTemplate[]> }>(API.settings.emailTemplates),
   emailLogs:      (params?: { search?: string }) =>
     clientApi.get<{ data: CandidateEmail[] }>(API.recruitment.emailLogs, { params }),
+  sendPortalLogin: (id: number) =>
+    clientApi.post<{ message: string }>(API.recruitment.sendPortalLogin(id)),
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

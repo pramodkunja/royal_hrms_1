@@ -14,13 +14,23 @@ class Candidate(models.Model):
         (MODE_PHONE,      'Phone'),
     ]
 
-    STATUS_PENDING  = 'pending'
-    STATUS_SELECTED = 'selected'
-    STATUS_REJECTED = 'rejected'
+    STATUS_PENDING             = 'pending'
+    STATUS_SCREENING           = 'screening'
+    STATUS_INTERVIEW_SCHEDULED = 'interview_scheduled'
+    STATUS_INTERVIEW_DONE      = 'interview_done'
+    STATUS_SELECTED            = 'selected'
+    STATUS_OFFER_SENT          = 'offer_sent'
+    STATUS_CONVERTED           = 'converted'
+    STATUS_REJECTED            = 'rejected'
     STATUS_CHOICES = [
-        (STATUS_PENDING,  'Pending'),
-        (STATUS_SELECTED, 'Selected'),
-        (STATUS_REJECTED, 'Rejected'),
+        (STATUS_PENDING,             'Pending'),
+        (STATUS_SCREENING,           'Screening'),
+        (STATUS_INTERVIEW_SCHEDULED, 'Interview Scheduled'),
+        (STATUS_INTERVIEW_DONE,      'Interview Done'),
+        (STATUS_SELECTED,            'Selected'),
+        (STATUS_OFFER_SENT,          'Offer Sent'),
+        (STATUS_CONVERTED,           'Converted to Employee'),
+        (STATUS_REJECTED,            'Rejected'),
     ]
 
     name             = models.CharField(max_length=200)
@@ -52,6 +62,12 @@ class Candidate(models.Model):
     details_filled          = models.BooleanField(default=False)
     hr_approved             = models.BooleanField(default=False)
     portal_credentials_sent = models.BooleanField(default=False)
+    portal_user             = models.ForeignKey(
+                                  settings.AUTH_USER_MODEL,
+                                  on_delete=models.SET_NULL,
+                                  null=True, blank=True,
+                                  related_name='candidate_portal',
+                              )
     added_by         = models.ForeignKey(
                            settings.AUTH_USER_MODEL,
                            on_delete=models.SET_NULL,

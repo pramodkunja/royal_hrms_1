@@ -58,12 +58,21 @@ export const API = {
   },
 
   recruitment: {
-    candidates: "/recruitment/candidates/",
-    stats:      "/recruitment/candidates/stats/",
-    review:     "/recruitment/candidates/review/",
-    detail:     (id: number) => `/recruitment/candidates/${id}/`,
-    status:     (id: number) => `/recruitment/candidates/${id}/status/`,
-    hrDecision: (id: number) => `/recruitment/candidates/${id}/hr-decision/`,
-    emailLogs:  "/recruitment/emails/",
+    candidates:      "/recruitment/candidates/",
+    stats:           "/recruitment/candidates/stats/",
+    review:          "/recruitment/candidates/review/",
+    detail:          (id: number) => `/recruitment/candidates/${id}/`,
+    status:          (id: number) => `/recruitment/candidates/${id}/status/`,
+    hrDecision:      (id: number) => `/recruitment/candidates/${id}/hr-decision/`,
+    sendPortalLogin: (id: number) => `/recruitment/candidates/${id}/send-portal-login/`,
+    emailLogs:       "/recruitment/emails/",
+  },
+
+  onboarding: {
+    profile:   "/onboarding/profile/",
+    documents: "/onboarding/documents/",
+    submit:    "/onboarding/submit/",
+    approvals: "/onboarding/approvals/",
+    approve:   (userId: string) => `/onboarding/approvals/${userId}/approve/`,
   },
 } as const;

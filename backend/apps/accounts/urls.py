@@ -3,6 +3,11 @@ from apps.accounts.views import (
     AuditLogListView,
     EmployeeCodeSettingsView,
     EmployeeDetailView,
+    EmployeeDocumentView,
+    EmployeeProfileView,
+    OnboardingApprovalsListView,
+    OnboardingApproveView,
+    SubmitOnboardingView,
     CompanyRetrieveUpdateView,
     DepartmentDetailView,
     DepartmentListCreateView,
@@ -47,6 +52,13 @@ urlpatterns = [
     # Employees
     path('employees/',                      EmployeeListCreateView.as_view(), name='employee-list-create'),
     path('employees/<str:employee_id>/',    EmployeeDetailView.as_view(),     name='employee-detail'),
+
+    # Onboarding (self-service wizard)
+    path('onboarding/profile/',             EmployeeProfileView.as_view(),          name='onboarding-profile'),
+    path('onboarding/documents/',           EmployeeDocumentView.as_view(),         name='onboarding-documents'),
+    path('onboarding/submit/',              SubmitOnboardingView.as_view(),         name='onboarding-submit'),
+    path('onboarding/approvals/',           OnboardingApprovalsListView.as_view(),  name='onboarding-approvals'),
+    path('onboarding/approvals/<uuid:user_id>/approve/', OnboardingApproveView.as_view(), name='onboarding-approve'),
 
     # Organisation structure
     path('departments/',           DepartmentListCreateView.as_view(), name='department-list'),

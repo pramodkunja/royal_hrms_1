@@ -13,12 +13,13 @@ interface LoginApiResponse {
   message: string;
   data: {
     user: {
-      id:          string;
-      email:       string;
-      full_name:   string;
-      role:        string;
-      branch:      string;
-      permissions: string[];
+      id:                string;
+      email:             string;
+      full_name:         string;
+      role:              string;
+      branch:            string;
+      permissions:       string[];
+      onboarding_status: string;
     };
   };
 }
@@ -40,15 +41,17 @@ export default function LoginPage() {
       const { data } = await clientApi.post<LoginApiResponse>(API.auth.login, { email, password });
       const d = data.data;
       const user: UserInfo = {
-        userId:      d.user.id,
-        email:       d.user.email,
-        name:        d.user.full_name,
-        role:        d.user.role,
-        branch:      d.user.branch ?? "",
-        permissions: d.user.permissions ?? [],
+        userId:            d.user.id,
+        email:             d.user.email,
+        name:              d.user.full_name,
+        role:              d.user.role,
+        branch:            d.user.branch ?? "",
+        permissions:       d.user.permissions ?? [],
+        onboarding_status: d.user.onboarding_status ?? "complete",
       };
       saveAuth(user);
-      window.location.href = "/dashboard";
+      const dest = user.onboarding_status !== "complete" ? "/onboarding" : "/dashboard";
+      window.location.href = dest;
     } catch (err) {
       const { message } = err as { message: string };
       setError(message || "Login failed. Please check your credentials.");

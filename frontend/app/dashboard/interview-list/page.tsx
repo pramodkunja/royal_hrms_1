@@ -19,12 +19,24 @@ import { LogsModal }          from "./LogsModal";
 
 // ─── Tiny helpers ─────────────────────────────────────────────────────────────
 
+const STATUS_META: Record<CandidateStatus, { label: string; cls: string; icon: string }> = {
+  pending:              { label: "Pending",            cls: "badge-neutral", icon: "ti-clock" },
+  screening:            { label: "Screening",          cls: "badge-info",    icon: "ti-eye" },
+  interview_scheduled:  { label: "Interview Scheduled",cls: "badge-info",    icon: "ti-calendar" },
+  interview_done:       { label: "Interview Done",     cls: "badge-warn",    icon: "ti-clipboard-check" },
+  selected:             { label: "Selected",           cls: "badge-success", icon: "ti-check" },
+  offer_sent:           { label: "Offer Sent",         cls: "badge-success", icon: "ti-send" },
+  rejected:             { label: "Rejected",           cls: "badge-error",   icon: "ti-x" },
+  converted:            { label: "Converted",          cls: "badge-neutral", icon: "ti-user-check" },
+};
+
 function StatusBadge({ status }: { status: CandidateStatus }) {
-  if (status === "selected")
-    return <span className="badge badge-success"><i className="ti ti-check" /> Selected</span>;
-  if (status === "rejected")
-    return <span className="badge badge-error"><i className="ti ti-x" /> Rejected</span>;
-  return <span className="badge badge-neutral"><i className="ti ti-clock" /> Pending</span>;
+  const meta = STATUS_META[status] ?? STATUS_META.pending;
+  return (
+    <span className={`badge ${meta.cls}`}>
+      <i className={`ti ${meta.icon}`} /> {meta.label}
+    </span>
+  );
 }
 
 function Avatar({ name, size = 32 }: { name: string; size?: number }) {
@@ -48,9 +60,12 @@ export default function InterviewListPage() {
   const [branchFilter,  setBranchFilter]  = useState<number | "">("");
   const [branches,      setBranches]      = useState<Branch[]>([]);
 
-  const [showAdd,  setShowAdd]  = useState(false);
-  const [markData, setMarkData] = useState<{ candidate: Candidate; targetStatus: "selected" | "rejected" } | null>(null);
-  const [logsFor,  setLogsFor]  = useState<Candidate | null>(null);
+  const [showAdd,   setShowAdd]   = useState(false);
+  const [markData,  setMarkData]  = useState<{ candidate: Candidate; targetStatus: "selected" | "rejected" } | null>(null);
+  const [logsFor,   setLogsFor]   = useState<Candidate | null>(null);
+  const [sendingPortal, setSendingPortal] = useState<number | null>(null);
+  const [portalMsg,     setPortalMsg]     = useState<string | null>(null);
+  const [portalErr,     setPortalErr]     = useState<string | null>(null);
 
   const searchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -123,6 +138,23 @@ export default function InterviewListPage() {
     fetchAll(search, statusFilter, branchFilter);
   }
 
+  async function handleSendPortalLogin(candidateId: number) {
+    setSendingPortal(candidateId);
+    setPortalMsg(null);
+    setPortalErr(null);
+    try {
+      const res = await RECRUITMENT_API.sendPortalLogin(candidateId);
+      setPortalMsg(res.data?.message ?? "Portal login sent.");
+      fetchAll(search, statusFilter, branchFilter);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })
+        ?.response?.data?.message ?? "Failed to send portal login.";
+      setPortalErr(msg);
+    } finally {
+      setSendingPortal(null);
+    }
+  }
+
   const activeBranch = branches.find(b => b.id === branchFilter);
 
   const statCards = [
@@ -187,10 +219,24 @@ export default function InterviewListPage() {
         ))}
       </div>
 
+      {/* Portal login feedback */}
+      {portalMsg && (
+        <div className="alert alert-success" style={{ marginBottom: 16 }}>
+          <i className="ti ti-circle-check" /><div>{portalMsg}</div>
+          <button style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer" }} onClick={() => setPortalMsg(null)}>✕</button>
+        </div>
+      )}
+      {portalErr && (
+        <div className="alert alert-error" style={{ marginBottom: 16 }}>
+          <i className="ti ti-alert-circle" /><div>{portalErr}</div>
+          <button style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer" }} onClick={() => setPortalErr(null)}>✕</button>
+        </div>
+      )}
+
       {/* Info banner */}
       <div className="alert alert-info" style={{ marginBottom: 16 }}>
         <i className="ti ti-info-circle" />
-        <div>Mark candidates as Selected or Rejected. Selected candidates will receive a login email automatically.</div>
+        <div>Move candidates through the pipeline stages. Send portal login to selected candidates so they can fill their onboarding wizard.</div>
       </div>
 
       {/* Table */}
@@ -207,14 +253,19 @@ export default function InterviewListPage() {
             </div>
             <select
               className="field-input field-select"
-              style={{ width: 140 }}
+              style={{ width: 180 }}
               value={statusFilter}
               onChange={e => handleStatusFilter(e.target.value as "" | CandidateStatus)}
             >
               <option value="">All Status</option>
               <option value="pending">Pending</option>
+              <option value="screening">Screening</option>
+              <option value="interview_scheduled">Interview Scheduled</option>
+              <option value="interview_done">Interview Done</option>
               <option value="selected">Selected</option>
+              <option value="offer_sent">Offer Sent</option>
               <option value="rejected">Rejected</option>
+              <option value="converted">Converted</option>
             </select>
           </div>
         </div>
@@ -268,7 +319,9 @@ export default function InterviewListPage() {
                         <button className="btn btn-ghost btn-sm" onClick={() => setLogsFor(c)}>
                           <i className="ti ti-history" /> Logs
                         </button>
-                        {c.status === "pending" && (
+
+                        {/* Pre-selection pipeline: allow marking selected or rejected */}
+                        {(c.status === "pending" || c.status === "screening" || c.status === "interview_scheduled" || c.status === "interview_done") && (
                           <>
                             <button
                               className="btn btn-success btn-sm"
@@ -285,6 +338,36 @@ export default function InterviewListPage() {
                               <i className="ti ti-x" />
                             </button>
                           </>
+                        )}
+
+                        {/* Selected but portal not sent yet */}
+                        {c.status === "selected" && !c.portal_credentials_sent && (
+                          <button
+                            className="btn btn-filled btn-sm"
+                            style={{ fontSize: ".78rem" }}
+                            onClick={() => handleSendPortalLogin(c.id)}
+                            disabled={sendingPortal === c.id}
+                            title="Send portal login credentials"
+                          >
+                            {sendingPortal === c.id
+                              ? <><i className="ti ti-loader-2 spin" /> Sending…</>
+                              : <><i className="ti ti-send" /> Send Login</>
+                            }
+                          </button>
+                        )}
+
+                        {/* Portal already sent */}
+                        {(c.status === "offer_sent" || (c.status === "selected" && c.portal_credentials_sent)) && (
+                          <span className="badge badge-success" style={{ fontSize: ".75rem" }}>
+                            <i className="ti ti-mail-check" /> Login Sent
+                          </span>
+                        )}
+
+                        {/* Converted to employee */}
+                        {c.status === "converted" && (
+                          <span className="badge badge-neutral" style={{ fontSize: ".75rem" }}>
+                            <i className="ti ti-user-check" /> Employee
+                          </span>
                         )}
                       </div>
                     </td>

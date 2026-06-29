@@ -202,6 +202,7 @@ class LoginView(APIView):
                 'designation':         user.designation,
                 'branch':              user.branch,
                 'must_change_password': user.must_change_password,
+                'onboarding_status':   user.onboarding_status,
                 'permissions':         permissions,
             },
         })
@@ -2096,3 +2097,209 @@ class EmployeeCodeSettingsView(APIView):
         )
         logger.info('Employee code settings updated by %s', request.user.email)
         return success('Employee code settings updated.', data=serializer.data)
+
+
+# ─── Onboarding — Employee fills their own profile ────────────────────────────
+
+class EmployeeProfileView(APIView):
+    """GET / PATCH the requesting user's own EmployeeProfile."""
+    permission_classes = [IsAuthenticated]
+    parser_classes     = [JSONParser, FormParser, MultiPartParser]
+
+    def _get_or_create_profile(self, user):
+        from apps.accounts.models import EmployeeProfile as EP
+        profile, _ = EP.objects.get_or_create(user=user)
+        return profile
+
+    def get(self, request):
+        from apps.accounts.serializers import EmployeeProfileSerializer
+        profile = self._get_or_create_profile(request.user)
+        return success('Profile retrieved.', data=EmployeeProfileSerializer(profile).data)
+
+    def patch(self, request):
+        from apps.accounts.serializers import EmployeeProfileSerializer
+        if request.user.onboarding_status == User.ONBOARDING_COMPLETE:
+            return error('Onboarding is already complete.')
+        profile = self._get_or_create_profile(request.user)
+        serializer = EmployeeProfileSerializer(profile, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return error(first_error(serializer.errors), data=serializer.errors)
+        serializer.save()
+        # Mark in_progress so the user has started filling
+        if request.user.onboarding_status == User.ONBOARDING_PENDING:
+            User.objects.filter(pk=request.user.pk).update(onboarding_status=User.ONBOARDING_PENDING)
+        return success('Profile saved.', data=serializer.data)
+
+
+# ─── Onboarding — Document upload ─────────────────────────────────────────────
+
+class EmployeeDocumentView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes     = [MultiPartParser, FormParser]
+
+    def get(self, request):
+        from apps.accounts.models import EmployeeDocument as ED
+        from apps.accounts.serializers import EmployeeDocumentSerializer
+        docs = ED.objects.filter(user=request.user)
+        return success('Documents retrieved.', data=EmployeeDocumentSerializer(docs, many=True).data)
+
+    def post(self, request):
+        from apps.accounts.models import EmployeeDocument as ED
+        from apps.accounts.serializers import EmployeeDocumentSerializer
+        if request.user.onboarding_status == User.ONBOARDING_COMPLETE:
+            return error('Onboarding is already complete.')
+        serializer = EmployeeDocumentSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error(first_error(serializer.errors), data=serializer.errors)
+        file_obj = serializer.validated_data['file']
+        # Replace existing document of same type
+        ED.objects.filter(user=request.user, document_type=request.data.get('document_type')).delete()
+        doc = serializer.save(
+            user=request.user,
+            file_name=file_obj.name,
+            file_size=file_obj.size,
+        )
+        return success('Document uploaded.', data=EmployeeDocumentSerializer(doc).data,
+                       http_status=status.HTTP_201_CREATED)
+
+
+# ─── Onboarding — Submit wizard ───────────────────────────────────────────────
+
+class SubmitOnboardingView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.onboarding_status == User.ONBOARDING_COMPLETE:
+            return error('Onboarding is already complete.')
+        if request.user.onboarding_status == User.ONBOARDING_SUBMITTED:
+            return error('Onboarding already submitted and awaiting approval.')
+        User.objects.filter(pk=request.user.pk).update(onboarding_status=User.ONBOARDING_SUBMITTED)
+        logger.info('User %s submitted onboarding wizard', request.user.email)
+        return success('Onboarding submitted. Awaiting HR approval.')
+
+
+# ─── Onboarding — Approvals queue (HR / Admin) ────────────────────────────────
+
+class OnboardingApprovalsListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _has_perm(request.user, 'onboarding.approve'):
+            return error('You do not have permission to view onboarding approvals.',
+                         http_status=status.HTTP_403_FORBIDDEN)
+
+        from apps.accounts.serializers import OnboardingApprovalSerializer
+
+        role_name = request.user.role.name if request.user.role else ''
+        qs = User.objects.filter(
+            onboarding_status=User.ONBOARDING_SUBMITTED
+        ).select_related('role').prefetch_related('employee_documents')
+
+        # hr_admin can only approve employees (not other hr_admins)
+        if role_name == 'hr_admin':
+            qs = qs.exclude(role__name__in=['hr_admin', 'system_admin'])
+
+        try:
+            page_num  = max(1, int(request.query_params.get('page', 1)))
+            page_size = min(50, max(1, int(request.query_params.get('page_size', 20))))
+        except (ValueError, TypeError):
+            page_num, page_size = 1, 20
+
+        paginator = Paginator(qs, page_size)
+        page_obj  = paginator.get_page(page_num)
+
+        return success('Onboarding approvals retrieved.', data={
+            'count':       paginator.count,
+            'page':        page_obj.number,
+            'page_size':   page_size,
+            'total_pages': paginator.num_pages,
+            'results':     OnboardingApprovalSerializer(
+                               page_obj.object_list, many=True,
+                               context={'request': request},
+                           ).data,
+        })
+
+
+# ─── Onboarding — Approve / Reject one user ───────────────────────────────────
+
+class OnboardingApproveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, user_id):
+        if not _has_perm(request.user, 'onboarding.approve'):
+            return error('You do not have permission to approve onboarding.',
+                         http_status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            target = User.objects.select_related('role').get(pk=user_id)
+        except User.DoesNotExist:
+            return error('User not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        if target.onboarding_status != User.ONBOARDING_SUBMITTED:
+            return error('This user has not submitted their onboarding form.')
+
+        # hr_admin cannot approve other hr_admins or system_admins
+        role_name        = request.user.role.name if request.user.role else ''
+        target_role_name = target.role.name if target.role else ''
+        if role_name == 'hr_admin' and target_role_name in ('hr_admin', 'system_admin'):
+            return error('HR admin can only approve employee onboarding.',
+                         http_status=status.HTTP_403_FORBIDDEN)
+
+        decision = request.data.get('decision')
+        remarks  = request.data.get('remarks', '')
+        if decision not in ('approve', 'reject'):
+            return error('decision must be "approve" or "reject".')
+
+        if decision == 'approve':
+            # If this user came through recruitment (no role, no employee_id) → assign employee role
+            needs_conversion = not target.role and not target.employee_id
+            if needs_conversion:
+                try:
+                    employee_role = Role.objects.get(name='employee')
+                except Role.DoesNotExist:
+                    return error('Role "employee" not found. Create it in Roles settings first.')
+                target.role        = employee_role
+                target.employee_id = EmployeeCodeSettings.generate_employee_id()
+                if not target.date_of_joining:
+                    from django.utils import timezone as tz
+                    target.date_of_joining = tz.now().date()
+
+            target.onboarding_status    = User.ONBOARDING_COMPLETE
+            target.must_change_password = False
+            target.save(update_fields=[
+                'onboarding_status', 'must_change_password',
+                'role', 'employee_id', 'date_of_joining',
+            ])
+
+            # Update linked candidate to converted
+            try:
+                from apps.recruitment.models import Candidate
+                candidate = Candidate.objects.get(portal_user=target)
+                candidate.status      = Candidate.STATUS_CONVERTED
+                candidate.hr_approved = True
+                candidate.save(update_fields=['status', 'hr_approved', 'updated_at'])
+            except Candidate.DoesNotExist:
+                pass
+
+            AuditLog.objects.create(
+                user=request.user, action='onboarding_approved', module='accounts',
+                object_id=str(target.pk),
+                changes={'target': target.email, 'remarks': remarks},
+                ip_address=get_client_ip(request),
+            )
+            logger.info('Onboarding approved for %s by %s', target.email, request.user.email)
+            return success(f'{target.full_name} onboarding approved.')
+
+        else:
+            # Reject: send back to pending so they can re-fill
+            target.onboarding_status = User.ONBOARDING_PENDING
+            target.save(update_fields=['onboarding_status'])
+            AuditLog.objects.create(
+                user=request.user, action='onboarding_rejected', module='accounts',
+                object_id=str(target.pk),
+                changes={'target': target.email, 'remarks': remarks},
+                ip_address=get_client_ip(request),
+            )
+            logger.info('Onboarding rejected for %s by %s', target.email, request.user.email)
+            return success(f'Onboarding sent back to {target.full_name} for corrections.')

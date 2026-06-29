@@ -84,6 +84,16 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser, PermissionsMixin):
+
+    ONBOARDING_PENDING   = 'pending'
+    ONBOARDING_SUBMITTED = 'submitted'
+    ONBOARDING_COMPLETE  = 'complete'
+    ONBOARDING_CHOICES   = [
+        (ONBOARDING_PENDING,   'Pending'),
+        (ONBOARDING_SUBMITTED, 'Submitted — awaiting approval'),
+        (ONBOARDING_COMPLETE,  'Complete'),
+    ]
+
     id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email       = models.EmailField(unique=True)
     full_name   = models.CharField(max_length=150)
@@ -103,6 +113,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active       = models.BooleanField(default=True)
     is_staff      = models.BooleanField(default=False)
     must_change_password    = models.BooleanField(default=True)
+    onboarding_status       = models.CharField(
+                                  max_length=20,
+                                  choices=ONBOARDING_CHOICES,
+                                  default=ONBOARDING_PENDING,
+                              )
     failed_login_attempts   = models.PositiveSmallIntegerField(default=0)
     locked_until            = models.DateTimeField(null=True, blank=True)
     last_login_ip           = models.GenericIPAddressField(null=True, blank=True)
@@ -578,6 +593,123 @@ class Document(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+
+# ─── Employee Profile (onboarding wizard data) ────────────────────────────────
+
+class EmployeeProfile(models.Model):
+    GENDER_MALE    = 'male'
+    GENDER_FEMALE  = 'female'
+    GENDER_OTHER   = 'other'
+    GENDER_CHOICES = [
+        (GENDER_MALE,   'Male'),
+        (GENDER_FEMALE, 'Female'),
+        (GENDER_OTHER,  'Other / Prefer not to say'),
+    ]
+
+    MARITAL_SINGLE   = 'single'
+    MARITAL_MARRIED  = 'married'
+    MARITAL_DIVORCED = 'divorced'
+    MARITAL_WIDOWED  = 'widowed'
+    MARITAL_CHOICES  = [
+        (MARITAL_SINGLE,   'Single'),
+        (MARITAL_MARRIED,  'Married'),
+        (MARITAL_DIVORCED, 'Divorced'),
+        (MARITAL_WIDOWED,  'Widowed'),
+    ]
+
+    BLOOD_CHOICES = [
+        ('A+', 'A+'), ('A-', 'A-'), ('B+', 'B+'), ('B-', 'B-'),
+        ('O+', 'O+'), ('O-', 'O-'), ('AB+', 'AB+'), ('AB-', 'AB-'),
+    ]
+
+    ACCOUNT_SAVINGS = 'savings'
+    ACCOUNT_CURRENT = 'current'
+    ACCOUNT_CHOICES = [
+        (ACCOUNT_SAVINGS, 'Savings'),
+        (ACCOUNT_CURRENT, 'Current'),
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+
+    # Personal
+    date_of_birth      = models.DateField(null=True, blank=True)
+    gender             = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True)
+    marital_status     = models.CharField(max_length=20, choices=MARITAL_CHOICES, blank=True)
+    father_name        = models.CharField(max_length=150, blank=True)
+    blood_group        = models.CharField(max_length=5, choices=BLOOD_CHOICES, blank=True)
+    current_address    = models.TextField(blank=True)
+    permanent_address  = models.TextField(blank=True)
+
+    # Education
+    highest_qualification = models.CharField(max_length=200, blank=True)
+    institution           = models.CharField(max_length=200, blank=True)
+    year_of_passing       = models.PositiveSmallIntegerField(null=True, blank=True)
+    specialization        = models.CharField(max_length=200, blank=True)
+
+    # Experience
+    total_experience_years = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    previous_employer      = models.CharField(max_length=200, blank=True)
+    previous_designation   = models.CharField(max_length=200, blank=True)
+    leaving_reason         = models.TextField(blank=True)
+
+    # Bank
+    account_number      = models.CharField(max_length=20, blank=True)
+    ifsc_code           = models.CharField(max_length=11, blank=True)
+    bank_name           = models.CharField(max_length=200, blank=True)
+    bank_branch_name    = models.CharField(max_length=200, blank=True)
+    account_holder_name = models.CharField(max_length=150, blank=True)
+    account_type        = models.CharField(max_length=10, choices=ACCOUNT_CHOICES, blank=True)
+
+    # Emergency Contact
+    emergency_name         = models.CharField(max_length=150, blank=True)
+    emergency_relationship = models.CharField(max_length=50, blank=True)
+    emergency_phone        = models.CharField(max_length=20, blank=True)
+    emergency_email        = models.EmailField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'hrms_employee_profiles'
+
+    def __str__(self) -> str:
+        return f'Profile — {self.user.email}'
+
+
+# ─── Employee Documents ───────────────────────────────────────────────────────
+
+class EmployeeDocument(models.Model):
+    TYPE_PAN        = 'pan_card'
+    TYPE_AADHAAR    = 'aadhaar_card'
+    TYPE_DEGREE     = 'degree_certificate'
+    TYPE_EXPERIENCE = 'experience_letter'
+    TYPE_OTHER      = 'other'
+    TYPE_CHOICES    = [
+        (TYPE_PAN,        'PAN Card'),
+        (TYPE_AADHAAR,    'Aadhaar Card'),
+        (TYPE_DEGREE,     'Degree Certificate'),
+        (TYPE_EXPERIENCE, 'Experience Letter'),
+        (TYPE_OTHER,      'Other'),
+    ]
+
+    ALLOWED_MIME_TYPES = {'image/jpeg', 'image/png', 'application/pdf'}
+    MAX_FILE_SIZE      = 5 * 1024 * 1024  # 5 MB
+
+    user          = models.ForeignKey(User, on_delete=models.CASCADE, related_name='employee_documents')
+    document_type = models.CharField(max_length=30, choices=TYPE_CHOICES)
+    file          = models.FileField(upload_to='employee_documents/%Y/%m/')
+    file_name     = models.CharField(max_length=255)
+    file_size     = models.PositiveBigIntegerField()
+    uploaded_at   = models.DateTimeField(auto_now_add=True)
+    updated_at    = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'hrms_employee_documents'
+        ordering = ['document_type', '-uploaded_at']
+
+    def __str__(self) -> str:
+        return f'{self.user.email} — {self.document_type}'
 
 
 class EmailTemplateAttachment(models.Model):
