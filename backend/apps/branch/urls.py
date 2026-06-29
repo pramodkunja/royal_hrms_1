@@ -1,5 +1,7 @@
+# pyrefly: ignore [missing-import]
 from django.urls import path
 
+# pyrefly: ignore [missing-import]
 from apps.branch.views import (
     BranchDetailView,
     BranchDistributionView,

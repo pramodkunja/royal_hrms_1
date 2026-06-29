@@ -16,6 +16,8 @@ import '../../features/settings/presentation/departments/departments_screen.dart
 import '../../features/settings/presentation/employee_code/employee_code_screen.dart';
 import '../../features/settings/presentation/roles/roles_screen.dart';
 import '../../features/settings/presentation/audit/audit_screen.dart';
+import '../../features/branches/presentation/screens/branches_screen.dart';
+import '../../features/documents/presentation/screens/documents_screen.dart';
 
 // ─── Route path constants ─────────────────────────────────────────────────────
 
@@ -190,9 +192,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.branches,
-            pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'Branch Management', icon: Icons.business_outlined),
-            ),
+            pageBuilder: (_, __) => const NoTransitionPage(child: BranchesScreen()),
           ),
 
           // Time & Pay
@@ -242,9 +242,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.documents,
-            pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'Document Center', icon: Icons.folder_outlined),
-            ),
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: DocumentsScreen()),
           ),
 
           // My

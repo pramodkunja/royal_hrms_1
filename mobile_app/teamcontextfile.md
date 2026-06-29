@@ -539,3 +539,547 @@ lib/
 - [ ] Payroll module
 
 ---
+
+## Session 5
+
+**Date:** 2026-06-29
+**Developer:** Pramod Kunja
+
+### Module Worked On
+- Branch Management feature — full Clean Architecture implementation
+
+---
+
+### Completed Tasks
+
+#### Feature: Branch Management (`lib/features/branches/`)
+
+Implemented the complete Branch Management feature following the exact same Clean Architecture pattern as the `settings` feature (domain / data / presentation layers). All providers use `.autoDispose`.
+
+#### 1. Domain Layer
+
+**`domain/entities/branch_entity.dart`**
+Four immutable entity classes:
+- `StateEntity` — id, name, code
+- `CityEntity` — id, name, stateId, stateName
+- `BranchEntity` — full branch data (id, branchCode, branchName, address, stateId/Name, cityId/Name, employeesCount, status, isHeadquarter). Computed getter `isActive` returns `status == 'active'`.
+- `BranchStatsEntity` — totalBranches, totalActiveBranches, totalInactiveBranches, totalCities, totalEmployees
+
+**`domain/repositories/branch_repository.dart`**
+Abstract repository contract with 8 methods: getStates, getCities, previewBranchCode, getStats, getBranches, createBranch, updateBranch, deleteBranch.
+
+#### 2. Data Layer
+
+**`data/models/branch_model.dart`**
+Model classes extending entities: `StateModel`, `CityModel`, `BranchModel`, `BranchStatsModel`. All with `fromJson` factories parsing exact backend field names (`branch_code`, `branch_name`, `employees_count`, `is_headquarter`, `state_name`, `city_name`).
+
+**`data/datasources/branch_remote_datasource.dart`**
+Uses the shared `Dio` instance. Parses the `{success, message, data}` envelope via `_unwrap()`. Handles paginated branch list response (`data['results']`).
+
+**`data/repositories/branch_repository_impl.dart`**
+Thin implementation delegating to datasource. Maps method params to backend JSON field names (`city`, `state`, `branch_name`, `address`, `status`, `is_headquarter`).
+
+#### 3. Presentation Layer
+
+**`presentation/providers/branch_providers.dart`**
+Six `.autoDispose` providers:
+- `branchDataSourceProvider` — stateless factory (non-autoDispose)
+- `branchRepositoryProvider` — repo
+- `branchStatsProvider` — `AsyncNotifier` with `refresh()`
+- `branchListProvider` — `AsyncNotifier` with `create()`, `edit()`, `remove()`, `refresh()`
+- `statesProvider` — `AsyncNotifier` for states list
+- `citiesProvider(stateId)` — `autoDispose.family` `AsyncNotifier` for per-state cities
+
+**`presentation/screens/branches_screen.dart`**
+`ConsumerStatefulWidget` with:
+- **Stats row** — horizontal `ListView` of 4 `_StatCard` widgets (Total Branches, Total Workforce, Cities Covered, Active Branches) with colored icon boxes and big numbers
+- **"+ Add Branch" FilledButton** top right
+- **Branch grid** — `SliverGrid` with `maxCrossAxisExtent: 300` (auto-adapts: 2 columns on tablet, 1 on narrow mobile)
+- **Delete confirmation** — `showDialog` with "Are you sure you want to delete this branch?" + Cancel/OK
+- **Employee Distribution section** — custom bar chart using `Stack`/`Container` (no external charting dependency). Navy filled bars, proportional to max count. Shows branch name + count. Navy banner header fused to card top (same pattern as Session 3).
+- Pull-to-refresh via `RefreshIndicator`
+- Loading state: shimmer placeholder cards (grey containers)
+- Error state: retry button with `ref.invalidate`
+
+**`presentation/widgets/branch_card.dart`**
+`BranchCard` widget taking `BranchEntity`, `onEdit`, `onDelete` callbacks:
+- Navy icon box with `Icons.business_outlined`
+- Branch name bold, branch code in grey caption
+- Gold "HQ" badge if `isHeadquarter`
+- City row (`Icons.location_on_outlined`) + State row (`Icons.flag_outlined`)
+- Divider + employees count + Active/Inactive status badge with colored dot
+- Edit (left) / Delete (right, red) buttons separated by `VerticalDivider`
+
+**`presentation/widgets/branch_form_dialog.dart`**
+`StatefulWidget` dialog (matched `DeptFormSheet` pattern from Session 4):
+- `_DlgHeader` — navy top header with white icon, title, subtitle, close button
+- Add mode: "Add New Branch" / "Create Branch"
+- Edit mode: "Edit Branch: {name}" / "Save Changes"
+- Fields: State dropdown → City dropdown (disabled until state selected, loads via `citiesProvider(stateId)`) → Branch Code (read-only, auto-fetched via `previewBranchCode` API when city selected) → Branch Name → Address (3 lines) → Status dropdown → HQ checkbox
+- Uses `initialValue:` + `ValueKey` pattern (instead of deprecated `value:`) for reactive `DropdownButtonFormField` updates
+- Full validation with per-field error text
+- On success: closes dialog + refreshes stats provider
+
+#### 4. Modified Files
+
+**`lib/core/constants/api_constants.dart`**
+Added 6 branch constants: `branchStates`, `branchCities(int)`, `branchPreviewCode`, `branchStats`, `branches`, `branchDetail(int)`. Also removed unused `dart:io` import.
+
+**`lib/core/router/app_router.dart`**
+- Added `BranchesScreen` import
+- Replaced `PlaceholderScreen(title: 'Branch Management', ...)` route with `BranchesScreen()`
+
+### Files Created
+```
+lib/features/branches/
+  domain/
+    entities/branch_entity.dart
+    repositories/branch_repository.dart
+  data/
+    models/branch_model.dart
+    datasources/branch_remote_datasource.dart
+    repositories/branch_repository_impl.dart
+  presentation/
+    providers/branch_providers.dart
+    screens/branches_screen.dart
+    widgets/branch_card.dart
+    widgets/branch_form_dialog.dart
+```
+
+### Files Modified
+```
+lib/
+  core/
+    constants/api_constants.dart    added branch endpoints, removed unused import
+    router/app_router.dart          wired BranchesScreen, removed PlaceholderScreen
+```
+
+### Analysis Result
+`flutter analyze --no-pub` → **No issues found**
+
+### Key Architecture Notes
+- **No `value:` deprecated param** — all `DropdownButtonFormField` instances use `initialValue:` + `ValueKey` to force widget rebuild on state change (matching Session 3 pattern from `desig_form_sheet.dart`)
+- **No fl_chart dependency** — employee distribution chart built with `Stack`/`Container` bars using `LayoutBuilder` for proportional widths. No `pubspec.yaml` change needed.
+- **citiesProvider family** — `AutoDisposeFamilyAsyncNotifier<List<CityEntity>, int>` — one provider per `stateId` arg, auto-disposed when form closes
+- **Stats refresh after mutations** — `create`, `edit`, `remove` in `BranchListNotifier` all trigger `branchStatsProvider.notifier.refresh()` to keep stats in sync
+
+### Pending Tasks
+- [ ] Backend team: add `access` token to login response body + token refresh response body (carried from Session 4)
+- [ ] Employee module implementation
+- [ ] Attendance module
+- [ ] Leave module
+- [ ] Payroll module
+
+---
+
+## Session 6
+
+**Date:** 2026-06-29
+**Developer:** Vignesh Kumar Saka
+
+### Module Worked On
+- Branch Management — bug fixes, UI polish, and widget refactor
+- Git remote setup (Sriainfotech org repo)
+- VS Code Pyrefly interpreter fix
+
+---
+
+### Part 1: Branch Management Bug Fixes
+
+#### Bug 1 — 404 on all branch API calls
+
+**Root cause:** All API constants used `/branches/` as prefix (e.g. `/branches/branches/stats/`) but the Django root `urls.py` mounts the branch app at `/api/branch/`.
+
+**Fix:** Changed all 6 constants in `api_constants.dart`:
+
+| Before | After |
+|--------|-------|
+| `/branches/states/` | `/branch/states/` |
+| `/branches/states/{id}/cities/` | `/branch/states/{id}/cities/` |
+| `/branches/branches/preview-code/` | `/branch/branches/preview-code/` |
+| `/branches/branches/stats/` | `/branch/branches/stats/` |
+| `/branches/branches/` | `/branch/branches/` |
+| `/branches/branches/{id}/` | `/branch/branches/{id}/` |
+
+#### Bug 2 — RenderFlex overflow 172px in screen header
+
+**Root cause:** `Row(children: [Text(...), Spacer(), FilledButton(...)])` — `Text` had no flex constraint so it expanded to its natural width on narrow viewport, leaving no room for the button.
+
+**Fix:** Wrapped `Text` in `Flexible(child: Text(..., overflow: TextOverflow.ellipsis))` and replaced `Spacer()` with `const SizedBox(width: 8)`.
+
+#### Bug 3 — Delete dialog crashes the app
+
+**Root cause:** `Navigator.pop(context, false)` inside the dialog used the page-level `context` captured from `build()`. GoRouter owns that navigator stack — popping it threw *"You have popped the last page off of the stack"*.
+
+**Fix:** Used the dialog's own context from the builder parameter:
+```dart
+builder: (dialogContext) => AlertDialog(
+  actions: [
+    TextButton(onPressed: () => Navigator.pop(dialogContext, false), ...),
+    FilledButton(onPressed: () => Navigator.pop(dialogContext, true), ...),
+  ],
+)
+```
+
+#### Bug 4 — Extra blank space between location and employee rows on card
+
+**Root cause:** A stray `Spacer()` inside the card's `Column` pushed the bottom content down.
+
+**Fix:** Removed the `Spacer()` between the location section and the employee row.
+
+#### Bug 5 — Extra space below Edit/Delete buttons on every card
+
+**Root cause:** `Column(mainAxisSize: MainAxisSize.max)` expanded the card content to fill the fixed grid cell height, leaving white space between the last data row and the action buttons.
+
+**Fix:** Set `mainAxisSize: MainAxisSize.min` on the card's `Column`.
+
+#### Bug 6 — HQ badge card overflows by ~1px
+
+**Root cause:** `SliverGrid` with a fixed `maxCrossAxisExtent` forced every card in a row to the same computed height. Cards with the HQ badge were ~1px taller than that computed height.
+
+**Fix:** Replaced `SliverGrid` with `SliverList` + `IntrinsicHeight` rows:
+```dart
+SliverList(
+  delegate: SliverChildBuilderDelegate((_, rowIndex) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: BranchCard(...)),
+            const SizedBox(width: 12),
+            right < branches.length
+                ? Expanded(child: BranchCard(...))
+                : const Expanded(child: SizedBox()),
+          ],
+        ),
+      ),
+    );
+  }, childCount: rowCount),
+)
+```
+Each row auto-sizes to the tallest card. The shorter card's `Spacer()` (before the Divider) fills the height difference so Edit/Delete stay at the bottom of both cards.
+
+---
+
+### Part 2: Branch Management UI Polish
+
+#### Stats Row — redesigned from horizontal scroll to 2×2 grid
+
+Replaced `ListView.builder` (horizontal scroll of 4 stat cards) with `GridView.count(crossAxisCount: 2, childAspectRatio: 2.5)` inside a `SliverToBoxAdapter`. Stats no longer scroll off screen; all 4 are always visible.
+
+#### Branch Card — full visual redesign
+
+| Element | Before | After |
+|---------|--------|-------|
+| Top bar | None | 4px accent bar (primary if active, textHint if inactive) |
+| Icon | Plain navy box | Gradient box (primary → primary 75% opacity) with `BorderRadius.circular(12)` |
+| Branch code | Plain text | Pill badge with `backgroundMid` fill |
+| HQ indicator | Text label | Gold pill badge with `Icons.star_rounded`, border |
+| Location | Two bare text rows | Grouped `Container` with `background` fill + border |
+| Status | Text only | Dot + text pill badge (green/grey) |
+| Actions | Flat row | Divider separator + `Spacer()` pushes them to card bottom |
+
+#### Widget files extracted (to keep each file under 300 lines)
+
+| New file | Extracted from |
+|----------|---------------|
+| `branch_stats_row.dart` | `branches_screen.dart` |
+| `branch_list_states.dart` (`BranchEmptyView`, `BranchErrorView`) | `branches_screen.dart` |
+| `employee_distribution.dart` | `branches_screen.dart` |
+| `branch_dlg_header.dart` | `branch_form_dialog.dart` |
+| `branch_location_selector.dart` | `branch_form_dialog.dart` |
+
+`branch_location_selector.dart` exposes a public `BranchLocationSelectorState` class so the parent form dialog can call `_locationKey.currentState?.validate()` via a `GlobalKey<BranchLocationSelectorState>`.
+
+---
+
+### Part 3: Git Remote Setup
+
+Added a second git remote for the Sriainfotech organisation repository:
+
+```
+sriai → https://github.com/Sriainfotech/Royal-HRMS.git
+origin → https://github.com/pramodkunja/royal_hrms_1.git  (mobile_app only)
+```
+
+Pulled `backend/` and `frontend/` folder trees from `sriai/demo` branch.
+`origin` (`pramodkunja/royal_hrms_1`) remains the tracking remote for `mobile_app/`.
+
+---
+
+### Part 4: VS Code Python Interpreter Fix
+
+Created `.vscode/settings.json` at the repo root to point Pyrefly and the Python extension to the project's virtual environment:
+
+```json
+{
+  "python.defaultInterpreterPath": "/Users/vigneshkumarsaka/royal_hrms_1/backend/venv/bin/python",
+  "python.pythonPath":             "/Users/vigneshkumarsaka/royal_hrms_1/backend/venv/bin/python",
+  "pyrefly.pythonInterpreter":     "/Users/vigneshkumarsaka/royal_hrms_1/backend/venv/bin/python"
+}
+```
+
+This eliminated the false *"Import could not be resolved"* errors Pyrefly was showing for Django, DRF, and other installed packages (it was using system Python 3.9 which had none of these).
+
+---
+
+### Files Created
+```
+mobile_app/lib/features/branches/presentation/widgets/
+  branch_stats_row.dart
+  branch_list_states.dart
+  employee_distribution.dart
+  branch_dlg_header.dart
+  branch_location_selector.dart
+.vscode/settings.json
+```
+
+### Files Modified
+```
+mobile_app/lib/
+  core/constants/api_constants.dart         corrected branch URL prefix /branches/ → /branch/
+  features/branches/presentation/
+    screens/branches_screen.dart            overflow fix, SliverGrid → SliverList+IntrinsicHeight
+    widgets/branch_card.dart                full visual redesign (accent bar, gradient icon, etc.)
+    widgets/branch_form_dialog.dart         extracted header + location selector to own files
+    widgets/branch_stats_row.dart           2×2 GridView layout
+```
+
+### Analysis Result
+`flutter analyze` → **No issues found**
+
+### Pending Tasks (carried to Session 7)
+- [ ] Document Center module
+- [ ] Backend team: add `access` token to login + refresh response bodies (from Session 4)
+- [ ] Employee module
+- [ ] Attendance, Leave, Payroll modules
+
+---
+
+## Session 7
+
+**Date:** 2026-06-29
+**Developer:** Vignesh Kumar Saka
+
+### Module Worked On
+- Document Center (`HR OPS → Document Center`) — full Clean Architecture implementation with backend API integration
+
+---
+
+### Feature Overview
+
+Implemented the complete Document Center screen matching the web UI design (3 screens: list, upload dialog, detail dialog). All files under 300 lines. All providers use `.autoDispose`.
+
+**Backend API endpoints used:**
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/documents/stats/` | 4 stat counts |
+| GET | `/api/documents/?category=&search=` | Paginated document list |
+| POST | `/api/documents/` | Multipart file upload |
+| GET | `/api/documents/<id>/` | Document detail |
+| DELETE | `/api/documents/<id>/` | Soft delete (sets `is_active=False`) |
+
+Files are stored on Cloudinary. The `file_url` field in every `DocumentEntity` is a 2-hour signed URL — used directly for Preview and Download by opening in the system browser.
+
+---
+
+### New Packages Added to `pubspec.yaml`
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `file_picker` | `^8.1.2` | Device file browser — supports PDF, DOC, XLS, PPT, images, TXT, CSV |
+| `url_launcher` | `^6.3.0` | Opens signed Cloudinary URLs in browser for Preview / Download |
+
+Run `flutter pub get` — packages are already installed (done during this session).
+
+---
+
+### Domain Layer
+
+**`domain/entities/document_entity.dart`**
+- `DocumentEntity` — id, title, description, category, categoryDisplay, fileUrl, fileName, fileType, fileSize, fileSizeDisplay, branchName?, uploadedByName, uploadedAt, isActive
+- `DocumentStatsEntity` — total, policy, form, template, other
+
+**`domain/repositories/document_repository.dart`**
+Abstract contract: `getStats`, `getDocuments`, `createDocument`, `deleteDocument`.
+
+---
+
+### Data Layer
+
+**`data/models/document_model.dart`**
+`DocumentModel` and `DocumentStatsModel` with `fromJson` factories. `DocumentStatsModel` reads `json['by_category']` map for per-category counts.
+
+**`data/datasources/document_remote_datasource.dart`**
+Uses shared `Dio` instance. Parses `{success, message, data}` envelope via `_unwrap()`. File upload uses `FormData.fromMap` with `MultipartFile.fromFile`:
+```dart
+final formData = FormData.fromMap({
+  'file': await MultipartFile.fromFile(filePath, filename: fileName),
+  'title': title,
+  'description': description,
+  'category': category,
+});
+await _dio.post(ApiConstants.documents, data: formData,
+    options: Options(contentType: 'multipart/form-data'));
+```
+
+**`data/repositories/document_repository_impl.dart`**
+Thin delegation to datasource.
+
+---
+
+### Presentation Layer — Providers
+
+**`presentation/providers/document_providers.dart`**
+
+| Provider | Type | Description |
+|----------|------|-------------|
+| `documentDataSourceProvider` | `Provider` | Stateless factory (non-autoDispose) |
+| `documentRepositoryProvider` | `Provider` | Repository |
+| `documentStatsProvider` | `AsyncNotifierProvider.autoDispose` | Loads stats, exposes `refresh()` |
+| `documentListProvider` | `AsyncNotifierProvider.autoDispose` | Full list with `upload()`, `remove()`, `refresh()` |
+| `documentFilterProvider` | `StateProvider.autoDispose<String>` | Active filter: `'all'`, `'policy'`, `'form'`, `'template'` |
+| `documentSearchProvider` | `StateProvider.autoDispose<String>` | Search query string |
+| `filteredDocumentsProvider` | `Provider.autoDispose` | Derived — client-side filter + search applied to list |
+
+Client-side filtering is used (documents loaded once, filtered in memory). This avoids extra API calls when the user switches filter tabs — the document count is small.
+
+---
+
+### Presentation Layer — Screen & Widgets
+
+**`presentation/screens/documents_screen.dart`** (224 lines)
+`ConsumerWidget` with `CustomScrollView` + `RefreshIndicator`. Structure:
+1. Title row ("Document Center") + "Upload" `FilledButton`
+2. Stats 2×2 grid (shimmer while loading)
+3. `DocumentFilterBar` (search + filter chips)
+4. Document grid via `_DocumentGrid` (SliverList + IntrinsicHeight — same pattern as branches)
+5. Empty/error state handling
+
+**`presentation/widgets/document_stats_row.dart`** (153 lines)
+2×2 `GridView.count` with 4 stat cards (Total Documents, Policies, Forms, Templates). `DocumentStatsRowShimmer` shows grey placeholders during load.
+
+**`presentation/widgets/document_filter_bar.dart`** (141 lines)
+`ConsumerStatefulWidget`. Contains:
+- `TextField` for search (writes to `documentSearchProvider`, shows clear button when non-empty)
+- Horizontal `SingleChildScrollView` with 4 animated `_FilterChip` buttons
+
+**`presentation/widgets/document_card.dart`** (197 lines)
+Tap-to-open-detail card design:
+- 3px top accent bar in file-type colour
+- Coloured icon box (file type icon) + document title + file type badge
+- File size + upload date row
+- Uploader name row
+- `Spacer()` + category pill badge at bottom
+- File type colours: PDF=red, DOC=blue, XLS=green, PPT=orange, images=purple, TXT/CSV=grey
+
+**`presentation/widgets/document_type_helpers.dart`** (57 lines)
+Shared utility functions used by both `document_card.dart` and `document_detail_dialog.dart`:
+- `documentTypeColor(String type) → Color`
+- `documentTypeIcon(String type) → IconData`
+- `formatDocDate(DateTime dt) → String`
+
+**`presentation/widgets/document_upload_dialog.dart`** (249 lines)
+`ConsumerStatefulWidget` dialog:
+- Navy header: "Upload Document" + subtitle + close button
+- `DocumentFilePicker` widget (tap-to-select, shows file name + size after selection)
+- Document Name `TextFormField`
+- Description `TextFormField` (3 lines, optional)
+- Category `DropdownButtonFormField` (Policy / Form / Template / Other)
+- Cancel + "Upload Document" buttons (spinner while uploading)
+
+**`presentation/widgets/document_file_picker.dart`** (104 lines)
+Extracted from upload dialog. Calls `FilePicker.platform.pickFiles()` with allowed extensions list. Shows cloud-upload icon + "Tap to select file" when empty; shows file name + size + green tick when a file is picked. Error text displayed in red if user tries to submit without selecting.
+
+**`presentation/widgets/document_detail_dialog.dart`** (300 lines)
+`ConsumerStatefulWidget` dialog:
+- Navy header: document title + close button
+- File preview card: large file-type icon (64px), file name, "PDF · 1.2 MB" subtitle
+- Metadata card: Category, Uploaded by, Upload date, Access ("All Employees") — each row has icon + left label + right value
+- Action row: Delete (red FilledButton, triggers confirm dialog + `remove()`) | Preview (outlined, opens fileUrl) | Download (navy FilledButton, opens fileUrl)
+- Delete confirmation uses `dialogContext` (not outer context) — same GoRouter-safe pattern as branches
+
+**`presentation/widgets/document_list_states.dart`** (85 lines)
+`DocumentEmptyView` (folder icon + "No Documents Yet" + Upload button) and `DocumentErrorView` (error icon + message + Retry button).
+
+---
+
+### API Constants Added
+
+```dart
+// lib/core/constants/api_constants.dart
+static const String documentStats  = '/documents/stats/';
+static const String documents      = '/documents/';
+static String documentDetail(int id) => '/documents/$id/';
+```
+
+### Router Updated
+
+```dart
+// lib/core/router/app_router.dart
+// was: PlaceholderScreen(title: 'Document Center', icon: Icons.folder_outlined)
+// now:
+GoRoute(
+  path: AppRoutes.documents,
+  pageBuilder: (_, __) => const NoTransitionPage(child: DocumentsScreen()),
+),
+```
+
+---
+
+### Files Created
+```
+mobile_app/lib/features/documents/
+  domain/
+    entities/document_entity.dart
+    repositories/document_repository.dart
+  data/
+    models/document_model.dart
+    datasources/document_remote_datasource.dart
+    repositories/document_repository_impl.dart
+  presentation/
+    providers/document_providers.dart
+    screens/documents_screen.dart
+    widgets/
+      document_stats_row.dart
+      document_card.dart
+      document_filter_bar.dart
+      document_upload_dialog.dart
+      document_file_picker.dart
+      document_detail_dialog.dart
+      document_list_states.dart
+      document_type_helpers.dart
+```
+
+### Files Modified
+```
+mobile_app/
+  pubspec.yaml                              added file_picker ^8.1.2, url_launcher ^6.3.0
+  pubspec.lock                              updated (flutter pub get run)
+  lib/
+    core/constants/api_constants.dart      added documentStats, documents, documentDetail(id)
+    core/router/app_router.dart            wired DocumentsScreen, removed PlaceholderScreen
+```
+
+### Analysis Result
+`flutter analyze` → **No issues found**
+
+### Architecture Notes
+- **Client-side filtering**: `filteredDocumentsProvider` derives from `documentListProvider` — no extra API calls when switching tabs. Suitable because document count is small.
+- **Multipart upload**: Dio's `FormData` + `MultipartFile.fromFile` handles multipart. The base `Content-Type: application/json` header in `api_client.dart` is overridden per-request with `Options(contentType: 'multipart/form-data')`.
+- **Preview / Download**: Both use the same Cloudinary signed URL from `doc.fileUrl`. `url_launcher` opens it in the system browser. No local file caching needed for MVP.
+- **`dialogContext` pattern**: Delete confirmation inside `_DocumentDetailDialogState` uses `this.context` (State's context, not a parameter) with `if (!mounted) return` after each await — same GoRouter-safe pattern established in branches.
+- **Shared type helpers**: `document_type_helpers.dart` avoids duplicate switch statements for color/icon/date logic across card and detail dialog.
+
+### Pending Tasks
+- [ ] Backend team: add `access` token to login + refresh response bodies (from Session 4)
+- [ ] Test Document Center end-to-end: upload a PDF, view detail, preview, delete
+- [ ] Employee module implementation
+- [ ] Attendance module
+- [ ] Leave module
+- [ ] Payroll module
+
+---

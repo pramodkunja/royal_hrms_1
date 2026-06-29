@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 class ApiConstants {
@@ -61,4 +60,17 @@ class ApiConstants {
 
   // Settings — Audit Log
   static const String settingsAudit = '/settings/audit/';
+
+  // Document Center
+  static const String documentStats = '/documents/stats/';
+  static const String documents = '/documents/';
+  static String documentDetail(int id) => '/documents/$id/';
+
+  // Branch management
+  static const String branchStates = '/branch/states/';
+  static String branchCities(int stateId) => '/branch/states/$stateId/cities/';
+  static const String branchPreviewCode = '/branch/branches/preview-code/';
+  static const String branchStats = '/branch/branches/stats/';
+  static const String branches = '/branch/branches/';
+  static String branchDetail(int id) => '/branch/branches/$id/';
 }

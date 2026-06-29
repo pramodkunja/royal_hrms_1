@@ -3,6 +3,9 @@
 Thumbs.db
 desktop.ini
 
+# ── Claude Code internal files ────────────────────────────────────────────────
+.claude/
+
 # ── Secrets / local env ───────────────────────────────────────────────────────
 .env
 .env.*
