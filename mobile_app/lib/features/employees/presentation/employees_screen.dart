@@ -66,7 +66,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
               ListTile(
                 title: Text('All', style: AppTextStyles.body),
                 trailing: current.isEmpty
-                    ? Icon(Icons.check, color: AppColors.primary, size: 18)
+                    ? const Icon(Icons.check, color: AppColors.primary, size: 18)
                     : null,
                 onTap: () {
                   onSelect('');
@@ -76,7 +76,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
               ...options.map((opt) => ListTile(
                     title: Text(opt, style: AppTextStyles.body),
                     trailing: current == opt
-                        ? Icon(Icons.check, color: AppColors.primary, size: 18)
+                        ? const Icon(Icons.check, color: AppColors.primary, size: 18)
                         : null,
                     onTap: () {
                       onSelect(opt);

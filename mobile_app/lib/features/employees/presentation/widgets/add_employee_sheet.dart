@@ -64,7 +64,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionHeader(
+                  const _SectionHeader(
                     icon: Icons.person_outline,
                     label: 'PERSONAL INFORMATION',
                   ),
@@ -121,7 +121,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
                     ],
                   ),
                   const SizedBox(height: 22),
-                  _SectionHeader(
+                  const _SectionHeader(
                     icon: Icons.work_outline,
                     label: 'EMPLOYMENT DETAILS',
                   ),
@@ -335,7 +335,7 @@ class _Field extends StatelessWidget {
         if (error != null) ...[
           const SizedBox(height: 3),
           Text(error!,
-              style: TextStyle(
+              style: const TextStyle(
                   fontSize: 10,
                   color: AppColors.error,
                   fontWeight: FontWeight.w500)),
@@ -366,7 +366,7 @@ class _RoleDropdown extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Label(text: 'Role', required: true),
+        const _Label(text: 'Role', required: true),
         const SizedBox(height: 5),
         DropdownButtonFormField<dynamic>(
           initialValue: form.roleId,
@@ -385,7 +385,7 @@ class _RoleDropdown extends ConsumerWidget {
         ),
         if (error != null) ...[
           const SizedBox(height: 3),
-          Text(error!, style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
+          Text(error!, style: const TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
         ],
       ],
     );
@@ -417,7 +417,7 @@ class _DeptDropdown extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Label(text: 'Department', required: true),
+        const _Label(text: 'Department', required: true),
         const SizedBox(height: 5),
         DropdownButtonFormField<DepartmentModel>(
           initialValue: selected,
@@ -438,7 +438,7 @@ class _DeptDropdown extends ConsumerWidget {
         ),
         if (error != null) ...[
           const SizedBox(height: 3),
-          Text(error!, style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
+          Text(error!, style: const TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
         ],
       ],
     );
@@ -475,7 +475,7 @@ class _DesignationDropdown extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Label(text: 'Designation', required: true),
+        const _Label(text: 'Designation', required: true),
         const SizedBox(height: 5),
         DropdownButtonFormField<String>(
           initialValue: form.designation.isEmpty ? null : form.designation,
@@ -507,7 +507,7 @@ class _DesignationDropdown extends ConsumerWidget {
         ),
         if (error != null) ...[
           const SizedBox(height: 3),
-          Text(error!, style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
+          Text(error!, style: const TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
         ],
       ],
     );
@@ -535,7 +535,7 @@ class _BranchDropdown extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Label(text: 'Branch', required: true),
+        const _Label(text: 'Branch', required: true),
         const SizedBox(height: 5),
         DropdownButtonFormField<String>(
           initialValue: form.branch.isEmpty ? null : form.branch,
@@ -554,7 +554,7 @@ class _BranchDropdown extends ConsumerWidget {
         ),
         if (error != null) ...[
           const SizedBox(height: 3),
-          Text(error!, style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
+          Text(error!, style: const TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
         ],
       ],
     );
@@ -575,7 +575,7 @@ class _EmployeeTypeDropdown extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Label(text: 'Employee Type'),
+        const _Label(text: 'Employee Type'),
         const SizedBox(height: 5),
         DropdownButtonFormField<String>(
           initialValue: form.employeeType,
@@ -650,7 +650,7 @@ class _DateFieldState extends State<_DateField> {
       lastDate: DateTime(2100),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: ColorScheme.light(primary: AppColors.primary),
+          colorScheme: const ColorScheme.light(primary: AppColors.primary),
         ),
         child: child!,
       ),
@@ -668,7 +668,7 @@ class _DateFieldState extends State<_DateField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Label(text: 'Date of Joining', required: true),
+        const _Label(text: 'Date of Joining', required: true),
         const SizedBox(height: 5),
         TextFormField(
           controller: _ctrl,
@@ -683,7 +683,7 @@ class _DateFieldState extends State<_DateField> {
         if (widget.error != null) ...[
           const SizedBox(height: 3),
           Text(widget.error!,
-              style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
+              style: const TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
         ],
       ],
     );
