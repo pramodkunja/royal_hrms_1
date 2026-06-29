@@ -6,7 +6,7 @@ import { buildEmailPreview, CompanyInfo, renderTemplateVars } from "@/lib/emailP
 import { Candidate, EmailTemplate, RECRUITMENT_API } from "../interview-list/_data";
 import clientApi from "@/lib/clientApi";
 
-const AUTO_KEYS = new Set(["candidate_name", "position", "company_name"]);
+const AUTO_KEYS = new Set(["FULL_NAME", "FNAME", "LNAME", "EMAIL", "POSITION", "COMPANY"]);
 
 interface Props {
   candidate: Candidate;
@@ -21,7 +21,7 @@ export function HRDecisionModal({ candidate, decision, onClose, onDone }: Props)
   const [remarks,          setRemarks]          = useState("");
   const [saving,           setSaving]           = useState(false);
   const [apiError,         setApiError]         = useState("");
-  const [templates,        setTemplates]        = useState<EmailTemplate[]>([]);
+  const [templateGroups,   setTemplateGroups]   = useState<{ category: string; templates: EmailTemplate[] }[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
   const [extraVars,        setExtraVars]        = useState<Record<string, string>>({});
@@ -36,12 +36,16 @@ export function HRDecisionModal({ candidate, decision, onClose, onDone }: Props)
       clientApi.get<{ data: CompanyInfo }>(API.settings.company),
     ])
       .then(([tplRes, coRes]) => {
-        const grouped: Record<string, EmailTemplate[]> = tplRes.data?.data ?? {};
-        const list: EmailTemplate[] = ([] as EmailTemplate[])
-          .concat(...Object.values(grouped))
-          .filter(t => t.is_active);
-        setTemplates(list);
-        if (list.length > 0) setSelectedTemplate(list[0]);
+        const grouped: Record<string, EmailTemplate[]> = tplRes.data?.data?.results ?? {};
+        const groups = Object.entries(grouped)
+          .map(([category, items]) => ({
+            category,
+            templates: items.filter(t => t.is_active),
+          }))
+          .filter(g => g.templates.length > 0);
+        setTemplateGroups(groups);
+        const first = groups[0]?.templates[0] ?? null;
+        setSelectedTemplate(first);
         setCompany(coRes.data?.data ?? null);
       })
       .catch(() => setApiError("Could not load email templates."))
@@ -59,10 +63,14 @@ export function HRDecisionModal({ candidate, decision, onClose, onDone }: Props)
   }, [selectedTemplate]);
 
   function previewVars(): Record<string, string> {
+    const parts = candidate.name.trim().split(/\s+/);
     return {
-      candidate_name: candidate.name,
-      position:       candidate.position_applied,
-      company_name:   company?.company_name ?? '[Company]',
+      FULL_NAME: candidate.name,
+      FNAME:     parts[0] ?? candidate.name,
+      LNAME:     parts.length > 1 ? parts[parts.length - 1] : "",
+      EMAIL:     candidate.email,
+      POSITION:  candidate.position_applied,
+      COMPANY:   company?.company_name ?? "[Company]",
       ...extraVars,
     };
   }
@@ -131,15 +139,25 @@ export function HRDecisionModal({ candidate, decision, onClose, onDone }: Props)
                   <select
                     className="field-input field-select"
                     value={selectedTemplate?.name ?? ""}
-                    onChange={e =>
-                      setSelectedTemplate(templates.find(t => t.name === e.target.value) ?? null)
-                    }
+                    onChange={e => {
+                      const found = templateGroups
+                        .flatMap(g => g.templates)
+                        .find(t => t.name === e.target.value) ?? null;
+                      setSelectedTemplate(found);
+                    }}
                   >
-                    {templates.length === 0 && (
+                    {templateGroups.length === 0 && (
                       <option value="">No active templates — create one in Settings → Email Templates</option>
                     )}
-                    {templates.map(t => (
-                      <option key={t.name} value={t.name}>{t.display_name}</option>
+                    {templateGroups.map(g => (
+                      <optgroup
+                        key={g.category}
+                        label={g.category.charAt(0).toUpperCase() + g.category.slice(1)}
+                      >
+                        {g.templates.map(t => (
+                          <option key={t.name} value={t.name}>{t.display_name}</option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 )}

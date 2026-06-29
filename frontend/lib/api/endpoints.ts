@@ -36,8 +36,9 @@ export const API = {
   },
 
   employees: {
-    list:    "/employees/",
-    detail:  (id: string) => `/employees/${id}/`,
+    list:     "/employees/",
+    detail:   (id: string) => `/employees/${id}/`,
+    profile:  (id: string) => `/employees/${id}/profile/`,
     branches: "/branch/branches/",
   },
 
@@ -69,10 +70,11 @@ export const API = {
   },
 
   onboarding: {
-    profile:   "/onboarding/profile/",
-    documents: "/onboarding/documents/",
-    submit:    "/onboarding/submit/",
-    approvals: "/onboarding/approvals/",
-    approve:   (userId: string) => `/onboarding/approvals/${userId}/approve/`,
+    profile:     "/onboarding/profile/",
+    profileStep: (step: number) => `/onboarding/profile/step/${step}/`,
+    documents:   "/onboarding/documents/",
+    submit:      "/onboarding/submit/",
+    approvals:   "/onboarding/approvals/",
+    approve:     (userId: string) => `/onboarding/approvals/${userId}/approve/`,
   },
 } as const;

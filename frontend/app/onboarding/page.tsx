@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import clientApi from "@/lib/clientApi";
 import { API } from "@/lib/api/endpoints";
-import { getStoredUser, setOnboardingStatus } from "@/lib/auth";
+import { getStoredUser, setOnboardingStatus, clearAuth } from "@/lib/auth";
+import { markIntentionalLogout } from "@/lib/clientApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -33,7 +35,14 @@ const EMPTY: ProfileForm = {
   emergency_name: "", emergency_relationship: "", emergency_phone: "", emergency_email: "",
 };
 
-const TABS = ["Personal", "Education & Experience", "Bank Details", "Emergency Contact", "Documents"];
+const STEPS = [
+  { label: "Personal",               shortLabel: "Personal",   icon: "ti-user"          },
+  { label: "Education & Experience", shortLabel: "Education",  icon: "ti-school"        },
+  { label: "Bank Details",           shortLabel: "Bank",       icon: "ti-building-bank" },
+  { label: "Emergency Contact",      shortLabel: "Emergency",  icon: "ti-urgent"        },
+  { label: "Documents",              shortLabel: "Documents",  icon: "ti-files"         },
+];
+
 const DOC_TYPES = [
   { value: "pan_card",           label: "PAN Card" },
   { value: "aadhaar_card",       label: "Aadhaar Card" },
@@ -47,18 +56,24 @@ const SEL = "field-input";
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function OnboardingPage() {
-  const [tab,      setTab]      = useState(0);
-  const [form,     setForm]     = useState<ProfileForm>(EMPTY);
-  const [docs,     setDocs]     = useState<UploadedDoc[]>([]);
-  const [saving,   setSaving]   = useState(false);
-  const [saveMsg,  setSaveMsg]  = useState<string | null>(null);
-  const [saveErr,  setSaveErr]  = useState<string | null>(null);
-  const [uploading, setUploading] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState(false);
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [tab,       setTab]       = useState(0);
+  const [form,      setForm]      = useState<ProfileForm>(EMPTY);
+  const [docs,      setDocs]      = useState<UploadedDoc[]>([]);
+  const [saving,    setSaving]    = useState(false);
+  const [saveMsg,   setSaveMsg]   = useState<string | null>(null);
+  const [saveErr,   setSaveErr]   = useState<string | null>(null);
+  const [uploading,    setUploading]    = useState<string | null>(null);
+  const [submitted,         setSubmitted]         = useState(false);
+  const [isAlreadySubmitted, setIsAlreadySubmitted] = useState(false);
+  const [highestSaved, setHighestSaved] = useState(-1);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const user = getStoredUser();
-  const isAlreadySubmitted = user?.onboarding_status === "submitted";
+  useEffect(() => {
+    const user = getStoredUser();
+    if (user?.onboarding_status === "submitted") setIsAlreadySubmitted(true);
+  }, []);
 
   useEffect(() => {
     clientApi.get(API.onboarding.profile).then(r => {
@@ -72,26 +87,48 @@ export default function OnboardingPage() {
     }).catch(() => {});
   }, []);
 
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      markIntentionalLogout();
+      await clientApi.post(API.auth.logout, {});
+    } catch { /* proceed regardless */ } finally {
+      clearAuth();
+      router.replace("/login");
+    }
+  }
+
   function set(field: keyof ProfileForm, value: string) {
     setForm(prev => ({ ...prev, [field]: value }));
   }
 
-  async function saveSection() {
+  async function saveSection(): Promise<boolean> {
     setSaving(true); setSaveMsg(null); setSaveErr(null);
     try {
-      await clientApi.patch(API.onboarding.profile, form);
-      setSaveMsg("Saved.");
-      setTimeout(() => setSaveMsg(null), 2000);
-    } catch {
-      setSaveErr("Save failed. Please try again.");
+      const payload = { ...form, documents: docs };
+      const res = await clientApi.patch<{ success: boolean; message: string }>(API.onboarding.profileStep(tab), payload);
+      // Backend may return HTTP 200 with success: false for validation errors
+      if (res.data?.success === false) {
+        setSaveErr(res.data.message ?? "Please fill in all required fields.");
+        return false;
+      }
+      setSaveMsg("Saved successfully.");
+      setTimeout(() => setSaveMsg(null), 2500);
+      return true;
+    } catch (err: unknown) {
+      setSaveErr((err as { message?: string })?.message ?? "Save failed. Please try again.");
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
   async function next() {
-    await saveSection();
-    if (tab < TABS.length - 1) setTab(t => t + 1);
+    const ok = await saveSection();
+    if (ok && tab < STEPS.length - 1) {
+      setHighestSaved(prev => Math.max(prev, tab));
+      setTab(t => t + 1);
+    }
   }
 
   async function handleUpload(docType: string, file: File) {
@@ -100,29 +137,27 @@ export default function OnboardingPage() {
     fd.append("document_type", docType);
     fd.append("file", file);
     try {
-      await clientApi.post(API.onboarding.documents, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      await clientApi.post(API.onboarding.documents, fd);
       const r = await clientApi.get(API.onboarding.documents);
       setDocs(r.data?.data ?? []);
-    } catch {
-      setSaveErr("Upload failed. Max 5 MB, PDF/JPG/PNG only.");
+    } catch (err: unknown) {
+      setSaveErr((err as { message?: string })?.message ?? "Upload failed. Max 5 MB, PDF/JPG/PNG only.");
     } finally {
       setUploading(null);
     }
   }
 
   async function handleSubmit() {
-    await saveSection();
+    const ok = await saveSection();
+    if (!ok) return;
     setSaving(true);
     try {
       await clientApi.post(API.onboarding.submit, {});
+      setHighestSaved(STEPS.length - 1);
       setOnboardingStatus("submitted");
       setSubmitted(true);
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })
-        ?.response?.data?.message ?? "Submission failed.";
-      setSaveErr(msg);
+      setSaveErr((err as { message?: string })?.message ?? "Submission failed. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -130,108 +165,253 @@ export default function OnboardingPage() {
 
   const uploadedTypes = new Set(docs.map(d => d.document_type));
 
-  // ── Submitted / waiting screen ─────────────────────────────────────────────
+  // ── Submitted screen ───────────────────────────────────────────────────────
   if (submitted || isAlreadySubmitted) {
     return (
-      <div className="onboarding-root">
-        <div className="onboarding-card">
-          <div style={{ textAlign: "center", padding: "2.5rem 1rem" }}>
-            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>✅</div>
-            <h2 className="card-title" style={{ marginBottom: ".5rem" }}>Profile Submitted</h2>
-            <p style={{ color: "var(--text-secondary)", marginBottom: "1.5rem" }}>
-              Your onboarding details have been sent for HR review.<br />
-              You will receive access to the dashboard once approved.
-            </p>
-            <p style={{ fontSize: ".85rem", color: "var(--text-muted)" }}>
-              You can close this tab. We will notify you by email when approved.
-            </p>
+      <div style={ROOT_STYLE}>
+        <div style={{ ...CARD_STYLE, textAlign: "center", padding: "3rem 2rem", maxWidth: 480 }}>
+          <div style={{ width: 72, height: 72, borderRadius: "50%", background: "var(--success-c)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.5rem", fontSize: 32 }}>
+            <i className="ti ti-check" style={{ color: "var(--success)", fontSize: 36 }} />
           </div>
+          <h2 style={{ fontSize: "1.4rem", fontWeight: 700, color: "var(--on-bg)", marginBottom: ".75rem" }}>Profile Submitted!</h2>
+          <p style={{ color: "var(--on-variant)", lineHeight: 1.6, marginBottom: "1.5rem" }}>
+            Your onboarding details have been sent for HR review.<br />
+            You will receive access once approved.
+          </p>
+          <p style={{ fontSize: ".82rem", color: "var(--outline)", background: "var(--bg-low)", padding: ".75rem 1rem", borderRadius: 8 }}>
+            You can close this tab. We will notify you by email when approved.
+          </p>
         </div>
+
+        <button
+          onClick={handleLogout}
+          disabled={loggingOut}
+          type="button"
+          style={{
+            position: "fixed", bottom: 24, right: 24, zIndex: 100,
+            display: "flex", alignItems: "center", gap: 7,
+            padding: "10px 18px", borderRadius: 10,
+            border: "1.5px solid var(--outline-v)",
+            background: "#fff",
+            boxShadow: "0 2px 12px rgba(0,0,0,0.10)",
+            cursor: loggingOut ? "not-allowed" : "pointer",
+            fontSize: ".84rem", fontWeight: 500,
+            color: "var(--on-variant)",
+            transition: "box-shadow 0.15s",
+          }}
+        >
+          {loggingOut
+            ? <><i className="ti ti-loader-2 spin" style={{ fontSize: 15 }} /> Logging out…</>
+            : <><i className="ti ti-logout" style={{ fontSize: 15 }} /> Logout</>
+          }
+        </button>
       </div>
     );
   }
 
   // ── Wizard ─────────────────────────────────────────────────────────────────
   return (
-    <div className="onboarding-root">
-      {/* Header */}
-      <div className="onboarding-header">
-        <div className="login-brand-icon" style={{ marginBottom: ".25rem" }}>👑</div>
-        <h1 className="onboarding-title">Complete Your Profile</h1>
-        <p className="onboarding-subtitle">Fill in your details to get started. Your information is kept secure.</p>
-      </div>
+    <div style={ROOT_STYLE}>
+      <div style={{ width: "100%", maxWidth: 820 }}>
 
-      {/* Step tabs */}
-      <div className="onboarding-steps">
-        {TABS.map((t, i) => (
-          <button
-            key={t}
-            className={`onboarding-step${i === tab ? " onboarding-step--active" : i < tab ? " onboarding-step--done" : ""}`}
-            onClick={() => setTab(i)}
-            type="button"
-          >
-            <span className="onboarding-step-num">{i < tab ? "✓" : i + 1}</span>
-            <span className="onboarding-step-label">{t}</span>
-          </button>
-        ))}
-      </div>
+        {/* ── Header ── */}
+        <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
+          <div style={{
+            width: 68, height: 68, borderRadius: "50%",
+            background: "linear-gradient(135deg, #1e4e8c 0%, #2563eb 100%)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            margin: "0 auto 1.25rem",
+            boxShadow: "0 6px 24px rgba(30,78,140,0.28)",
+            fontSize: 30,
+          }}>
+            👑
+          </div>
+          <h1 style={{ fontSize: "1.75rem", fontWeight: 700, color: "var(--on-bg)", marginBottom: ".5rem", letterSpacing: "-.02em" }}>
+            Complete Your Profile
+          </h1>
+          <p style={{ color: "var(--on-variant)", fontSize: ".95rem" }}>
+            Fill in your details to get started. Your information is kept secure.
+          </p>
+        </div>
 
-      {/* Card */}
-      <div className="onboarding-card">
-        {saveErr  && <div className="alert alert-error"  style={{ marginBottom: "1rem" }}>{saveErr}</div>}
-        {saveMsg  && <div className="alert alert-success" style={{ marginBottom: "1rem" }}>{saveMsg}</div>}
+        {/* ── Step Indicator ── */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "center", marginBottom: "2.5rem", overflowX: "auto", padding: "0 .5rem" }}>
+          {STEPS.map((step, i) => {
+            const isDone   = i <= highestSaved;
+            const isActive = i === tab;
+            return (
+              <div key={step.label} style={{ display: "flex", alignItems: "flex-start", flexShrink: 0 }}>
 
-        {tab === 0 && <TabPersonal  form={form} set={set} />}
-        {tab === 1 && <TabEducation form={form} set={set} />}
-        {tab === 2 && <TabBank      form={form} set={set} />}
-        {tab === 3 && <TabEmergency form={form} set={set} />}
-        {tab === 4 && (
-          <TabDocuments
-            docs={docs}
-            uploadedTypes={uploadedTypes}
-            uploading={uploading}
-            fileRefs={fileRefs}
-            onUpload={handleUpload}
-          />
-        )}
+                {/* Step node */}
+                <button
+                  type="button"
+                  onClick={() => { if (i <= highestSaved + 1) setTab(i); }}
+                  disabled={i > highestSaved + 1}
+                  style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, background: "none", border: "none", cursor: i <= highestSaved + 1 ? "pointer" : "default", padding: "0 4px", minWidth: 88, opacity: i > highestSaved + 1 ? 0.45 : 1 }}
+                >
+                  <div style={{
+                    width: 58, height: 58, borderRadius: "50%",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: isDone ? "var(--success)" : isActive ? "var(--primary)" : "#fff",
+                    border: isDone ? "2.5px solid var(--success)" : isActive ? "2.5px solid var(--primary)" : "2px solid var(--outline-v)",
+                    boxShadow: isActive ? "0 0 0 5px rgba(30,78,140,0.12), 0 4px 12px rgba(30,78,140,0.18)" : isDone ? "0 2px 8px rgba(27,138,107,0.18)" : "none",
+                    transition: "all 0.25s ease",
+                    position: "relative",
+                  }}>
+                    {isDone ? (
+                      <i className="ti ti-check" style={{ fontSize: 24, color: "#fff" }} />
+                    ) : (
+                      <i className={`ti ${step.icon}`} style={{ fontSize: 22, color: isActive ? "#fff" : "var(--outline)" }} />
+                    )}
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{
+                      fontSize: 10, fontWeight: 700, letterSpacing: ".07em", textTransform: "uppercase",
+                      color: isDone ? "var(--success)" : isActive ? "var(--primary)" : "var(--outline)",
+                      marginBottom: 3,
+                    }}>
+                      {isDone ? "Done" : `Step ${i + 1}`}
+                    </div>
+                    <div style={{
+                      fontSize: 12, fontWeight: isActive ? 700 : 500,
+                      color: isActive ? "var(--on-bg)" : isDone ? "var(--success)" : "var(--on-variant)",
+                      maxWidth: 80, lineHeight: 1.3,
+                    }}>
+                      {step.shortLabel}
+                    </div>
+                  </div>
+                </button>
 
-        {/* Navigation */}
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "1.5rem", paddingTop: "1rem", borderTop: "1px solid var(--border)" }}>
-          <button
-            className="btn btn-ghost"
-            onClick={() => setTab(t => t - 1)}
-            disabled={tab === 0 || saving}
-            type="button"
-          >
-            ← Previous
-          </button>
+                {/* Connector */}
+                {i < STEPS.length - 1 && (
+                  <div style={{ display: "flex", alignItems: "center", paddingTop: 29, margin: "0 -4px" }}>
+                    <div style={{ width: 28, height: 2, background: i <= highestSaved ? "var(--success)" : "var(--outline-v)", borderRadius: 2, transition: "background 0.3s" }} />
+                    <i className="ti ti-chevron-right" style={{ fontSize: 14, color: i <= highestSaved ? "var(--success)" : "var(--outline-v)", margin: "0 -2px", transition: "color 0.3s" }} />
+                    <div style={{ width: 28, height: 2, background: i <= highestSaved ? "var(--success)" : "var(--outline-v)", borderRadius: 2, transition: "background 0.3s" }} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
 
-          {tab < TABS.length - 1 ? (
-            <button className="btn btn-filled" onClick={next} disabled={saving} type="button">
-              {saving ? "Saving…" : "Save & Continue →"}
-            </button>
-          ) : (
-            <div style={{ display: "flex", gap: ".75rem" }}>
-              <button className="btn btn-ghost" onClick={saveSection} disabled={saving} type="button">
-                {saving ? "Saving…" : "Save Draft"}
-              </button>
-              <button className="btn btn-filled" onClick={handleSubmit} disabled={saving} type="button">
-                {saving ? "Submitting…" : "Submit for Approval ✓"}
-              </button>
+        {/* ── Form card ── */}
+        <div style={CARD_STYLE}>
+          {/* Card header strip */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "1.5rem", paddingBottom: "1rem", borderBottom: "1px solid var(--outline-v)" }}>
+            <div style={{
+              width: 38, height: 38, borderRadius: 10,
+              background: "rgba(30,78,140,0.08)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              <i className={`ti ${STEPS[tab].icon}`} style={{ fontSize: 18, color: "var(--primary)" }} />
             </div>
+            <div>
+              <div style={{ fontSize: ".7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--outline)", marginBottom: 2 }}>Step {tab + 1} of {STEPS.length}</div>
+              <div style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--on-bg)" }}>{STEPS[tab].label}</div>
+            </div>
+            {/* Progress bar */}
+            <div style={{ marginLeft: "auto", textAlign: "right" }}>
+              <div style={{ fontSize: ".75rem", color: "var(--on-variant)", marginBottom: 4 }}>{Math.round(((highestSaved + 1) / STEPS.length) * 100)}% complete</div>
+              <div style={{ width: 100, height: 5, borderRadius: 3, background: "var(--outline-v)", overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${((highestSaved + 1) / STEPS.length) * 100}%`, background: "var(--primary)", borderRadius: 3, transition: "width 0.4s ease" }} />
+              </div>
+            </div>
+          </div>
+
+          {saveErr && <div className="alert alert-error"  style={{ marginBottom: "1.25rem" }}>{saveErr}</div>}
+          {saveMsg && <div className="alert alert-success" style={{ marginBottom: "1.25rem" }}>{saveMsg}</div>}
+
+          {tab === 0 && <TabPersonal  form={form} set={set} />}
+          {tab === 1 && <TabEducation form={form} set={set} />}
+          {tab === 2 && <TabBank      form={form} set={set} />}
+          {tab === 3 && <TabEmergency form={form} set={set} />}
+          {tab === 4 && (
+            <TabDocuments
+              docs={docs}
+              uploadedTypes={uploadedTypes}
+              uploading={uploading}
+              fileRefs={fileRefs}
+              onUpload={handleUpload}
+            />
           )}
+
+          {/* Navigation */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2rem", paddingTop: "1.25rem", borderTop: "1px solid var(--outline-v)" }}>
+            <button className="btn btn-ghost" onClick={() => setTab(t => t - 1)} disabled={tab === 0 || saving} type="button">
+              <i className="ti ti-arrow-left" style={{ fontSize: 14 }} /> Previous
+            </button>
+            {tab < STEPS.length - 1 ? (
+              <button className="btn btn-filled" onClick={next} disabled={saving} type="button">
+                {saving ? <><i className="ti ti-loader-2 spin" style={{ fontSize: 14 }} /> Saving…</> : <>Save & Continue <i className="ti ti-arrow-right" style={{ fontSize: 14 }} /></>}
+              </button>
+            ) : (
+              <div style={{ display: "flex", gap: ".75rem" }}>
+                <button className="btn btn-ghost" onClick={saveSection} disabled={saving} type="button">
+                  {saving ? "Saving…" : "Save Draft"}
+                </button>
+                <button className="btn btn-filled" onClick={handleSubmit} disabled={saving} type="button" style={{ background: "var(--success)", borderColor: "var(--success)" }}>
+                  {saving ? <><i className="ti ti-loader-2 spin" style={{ fontSize: 14 }} /> Submitting…</> : <><i className="ti ti-check" style={{ fontSize: 14 }} /> Submit for Approval</>}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* ── Fixed logout button ── */}
+      <button
+        onClick={handleLogout}
+        disabled={loggingOut}
+        type="button"
+        style={{
+          position: "fixed", bottom: 24, right: 24, zIndex: 100,
+          display: "flex", alignItems: "center", gap: 7,
+          padding: "10px 18px", borderRadius: 10,
+          border: "1.5px solid var(--outline-v)",
+          background: "#fff",
+          boxShadow: "0 2px 12px rgba(0,0,0,0.10)",
+          cursor: loggingOut ? "not-allowed" : "pointer",
+          fontSize: ".84rem", fontWeight: 500,
+          color: "var(--on-variant)",
+          transition: "box-shadow 0.15s",
+        }}
+      >
+        {loggingOut
+          ? <><i className="ti ti-loader-2 spin" style={{ fontSize: 15 }} /> Logging out…</>
+          : <><i className="ti ti-logout" style={{ fontSize: 15 }} /> Logout</>
+        }
+      </button>
     </div>
   );
 }
+
+// ── Layout constants ───────────────────────────────────────────────────────────
+
+const ROOT_STYLE: React.CSSProperties = {
+  minHeight: "100vh",
+  background: "linear-gradient(140deg, #f0f4ff 0%, #e9effe 45%, #f3f0ff 100%)",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "flex-start",
+  padding: "3rem 1rem 4rem",
+};
+
+const CARD_STYLE: React.CSSProperties = {
+  background: "#fff",
+  borderRadius: 16,
+  padding: "2rem",
+  boxShadow: "0 4px 24px rgba(30,78,140,0.08), 0 1px 4px rgba(0,0,0,0.04)",
+  border: "1px solid rgba(30,78,140,0.08)",
+};
 
 // ── Tab: Personal ─────────────────────────────────────────────────────────────
 
 function TabPersonal({ form, set }: { form: ProfileForm; set: (f: keyof ProfileForm, v: string) => void }) {
   return (
     <div>
-      <h3 className="card-title" style={{ marginBottom: "1rem" }}>Personal Details</h3>
       <div className="field-group-row">
         <div className="field-group">
           <label className="field-label">Date of Birth</label>
@@ -275,7 +455,7 @@ function TabPersonal({ form, set }: { form: ProfileForm; set: (f: keyof ProfileF
         <textarea className={INP} rows={2} value={form.current_address} onChange={e => set("current_address", e.target.value)} placeholder="House / Flat no., Street, City, State, PIN" />
       </div>
       <div className="field-group">
-        <label className="field-label">Permanent Address <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(if different from current)</span></label>
+        <label className="field-label">Permanent Address <span style={{ color: "var(--outline)", fontWeight: 400, fontSize: ".8rem" }}>(if different)</span></label>
         <textarea className={INP} rows={2} value={form.permanent_address} onChange={e => set("permanent_address", e.target.value)} placeholder="Leave blank if same as current" />
       </div>
     </div>
@@ -287,11 +467,11 @@ function TabPersonal({ form, set }: { form: ProfileForm; set: (f: keyof ProfileF
 function TabEducation({ form, set }: { form: ProfileForm; set: (f: keyof ProfileForm, v: string) => void }) {
   return (
     <div>
-      <h3 className="card-title" style={{ marginBottom: "1rem" }}>Education</h3>
+      <p style={{ fontWeight: 600, color: "var(--on-variant)", fontSize: ".8rem", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "1rem" }}>Education</p>
       <div className="field-group-row">
         <div className="field-group">
           <label className="field-label">Highest Qualification</label>
-          <input className={INP} value={form.highest_qualification} onChange={e => set("highest_qualification", e.target.value)} placeholder="e.g. B.Tech, MBA, B.Com" />
+          <input className={INP} value={form.highest_qualification} onChange={e => set("highest_qualification", e.target.value)} placeholder="e.g. B.Tech, MBA" />
         </div>
         <div className="field-group">
           <label className="field-label">Specialization</label>
@@ -308,8 +488,7 @@ function TabEducation({ form, set }: { form: ProfileForm; set: (f: keyof Profile
           <input type="number" className={INP} value={form.year_of_passing} onChange={e => set("year_of_passing", e.target.value)} placeholder="e.g. 2020" min={1950} max={2099} />
         </div>
       </div>
-
-      <h3 className="card-title" style={{ margin: "1.5rem 0 1rem" }}>Work Experience</h3>
+      <p style={{ fontWeight: 600, color: "var(--on-variant)", fontSize: ".8rem", textTransform: "uppercase", letterSpacing: ".05em", margin: "1.5rem 0 1rem" }}>Work Experience</p>
       <div className="field-group-row">
         <div className="field-group">
           <label className="field-label">Total Experience (years)</label>
@@ -337,9 +516,9 @@ function TabEducation({ form, set }: { form: ProfileForm; set: (f: keyof Profile
 function TabBank({ form, set }: { form: ProfileForm; set: (f: keyof ProfileForm, v: string) => void }) {
   return (
     <div>
-      <h3 className="card-title" style={{ marginBottom: "1rem" }}>Bank Details</h3>
-      <div className="alert alert-error" style={{ background: "#fff8e1", border: "1px solid #ffc107", color: "#7c5800", marginBottom: "1rem" }}>
-        ⚠ Bank details are used for payroll. Ensure all information is accurate and matches your passbook.
+      <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#fffbea", border: "1px solid #f0c040", borderRadius: 10, padding: ".75rem 1rem", marginBottom: "1.5rem" }}>
+        <i className="ti ti-alert-triangle" style={{ color: "#b07c00", fontSize: 18, flexShrink: 0 }} />
+        <span style={{ fontSize: ".85rem", color: "#7c5800" }}>Bank details are used for payroll. Ensure all information matches your passbook exactly.</span>
       </div>
       <div className="field-group-row">
         <div className="field-group">
@@ -384,8 +563,7 @@ function TabBank({ form, set }: { form: ProfileForm; set: (f: keyof ProfileForm,
 function TabEmergency({ form, set }: { form: ProfileForm; set: (f: keyof ProfileForm, v: string) => void }) {
   return (
     <div>
-      <h3 className="card-title" style={{ marginBottom: "1rem" }}>Emergency Contact</h3>
-      <p style={{ color: "var(--text-secondary)", marginBottom: "1rem", fontSize: ".9rem" }}>
+      <p style={{ color: "var(--on-variant)", marginBottom: "1.25rem", fontSize: ".9rem", lineHeight: 1.6 }}>
         This person will be contacted in case of an emergency at the workplace.
       </p>
       <div className="field-group-row">
@@ -404,7 +582,7 @@ function TabEmergency({ form, set }: { form: ProfileForm; set: (f: keyof Profile
           <input className={INP} value={form.emergency_phone} onChange={e => set("emergency_phone", e.target.value)} placeholder="Mobile number" />
         </div>
         <div className="field-group">
-          <label className="field-label">Email <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(optional)</span></label>
+          <label className="field-label">Email <span style={{ color: "var(--outline)", fontWeight: 400, fontSize: ".8rem" }}>(optional)</span></label>
           <input type="email" className={INP} value={form.emergency_email} onChange={e => set("emergency_email", e.target.value)} placeholder="email@example.com" />
         </div>
       </div>
@@ -420,32 +598,41 @@ function TabDocuments({
   docs: UploadedDoc[];
   uploadedTypes: Set<string>;
   uploading: string | null;
-  fileRefs: React.MutableRefObject<Record<string, HTMLInputElement | null>>;
+  fileRefs: React.RefObject<Record<string, HTMLInputElement | null>>;
   onUpload: (docType: string, file: File) => void;
 }) {
   return (
     <div>
-      <h3 className="card-title" style={{ marginBottom: "1rem" }}>Documents</h3>
-      <p style={{ color: "var(--text-secondary)", marginBottom: "1rem", fontSize: ".9rem" }}>
-        Upload clear scans or photos. Accepted formats: PDF, JPG, PNG. Max 5 MB each.
+      <p style={{ color: "var(--on-variant)", marginBottom: "1.25rem", fontSize: ".9rem", lineHeight: 1.6 }}>
+        Upload clear scans or photos. Accepted: PDF, JPG, PNG · Max 5 MB each.
       </p>
-      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: ".875rem" }}>
         {DOC_TYPES.map(dt => {
-          const uploaded = uploadedTypes.has(dt.value);
+          const uploaded     = uploadedTypes.has(dt.value);
           const uploaded_doc = docs.find(d => d.document_type === dt.value);
           const isUploading  = uploading === dt.value;
           return (
-            <div key={dt.value} className="card" style={{ padding: "1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
-              <div>
-                <div style={{ fontWeight: 600, marginBottom: ".15rem" }}>{dt.label}</div>
-                {uploaded && uploaded_doc && (
-                  <div style={{ fontSize: ".8rem", color: "var(--text-secondary)" }}>
-                    ✓ {uploaded_doc.file_name}
-                  </div>
-                )}
+            <div key={dt.value} style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem",
+              padding: "1rem 1.25rem", borderRadius: 12,
+              border: `1.5px solid ${uploaded ? "var(--success)" : "var(--outline-v)"}`,
+              background: uploaded ? "var(--success-c)" : "#fff",
+              transition: "all 0.2s",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 9, background: uploaded ? "var(--success)" : "var(--bg-high)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <i className={uploaded ? "ti ti-file-check" : "ti ti-file-upload"} style={{ color: uploaded ? "#fff" : "var(--on-variant)", fontSize: 18 }} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: ".9rem", color: "var(--on-bg)" }}>{dt.label}</div>
+                  {uploaded && uploaded_doc && (
+                    <div style={{ fontSize: ".78rem", color: "var(--success)", marginTop: 2 }}>
+                      <i className="ti ti-check" style={{ fontSize: 11 }} /> {uploaded_doc.file_name}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}>
-                {uploaded && <span style={{ color: "var(--success)", fontSize: ".85rem" }}>Uploaded</span>}
+              <div style={{ display: "flex", gap: ".5rem", alignItems: "center", flexShrink: 0 }}>
                 <input
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png"
@@ -459,12 +646,12 @@ function TabDocuments({
                 />
                 <button
                   className="btn btn-ghost"
-                  style={{ fontSize: ".85rem" }}
+                  style={{ fontSize: ".83rem", borderColor: uploaded ? "var(--success)" : undefined, color: uploaded ? "var(--success)" : undefined }}
                   onClick={() => fileRefs.current[dt.value]?.click()}
                   disabled={isUploading}
                   type="button"
                 >
-                  {isUploading ? "Uploading…" : uploaded ? "Replace" : "Upload"}
+                  {isUploading ? <><i className="ti ti-loader-2 spin" style={{ fontSize: 13 }} /> Uploading…</> : uploaded ? "Replace" : "Upload"}
                 </button>
               </div>
             </div>
