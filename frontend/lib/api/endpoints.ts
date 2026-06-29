@@ -37,6 +37,7 @@ export const API = {
 
   employees: {
     list:    "/employees/",
+    me:      "/employees/me/",
     detail:  (id: string) => `/employees/${id}/`,
     branches: "/branch/branches/",
   },
@@ -74,5 +75,10 @@ export const API = {
     submit:    "/onboarding/submit/",
     approvals: "/onboarding/approvals/",
     approve:   (userId: string) => `/onboarding/approvals/${userId}/approve/`,
+  },
+
+  expenses: {
+    list:  "/expenses/",
+    stats: "/expenses/stats/",
   },
 } as const;

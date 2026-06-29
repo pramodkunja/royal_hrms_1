@@ -80,11 +80,15 @@ export default function LoginPage() {
         <div className="login-form-panel">
           <div className="login-form-inner">
 
-            {/* Brand icon */}
+            {/* Brand logo */}
             <div className="login-brand-wrap">
-              <div className="login-brand-icon">
-                <img src="/logo.png" alt="Royal HRMS" width={42} height={42} style={{ borderRadius: 10 }} />
-              </div>
+              <img
+                src="/logo.png"
+                alt="Royal HRMS"
+                width={240}
+                height={160}
+                style={{ width: 240, height: "auto" }}
+              />
             </div>
 
             <h2 className="login-title">Welcome back</h2>

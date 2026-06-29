@@ -156,7 +156,9 @@ export default function OnboardingPage() {
     <div className="onboarding-root">
       {/* Header */}
       <div className="onboarding-header">
-        <div className="login-brand-icon" style={{ marginBottom: ".25rem" }}>👑</div>
+        <div className="login-brand-icon" style={{ marginBottom: ".25rem" }}>
+          <img src="/logo.png" alt="Royal HRMS" width={42} height={42} style={{ borderRadius: 10 }} />
+        </div>
         <h1 className="onboarding-title">Complete Your Profile</h1>
         <p className="onboarding-subtitle">Fill in your details to get started. Your information is kept secure.</p>
       </div>

@@ -108,17 +108,26 @@ export default function DashboardShell({
         {/* Sidebar header */}
         <div className="h-14 px-3 flex items-center gap-2.5 border-b border-[var(--outline-v)] flex-shrink-0">
           <div className="flex items-center gap-2 flex-1 overflow-hidden">
-            <img
-              src="/logo.png"
-              alt="Royal HRMS"
-              width={30}
-              height={30}
-              style={{ borderRadius: 6, flexShrink: 0 }}
-            />
-            {!collapsed && (
-              <span className="text-sm font-bold whitespace-nowrap tracking-tight overflow-hidden text-[var(--on-bg)]">
-                Royal HRMS
-              </span>
+            {collapsed ? (
+              <img
+                src="/logo.png"
+                alt="Royal HRMS"
+                style={{
+                  width: 36, height: 36, flexShrink: 0,
+                  objectFit: "cover", objectPosition: "45% center",
+                  borderRadius: 6,
+                }}
+              />
+            ) : (
+              <img
+                src="/logo.png"
+                alt="Royal HRMS"
+                style={{
+                  height: 44, width: "auto", maxWidth: 170,
+                  objectFit: "contain", objectPosition: "left center",
+                  flexShrink: 0,
+                }}
+              />
             )}
           </div>
           <button

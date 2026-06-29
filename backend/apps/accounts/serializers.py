@@ -848,3 +848,30 @@ class OnboardingApprovalSerializer(serializers.ModelSerializer):
             'role_name', 'role_display', 'employee_id', 'date_of_joining',
             'onboarding_status', 'date_joined', 'profile', 'documents',
         ]
+
+
+# ─── My Profile (authenticated employee view) ─────────────────────────────────
+
+class MyProfileSerializer(serializers.ModelSerializer):
+    role_name    = serializers.CharField(source='role.name',         read_only=True, default='')
+    role_display = serializers.CharField(source='role.display_name', read_only=True, default='')
+    profile      = EmployeeProfileSerializer(read_only=True)
+
+    class Meta:
+        model  = User
+        fields = [
+            'id', 'full_name', 'email', 'phone', 'employee_id',
+            'department', 'designation', 'branch',
+            'role_name', 'role_display', 'date_of_joining', 'date_joined',
+            'profile',
+        ]
+
+
+class MyProfileUpdateSerializer(serializers.Serializer):
+    phone                  = serializers.CharField(max_length=20,  required=False, allow_blank=True)
+    current_address        = serializers.CharField(max_length=500,  required=False, allow_blank=True)
+    permanent_address      = serializers.CharField(max_length=500,  required=False, allow_blank=True)
+    emergency_name         = serializers.CharField(max_length=150,  required=False, allow_blank=True)
+    emergency_relationship = serializers.CharField(max_length=50,   required=False, allow_blank=True)
+    emergency_phone        = serializers.CharField(max_length=20,   required=False, allow_blank=True)
+    emergency_email        = serializers.EmailField(required=False, allow_blank=True)

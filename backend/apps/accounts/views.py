@@ -2303,3 +2303,44 @@ class OnboardingApproveView(APIView):
             )
             logger.info('Onboarding rejected for %s by %s', target.email, request.user.email)
             return success(f'Onboarding sent back to {target.full_name} for corrections.')
+
+
+# ─── My Profile ───────────────────────────────────────────────────────────────
+
+class MyProfileView(APIView):
+    """GET / PATCH the authenticated user's own profile (post-onboarding)."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.accounts.models import EmployeeProfile
+        from apps.accounts.serializers import MyProfileSerializer
+        EmployeeProfile.objects.get_or_create(user=request.user)
+        user = User.objects.select_related('role', 'profile').get(pk=request.user.pk)
+        return success('Profile retrieved.', MyProfileSerializer(user).data)
+
+    def patch(self, request):
+        from apps.accounts.models import EmployeeProfile
+        from apps.accounts.serializers import MyProfileUpdateSerializer
+        serializer = MyProfileUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error(first_error(serializer.errors))
+        data = serializer.validated_data
+
+        if 'phone' in data:
+            request.user.phone = data['phone']
+            request.user.save(update_fields=['phone', 'updated_at'])
+
+        profile_fields = [
+            'current_address', 'permanent_address',
+            'emergency_name', 'emergency_relationship',
+            'emergency_phone', 'emergency_email',
+        ]
+        profile_data = {k: v for k, v in data.items() if k in profile_fields}
+        if profile_data:
+            profile, _ = EmployeeProfile.objects.get_or_create(user=request.user)
+            for key, value in profile_data.items():
+                setattr(profile, key, value)
+            profile.save(update_fields=list(profile_data.keys()) + ['updated_at'])
+
+        logger.info('Profile updated by %s', request.user.email)
+        return success('Profile updated successfully.')

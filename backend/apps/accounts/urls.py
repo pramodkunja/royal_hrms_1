@@ -5,6 +5,7 @@ from apps.accounts.views import (
     EmployeeDetailView,
     EmployeeDocumentView,
     EmployeeProfileView,
+    MyProfileView,
     OnboardingApprovalsListView,
     OnboardingApproveView,
     SubmitOnboardingView,
@@ -51,6 +52,7 @@ urlpatterns = [
 
     # Employees
     path('employees/',                      EmployeeListCreateView.as_view(), name='employee-list-create'),
+    path('employees/me/',                   MyProfileView.as_view(),          name='my-profile'),
     path('employees/<str:employee_id>/',    EmployeeDetailView.as_view(),     name='employee-detail'),
 
     # Onboarding (self-service wizard)
