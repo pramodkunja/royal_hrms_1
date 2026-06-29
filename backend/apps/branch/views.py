@@ -2,7 +2,7 @@ import logging
 
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.db.models import Sum
+from django.db.models import Count
 from django.db.models.deletion import ProtectedError
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from core.responses import error, first_error, get_client_ip, success
 
-from apps.accounts.models import AuditLog
+from apps.accounts.models import AuditLog, User
 from apps.branch.models import Branch, City, State
 from apps.branch.serializers import BranchSerializer, CitySerializer, StateSerializer
 from apps.branch.utils import generate_branch_code
@@ -112,12 +112,23 @@ class BranchListCreateView(APIView):
         paginator = Paginator(qs, page_size)
         page_obj  = paginator.get_page(page_num)
 
+        # Compute real employee counts from User table (branch is stored as a name string)
+        branch_counts = dict(
+            User.objects.filter(is_active=True)
+            .values('branch')
+            .annotate(count=Count('id'))
+            .values_list('branch', 'count')
+        )
+
         return success('Branches retrieved successfully.', data={
             'count':       paginator.count,
             'page':        page_obj.number,
             'page_size':   page_size,
             'total_pages': paginator.num_pages,
-            'results':     BranchSerializer(page_obj.object_list, many=True).data,
+            'results':     BranchSerializer(
+                page_obj.object_list, many=True,
+                context={'branch_counts': branch_counts},
+            ).data,
         })
 
     def post(self, request):
@@ -254,9 +265,7 @@ class BranchStatsView(APIView):
             return error(_PERM_DENIED, http_status=status.HTTP_403_FORBIDDEN)
         total_branches = Branch.objects.count()
         total_active = Branch.objects.filter(status=Branch.STATUS_ACTIVE).count()
-        total_employees = (
-            Branch.objects.aggregate(total=Sum('employees_count'))['total'] or 0
-        )
+        total_employees = User.objects.filter(is_active=True).count()
         total_cities = Branch.objects.values('city').distinct().count()
         return success('Branch statistics retrieved successfully.', data={
             'total_employees': total_employees,
@@ -279,18 +288,29 @@ class BranchDistributionView(APIView):
     def get(self, request):
         if not _has_perm(request.user, 'branches.view'):
             return error(_PERM_DENIED, http_status=status.HTTP_403_FORBIDDEN)
+
+        branch_counts = dict(
+            User.objects.filter(is_active=True)
+            .values('branch')
+            .annotate(count=Count('id'))
+            .values_list('branch', 'count')
+        )
+
         branches = (
             Branch.objects
             .filter(status=Branch.STATUS_ACTIVE)
-            .values('branch_name', 'branch_code', 'employees_count')
-            .order_by('-employees_count')
+            .values('branch_name', 'branch_code')
         )
-        data = [
-            {
-                'branch': b['branch_name'],
-                'branch_code': b['branch_code'],
-                'employees': b['employees_count'],
-            }
-            for b in branches
-        ]
+        data = sorted(
+            [
+                {
+                    'branch': b['branch_name'],
+                    'branch_code': b['branch_code'],
+                    'employees': branch_counts.get(b['branch_name'], 0),
+                }
+                for b in branches
+            ],
+            key=lambda x: x['employees'],
+            reverse=True,
+        )
         return success('Employee distribution by branch retrieved successfully.', data=data)

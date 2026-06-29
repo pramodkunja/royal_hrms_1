@@ -319,11 +319,10 @@ class AnnouncementViewTrackView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk: int):
-        # Only count views from non-authors
-        updated = Announcement.objects.filter(pk=pk).exclude(
+        if not Announcement.objects.filter(pk=pk).exists():
+            return error('Announcement not found.', http_status=status.HTTP_404_NOT_FOUND)
+        # Only count views from non-authors; silently skip if user is the author
+        Announcement.objects.filter(pk=pk).exclude(
             posted_by=request.user
         ).update(views_count=F('views_count') + 1)
-        if not updated:
-            # Either announcement doesn't exist or user is the author — silently no-op
-            pass
         return success('View recorded.')

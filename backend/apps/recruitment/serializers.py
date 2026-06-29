@@ -1,6 +1,10 @@
+import re
+
 from rest_framework import serializers
 
 from .models import Candidate, CandidateEmail, CandidateLog
+
+_PHONE_RE = re.compile(r'^\+?[\d\s\-()\./]{7,20}$')
 
 
 class CandidateLogSerializer(serializers.ModelSerializer):
@@ -71,9 +75,62 @@ class CandidateDetailSerializer(CandidateListSerializer):
 
 
 class CandidateCreateSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(required=True, max_length=254)
+
     class Meta:
         model  = Candidate
         fields = [
             'name', 'email', 'phone', 'position_applied',
             'branch', 'interview_date', 'interviewer', 'interview_mode', 'notes',
         ]
+        extra_kwargs = {
+            'name':             {'required': True},
+            'position_applied': {'required': True},
+        }
+
+    def validate_name(self, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Candidate name is required.')
+        if len(value) > 200:
+            raise serializers.ValidationError('Candidate name must be 200 characters or fewer.')
+        return value
+
+    def validate_email(self, value: str) -> str:
+        value = value.strip().lower()
+        if not value:
+            raise serializers.ValidationError('Email address is required.')
+        return value
+
+    def validate_phone(self, value: str) -> str:
+        if not value:
+            return value
+        value = value.strip()
+        if len(value) > 20:
+            raise serializers.ValidationError('Phone number must be 20 characters or fewer.')
+        if not _PHONE_RE.match(value):
+            raise serializers.ValidationError(
+                'Enter a valid phone number (digits, spaces, +, -, ( ) allowed).'
+            )
+        return value
+
+    def validate_position_applied(self, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Position applied is required.')
+        if len(value) > 200:
+            raise serializers.ValidationError('Position applied must be 200 characters or fewer.')
+        return value
+
+    def validate_interview_mode(self, value: str) -> str:
+        valid_modes = [choice[0] for choice in Candidate.MODE_CHOICES]
+        if value and value not in valid_modes:
+            raise serializers.ValidationError(
+                f'Interview mode must be one of: {", ".join(valid_modes)}.'
+            )
+        return value
+
+    def validate_notes(self, value: str) -> str:
+        if value and len(value) > 2000:
+            raise serializers.ValidationError('Notes must be 2000 characters or fewer.')
+        return value

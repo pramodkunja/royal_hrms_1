@@ -616,6 +616,85 @@ Management command: `python manage.py migrate_files_to_cloudinary`
 
 ---
 
+### 2026-06-29 — Error Handling, Validations & Serializer Required Fields
+
+**Who:** G.Durga Prasad
+
+#### 1. Bug fixes in `apps/accounts/views.py`
+
+| Fix | Location | Detail |
+|-----|----------|--------|
+| `UnorderedObjectListWarning` | `RoleListCreateView.get` | Added `.order_by('id')` — `annotate()` strips `Meta.ordering`, leaving queryset unordered for `Paginator` |
+| `EmployeeListCreateView.get` pagination missing | `EmployeeListCreateView.get` | Added full `Paginator` block returning `{count, page, page_size, total_pages, results}` envelope |
+| `EmployeeListCreateView.post` no input guards | `EmployeeListCreateView.post` | Added length guards (first_name ≤150, last_name ≤150, email ≤254, phone ≤20, branch/dept/designation ≤100), `strptime` date validation, basic email regex |
+| `AuditLogListView` unsafe date filter | `AuditLogListView.get` | Added `strptime('%Y-%m-%d')` guard for `date_from` and `date_to` before ORM filter |
+| Employee welcome email not sending | `EmployeeListCreateView.post` | Replaced `django.core.mail.send_mail` with `_get_smtp_connection()` + `_build_message()` + `_company_email_wrapper()` — `send_mail` reads `settings.py` and ignores the DB SMTP config |
+
+#### 2. Bug fixes in `apps/recruitment/views.py`
+
+| Fix | Location | Detail |
+|-----|----------|--------|
+| `CandidateEmailLogView` no pagination | `CandidateEmailLogView.get` | Added pagination + search max 100 chars guard |
+| `SendPortalLoginView` unsafe create | `SendPortalLoginView.post` | Added: empty email check, duplicate email (409) check, `portal_url` format validation (must start with http:// or https://) |
+
+#### 3. Bug fixes in `apps/announcements/views.py`
+
+| Fix | Location | Detail |
+|-----|----------|--------|
+| `AnnouncementViewTrackView` silent no-op | `AnnouncementViewTrackView.post` | Added 404 for non-existent announcement; kept silent skip only for author's own view |
+
+#### 4. Serializer required-field validators added
+
+**`apps/recruitment/serializers.py` — `CandidateCreateSerializer`:**
+
+| Field | Validator added |
+|-------|----------------|
+| `name` | Required, strip, blank check, max_length=200 |
+| `email` | `EmailField(required=True, max_length=254)`, strip, lowercase |
+| `phone` | Optional; if provided: max_length=20, regex `^\+?[\d\s\-()\./]{7,20}$` |
+| `position_applied` | Required, strip, blank check, max_length=200 |
+| `interview_mode` | Validated against `Candidate.MODE_CHOICES` |
+| `notes` | Optional; if provided: max_length=2000 |
+
+Added module-level `_PHONE_RE` regex constant.
+
+---
+
+**`apps/announcements/serializers.py` — `AnnouncementWriteSerializer`:**
+
+| Field | Change |
+|-------|--------|
+| `body` | Added `max_length=10000`; added `validate_body` (strip + blank check) |
+| `title` | Added `validate_title` (strip + blank check) |
+
+---
+
+**`apps/branch/serializers.py` — `BranchSerializer`:**
+
+| Validator added | Detail |
+|----------------|--------|
+| `validate_address` | Strip, blank check, max_length=500 (matches `Branch.address` model field) |
+| `validate_status` | Validates against `Branch.STATUS_CHOICES` |
+
+---
+
+**`apps/accounts/serializers.py` — `CompanySerializer`:**
+
+| Validator added | Detail |
+|----------------|--------|
+| `validate_company_name` | Strip, blank check, max_length=255 |
+| `validate_address` | Strip, blank check, max_length=500 |
+| `validate_city` | Strip, blank check, max_length=100 |
+| `validate_state` | Strip, blank check, max_length=100 |
+
+**`apps/accounts/serializers.py` — `SMTPSettingsSerializer`:**
+
+| Validator added | Detail |
+|----------------|--------|
+| `validate_username` | Strip, blank check — SMTP username must not be empty |
+
+---
+
 ## Adding a New Module (Pattern)
 
 1. Create a new Django app: `python manage.py startapp <module>` under `apps/`
