@@ -29,11 +29,11 @@ export function MarkCandidateModal({ candidate, targetStatus, onClose, onConfirm
   // Fetch templates and company info in parallel on open
   useEffect(() => {
     Promise.all([
-      clientApi.get<{ data: Record<string, EmailTemplate[]> }>(API.settings.emailTemplates),
+      clientApi.get<{ data: { results: Record<string, EmailTemplate[]> } }>(API.settings.emailTemplates),
       clientApi.get<{ data: CompanyInfo }>(API.settings.company),
     ])
       .then(([tplRes, coRes]) => {
-        const grouped: Record<string, EmailTemplate[]> = tplRes.data?.data?.results ?? {};
+        const grouped: Record<string, EmailTemplate[]> = tplRes.data?.data?.results ?? {} as Record<string, EmailTemplate[]>;
         const groups = Object.entries(grouped)
           .map(([category, items]) => ({
             category,

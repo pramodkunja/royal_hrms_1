@@ -119,7 +119,7 @@ export const RECRUITMENT_API = {
   reviewList:     () =>
     clientApi.get<{ data: PaginatedCandidates }>(API.recruitment.review),
   emailTemplates: () =>
-    clientApi.get<{ data: Record<string, EmailTemplate[]> }>(API.settings.emailTemplates),
+    clientApi.get<{ data: { results: Record<string, EmailTemplate[]> } }>(API.settings.emailTemplates),
   emailLogs:      (params?: { search?: string }) =>
     clientApi.get<{ data: CandidateEmail[] }>(API.recruitment.emailLogs, { params }),
   sendPortalLogin: (id: number) =>

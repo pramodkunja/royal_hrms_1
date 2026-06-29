@@ -36,7 +36,7 @@ export function HRDecisionModal({ candidate, decision, onClose, onDone }: Props)
       clientApi.get<{ data: CompanyInfo }>(API.settings.company),
     ])
       .then(([tplRes, coRes]) => {
-        const grouped: Record<string, EmailTemplate[]> = tplRes.data?.data?.results ?? {};
+        const grouped: Record<string, EmailTemplate[]> = tplRes.data?.data?.results ?? {} as Record<string, EmailTemplate[]>;
         const groups = Object.entries(grouped)
           .map(([category, items]) => ({
             category,
