@@ -22,7 +22,7 @@ const ALL_NAV: NavEntry[] = [
 
   { section: "Recruitment" },
   { id: "interview-list",   icon: "ti-users",                label: "Interview List",   path: "/dashboard/interview-list",   permission: "recruitment.view" },
-  { id: "candidate-review", icon: "ti-user-check",           label: "Candidate Review", path: "/dashboard/candidate-review", permission: "recruitment.view" },
+  { id: "candidate-review", icon: "ti-user-check",           label: "Review & Onboarding", path: "/dashboard/candidate-review", permission: "recruitment.view" },
   { id: "email-logs",       icon: "ti-mail",                 label: "Email Logs",       path: "/dashboard/email-logs",       permission: "recruitment.view" },
 
   { section: "Workforce" },
@@ -38,7 +38,6 @@ const ALL_NAV: NavEntry[] = [
   { id: "expenses",         icon: "ti-wallet",               label: "Expenses",         path: "/dashboard/expenses",         permission: "expenses.view" },
 
   { section: "HR Ops" },
-  { id: "onboarding-approvals", icon: "ti-user-plus",        label: "Onboarding Queue", path: "/dashboard/onboarding-approvals", permission: "onboarding.approve" },
   { id: "approvals",        icon: "ti-checks",               label: "Approvals",        path: "/dashboard/approvals",        permission: "leave.view" },
   { id: "separation",       icon: "ti-logout",               label: "Separation & FnF", path: "/dashboard/separation",       permission: "employees.view" },
   { id: "documents",        icon: "ti-folder",               label: "Document Center",  path: "/dashboard/documents",        permission: "documents.view" },

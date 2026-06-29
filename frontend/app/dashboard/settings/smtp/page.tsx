@@ -41,8 +41,8 @@ export default function SmtpSettingsPage() {
     setError(null);
     try {
       const res = await clientApi.get(SMTP_BASE);
-      const arr = (res.data.data ?? res.data) as ApiSmtpResponse;
-      setEntries(Array.isArray(arr) ? arr : []);
+      const envelope = res.data?.data as ApiSmtpResponse;
+      setEntries(envelope?.results ?? []);
     } catch (err: unknown) {
       setError((err as { message?: string }).message ?? "Failed to load SMTP configurations");
     } finally {

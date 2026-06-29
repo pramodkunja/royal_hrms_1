@@ -1333,3 +1333,172 @@ Direct HR-created employees follow the same wizard flow. HR admin wizards must b
 ✅ Added Analytics and Audit Log screens.
 ✅ Implemented Leave Settings and Policy configuration.
 ✅ Module is ready for QA/testing.
+## Session 6 — Safura Samreen (29 June 2026)
+
+**Branch:** `Frontend/Employee_Onboarding`
+
+---
+
+### 1. Onboarding Page — Candidate Review Stage Removed (`app/dashboard/candidate-review/page.tsx`)
+
+The onboarding page previously had two stages: a "candidate review" stage and an "onboarding approvals" stage. The candidate-review stage and its API call (`RECRUITMENT_API.reviewList`) were fully removed.
+
+- Page now only fetches `GET /api/onboarding/approvals/`
+- Page title changed to "Onboarding Approvals"
+- `handleOnboardingAction` updated to accept optional `extras?: { department: string; designation: string }` and forward them to `POST /api/onboarding/approve/{userId}/`
+- No review-stage state, no review API call remains
+
+---
+
+### 2. Onboarding Drawer — Inline Dept/Designation Assignment on Approval (`app/dashboard/candidate-review/_components/OnboardingDrawer.tsx`)
+
+**Feature:** When the HR admin clicks "Approve & Activate ✓", instead of immediately calling the API, the drawer reveals an inline "Assign Role" panel at the bottom of the existing content. The footer button changes to "Confirm & Activate". Clicking "Send Back for Corrections" still works independently at any point.
+
+**Implementation:**
+- Added state: `showAssign`, `depts`, `desigs`, `selDept`, `selDesig`, `loadDepts`, `assignErr`
+- `onAction` prop type extended: `(userId, decision, extras?) => void`
+- Departments fetched from `GET /api/departments/?page_size=100` when `showAssign` becomes true (handles both paginated `{ results: [...] }` and flat array responses)
+- Designations fetched from `GET /api/designations/?page_size=100`, filtered client-side by `department_name === selDept`
+- Both fields required before submit — shows inline error if either is missing
+- Footer: "Send Back for Corrections" (reject, always visible) / "Approve & Activate ✓" → "Confirm & Activate" (approve, two-step)
+
+---
+
+### 3. Employee Profile — Department & Designation Editable (`app/dashboard/employees/_data.ts`)
+
+Added `department` and `designation` as the first two fields in the `personal` `PROFILE_SECTION` definition so they appear in the Personal tab of the employee profile and are editable there.
+
+```typescript
+{ key: "department",  label: "Department",  type: "text", required: true, placeholder: "e.g. Engineering" },
+{ key: "designation", label: "Designation", type: "text", required: true, placeholder: "e.g. Software Engineer" },
+```
+
+Both fields were already mapped in `apiToEmployee` via `details.department` and `details.designation` — no API change required.
+
+---
+
+### 4. Employees List Page — Hydration Mismatch Fix (`app/dashboard/employees/page.tsx`)
+
+**Problem:** `getStoredUser()` reads `document.cookie`, which returns `null` during SSR. This caused `isAdmin` and `userBranch` to differ between server and client, triggering a React hydration mismatch error.
+
+**Fix:** Moved both values out of render-time into `useState` + `useEffect`:
+
+```typescript
+const [isAdmin,    setIsAdmin]    = useState(false);
+const [userBranch, setUserBranch] = useState("");
+useEffect(() => {
+  const user = getStoredUser();
+  setIsAdmin(user?.role === "system_admin");
+  setUserBranch(user?.branch ?? "");
+}, []);
+```
+
+---
+
+### 5. AddEmployeeModal — `depts.map is not a function` Fix (`app/dashboard/employees/_components/AddEmployeeModal.tsx`)
+
+**Problem:** Departments API returns a paginated envelope `{ count, results: [...] }`, not a flat array. Calling `.map` on the envelope object threw a runtime error.
+
+**Fix:** Updated the API call to access `.results`:
+
+```typescript
+clientApi.get<{ data: { results: ApiDept[] } }>(API.departments.list, { params: { page_size: 100 } })
+  .then(d => setDepts(d.data.data?.results ?? []))
+```
+
+---
+
+### 6. HRDecisionModal — Email Template Dropdown Fix (`app/dashboard/candidate-review/HRDecisionModal.tsx`)
+
+Three fixes applied:
+
+**Response accessor** — Templates API returns `data.data.results` (not `data.data`). `results` is a grouped object `{ document: [...], notification: [...] }`.
+```typescript
+const grouped = tplRes.data?.data?.results ?? {};
+```
+
+**Grouped dropdown** — State changed from a flat `EmailTemplate[]` to `{ category: string; templates: EmailTemplate[] }[]`. Dropdown uses `<optgroup label="…">` per category.
+
+**Template variable keys** — `AUTO_KEYS` updated to uppercase to match the actual `{FULL_NAME}` syntax:
+```typescript
+const AUTO_KEYS = new Set(["FULL_NAME", "FNAME", "LNAME", "EMAIL", "POSITION", "COMPANY"]);
+```
+`previewVars()` now returns the correct uppercase-keyed dictionary so `renderTemplateVars` substitutes correctly.
+
+---
+
+### 7. MarkCandidateModal — Same Three Fixes (`app/dashboard/interview-list/MarkCandidateModal.tsx`)
+
+Applied the same three fixes as HRDecisionModal:
+- `tplRes.data?.data?.results ?? {}` response accessor
+- Grouped state + `<optgroup>` dropdown
+- `AUTO_KEYS` set with uppercase variable names; `hasManualVars` check uses `.toUpperCase()` before comparing
+
+---
+
+### 8. SMTP Settings — Paginated Response Fix (`app/dashboard/settings/smtp/page.tsx` + `_data.ts`)
+
+**Problem:** `GET /api/settings/smtp/` was returning a paginated envelope `{ count, page, results: [...] }` but the page was treating `data` as a flat array.
+
+**`_data.ts`:** Added `ApiSmtpResponse` interface with `count`, `page`, `page_size`, `total_pages`, `results: ApiSmtpEntry[]`. Added `smtp_type` and `smtp_type_display` to `ApiSmtpEntry`.
+
+**`page.tsx`:** Updated `loadData` to access `.results`:
+```typescript
+const envelope = res.data?.data as ApiSmtpResponse;
+setEntries(envelope?.results ?? []);
+```
+
+---
+
+### 9. Email Templates Settings Page — Two Crash Fixes (`app/dashboard/settings/email-templates/page.tsx`)
+
+**Fix 1 — `toLowerCase` on undefined:** Some templates have `null` or `undefined` for `description`, `display_name`, or `template_type_display`. Added `?? ""` fallback on all three fields in the search filter:
+```typescript
+(t.display_name ?? "").toLowerCase().includes(q) ||
+(t.template_type_display ?? "").toLowerCase().includes(q) ||
+(t.description ?? "").toLowerCase().includes(q)
+```
+
+**Fix 2 — Templates not loading (wrong response accessor):** `loadData` was passing the full paginated envelope (`{ count, page, results: {...} }`) to `flattenTemplates`, which expected the grouped object `{ document: [...], notification: [...] }`. Fixed accessor:
+```typescript
+const envelope = res.data?.data;
+const grouped  = (envelope?.results ?? envelope) as ApiEmailTemplatesResponse;
+setTemplates(flattenTemplates(grouped));
+```
+
+---
+
+### API Response Pattern (Key Rule for This Branch)
+
+All list endpoints return a paginated envelope:
+```json
+{ "count": N, "page": 1, "page_size": 20, "total_pages": M, "results": [...] }
+```
+Always access `.results` for the array. The email templates endpoint is special — its `results` is a **grouped object** `{ document: [...], notification: [...] }`, not a flat array.
+
+---
+
+### Key Files Changed (29 June 2026)
+
+| File | Change |
+|------|--------|
+| `app/dashboard/candidate-review/page.tsx` | Removed review stage; only onboarding approvals; `handleOnboardingAction` accepts `extras` |
+| `app/dashboard/candidate-review/_components/OnboardingDrawer.tsx` | Inline dept/designation assignment panel; two-step approve flow; `onAction` prop extended |
+| `app/dashboard/employees/_data.ts` | Added `department` and `designation` fields to `personal` PROFILE_SECTION |
+| `app/dashboard/employees/page.tsx` | Fixed hydration mismatch — `isAdmin` and `userBranch` moved to `useState` + `useEffect` |
+| `app/dashboard/employees/_components/AddEmployeeModal.tsx` | Fixed paginated departments response — access `.results` not root |
+| `app/dashboard/candidate-review/HRDecisionModal.tsx` | Fixed template response accessor; grouped `<optgroup>` dropdown; uppercase AUTO_KEYS |
+| `app/dashboard/interview-list/MarkCandidateModal.tsx` | Same three fixes as HRDecisionModal |
+| `app/dashboard/settings/smtp/_data.ts` | Added `ApiSmtpResponse` (paginated); added `smtp_type` / `smtp_type_display` to `ApiSmtpEntry` |
+| `app/dashboard/settings/smtp/page.tsx` | Fixed `loadData` to access `.results` from paginated SMTP response |
+| `app/dashboard/settings/email-templates/page.tsx` | Fixed `toLowerCase` crash with `?? ""` fallbacks; fixed `loadData` to access `envelope.results` |
+
+---
+
+### Notes for Next Developer (29 June 2026)
+
+- **Two-step approval flow** — "Approve & Activate" in `OnboardingDrawer` now reveals dept/desig selects inline. The `onAction` callback receives `extras: { department, designation }`. The parent page (`candidate-review/page.tsx`) forwards these as extra fields in the `POST /api/onboarding/approve/{userId}/` body.
+- **Any `getStoredUser()` call at render time will cause hydration mismatch** — always wrap in `useEffect`. This applies to any new page that reads user info from cookies.
+- **Departments and Designations APIs are paginated** — always pass `page_size=100` and access `.results`. Never treat the response root as an array.
+- **Email templates `results` is a grouped object, not an array** — use `flattenTemplates()` from `_data.ts` after accessing `.results`.
+- **Template variable names are UPPERCASE** — `{FULL_NAME}`, `{FNAME}`, `{LNAME}`, `{EMAIL}`, `{POSITION}`, `{COMPANY}`. Keep `AUTO_KEYS` in uppercase in any modal that uses `renderTemplateVars`.

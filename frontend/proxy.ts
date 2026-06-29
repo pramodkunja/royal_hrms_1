@@ -5,7 +5,6 @@ const ACCESS_COOKIE = "royal_access_token";
 const USER_COOKIE   = "royal_hrms_user";
 
 const ROUTE_PERMISSIONS: Record<string, string> = {
-  "/dashboard/onboarding-approvals": "onboarding.approve",
   "/dashboard/announcements":    "announcements.view",
   "/dashboard/interview-list":   "recruitment.view",
   "/dashboard/candidate-review": "recruitment.view",

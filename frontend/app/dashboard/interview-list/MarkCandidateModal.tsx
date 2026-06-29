@@ -13,7 +13,7 @@ interface Props {
   onConfirmed:  (updated: Candidate) => void;
 }
 
-const AUTO_KEYS = new Set(["candidate_name", "position", "company_name"]);
+const AUTO_KEYS = new Set(["FULL_NAME", "FNAME", "LNAME", "EMAIL", "POSITION", "COMPANY"]);
 
 export function MarkCandidateModal({ candidate, targetStatus, onClose, onConfirmed }: Props) {
   const isSelect = targetStatus === "selected";
@@ -21,7 +21,7 @@ export function MarkCandidateModal({ candidate, targetStatus, onClose, onConfirm
   const [remarks,          setRemarks]          = useState("");
   const [saving,           setSaving]           = useState(false);
   const [apiError,         setApiError]         = useState("");
-  const [templates,        setTemplates]        = useState<EmailTemplate[]>([]);
+  const [templateGroups,   setTemplateGroups]   = useState<{ category: string; templates: EmailTemplate[] }[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
   const [company,          setCompany]          = useState<CompanyInfo | null>(null);
@@ -33,12 +33,16 @@ export function MarkCandidateModal({ candidate, targetStatus, onClose, onConfirm
       clientApi.get<{ data: CompanyInfo }>(API.settings.company),
     ])
       .then(([tplRes, coRes]) => {
-        const grouped: Record<string, EmailTemplate[]> = tplRes.data?.data ?? {};
-        const all: EmailTemplate[] = ([] as EmailTemplate[])
-          .concat(...Object.values(grouped))
-          .filter(t => t.is_active);
-        setTemplates(all);
+        const grouped: Record<string, EmailTemplate[]> = tplRes.data?.data?.results ?? {};
+        const groups = Object.entries(grouped)
+          .map(([category, items]) => ({
+            category,
+            templates: items.filter(t => t.is_active),
+          }))
+          .filter(g => g.templates.length > 0);
+        setTemplateGroups(groups);
 
+        const all = groups.flatMap(g => g.templates);
         const defaultSlug = isSelect ? "selection" : "rejection";
         const preferred   = all.find(t => t.name === defaultSlug) ?? all[0] ?? null;
         setSelectedTemplate(preferred);
@@ -50,10 +54,14 @@ export function MarkCandidateModal({ candidate, targetStatus, onClose, onConfirm
   }, [isSelect]);
 
   function previewVars(): Record<string, string> {
+    const parts = candidate.name.trim().split(/\s+/);
     return {
-      candidate_name: candidate.name,
-      position:       candidate.position_applied,
-      company_name:   company?.company_name ?? '[Company]',
+      FULL_NAME: candidate.name,
+      FNAME:     parts[0] ?? candidate.name,
+      LNAME:     parts.length > 1 ? parts[parts.length - 1] : "",
+      EMAIL:     candidate.email,
+      POSITION:  candidate.position_applied,
+      COMPANY:   company?.company_name ?? "[Company]",
     };
   }
 
@@ -87,7 +95,7 @@ export function MarkCandidateModal({ candidate, targetStatus, onClose, onConfirm
   }
 
   const hasManualVars = (selectedTemplate?.available_variables ?? [])
-    .some(v => !AUTO_KEYS.has(v));
+    .some(v => !AUTO_KEYS.has(v.toUpperCase()));
 
   return (
     <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -125,15 +133,25 @@ export function MarkCandidateModal({ candidate, targetStatus, onClose, onConfirm
               <select
                 className="field-input field-select"
                 value={selectedTemplate?.name ?? ""}
-                onChange={e =>
-                  setSelectedTemplate(templates.find(t => t.name === e.target.value) ?? null)
-                }
+                onChange={e => {
+                  const found = templateGroups
+                    .flatMap(g => g.templates)
+                    .find(t => t.name === e.target.value) ?? null;
+                  setSelectedTemplate(found);
+                }}
               >
-                {templates.length === 0 && (
+                {templateGroups.length === 0 && (
                   <option value="">No active templates — create one in Settings → Email Templates</option>
                 )}
-                {templates.map(t => (
-                  <option key={t.name} value={t.name}>{t.display_name}</option>
+                {templateGroups.map(g => (
+                  <optgroup
+                    key={g.category}
+                    label={g.category.charAt(0).toUpperCase() + g.category.slice(1)}
+                  >
+                    {g.templates.map(t => (
+                      <option key={t.name} value={t.name}>{t.display_name}</option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             )}

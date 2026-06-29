@@ -40,8 +40,9 @@ export default function EmailTemplatesPage() {
     setError(null);
     try {
       const res = await clientApi.get(EMAIL_TEMPLATES_BASE);
-      const data: ApiEmailTemplatesResponse = res.data.data ?? res.data;
-      setTemplates(flattenTemplates(data));
+      const envelope = res.data?.data;
+      const grouped  = (envelope?.results ?? envelope) as ApiEmailTemplatesResponse;
+      setTemplates(flattenTemplates(grouped));
     } catch (err: unknown) {
       setError((err as { message?: string }).message ?? "Failed to load email templates");
     } finally {
@@ -131,9 +132,9 @@ export default function EmailTemplatesPage() {
 
   const q = search.toLowerCase();
   const filtered = templates.filter(t =>
-    t.display_name.toLowerCase().includes(q) ||
-    t.template_type_display.toLowerCase().includes(q) ||
-    t.description.toLowerCase().includes(q)
+    (t.display_name ?? "").toLowerCase().includes(q) ||
+    (t.template_type_display ?? "").toLowerCase().includes(q) ||
+    (t.description ?? "").toLowerCase().includes(q)
   );
 
   const grouped = TYPE_ORDER.reduce<Record<TemplateType, ApiEmailTemplate[]>>((acc, type) => {
