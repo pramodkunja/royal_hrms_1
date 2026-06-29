@@ -539,3 +539,169 @@ lib/
 - [ ] Payroll module
 
 ---
+
+## Session 5
+
+**Date:** 2026-06-29
+**Developer:** Pramod Kunja
+
+### Module Worked On
+- Employees — full screen + card + profile redesign
+- Announcements — stat card layout update
+
+---
+
+### Part 1: Employee Card Redesign
+
+**File:** `features/employees/presentation/widgets/employee_card.dart`
+
+Replaced previous design with a professional card using a colored left accent strip pattern:
+
+**Structure:**
+```
+Container (white, radius 16, AppColors.border border, cardShadow)
+  clipBehavior: Clip.antiAlias
+  IntrinsicHeight > Row:
+    ├─ 4px left accent strip (employee.avatarColor, topLeft/bottomLeft radius 16)
+    └─ Expanded body (padding fromLTRB(14,14,14,12))
+         ├─ Top: Avatar (52px circle, tinted) + name/ID/designation + _StatusBadge pill
+         ├─ Middle: Info box (AppColors.background bg, border, radius 10)
+         │    └─ BRANCH | vertical divider | DEPT  (_InfoItem: icon + label + value)
+         └─ Bottom: "View Profile" (outline) + "Edit Details" (filled) buttons (_ActionBtn)
+```
+
+**Key widget specs:**
+- `_Avatar`: 52×52 circle, `avatarColor.withValues(alpha:0.15)` bg, `avatarColor.withValues(alpha:0.30)` border 1.5px, colored initials (not white)
+- `_StatusBadge`: pill (radius 20), sentence-case labels, uses `AppColors.successContainer / warningContainer / errorContainer` bg
+- `_InfoItem`: `Icon(13px, textHint)` + `Column(9px label + 12px value)`
+- `_ActionBtn`: `GestureDetector > Container`, filled=true → primary bg + white text, filled=false → transparent + 30% primary border
+
+---
+
+### Part 2: Employees Screen Redesign
+
+**File:** `features/employees/presentation/employees_screen.dart`
+
+#### Stats Grid — 2×2 layout
+`_StatsGrid` uses `Column(Row, Row)` with 12px gaps (not a single 4-in-a-row `Row`).
+
+Each `_StatCard` format:
+```dart
+Container(
+  padding: EdgeInsets.fromLTRB(16, 14, 14, 14),
+  decoration: BoxDecoration(
+    color: AppColors.surface,
+    borderRadius: BorderRadius.circular(14),
+    border: Border.all(color: AppColors.border),
+    boxShadow: AppColors.cardShadow,
+  ),
+  child: Row([
+    Container(44×44, radius 12, color.withValues(alpha:0.10))  // icon box
+      child: Icon(22px, color),
+    SizedBox(12),
+    Expanded(Column([
+      Text('$count', 26px w800 textPrimary),
+      Text(label, 11px w500 textSecondary),
+    ])),
+  ]),
+)
+```
+
+Cards: Total Employees (primary), Active (success), Onboarding (warning), Departments (`Color(0xFF7C3AED)`)
+
+#### Filter bar
+`_FilterBar` — horizontal scrollable row of filter chips (All / Active / Onboarding / Inactive) using `AnimatedContainer` for active state.
+
+#### Results count
+Text `'${list.length} employee(s)'` shown above the list when data is loaded.
+
+#### Employee list
+`ListView.separated` with `EmployeeCard` items, 12px separators, `RefreshIndicator`.
+
+---
+
+### Part 3: Employee Profile Screen Redesign
+
+**File:** `features/employees/presentation/screens/employee_profile_screen.dart`
+
+**Profile card (`_ProfileCard`):**
+- Gradient header: `[AppColors.primary, Color(0xFF2A6ACC)]` matching home screen
+- 68×68 white semi-transparent avatar circle with initials
+- Employee name, ID, status badge in white
+- 3-column info row: JOINED | LOCATION | DEPT (`_InfoCell`)
+- Active/Inactive toggle using `Switch.adaptive(activeTrackColor: AppColors.success)`
+
+**Tab bar:**
+`TabController(length: 5)` with tabs: Profile / Salary / Payroll / Leave / Attendance.
+Implemented via `NestedScrollView` + `SliverPersistentHeader` for pinned tab bar.
+
+**Profile tab (`_ProfileTab`):**
+3 sub-tab pills (Basic Detail / Employee Detail / Personal Detail) with a section card body.
+Section card header: 4px primary left border, primary-tinted background, icon chip + title.
+
+**Sub-tab content — all fields use `_DisplayField` in `_FieldRow` pairs (2-column layout):**
+
+| Tab | Fields (pair rows) |
+|---|---|
+| Basic Detail | EmpCode/FirstName, MiddleName/LastName, Gender/Category, ProfTax/DOB, DOJ/ESI, Metro/ESIDispensary, ContractPeriod (full-width) |
+| Employee Detail | Dept/Designation, Branch/ReportingMgr, EmpType/WorkLocation, CostCentre/ProbationEnd, ConfirmStatus/Grade, Band/EmpStatus, SelfServiceRole (full-width) |
+| Personal Detail | MaritalStatus/SpouseName, Nationality/Religion, BloodGroup/DifferentlyAbled, PersonalEmail/MobileNumber, PAN/Aadhaar, LoginEmail (full-width) |
+
+**`_FieldRow`:** `Padding(bottom:14) > Row([Expanded(_DisplayField), SizedBox(12), Expanded(_DisplayField)])`
+**`_DisplayField`:** label + optional `*` + bordered container (background tint, border, radius 8, padding 10h/11v, 13px value text). Added `padBottom` parameter to control bottom spacing when used inside `_FieldRow`.
+
+**Backend note:** Backend `_employee_dict()` only exposes: `id, employee_id, first_name, last_name, full_name, email, phone, department, designation, branch, role, role_display, date_of_joining, date_joined, is_active, status`. Fields not yet on backend (gender, DOB, category, ESI, PAN, etc.) display `'—'` until backend adds them.
+
+**Lint fixes applied during this session:**
+- `activeColor` deprecated → replaced with `activeTrackColor: AppColors.success` on `Switch.adaptive`
+- Added `const` to `_FieldRow` and `_DisplayField` instantiations where all args are literals
+- Added `const` to `Icon()` usages in section header chips
+- Changed `TextStyle()` for stat count to `const TextStyle(...)` since `AppColors.textPrimary` is const
+
+---
+
+### Part 4: Announcements Screen — Stat Cards Update
+
+**File:** `features/announcements/presentation/announcements_screen.dart`
+
+Updated `_StatsRow` and `_StatCard` to match the employees screen format exactly.
+
+**Before:** 4 cards in a single `Row` with tinted-header + colored count style (icon + dot in colored strip header, large colored count, tiny grey label).
+
+**After:** 2×2 grid (`Column` of two `Row`s, 12px gaps) with icon-box + dark count style.
+
+New `_StatCard` matches employees format:
+- White bg, `AppColors.border` border, `AppColors.cardShadow`
+- 44×44 icon box (`color.withValues(alpha:0.10)`, radius 12)
+- Count: 26px, w800, `AppColors.textPrimary` (dark, not colored)
+- Label: 11px, w500, `AppColors.textSecondary`
+
+Cards: Total Posts (primary), Pinned (`Color(0xFFC99A2E)`), Reactions (`Color(0xFFD4487B)`), Total Views (`Color(0xFF0D7490)`)
+
+---
+
+### Files Modified
+```
+lib/features/
+  employees/
+    presentation/
+      employees_screen.dart                 stats grid 2×2, filter bar, results count
+      widgets/employee_card.dart            full redesign — left accent strip
+      screens/employee_profile_screen.dart  full redesign — gradient header, 5 tabs, profile sub-tabs
+  announcements/
+    presentation/
+      announcements_screen.dart             stat cards → 2×2 grid, employees format
+```
+
+### Pending Tasks
+- [ ] Backend: expose additional profile fields (gender, DOB, category, ESI, PAN, Aadhaar, marital status, nationality, etc.) from `_employee_dict()` or a dedicated profile endpoint
+- [ ] Salary tab content
+- [ ] Payroll tab content
+- [ ] Leave tab content (leave balance + history)
+- [ ] Attendance tab content
+- [ ] Employee create / edit form (currently opens empty modal)
+- [ ] Attendance module screen
+- [ ] Leave module screen
+- [ ] Payroll module screen
+
+---
