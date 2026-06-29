@@ -1318,3 +1318,18 @@ Direct HR-created employees follow the same wizard flow. HR admin wizards must b
 - **Employee ID generation** — uses `EmployeeCodeSettings.generate_employee_id()`. Ensure `EmployeeCodeSettings` record exists in Settings → Employee Code before approving the first candidate.
 - **`useFetch` hook** — all new pages that need data fetching must use `useFetch` from `hooks/useFetch.ts`. Never write `useState + useEffect + try/catch` in page components.
 - **Server-side migrations needed on deploy** — run `python manage.py migrate` after pulling. Migrations 0021, 0022, 0023 (accounts) and 0003 (recruitment) must all apply cleanly.
+
+---
+
+## Leave Management Module (29 June 2026)
+
+**Branch:** `LEAVE`
+
+✅ Completed Leave Management module.
+✅ Developed all Leave Management screens.
+✅ Implemented Leave Dashboard.
+✅ Completed Apply Leave workflow.
+✅ Developed Approvals, Leave Balance, and Holiday Calendar.
+✅ Added Analytics and Audit Log screens.
+✅ Implemented Leave Settings and Policy configuration.
+✅ Module is ready for QA/testing.
