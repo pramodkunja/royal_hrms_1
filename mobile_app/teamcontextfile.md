@@ -1249,3 +1249,187 @@ mobile_app/
 - [ ] Payroll module
 
 ---
+
+## Session 9
+
+**Date:** 2026-06-29
+**Developer:** Pramod Kunja
+
+### Module Worked On
+- Branch Management — single-column list layout + FAB + card layout fix
+- Document Center — single-column list layout + FAB + card layout fix
+
+---
+
+### Part 1: Branch Management — Layout Changes
+
+**File:** `features/branches/presentation/screens/branches_screen.dart`
+
+#### Change 1 — "Add Branch" moved to FAB
+
+Removed the inline `FilledButton.icon` from the header `Row`. Header is now just the `Text('Branch Management')` title.
+
+Added `FloatingActionButton.extended` to the `Scaffold`:
+```dart
+floatingActionButton: FloatingActionButton.extended(
+  onPressed: () => _openForm(context, null),
+  backgroundColor: AppColors.primary,
+  foregroundColor: Colors.white,
+  icon: const Icon(Icons.add),
+  label: const Text('Add Branch', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+),
+```
+
+#### Change 2 — Cards changed from 2-column to single-column list
+
+`_BranchGrid` previously used `SliverList` + `IntrinsicHeight` rows pairing two `BranchCard` widgets per row. Rewritten to one card per row:
+
+```dart
+// Before: rowCount = (branches.length / 2).ceil(), two cards per IntrinsicHeight row
+// After:
+SliverPadding(
+  padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),  // 96px bottom = FAB clearance
+  sliver: SliverList(
+    delegate: SliverChildBuilderDelegate(
+      (_, index) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: BranchCard(branch: branches[index], onEdit: ..., onDelete: ...),
+      ),
+      childCount: branches.length,
+    ),
+  ),
+)
+```
+
+`_loadingGrid` updated to show 3 single full-width shimmer placeholders (height 180) instead of 2 paired rows.
+
+---
+
+### Part 2: Branch Card — RenderFlex Fix
+
+**File:** `features/branches/presentation/widgets/branch_card.dart`
+
+**Root cause of blank screen:** `BranchCard`'s outer `Column` had `mainAxisSize: MainAxisSize.max` combined with a `Spacer()` between the employees row and the `Divider`. This required a bounded height from the parent — `IntrinsicHeight` provided that in the 2-column layout. In a `ListView` (unbounded height), Flutter throws a `RenderFlex` overflow and renders nothing.
+
+**Fix:**
+```dart
+// Before
+Column(mainAxisSize: MainAxisSize.max, children: [
+  ...
+  const Spacer(),
+  const Divider(height: 1, color: AppColors.border),
+  ...
+])
+
+// After
+Column(mainAxisSize: MainAxisSize.min, children: [
+  ...
+  const SizedBox(height: 10),
+  const Divider(height: 1, color: AppColors.border),
+  ...
+])
+```
+
+---
+
+### Part 3: Document Center — Layout Changes
+
+**File:** `features/documents/presentation/screens/documents_screen.dart`
+
+#### Change 1 — "Upload" moved to FAB
+
+Removed the inline `FilledButton.icon` from the header `Row`. Header is now just `Text('Document Center')`.
+
+Added `FloatingActionButton.extended` to the `Scaffold`:
+```dart
+floatingActionButton: FloatingActionButton.extended(
+  onPressed: () => _openUpload(context),
+  backgroundColor: AppColors.primary,
+  foregroundColor: Colors.white,
+  icon: const Icon(Icons.upload_file_outlined),
+  label: const Text('Upload', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+),
+```
+
+#### Change 2 — Cards changed from 2-column to single-column list
+
+`_DocumentGrid` rewritten from `IntrinsicHeight` paired rows to one card per row:
+```dart
+SliverPadding(
+  padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+  sliver: SliverList(
+    delegate: SliverChildBuilderDelegate(
+      (_, index) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: DocumentCard(document: documents[index], onTap: () => onTap(documents[index])),
+      ),
+      childCount: documents.length,
+    ),
+  ),
+)
+```
+
+`_loadingGrid` updated to 3 single full-width shimmer placeholders (height 140).
+
+---
+
+### Part 4: Document Card — RenderFlex Fix
+
+**File:** `features/documents/presentation/widgets/document_card.dart`
+
+Same root cause as Branch card: `mainAxisSize: MainAxisSize.max` + `Spacer()` requires bounded height.
+
+**Fix:**
+```dart
+// Before
+Column(mainAxisSize: MainAxisSize.max, children: [
+  ...uploader row...
+  const Spacer(),
+  const SizedBox(height: 8),
+  // category badge
+])
+
+// After
+Column(mainAxisSize: MainAxisSize.min, children: [
+  ...uploader row...
+  const SizedBox(height: 8),
+  // category badge
+])
+```
+
+### Key Pattern — Spacer in ListView Cards
+
+`Spacer()` inside a `Column` requires a bounded height. Two patterns provide bounded height:
+- `IntrinsicHeight` (used in 2-column grid rows — computes intrinsic height from children)
+- Fixed-height parent (e.g., `SizedBox(height: 200)`)
+
+`ListView` children have **unbounded** height. If a card's `Column` contains a `Spacer()` and is placed directly in a `ListView`, Flutter throws `RenderFlex overflow` and the widget renders nothing.
+
+**Rule:** Never use `Spacer()` inside a card `Column` unless the card is always wrapped in `IntrinsicHeight` or a fixed-height container.
+
+### Files Modified
+```
+mobile_app/lib/features/
+  branches/
+    presentation/
+      screens/branches_screen.dart    FAB, single-column list, shimmer fix
+      widgets/branch_card.dart        mainAxisSize.min, Spacer → SizedBox(10)
+  documents/
+    presentation/
+      screens/documents_screen.dart   FAB, single-column list, shimmer fix
+      widgets/document_card.dart      mainAxisSize.min, Spacer removed
+
+```
+
+### Pending Tasks
+- [ ] Backend team: add `access` token to login + refresh response bodies (from Session 4)
+- [ ] Test Document Center end-to-end: upload a PDF, view detail, preview, delete
+- [ ] Employee profile — Salary / Payroll / Leave / Attendance tab content
+- [ ] Employee create / edit form (currently opens empty modal)
+- [ ] Attendance module screen
+- [ ] Leave module screen
+- [ ] Payroll module screen
+
+---
