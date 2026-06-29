@@ -31,7 +31,7 @@ class DocumentCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.max,
+          mainAxisSize: MainAxisSize.min,
           children: [
             // ── Top accent bar ─────────────────────────────────────────────
             Container(height: 3, color: typeColor),
@@ -137,7 +137,6 @@ class DocumentCard extends StatelessWidget {
               ),
             ),
 
-            const Spacer(),
             const SizedBox(height: 8),
 
             // ── Category badge ─────────────────────────────────────────────

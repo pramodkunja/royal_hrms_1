@@ -27,7 +27,7 @@ class BranchCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.max,
+        mainAxisSize: MainAxisSize.min,
         children: [
           // ── Top accent bar ───────────────────────────────────────────────
           Container(
@@ -197,7 +197,7 @@ class BranchCard extends StatelessWidget {
             ),
           ),
 
-          const Spacer(),
+          const SizedBox(height: 10),
           const Divider(height: 1, color: AppColors.border),
 
           // ── Actions ──────────────────────────────────────────────────────

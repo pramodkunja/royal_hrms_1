@@ -22,6 +22,17 @@ class DocumentsScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _openUpload(context),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.upload_file_outlined),
+        label: const Text(
+          'Upload',
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
       body: RefreshIndicator(
         color: AppColors.primary,
         onRefresh: () async {
@@ -32,35 +43,13 @@ class DocumentsScreen extends ConsumerWidget {
         },
         child: CustomScrollView(
           slivers: [
-            // ── Title + Upload button ────────────────────────────────────────
+            // ── Title ────────────────────────────────────────────────────────
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        'Document Center',
-                        style: AppTextStyles.h4,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton.icon(
-                      onPressed: () => _openUpload(context),
-                      icon: const Icon(Icons.upload_file_outlined, size: 16),
-                      label: const Text('Upload'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                        textStyle: AppTextStyles.labelSmall
-                            .copyWith(color: Colors.white),
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  'Document Center',
+                  style: AppTextStyles.h4,
                 ),
               ),
             ),
@@ -138,36 +127,20 @@ class DocumentsScreen extends ConsumerWidget {
 
   SliverPadding _loadingGrid() {
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
           (_, __) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 180,
-                    decoration: BoxDecoration(
-                      color: AppColors.border,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Container(
-                    height: 180,
-                    decoration: BoxDecoration(
-                      color: AppColors.border,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
-              ],
+            child: Container(
+              height: 140,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
           ),
-          childCount: 2,
+          childCount: 3,
         ),
       ),
     );
@@ -182,41 +155,18 @@ class _DocumentGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rowCount = (documents.length / 2).ceil();
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
-          (_, rowIndex) {
-            final left = rowIndex * 2;
-            final right = left + 1;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      child: DocumentCard(
-                        document: documents[left],
-                        onTap: () => onTap(documents[left]),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    right < documents.length
-                        ? Expanded(
-                            child: DocumentCard(
-                              document: documents[right],
-                              onTap: () => onTap(documents[right]),
-                            ),
-                          )
-                        : const Expanded(child: SizedBox()),
-                  ],
-                ),
-              ),
-            );
-          },
-          childCount: rowCount,
+          (_, index) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: DocumentCard(
+              document: documents[index],
+              onTap: () => onTap(documents[index]),
+            ),
+          ),
+          childCount: documents.length,
         ),
       ),
     );

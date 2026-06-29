@@ -20,6 +20,17 @@ class BranchesScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _openForm(context, null),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text(
+          'Add Branch',
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
       body: RefreshIndicator(
         color: AppColors.primary,
         onRefresh: () async {
@@ -33,31 +44,9 @@ class BranchesScreen extends ConsumerWidget {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        'Branch Management',
-                        style: AppTextStyles.h4,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton.icon(
-                      onPressed: () => _openForm(context, null),
-                      icon: const Icon(Icons.add, size: 16),
-                      label: const Text('Add Branch'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                        textStyle: AppTextStyles.labelSmall
-                            .copyWith(color: Colors.white),
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  'Branch Management',
+                  style: AppTextStyles.h4,
                 ),
               ),
             ),
@@ -176,36 +165,20 @@ class BranchesScreen extends ConsumerWidget {
 
   SliverPadding _loadingGrid() {
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
           (_, __) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 220,
-                    decoration: BoxDecoration(
-                      color: AppColors.border,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Container(
-                    height: 220,
-                    decoration: BoxDecoration(
-                      color: AppColors.border,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
-              ],
+            child: Container(
+              height: 180,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(16),
+              ),
             ),
           ),
-          childCount: 2,
+          childCount: 3,
         ),
       ),
     );
@@ -225,43 +198,19 @@ class _BranchGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rowCount = (branches.length / 2).ceil();
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
-          (_, rowIndex) {
-            final left = rowIndex * 2;
-            final right = left + 1;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      child: BranchCard(
-                        branch: branches[left],
-                        onEdit: () => onEdit(branches[left]),
-                        onDelete: () => onDelete(branches[left]),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    right < branches.length
-                        ? Expanded(
-                            child: BranchCard(
-                              branch: branches[right],
-                              onEdit: () => onEdit(branches[right]),
-                              onDelete: () => onDelete(branches[right]),
-                            ),
-                          )
-                        : const Expanded(child: SizedBox()),
-                  ],
-                ),
-              ),
-            );
-          },
-          childCount: rowCount,
+          (_, index) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: BranchCard(
+              branch: branches[index],
+              onEdit: () => onEdit(branches[index]),
+              onDelete: () => onDelete(branches[index]),
+            ),
+          ),
+          childCount: branches.length,
         ),
       ),
     );
