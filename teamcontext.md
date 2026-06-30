@@ -375,6 +375,40 @@ All list endpoints return paginated data:
 
 ---
 
+### 2026-06-30 — G. Durga Prasad (Employee Profile Update + Teamcontext Merge)
+
+**Branch:** `Employee_Onboarding`
+
+#### 1. Employee Profile PUT Endpoint
+
+**Problem:** `PATCH /api/employees/<id>/` only handled `is_active` toggling. When the frontend sent `{ role, department, designation, branch }` to update employee details, the backend returned `"Employee is already active."` and ignored all the other fields.
+
+**Fix:** Added `PUT /api/employees/<id>/` to `EmployeeDetailView` for profile field updates.
+
+| Field | Behaviour |
+|---|---|
+| `role` | Looked up by `name` slug — returns 400 if slug doesn't exist in DB |
+| `department` | Plain string, saved directly |
+| `designation` | Plain string, saved directly |
+| `branch` | Plain string, saved directly |
+| `phone` | Plain string, saved directly |
+| `full_name` | Plain string, optional |
+| `date_of_joining` | `YYYY-MM-DD` format, validated with `strptime` |
+
+- Only fields present in the request body are written (`update_fields` list built dynamically)
+- `dict.fromkeys()` de-duplicates `update_fields` before `save()`
+- After save, re-fetches via `_get_employee()` so `role.display_name` is fresh (not stale from `select_related`)
+- Writes `AuditLog` entry with `before/after` values for every changed field
+- `PATCH` method unchanged — still only handles `is_active` toggle
+
+**Frontend action:** Call `PUT /api/employees/<employee_id>/` (not PATCH) for profile field edits. PATCH remains for activate/deactivate only.
+
+#### 2. Teamcontext Files Merged
+
+Combined `backend/TEAMCONTEXT.md`, `frontend/TEAMCONTEXT.md`, and the root `teamcontext.md` into a single `teamcontext.md` at the repo root. Both subdirectory files deleted.
+
+---
+
 ### 2026-06-24 — Safura Samreen (Frontend Session 1 & 2)
 
 Built the core frontend shell:
