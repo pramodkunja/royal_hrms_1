@@ -1,4 +1,4 @@
-# Team Context
+﻿# Team Context
 
 **Name:** Safura Samreen
 **Last Updated:** 24 June 2026 (Session 2)
@@ -1700,3 +1700,94 @@ reporting_manager = models.ForeignKey(
 - **`EmployeeSearchInput` must stay at module level** in `ApprovalMatrixTab.tsx` — if defined inside another component it gets a new function reference on every re-render, causing unmount/remount on every keystroke and losing input focus.
 - **Search uses dynamic useFetch URL** — `useFetch` accepts only a URL string. Pass `?search=query&page_size=8` inline to trigger employee search.
 - **Reporting manager is set post-onboarding** — it lives in the Employee Profile tab, not the onboarding wizard. Only `hr_admin` / `system_admin` can assign or change it.
+
+---
+
+### Session 11 — G. Durga Prasad (30 June 2026) — Onboarding: Draft Status, Step Filtering, Validators
+
+**Branch:** `durgaprasad`
+
+#### 1. Draft Onboarding Status
+
+Added `ONBOARDING_DRAFT = 'draft'` ("In Progress") to `User.ONBOARDING_CHOICES`. When a candidate saves Step 0 for the first time, their status transitions from `pending` → `draft` automatically. Pipeline endpoint and stats now include `draft` in the query so in-progress candidates are visible to HR.
+
+- `backend/apps/accounts/models.py` — new `ONBOARDING_DRAFT` constant + added to `ONBOARDING_CHOICES`
+- `backend/apps/accounts/migrations/0028_add_onboarding_draft_status.py` — `AlterField` on `onboarding_status`
+- `backend/apps/accounts/views.py` — `_save_profile_step` sets `onboarding_status=draft` after first step save; `OnboardingPipelineView` includes `draft` in filter; stats include `draft` count
+
+#### 2. Per-Step Field Scoping (`_STEP_ALL_FIELDS`)
+
+Added `_STEP_ALL_FIELDS` dict mapping each step number to the exact set of fields that belong to it. `_save_profile_step` now strips any field not in the step's set before saving — prevents cross-step overwrites when the frontend sends the full form on every "Save & Continue".
+
+```python
+_STEP_ALL_FIELDS = {
+    0: frozenset({'date_of_birth', 'gender', 'marital_status', 'father_name', 'blood_group', 'current_address', 'permanent_address'}),
+    1: frozenset({'highest_qualification', 'institution', 'year_of_passing', 'specialization', ...}),
+    2: frozenset({'account_number', 'ifsc_code', 'bank_name', 'bank_branch_name', 'account_holder_name', 'account_type'}),
+    3: frozenset({'emergency_name', 'emergency_relationship', 'emergency_phone', 'emergency_email'}),
+    4: frozenset(),
+}
+```
+
+#### 3. Required Fields Expanded
+
+`_STEP_REQUIRED_FIELDS` now includes `marital_status` and `father_name` (Step 0) and `bank_branch_name` (Step 2). `SubmitOnboardingView` checks these before allowing final submission.
+
+#### 4. Serializer Validators Added
+
+`EmployeeProfileSerializer` now validates: `gender`, `marital_status`, `blood_group` (against `GENDER_CHOICES`, `MARITAL_CHOICES`, `BLOOD_CHOICES`); `account_type` (against `ACCOUNT_CHOICES`); `emergency_email` (Django email validator).
+
+#### Key Files Changed
+
+| File | Change |
+|---|---|
+| `backend/apps/accounts/models.py` | `ONBOARDING_DRAFT` constant + choices |
+| `backend/apps/accounts/migrations/0028_add_onboarding_draft_status.py` | **NEW** — AlterField migration |
+| `backend/apps/accounts/serializers.py` | 4 new field validators |
+| `backend/apps/accounts/views.py` | `_STEP_ALL_FIELDS`, expanded required fields, draft status transition, pipeline draft filter |
+
+---
+
+### Session 12 — Safura Samreen (30 June 2026) — Onboarding Wizard UI Overhaul
+
+**Branch:** `Frontend/Samreen`
+
+#### 1. STEPS Array with Icons (replaces flat TABS)
+
+```typescript
+const STEPS = [
+  { label: "Personal",               shortLabel: "Personal",  icon: "ti-user"          },
+  { label: "Education & Experience", shortLabel: "Education", icon: "ti-school"        },
+  { label: "Bank Details",           shortLabel: "Bank",      icon: "ti-building-bank" },
+  { label: "Emergency Contact",      shortLabel: "Emergency", icon: "ti-urgent"        },
+  { label: "Documents",              shortLabel: "Documents", icon: "ti-files"         },
+];
+```
+
+#### 2. `highestSaved` State
+
+Tracks the highest step index the user has successfully saved. Used to enable/disable forward navigation (cannot jump ahead without saving). Starts at `-1` (nothing saved yet).
+
+#### 3. Logout Button on Submitted Screen
+
+Fixed-position logout button (`bottom: 24, right: 24`) on the post-submission screen. Calls `clearAuth()` + `markIntentionalLogout()` then redirects to login.
+
+#### 4. Auto-save Removed
+
+The auto-save timer, `isDirty` ref, `useCallback`, and `beforeunload` handler were removed. Saving happens only on explicit "Save & Continue" clicks, which is sufficient since the backend now transitions to `draft` status on first save.
+
+#### 5. Employee Profile: Additional Readonly Fields
+
+`PROFILE_SECTIONS.personal` in `frontend/app/dashboard/employees/_data.ts` now shows three more readonly fields:
+- `dateOfJoining` — "Date of Joining"
+- `loginEmail` — "Login Email"
+- `mobileNumber` — "Phone"
+
+#### Key Files Changed
+
+| File | Change |
+|---|---|
+| `frontend/app/onboarding/page.tsx` | STEPS with icons; `highestSaved`; logout button; auto-save removed; updated submitted screen |
+| `frontend/app/dashboard/employees/_data.ts` | Added `dateOfJoining`, `loginEmail`, `mobileNumber` as readonly fields |
+
+---

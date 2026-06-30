@@ -88,10 +88,12 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
 
     ONBOARDING_PENDING   = 'pending'
+    ONBOARDING_DRAFT     = 'draft'
     ONBOARDING_SUBMITTED = 'submitted'
     ONBOARDING_COMPLETE  = 'complete'
     ONBOARDING_CHOICES   = [
         (ONBOARDING_PENDING,   'Pending'),
+        (ONBOARDING_DRAFT,     'In Progress'),
         (ONBOARDING_SUBMITTED, 'Submitted — awaiting approval'),
         (ONBOARDING_COMPLETE,  'Complete'),
     ]
