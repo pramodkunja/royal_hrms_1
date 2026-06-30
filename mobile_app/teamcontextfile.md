@@ -1572,3 +1572,128 @@ mobile_app/
 - [ ] Payroll module
 
 ---
+
+## Session 9 — Interview List Screen (Full API Integration)
+
+**Date:** 2026-06-30
+**Developer:** Vignesh Kumar Saka
+**Branch:** demo
+
+---
+
+### Overview
+
+Complete Interview List screen implemented with live API integration — matching the web UI design. Includes candidate listing, stat cards, search/filter, status changes, activity logs, add candidate form, and send-portal-login action.
+
+---
+
+### Features Implemented
+
+| Feature | Detail |
+|---|---|
+| **Stat cards** | Total · Pending · Selected · Rejected — fetched from `/api/recruitment/candidates/stats/` |
+| **Info banner** | Blue pipeline tip (matches web design) |
+| **Search** | Live client-side search by name / email / position / branch |
+| **Status filter chips** | All · Pending · Selected · Rejected — re-fetches on tap |
+| **Candidate cards** | Avatar initials · name · email · status badge · position/branch/date/mode meta chips |
+| **Status change** | 3-dot popup menu → valid transitions → `PATCH /recruitment/candidates/{id}/status/` |
+| **Activity Log dialog** | Icon-coloured timeline (info/success/warn/error) → `GET /recruitment/candidates/{id}/` |
+| **Send Login** | `POST /recruitment/candidates/{id}/send-portal-login/` — shown for `selected` candidates |
+| **Add Candidate sheet** | Bottom sheet with full validation — branch dropdown (live from `/api/branch/branches/`), date picker, mode selector → `POST /recruitment/candidates/` |
+| **Pull-to-refresh** | Refreshes both list and stats simultaneously |
+
+---
+
+### Files Created
+
+```
+mobile_app/lib/features/interview_list/
+  domain/
+    entities/candidate_entity.dart               CandidateEntity, CandidateLogEntity, CandidateStatsEntity
+  data/
+    models/candidate_model.dart                  CandidateModel, CandidateLogModel, CandidateStatsModel
+    datasources/interview_datasource.dart        fetchStats, fetchCandidates, fetchCandidate, createCandidate, updateStatus, sendPortalLogin, resendPortalLogin
+  presentation/
+    providers/interview_providers.dart           candidateStatsProvider, candidateListProvider, filteredCandidatesProvider, candidateDetailProvider
+    screens/interview_list_screen.dart           InterviewListScreen (part file — uses interview_list_widgets.dart)
+    widgets/
+      interview_list_widgets.dart                _Header, _InfoBanner, _StatsRow, _StatCard, _StatsShimmer, _SearchFilter, _EmptyView, _ErrorView (part of screen)
+      interview_status_badge.dart                CandidateStatusBadge, candidateStatusColor(), candidateStatusLabel(), interviewModeLabel()
+      candidate_card.dart                        CandidateCard, _MetaChip, _LogsButton, _StatusChangeButton, _PortalActionButton
+      activity_log_dialog.dart                   ActivityLogDialog, _LogList, _LogItem
+      add_candidate_sheet.dart                   AddCandidateSheet (part file — uses add_candidate_form.dart)
+      add_candidate_form.dart                    _AddCandidateFormContent, _DropdownField<T>, _inputDec()
+```
+
+### Files Modified
+
+```
+mobile_app/
+  lib/
+    core/constants/api_constants.dart   added 6 recruitment candidate endpoints
+    core/router/app_router.dart         wired InterviewListScreen at /dashboard/interview-list
+```
+
+---
+
+### Bug Fixed — 404 on Candidates API
+
+**Symptom:** Screen showed `DioException [bad response]: 404` on load.
+
+**Root Cause:** API constants used `/candidates/` instead of `/recruitment/candidates/`. The Django root URL config mounts the recruitment app at `/api/recruitment/` (not `/api/`), as confirmed in `backend/config/urls.py`:
+```python
+path('api/recruitment/', include('apps.recruitment.urls')),
+```
+
+**Fix:** All 6 candidate API constants updated to use `/recruitment/candidates/` prefix.
+
+**Commit:** `00725f0` — fix(mobile): correct recruitment API base path
+
+---
+
+### Architecture Notes
+
+- **`part`/`part of` pattern**: `interview_list_screen.dart` declares `part '../widgets/interview_list_widgets.dart'` so private (`_`-prefixed) widget classes can be shared across the two files without making them public. Same pattern used for `add_candidate_sheet.dart` ↔ `add_candidate_form.dart`.
+- **`autoDispose` providers**: Both `candidateListProvider` and `candidateStatsProvider` auto-dispose when the user leaves the screen — prevents stale data on re-entry.
+- **`filteredCandidatesProvider`**: Derived provider — client-side search filter on top of the fetched list; no extra API calls.
+- **`candidateDetailProvider`**: `FutureProvider.autoDispose.family<CandidateEntity, int>` — fetches full candidate with logs only when Activity Log dialog opens; auto-disposes when dialog closes.
+- **Status action logic** (`_PortalActionButton`):
+  - `converted` → static "Employee" teal chip
+  - `portalCredentialsSent == true` or `offer_sent` → static "Login Sent" grey chip
+  - `selected` and not sent → active "Send Login" button → `POST /send-portal-login/`
+- **`_DropdownField<T>`** generic widget: wraps `DropdownButton` in a styled `Container` — avoids the deprecated `value` parameter on `DropdownButtonFormField` (deprecated after Flutter v3.33).
+- **Branches in Add Candidate**: fetched from `/api/branch/branches/?page_size=100` in `initState` of the sheet — not a provider, because the sheet is short-lived and branches rarely change.
+
+### Analysis Result
+`flutter analyze lib/features/interview_list/` → **No issues found**
+
+### Line Counts (all under 300-line rule)
+
+| File | Lines |
+|------|-------|
+| interview_list_screen.dart | 105 |
+| interview_list_widgets.dart | 291 |
+| interview_status_badge.dart | 81 |
+| candidate_card.dart | 262 |
+| activity_log_dialog.dart | 183 |
+| add_candidate_sheet.dart | 193 |
+| add_candidate_form.dart | 288 |
+| interview_providers.dart | 116 |
+| interview_datasource.dart | 70 |
+| candidate_model.dart | 85 |
+| candidate_entity.dart | 69 |
+
+---
+
+### Pending Tasks (updated)
+- [ ] Interview List: test Send Login flow end-to-end
+- [ ] Connect My Profile screen to real API (GET /profile/, PATCH /profile/, POST /change-password/)
+- [ ] Connect Documents section in profile to real employee documents API
+- [ ] Backend team: add `access` token to login + refresh response bodies (from Session 4)
+- [ ] Review & Onboarding screen implementation
+- [ ] Email Logs screen implementation
+- [ ] Attendance module
+- [ ] Leave module
+- [ ] Payroll module
+
+---
