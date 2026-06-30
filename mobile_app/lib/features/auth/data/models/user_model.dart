@@ -13,6 +13,7 @@ class UserModel extends UserEntity {
     super.branch,
     required super.mustChangePassword,
     required super.permissions,
+    super.onboardingStatus,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -31,6 +32,7 @@ class UserModel extends UserEntity {
               ?.map((p) => p as String)
               .toList() ??
           [],
+      onboardingStatus: json['onboarding_status'] as String?,
     );
   }
 
@@ -46,5 +48,6 @@ class UserModel extends UserEntity {
         'branch': branch,
         'must_change_password': mustChangePassword,
         'permissions': permissions,
+        'onboarding_status': onboardingStatus,
       };
 }

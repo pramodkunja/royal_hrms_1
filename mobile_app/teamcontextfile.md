@@ -1690,10 +1690,129 @@ path('api/recruitment/', include('apps.recruitment.urls')),
 - [ ] Connect My Profile screen to real API (GET /profile/, PATCH /profile/, POST /change-password/)
 - [ ] Connect Documents section in profile to real employee documents API
 - [ ] Backend team: add `access` token to login + refresh response bodies (from Session 4)
-- [ ] Review & Onboarding screen implementation
+- [x] Employee Onboarding Wizard — implemented (Session 10)
+- [ ] HR Candidate Review / Onboarding Approval screen (HR-side)
 - [ ] Email Logs screen implementation
 - [ ] Attendance module
 - [ ] Leave module
 - [ ] Payroll module
+
+---
+
+## Session 10
+
+**Date:** 2026-06-30
+**Developer:** Vignesh Kumar Saka
+
+### Module Worked On
+- Employee Onboarding Wizard (full implementation)
+- Auth entity update (onboarding_status)
+- Router redirect logic for onboarding flow
+
+### Flow Implemented
+
+```
+Candidate receives portal login credentials via email
+       ↓
+Employee logs in → login response includes onboarding_status
+       ↓
+Router redirect logic (app_router.dart):
+  pending / draft  →  /onboarding        (wizard, resumes from saved step)
+  submitted        →  /onboarding/awaiting-approval  (waiting screen, no dashboard)
+  complete         →  /dashboard          (full employee access)
+```
+
+### Screens Created
+
+#### `/onboarding` — OnboardingScreen
+- 5-step wizard with animated step indicator + progress bar
+- Step labels: Personal, Education, Bank, Emergency, Documents
+- Each step saves via `PATCH /api/onboarding/profile/step/{step}/`
+- Resume capability: fetches profile on load, restores `currentStep` from server
+- App bar shows "Step X of 5 — {StepName}" + Logout button
+- Part file pattern: `onboarding_screen.dart` + `onboarding_steps.dart`
+
+#### `/onboarding/awaiting-approval` — AwaitingApprovalScreen
+- Full-screen static screen shown after submission
+- Large hourglass illustration with animated pulse rings
+- 3-step timeline: Profile Submitted (done) → HR Review → Account Activation
+- Logout button — no dashboard access until HR approves
+
+### Step Details
+
+| Step | Widget | Fields | API |
+|------|--------|--------|-----|
+| 0 | `_PersonalStep` | First/Last name, DOB (date picker), Gender, Blood Group, Nationality, Marital Status, Father's Name, Phone, Address (line1, line2, city, state, pincode, country) | `PATCH /onboarding/profile/step/0/` |
+| 1 | `_EducationStep` | Qualification (dropdown), Institution, Specialization, Year of Passing, Grade | `PATCH /onboarding/profile/step/1/` |
+| 2 | `_BankStep` | Bank Name, Account Number (obscured), IFSC Code, Account Type, Branch Name + orange warning banner | `PATCH /onboarding/profile/step/2/` |
+| 3 | `_EmergencyStep` | Contact Name, Relationship (dropdown), Phone, Email, Address | `PATCH /onboarding/profile/step/3/` |
+| 4 | `_DocumentsStep` | Upload: Aadhaar, PAN, Passport Photo, Resume, Education Certificate, Other; delete uploaded docs; Submit button with confirm dialog | `POST /onboarding/documents/` + `POST /onboarding/submit/` |
+
+### Files Created
+
+```
+mobile_app/lib/features/onboarding/
+  domain/
+    entities/onboarding_entity.dart    OnboardingProfileEntity, OnboardingPersonalEntity, OnboardingEducationEntity, OnboardingBankEntity, OnboardingEmergencyEntity, OnboardingDocEntity
+  data/
+    models/onboarding_model.dart       Model classes with fromJson/toJson for all entities
+    datasources/onboarding_datasource.dart  fetchProfile, saveStep, uploadDocument, deleteDocument, submitProfile
+  presentation/
+    providers/onboarding_providers.dart    onboardingProfileProvider (AsyncNotifier), onboardingStepProvider (StateProvider)
+    screens/
+      onboarding_screen.dart           OnboardingScreen (5-step wizard host, part file)
+      awaiting_approval_screen.dart    AwaitingApprovalScreen (static waiting screen)
+    widgets/
+      step_indicator.dart              OnboardingStepIndicator (animated dots + progress bar)
+      onboarding_steps.dart            _PersonalStep, _EducationStep, _BankStep, _EmergencyStep, _DocumentsStep, _StepFormWrapper, _DropdownInput, _DocTypeCard, _UploadedDocRow (part of onboarding_screen.dart)
+```
+
+### Files Modified
+
+```
+mobile_app/lib/
+  features/auth/domain/entities/user_entity.dart   added onboardingStatus field, needsOnboarding, awaitingApproval, onboardingComplete getters
+  features/auth/data/models/user_model.dart         parse onboarding_status from JSON, include in toJson
+  core/constants/api_constants.dart                 added 5 onboarding endpoints
+  core/router/app_router.dart                       added /onboarding + /onboarding/awaiting-approval routes; updated redirect logic for onboarding status
+```
+
+### API Constants Added
+
+```dart
+static const String onboardingProfile = '/onboarding/profile/';
+static String onboardingStep(int step) => '/onboarding/profile/step/$step/';
+static const String onboardingDocuments = '/onboarding/documents/';
+static String onboardingDocumentDetail(int id) => '/onboarding/documents/$id/';
+static const String onboardingSubmit = '/onboarding/submit/';
+```
+
+### Router Redirect Logic
+
+```dart
+if (user.needsOnboarding)    → /onboarding             (pending/draft)
+if (user.awaitingApproval)   → /onboarding/awaiting-approval  (submitted)
+// complete or null          → normal dashboard routing
+```
+
+### Architecture Notes
+
+- **No GoRouter redirect loop**: onboarding/awaiting paths are outside `/dashboard`, so existing `path.startsWith('/dashboard')` guard remains intact.
+- **Step resume**: `onboardingProfileProvider` fetches profile on build; `currentStep` is synced from `profile.currentStep` so employees pick up where they left off.
+- **File upload stub**: `onUpload` in `_DocumentsStep` calls provider but actual `MultipartFile` construction requires `file_picker` package (not yet installed) — wire up when file_picker is added.
+- **Submit flow**: After `POST /onboarding/submit/`, app navigates directly to `/onboarding/awaiting-approval` — no auth refresh needed. On next login, router reads updated `onboarding_status` from login response.
+- **`_DropdownInput`**: Same pattern as `_DropdownField<T>` from Interview List — uses raw `DropdownButton` inside `InputDecorator` to avoid deprecated `value` parameter.
+
+### Analysis Result
+`flutter analyze` → **No issues found** (full project)
+
+### Pending (Backend team)
+- [ ] Implement `GET /api/onboarding/profile/` → returns profile with `status`, `current_step`, nested `personal`, `education`, `bank`, `emergency`, `documents`
+- [ ] Implement `PATCH /api/onboarding/profile/step/{step}/` → accepts step data, updates `current_step`
+- [ ] Implement `POST /api/onboarding/documents/` → multipart upload
+- [ ] Implement `DELETE /api/onboarding/documents/{id}/`
+- [ ] Implement `POST /api/onboarding/submit/` → sets status to `submitted`
+- [ ] Login response must include `onboarding_status` field in user data
+- [ ] HR Approval endpoint: `PATCH /api/onboarding/{candidate_id}/approve/` → sets status to `complete`, converts candidate to employee
 
 ---

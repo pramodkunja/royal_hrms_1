@@ -94,4 +94,12 @@ class ApiConstants {
   static const String branchStats = '/branch/branches/stats/';
   static const String branches = '/branch/branches/';
   static String branchDetail(int id) => '/branch/branches/$id/';
+
+  // Employee Onboarding
+  static const String onboardingProfile = '/onboarding/profile/';
+  static String onboardingStep(int step) => '/onboarding/profile/step/$step/';
+  static const String onboardingDocuments = '/onboarding/documents/';
+  static String onboardingDocumentDetail(int id) =>
+      '/onboarding/documents/$id/';
+  static const String onboardingSubmit = '/onboarding/submit/';
 }

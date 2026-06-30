@@ -25,6 +25,8 @@ import '../../features/documents/presentation/screens/documents_screen.dart';
 import '../../features/org_chart/presentation/screens/org_chart_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/interview_list/presentation/screens/interview_list_screen.dart';
+import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
+import '../../features/onboarding/presentation/screens/awaiting_approval_screen.dart';
 
 // ─── Route path constants ─────────────────────────────────────────────────────
 
@@ -61,6 +63,10 @@ class AppRoutes {
   static const String audit           = '/dashboard/audit';
   static const String settings        = '/dashboard/settings';
 
+  // Onboarding
+  static const String onboarding        = '/onboarding';
+  static const String onboardingAwaiting = '/onboarding/awaiting-approval';
+
   // Settings sub-screens — pushed on top of the shell (full-screen with back arrow)
   static const String settingsCompany        = '/settings/company';
   static const String settingsDepartments    = '/settings/departments';
@@ -92,15 +98,44 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
     redirect: (context, state) {
       final authAsync = ref.read(authStateProvider);
-      final isAuthenticated = authAsync.valueOrNull?.isAuthenticated ?? false;
+      final authState = authAsync.valueOrNull;
+      final isAuthenticated = authState?.isAuthenticated ?? false;
+      final user = authState?.user;
       final path = state.uri.path;
 
-      if (!isAuthenticated && path.startsWith('/dashboard')) {
-        return AppRoutes.login;
+      // Not logged in — send to login
+      if (!isAuthenticated) {
+        if (path.startsWith('/dashboard') ||
+            path.startsWith('/settings') ||
+            path.startsWith('/onboarding')) {
+          return AppRoutes.login;
+        }
+        return null;
       }
-      if (!isAuthenticated && path.startsWith('/settings')) {
-        return AppRoutes.login;
+
+      // Logged in — check onboarding status
+      if (user != null) {
+        if (user.needsOnboarding) {
+          // pending/draft: must complete onboarding wizard
+          if (!path.startsWith('/onboarding')) {
+            return AppRoutes.onboarding;
+          }
+          return null;
+        }
+        if (user.awaitingApproval) {
+          // submitted: waiting for HR approval
+          if (path != AppRoutes.onboardingAwaiting) {
+            return AppRoutes.onboardingAwaiting;
+          }
+          return null;
+        }
+        // complete / no onboarding: normal dashboard access
+        // Redirect away from onboarding routes if already done
+        if (path.startsWith('/onboarding')) {
+          return AppRoutes.dashboard;
+        }
       }
+
       return null;
     },
 
@@ -117,6 +152,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.forgotPassword,
         builder: (_, __) => const ForgotPasswordScreen(),
+      ),
+
+      // ── Onboarding (outside dashboard shell) ───────────────────────────
+      GoRoute(
+        path: AppRoutes.onboarding,
+        pageBuilder: (_, __) =>
+            const NoTransitionPage(child: OnboardingScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.onboardingAwaiting,
+        pageBuilder: (_, __) =>
+            const NoTransitionPage(child: AwaitingApprovalScreen()),
       ),
 
       // ── Settings sub-screens (outside shell — own AppBar + back button) ──

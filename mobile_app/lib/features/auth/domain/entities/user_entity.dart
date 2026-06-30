@@ -10,6 +10,7 @@ class UserEntity {
   final String? branch;
   final bool mustChangePassword;
   final List<String> permissions;
+  final String? onboardingStatus;
 
   const UserEntity({
     required this.id,
@@ -23,7 +24,13 @@ class UserEntity {
     this.branch,
     required this.mustChangePassword,
     required this.permissions,
+    this.onboardingStatus,
   });
+
+  bool get needsOnboarding =>
+      onboardingStatus == 'pending' || onboardingStatus == 'draft';
+  bool get awaitingApproval => onboardingStatus == 'submitted';
+  bool get onboardingComplete => onboardingStatus == 'complete';
 
   bool hasPermission(String permission) => permissions.contains(permission);
 
