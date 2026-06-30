@@ -110,6 +110,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     branch          = models.CharField(max_length=100, blank=True)
     phone           = models.CharField(max_length=20, blank=True)
     date_of_joining = models.DateField(null=True, blank=True)
+    reporting_manager = models.ForeignKey(
+                            'self',
+                            on_delete=models.SET_NULL,
+                            null=True,
+                            blank=True,
+                            related_name='direct_reports',
+                        )
     is_active       = models.BooleanField(default=True)
     is_staff      = models.BooleanField(default=False)
     must_change_password    = models.BooleanField(default=True)
@@ -723,6 +730,103 @@ class EmployeeDocument(models.Model):
 
     def __str__(self) -> str:
         return f'{self.user.email} — {self.document_type}'
+
+
+# ─── Approval Workflow Rules (global defaults) ────────────────────────────────
+
+class ApprovalWorkflowRule(models.Model):
+    WORKFLOW_LEAVE       = 'leave'
+    WORKFLOW_EXPENSE     = 'expense'
+    WORKFLOW_RESIGNATION = 'resignation'
+    WORKFLOW_LOAN        = 'loan'
+    WORKFLOW_CHOICES = [
+        (WORKFLOW_LEAVE,       'Leave Request'),
+        (WORKFLOW_EXPENSE,     'Expense Claim'),
+        (WORKFLOW_RESIGNATION, 'Resignation'),
+        (WORKFLOW_LOAN,        'Loan Request'),
+    ]
+
+    ROLE_REPORTING_MANAGER = 'reporting_manager'
+    ROLE_HR_MANAGER        = 'hr_manager'
+    ROLE_ADMIN             = 'admin'
+    APPROVER_ROLE_CHOICES = [
+        (ROLE_REPORTING_MANAGER, 'Reporting Manager'),
+        (ROLE_HR_MANAGER,        'HR Manager'),
+        (ROLE_ADMIN,             'Admin'),
+    ]
+
+    workflow_type    = models.CharField(max_length=15, choices=WORKFLOW_CHOICES, unique=True)
+    l1_approver_role = models.CharField(
+                           max_length=20,
+                           choices=APPROVER_ROLE_CHOICES,
+                           default=ROLE_REPORTING_MANAGER,
+                       )
+    l2_approver_role = models.CharField(
+                           max_length=20,
+                           choices=APPROVER_ROLE_CHOICES,
+                           blank=True,
+                           default='',
+                       )
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+                     User,
+                     on_delete=models.SET_NULL,
+                     null=True,
+                     blank=True,
+                     related_name='approval_rule_updates',
+                 )
+
+    class Meta:
+        db_table = 'hrms_approval_workflow_rules'
+
+    def __str__(self) -> str:
+        return f'{self.get_workflow_type_display()} — L1: {self.l1_approver_role}'
+
+
+# ─── Employee Approval Overrides (per-employee) ───────────────────────────────
+
+class EmployeeApprovalOverride(models.Model):
+    """Per-employee override for a specific workflow's approvers.
+    If l1_override or l2_override is null, the global ApprovalWorkflowRule applies."""
+
+    employee      = models.ForeignKey(
+                        User,
+                        on_delete=models.CASCADE,
+                        related_name='approval_overrides',
+                    )
+    workflow_type = models.CharField(
+                        max_length=15,
+                        choices=ApprovalWorkflowRule.WORKFLOW_CHOICES,
+                    )
+    l1_override   = models.ForeignKey(
+                        User,
+                        on_delete=models.SET_NULL,
+                        null=True,
+                        blank=True,
+                        related_name='l1_approval_overrides',
+                    )
+    l2_override   = models.ForeignKey(
+                        User,
+                        on_delete=models.SET_NULL,
+                        null=True,
+                        blank=True,
+                        related_name='l2_approval_overrides',
+                    )
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+                     User,
+                     on_delete=models.SET_NULL,
+                     null=True,
+                     blank=True,
+                     related_name='approval_override_updates',
+                 )
+
+    class Meta:
+        db_table        = 'hrms_employee_approval_overrides'
+        unique_together = ('employee', 'workflow_type')
+
+    def __str__(self) -> str:
+        return f'{self.employee.email} — {self.workflow_type}'
 
 
 class EmailTemplateAttachment(models.Model):

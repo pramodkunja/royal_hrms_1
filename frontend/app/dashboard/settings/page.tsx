@@ -8,6 +8,7 @@ const SETTINGS_ITEMS = [
   { id: "departments",        cat: "company", icon: "ti-sitemap",         iconClass: "sc-company", label: "Departments & Designations", desc: "Organisation structure and job titles" },
   { id: "permissions",        cat: "company", icon: "ti-shield-lock",     iconClass: "sc-company", label: "Roles & Permissions",   desc: "Role-based access control for all users" },
   { id: "leave-policy",       cat: "modules", icon: "ti-beach",           iconClass: "sc-modules", label: "Leave Policy",          desc: "Configure leave types, accruals and limits" },
+  { id: "approval-rules",     cat: "modules", icon: "ti-sitemap",         iconClass: "sc-modules", label: "Approval Rules",        desc: "Who approves leave, expenses, resignation and loans" },
   { id: "holiday-calendar",   cat: "modules", icon: "ti-calendar-event",  iconClass: "sc-modules", label: "Holiday Calendar",      desc: "Manage national, regional and company holidays" },
   { id: "payroll-config",     cat: "modules", icon: "ti-report-money",    iconClass: "sc-modules", label: "Payroll Rules",         desc: "Salary components, tax slabs and statutory" },
   { id: "attendance-config",  cat: "modules", icon: "ti-clock",           iconClass: "sc-modules", label: "Attendance Rules",      desc: "Shift timings, late marks and overtime" },
@@ -39,6 +40,7 @@ const ITEM_ROUTES: Record<string, string> = {
   "employee-code":      "/dashboard/settings/employee-code",
   "leave-policy":     "/dashboard/settings/leave-policy",
   "holiday-calendar": "/dashboard/settings/holiday-calendar",
+  "approval-rules":   "/dashboard/settings/approval-rules",
 };
 
 export default function SettingsPage() {

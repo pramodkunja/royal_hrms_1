@@ -1,10 +1,13 @@
 from django.urls import path
 from apps.accounts.views import (
+    ApprovalWorkflowRuleView,
     AuditLogListView,
+    EmployeeApprovalMatrixView,
     EmployeeCodeSettingsView,
     EmployeeDetailView,
     EmployeeDocumentView,
     EmployeeProfileView,
+    EmployeeReportingManagerView,
     MyProfileView,
     OnboardingApprovalsListView,
     OnboardingApproveView,
@@ -53,9 +56,11 @@ urlpatterns = [
     path('change-password/', ChangePasswordView.as_view(),  name='change-password'),
 
     # Employees
-    path('employees/',                      EmployeeListCreateView.as_view(), name='employee-list-create'),
-    path('employees/me/',                   MyProfileView.as_view(),          name='my-profile'),
-    path('employees/<str:employee_id>/',    EmployeeDetailView.as_view(),     name='employee-detail'),
+    path('employees/',                                          EmployeeListCreateView.as_view(),       name='employee-list-create'),
+    path('employees/me/',                                       MyProfileView.as_view(),                name='my-profile'),
+    path('employees/<str:employee_id>/reporting-manager/',      EmployeeReportingManagerView.as_view(), name='employee-reporting-manager'),
+    path('employees/<str:employee_id>/approval-matrix/',        EmployeeApprovalMatrixView.as_view(),   name='employee-approval-matrix'),
+    path('employees/<str:employee_id>/',                        EmployeeDetailView.as_view(),           name='employee-detail'),
 
     # Onboarding (self-service wizard)
     path('onboarding/profile/',                            EmployeeProfileView.as_view(),        name='onboarding-profile'),
@@ -81,8 +86,9 @@ urlpatterns = [
     path('permissions/<int:pk>/', PermissionDetailView.as_view(), name='permission-detail'),
 
     # Company (singleton)
-    path('settings/company/',       CompanyRetrieveUpdateView.as_view(),  name='company'),
-    path('settings/employee-code/', EmployeeCodeSettingsView.as_view(),   name='employee-code-settings'),
+    path('settings/company/',          CompanyRetrieveUpdateView.as_view(),  name='company'),
+    path('settings/employee-code/',    EmployeeCodeSettingsView.as_view(),   name='employee-code-settings'),
+    path('settings/approval-rules/',   ApprovalWorkflowRuleView.as_view(),   name='approval-workflow-rules'),
 
     # Audit Log (read-only)
     path('settings/audit/', AuditLogListView.as_view(), name='audit-log-list'),

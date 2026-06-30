@@ -36,11 +36,13 @@ export const API = {
   },
 
   employees: {
-    list:    "/employees/",
-    me:      "/employees/me/",
-    detail:  (id: string) => `/employees/${id}/`,
-    profile: (id: string) => `/employees/${id}/profile/`,
-    branches: "/branch/branches/",
+    list:              "/employees/",
+    me:                "/employees/me/",
+    detail:            (id: string) => `/employees/${id}/`,
+    profile:           (id: string) => `/employees/${id}/profile/`,
+    reportingManager:  (id: string) => `/employees/${id}/reporting-manager/`,
+    approvalMatrix:    (id: string) => `/employees/${id}/approval-matrix/`,
+    branches:          "/branch/branches/",
   },
 
   roles: {
@@ -57,6 +59,7 @@ export const API = {
     company:        "/settings/company/",
     employeeCode:   "/settings/employee-code/",
     emailTemplates: "/settings/email-templates/",
+    approvalRules:  "/settings/approval-rules/",
   },
 
   recruitment: {

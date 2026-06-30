@@ -1129,3 +1129,42 @@ class MyProfileUpdateSerializer(serializers.Serializer):
     emergency_relationship = serializers.CharField(max_length=50,   required=False, allow_blank=True)
     emergency_phone        = serializers.CharField(max_length=20,   required=False, allow_blank=True)
     emergency_email        = serializers.EmailField(required=False, allow_blank=True)
+
+
+# ─── Approval Matrix ──────────────────────────────────────────────────────────
+
+class ApprovalWorkflowRuleSerializer(serializers.ModelSerializer):
+    workflow_label    = serializers.CharField(source='get_workflow_type_display', read_only=True)
+    l1_approver_label = serializers.SerializerMethodField()
+    l2_approver_label = serializers.SerializerMethodField()
+
+    class Meta:
+        from apps.accounts.models import ApprovalWorkflowRule as _Rule
+        model  = _Rule
+        fields = [
+            'workflow_type', 'workflow_label',
+            'l1_approver_role', 'l1_approver_label',
+            'l2_approver_role', 'l2_approver_label',
+        ]
+
+    def get_l1_approver_label(self, obj) -> str:
+        from apps.accounts.models import ApprovalWorkflowRule
+        return dict(ApprovalWorkflowRule.APPROVER_ROLE_CHOICES).get(obj.l1_approver_role, '')
+
+    def get_l2_approver_label(self, obj) -> str:
+        if not obj.l2_approver_role:
+            return ''
+        from apps.accounts.models import ApprovalWorkflowRule
+        return dict(ApprovalWorkflowRule.APPROVER_ROLE_CHOICES).get(obj.l2_approver_role, '')
+
+
+class ApprovalWorkflowRuleUpdateSerializer(serializers.Serializer):
+    from apps.accounts.models import ApprovalWorkflowRule as _Rule
+    workflow_type    = serializers.ChoiceField(choices=[c[0] for c in _Rule.WORKFLOW_CHOICES])
+    l1_approver_role = serializers.ChoiceField(choices=[c[0] for c in _Rule.APPROVER_ROLE_CHOICES])
+    l2_approver_role = serializers.ChoiceField(
+                           choices=[''] + [c[0] for c in _Rule.APPROVER_ROLE_CHOICES],
+                           required=False,
+                           allow_blank=True,
+                           default='',
+                       )
