@@ -131,9 +131,12 @@ export const PROFILE_SECTIONS: ProfileSection[] = [
     kind: "grid",
     fields: [
       // ── read-only identity fields (set by system, not editable) ──
-      { key: "code",      label: "Employee ID", type: "readonly" },
-      { key: "firstName", label: "First Name",  type: "readonly" },
-      { key: "lastName",  label: "Last Name",   type: "readonly" },
+      { key: "code",          label: "Employee ID",    type: "readonly" },
+      { key: "firstName",     label: "First Name",     type: "readonly" },
+      { key: "lastName",      label: "Last Name",      type: "readonly" },
+      { key: "dateOfJoining", label: "Date of Joining", type: "readonly" },
+      { key: "loginEmail",    label: "Login Email",    type: "readonly" },
+      { key: "mobileNumber",  label: "Phone",          type: "readonly" },
       // ── editable employment fields (options injected at runtime from API) ──
       { key: "department",  label: "Department",  type: "select", required: true, options: [] },
       { key: "designation", label: "Designation", type: "select", required: true, options: [] },
