@@ -77,14 +77,15 @@ class ApiConstants {
   static String documentDetail(int id) => '/documents/$id/';
 
   // Candidates / Interview List
-  static const String candidateStats = '/candidates/stats/';
-  static const String candidates = '/candidates/';
-  static String candidateDetail(int id) => '/candidates/$id/';
-  static String candidateStatus(int id) => '/candidates/$id/status/';
+  static const String candidateStats = '/recruitment/candidates/stats/';
+  static const String candidates = '/recruitment/candidates/';
+  static String candidateDetail(int id) => '/recruitment/candidates/$id/';
+  static String candidateStatus(int id) =>
+      '/recruitment/candidates/$id/status/';
   static String candidateSendLogin(int id) =>
-      '/candidates/$id/send-portal-login/';
+      '/recruitment/candidates/$id/send-portal-login/';
   static String candidateResendLogin(int id) =>
-      '/candidates/$id/resend-portal-login/';
+      '/recruitment/candidates/$id/resend-portal-login/';
 
   // Branch management
   static const String branchStates = '/branch/states/';
