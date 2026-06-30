@@ -1,12 +1,18 @@
 from django.urls import path
 from apps.accounts.views import (
+    ApprovalWorkflowRuleView,
     AuditLogListView,
+    EmployeeApprovalMatrixView,
     EmployeeCodeSettingsView,
     EmployeeDetailView,
     EmployeeDocumentView,
     EmployeeProfileView,
+    EmployeeReportingManagerView,
+    MyProfileView,
     OnboardingApprovalsListView,
     OnboardingApproveView,
+    OnboardingPipelineView,
+    OnboardingStepSaveView,
     SubmitOnboardingView,
     CompanyRetrieveUpdateView,
     DepartmentDetailView,
@@ -50,15 +56,20 @@ urlpatterns = [
     path('change-password/', ChangePasswordView.as_view(),  name='change-password'),
 
     # Employees
-    path('employees/',                      EmployeeListCreateView.as_view(), name='employee-list-create'),
-    path('employees/<str:employee_id>/',    EmployeeDetailView.as_view(),     name='employee-detail'),
+    path('employees/',                                          EmployeeListCreateView.as_view(),       name='employee-list-create'),
+    path('employees/me/',                                       MyProfileView.as_view(),                name='my-profile'),
+    path('employees/<str:employee_id>/reporting-manager/',      EmployeeReportingManagerView.as_view(), name='employee-reporting-manager'),
+    path('employees/<str:employee_id>/approval-matrix/',        EmployeeApprovalMatrixView.as_view(),   name='employee-approval-matrix'),
+    path('employees/<str:employee_id>/',                        EmployeeDetailView.as_view(),           name='employee-detail'),
 
     # Onboarding (self-service wizard)
-    path('onboarding/profile/',             EmployeeProfileView.as_view(),          name='onboarding-profile'),
-    path('onboarding/documents/',           EmployeeDocumentView.as_view(),         name='onboarding-documents'),
-    path('onboarding/submit/',              SubmitOnboardingView.as_view(),         name='onboarding-submit'),
-    path('onboarding/approvals/',           OnboardingApprovalsListView.as_view(),  name='onboarding-approvals'),
-    path('onboarding/approvals/<uuid:user_id>/approve/', OnboardingApproveView.as_view(), name='onboarding-approve'),
+    path('onboarding/profile/',                            EmployeeProfileView.as_view(),        name='onboarding-profile'),
+    path('onboarding/profile/step/<int:step>/',            OnboardingStepSaveView.as_view(),     name='onboarding-profile-step'),
+    path('onboarding/documents/',                          EmployeeDocumentView.as_view(),       name='onboarding-documents'),
+    path('onboarding/submit/',                             SubmitOnboardingView.as_view(),       name='onboarding-submit'),
+    path('onboarding/pipeline/',                           OnboardingPipelineView.as_view(),     name='onboarding-pipeline'),
+    path('onboarding/approvals/',                          OnboardingApprovalsListView.as_view(), name='onboarding-approvals'),
+    path('onboarding/approvals/<uuid:user_id>/approve/',   OnboardingApproveView.as_view(),      name='onboarding-approve'),
 
     # Organisation structure
     path('departments/',           DepartmentListCreateView.as_view(), name='department-list'),
@@ -75,8 +86,9 @@ urlpatterns = [
     path('permissions/<int:pk>/', PermissionDetailView.as_view(), name='permission-detail'),
 
     # Company (singleton)
-    path('settings/company/',       CompanyRetrieveUpdateView.as_view(),  name='company'),
-    path('settings/employee-code/', EmployeeCodeSettingsView.as_view(),   name='employee-code-settings'),
+    path('settings/company/',          CompanyRetrieveUpdateView.as_view(),  name='company'),
+    path('settings/employee-code/',    EmployeeCodeSettingsView.as_view(),   name='employee-code-settings'),
+    path('settings/approval-rules/',   ApprovalWorkflowRuleView.as_view(),   name='approval-workflow-rules'),
 
     # Audit Log (read-only)
     path('settings/audit/', AuditLogListView.as_view(), name='audit-log-list'),
@@ -101,3 +113,4 @@ urlpatterns = [
     path('documents/stats/',     DocumentStatsView.as_view(),      name='document-stats'),
     path('documents/<int:pk>/',  DocumentDetailView.as_view(),     name='document-detail'),
 ]
+

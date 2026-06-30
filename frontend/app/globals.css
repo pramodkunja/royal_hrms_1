@@ -399,6 +399,7 @@ tr:hover td {
 }
 
 .field-input {
+  width: 100%;
   padding: 9px 12px;
   border: 1.5px solid var(--outline-v);
   border-radius: var(--radius);
@@ -406,6 +407,7 @@ tr:hover td {
   color: var(--on-bg);
   font-size: 13px;
   transition: border-color 0.15s;
+  box-sizing: border-box;
 }
 
 .field-input:focus {
@@ -2001,6 +2003,28 @@ body.dark-mode {
 }
 
 /* ============================================================
+   FILTER-SCROLL — horizontally scrollable filter bar
+   (use for bars with 4+ icon+text buttons to prevent squishing)
+   ============================================================ */
+.filter-scroll {
+  overflow-x: auto;
+  flex-wrap: nowrap !important;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 3px;
+  scrollbar-width: none;
+}
+
+.filter-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-scroll .btn {
+  flex-shrink: 0 !important;
+  flex: none !important;
+  white-space: nowrap;
+}
+
+/* ============================================================
    RESPONSIVE
    ============================================================ */
 @media (max-width: 768px) {
@@ -2205,6 +2229,19 @@ body.dark-mode {
     min-width: 0;
   }
 
+  /* Page-actions select (e.g. branch dropdown) → same as .btn */
+  .page-actions select {
+    flex: 1;
+    min-width: 0;
+    width: auto;
+  }
+
+  /* Expense / payslip list rows → stack amount+status+buttons below details */
+  .expense-row-meta {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
   /* Drawer → full width on mobile */
   .drawer {
     width: 100vw;
@@ -2228,6 +2265,30 @@ body.dark-mode {
 
   .stat-value {
     font-size: 20px;
+  }
+
+  /* Tighten filter-scroll buttons on small phones */
+  .filter-scroll .btn {
+    padding: 7px 12px;
+    font-size: 12px;
+  }
+
+  /* Page-header actions stack cleanly on small screens */
+  .page-actions {
+    gap: 6px;
+  }
+
+  /* Modal full-bleed on tiny screens */
+  .modal {
+    width: 100vw;
+    max-height: 96vh;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    align-self: flex-end;
+  }
+
+  .modal-overlay.open {
+    align-items: flex-end;
   }
 
   .doc-grid {

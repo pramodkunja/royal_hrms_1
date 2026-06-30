@@ -352,9 +352,26 @@ class CandidateEmailLogView(APIView):
               .order_by('-sent_at'))
 
         if q := request.query_params.get('search'):
+            if len(q) > 100:
+                return error('search must be 100 characters or fewer.')
             qs = qs.filter(candidate__name__icontains=q) | qs.filter(to_email__icontains=q)
 
-        return success('Email logs retrieved.', data=CandidateEmailSerializer(qs, many=True).data)
+        try:
+            page_num  = max(1, int(request.query_params.get('page', 1)))
+            page_size = min(50, max(1, int(request.query_params.get('page_size', 20))))
+        except (ValueError, TypeError):
+            page_num, page_size = 1, 20
+
+        paginator = Paginator(qs, page_size)
+        page_obj  = paginator.get_page(page_num)
+
+        return success('Email logs retrieved.', data={
+            'count':       paginator.count,
+            'page':        page_obj.number,
+            'page_size':   page_size,
+            'total_pages': paginator.num_pages,
+            'results':     CandidateEmailSerializer(page_obj.object_list, many=True).data,
+        })
 
 
 # ─── Stats ─────────────────────────────────────────────────────────────────────
@@ -405,6 +422,20 @@ class SendPortalLoginView(APIView):
         if candidate.portal_credentials_sent and candidate.portal_user_id:
             return error('Portal login already sent. Use resend if you want to issue new credentials.')
 
+        if not candidate.email or not candidate.email.strip():
+            return error('Candidate does not have a valid email address.')
+
+        if User.objects.filter(email__iexact=candidate.email).exists():
+            return error(
+                'A portal account already exists for this email address.',
+                http_status=status.HTTP_409_CONFLICT,
+            )
+
+        # portal_url: request body overrides company setting
+        portal_url_override = (request.data.get('portal_url') or '').strip()
+        if portal_url_override and not portal_url_override.startswith(('http://', 'https://')):
+            return error('portal_url must start with http:// or https://.')
+
         # Generate a temporary password
         alphabet = string.ascii_letters + string.digits
         temp_password = ''.join(secrets.choice(alphabet) for _ in range(12))
@@ -433,13 +464,14 @@ class SendPortalLoginView(APIView):
         # Send credentials email
         company      = Company.objects.first()
         company_name = company.company_name if company else ''
+        portal_url   = portal_url_override or (company.portal_url if company else '') or ''
         context = {
             'candidate_name': candidate.name,
             'position':       candidate.position_applied,
             'company_name':   company_name,
             'login_email':    candidate.email,
             'temp_password':  temp_password,
-            'portal_url':     request.data.get('portal_url', 'https://royalhrms.com/login'),
+            'portal_url':     portal_url,
         }
         sent_status = CandidateEmail.STATUS_FAILED
         try:
@@ -477,4 +509,97 @@ class SendPortalLoginView(APIView):
             ip_address=get_client_ip(request),
         )
         return success('Portal login sent successfully.', data={'email': candidate.email})
+
+
+# ─── Resend Portal Login ───────────────────────────────────────────────────────
+
+class ResendPortalLoginView(APIView):
+    """
+    POST /api/recruitment/candidates/<pk>/resend-portal-login/
+    Issues a fresh temporary password to the candidate's existing portal account
+    and re-sends the invitation email.  Only valid once credentials have been sent.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        if not _has_perm(request.user, 'recruitment.edit'):
+            return error(_DENIED, http_status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            candidate = Candidate.objects.select_for_update().get(pk=pk)
+        except Candidate.DoesNotExist:
+            return error('Candidate not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        if not candidate.portal_credentials_sent or not candidate.portal_user_id:
+            return error(
+                'Portal login has not been sent yet. Use Send Portal Login first.',
+                http_status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        portal_user = candidate.portal_user
+        if not portal_user:
+            return error('Linked portal user account no longer exists.')
+
+        if portal_user.onboarding_status == User.ONBOARDING_COMPLETE:
+            return error('This candidate has already completed onboarding and cannot receive new credentials.')
+
+        # Generate and set a fresh temporary password
+        alphabet      = string.ascii_letters + string.digits
+        temp_password = ''.join(secrets.choice(alphabet) for _ in range(12))
+        portal_user.set_password(temp_password)
+        portal_user.must_change_password = True
+        portal_user.save(update_fields=['password', 'must_change_password'])
+
+        company      = Company.objects.first()
+        company_name = company.company_name if company else ''
+        portal_url_override = (request.data.get('portal_url') or '').strip()
+        if portal_url_override and not portal_url_override.startswith(('http://', 'https://')):
+            return error('portal_url must start with http:// or https://.')
+        portal_url = portal_url_override or (company.portal_url if company else '') or ''
+
+        context = {
+            'candidate_name': candidate.name,
+            'position':       candidate.position_applied,
+            'company_name':   company_name,
+            'login_email':    candidate.email,
+            'temp_password':  temp_password,
+            'portal_url':     portal_url,
+        }
+        sent_status = CandidateEmail.STATUS_FAILED
+        try:
+            send_template_email(
+                recipient_email=candidate.email,
+                template_name='portal_invite',
+                context=context,
+            )
+            sent_status = CandidateEmail.STATUS_SENT
+        except Exception as exc:
+            logger.exception('Failed to resend portal invite to %s: %s', candidate.email, exc)
+
+        CandidateEmail.objects.create(
+            candidate=candidate,
+            template_used='portal_invite',
+            subject=f'Your Portal Login (Resent) — {company_name}',
+            to_email=candidate.email,
+            status=sent_status,
+            sent_by=request.user,
+        )
+        CandidateLog.objects.create(
+            candidate=candidate,
+            log_type=(CandidateLog.TYPE_SUCCESS
+                      if sent_status == CandidateEmail.STATUS_SENT
+                      else CandidateLog.TYPE_WARN),
+            title=('Portal credentials resent'
+                   if sent_status == CandidateEmail.STATUS_SENT
+                   else 'Portal credentials resend failed — check SMTP settings'),
+            description=f'New credentials issued to {candidate.email} by {request.user.full_name or request.user.email}.',
+        )
+        AuditLog.objects.create(
+            user=request.user, action='portal_login_resent', module='recruitment',
+            object_id=str(candidate.pk),
+            changes={'email': candidate.email},
+            ip_address=get_client_ip(request),
+        )
+        return success('Portal credentials resent successfully.', data={'email': candidate.email})
 

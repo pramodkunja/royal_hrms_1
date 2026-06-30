@@ -4,18 +4,20 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 const SETTINGS_ITEMS = [
-  { id: "company",            cat: "company", icon: "ti-building",        iconClass: "sc-company", label: "Company Info",        desc: "Name, GST, address, registration details" },
+  { id: "company",            cat: "company", icon: "ti-building",        iconClass: "sc-company", label: "Company Info",          desc: "Name, GST, address, registration details" },
   { id: "departments",        cat: "company", icon: "ti-sitemap",         iconClass: "sc-company", label: "Departments & Designations", desc: "Organisation structure and job titles" },
-  { id: "permissions",        cat: "company", icon: "ti-shield-lock",     iconClass: "sc-company", label: "Roles & Permissions", desc: "Role-based access control for all users" },
-  { id: "leave-config",       cat: "modules", icon: "ti-beach",           iconClass: "sc-modules", label: "Leave Policy",        desc: "Configure leave types, accruals and limits" },
-  { id: "payroll-config",     cat: "modules", icon: "ti-report-money",    iconClass: "sc-modules", label: "Payroll Rules",       desc: "Salary components, tax slabs and statutory" },
-  { id: "attendance-config",  cat: "modules", icon: "ti-clock",           iconClass: "sc-modules", label: "Attendance Rules",    desc: "Shift timings, late marks and overtime" },
-  { id: "recruitment-config", cat: "modules", icon: "ti-users",           iconClass: "sc-modules", label: "Recruitment Config",  desc: "Interview stages, evaluation criteria" },
-  { id: "email-templates",    cat: "comm",    icon: "ti-mail",            iconClass: "sc-comm",    label: "Email Templates",     desc: "Customize all transactional emails" },
-  { id: "smtp",               cat: "comm",    icon: "ti-server",          iconClass: "sc-comm",    label: "SMTP Settings",       desc: "Outgoing email server configuration" },
-  { id: "notifications",      cat: "comm",    icon: "ti-bell",            iconClass: "sc-comm",    label: "Notifications",       desc: "In-app and email notification preferences" },
-  { id: "employee-code",      cat: "company", icon: "ti-id-badge",        iconClass: "sc-company", label: "Employee ID Format",  desc: "Prefix, padding, and starting number for employee codes" },
-  { id: "audit",              cat: "system",  icon: "ti-history",         iconClass: "sc-system",  label: "Audit Log",           desc: "View all system actions and changes" },
+  { id: "permissions",        cat: "company", icon: "ti-shield-lock",     iconClass: "sc-company", label: "Roles & Permissions",   desc: "Role-based access control for all users" },
+  { id: "leave-policy",       cat: "modules", icon: "ti-beach",           iconClass: "sc-modules", label: "Leave Policy",          desc: "Configure leave types, accruals and limits" },
+  { id: "approval-rules",     cat: "modules", icon: "ti-sitemap",         iconClass: "sc-modules", label: "Approval Rules",        desc: "Who approves leave, expenses, resignation and loans" },
+  { id: "holiday-calendar",   cat: "modules", icon: "ti-calendar-event",  iconClass: "sc-modules", label: "Holiday Calendar",      desc: "Manage national, regional and company holidays" },
+  { id: "payroll-config",     cat: "modules", icon: "ti-report-money",    iconClass: "sc-modules", label: "Payroll Rules",         desc: "Salary components, tax slabs and statutory" },
+  { id: "attendance-config",  cat: "modules", icon: "ti-clock",           iconClass: "sc-modules", label: "Attendance Rules",      desc: "Shift timings, late marks and overtime" },
+  { id: "recruitment-config", cat: "modules", icon: "ti-users",           iconClass: "sc-modules", label: "Recruitment Config",    desc: "Interview stages, evaluation criteria" },
+  { id: "email-templates",    cat: "comm",    icon: "ti-mail",            iconClass: "sc-comm",    label: "Email Templates",       desc: "Customize all transactional emails" },
+  { id: "smtp",               cat: "comm",    icon: "ti-server",          iconClass: "sc-comm",    label: "SMTP Settings",         desc: "Outgoing email server configuration" },
+  { id: "notifications",      cat: "comm",    icon: "ti-bell",            iconClass: "sc-comm",    label: "Notifications",         desc: "In-app and email notification preferences" },
+  { id: "employee-code",      cat: "company", icon: "ti-id-badge",        iconClass: "sc-company", label: "Employee ID Format",    desc: "Prefix, padding, and starting number for employee codes" },
+  { id: "audit",              cat: "system",  icon: "ti-history",         iconClass: "sc-system",  label: "Audit Log",             desc: "View all system actions and changes" },
 ] as const;
 
 const CATS = [
@@ -29,13 +31,16 @@ const CATS = [
 type CatId = "all" | "company" | "modules" | "comm" | "system";
 
 const ITEM_ROUTES: Record<string, string> = {
-  company:           "/dashboard/settings/company",
-  permissions:       "/dashboard/settings/permissions",
-  departments:       "/dashboard/settings/departments",
-  smtp:              "/dashboard/settings/smtp",
-  "email-templates": "/dashboard/settings/email-templates",
-  audit:             "/dashboard/settings/audit",
-  "employee-code":   "/dashboard/settings/employee-code",
+  company:              "/dashboard/settings/company",
+  permissions:          "/dashboard/settings/permissions",
+  departments:          "/dashboard/settings/departments",
+  smtp:                 "/dashboard/settings/smtp",
+  "email-templates":    "/dashboard/settings/email-templates",
+  audit:                "/dashboard/settings/audit",
+  "employee-code":      "/dashboard/settings/employee-code",
+  "leave-policy":     "/dashboard/settings/leave-policy",
+  "holiday-calendar": "/dashboard/settings/holiday-calendar",
+  "approval-rules":   "/dashboard/settings/approval-rules",
 };
 
 export default function SettingsPage() {

@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     'apps.branch',
     'apps.announcements',
     'apps.recruitment',
+    'apps.hrms',
 ]
 
 MIDDLEWARE = [

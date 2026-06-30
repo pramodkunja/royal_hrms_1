@@ -12,6 +12,8 @@ export type ReceiverEmailType = "email_id" | "personal_email_id";
 export interface ApiSmtpEntry {
   id:                   number;
   name:                 string;             // user-defined label, e.g. "Gmail SMTP"
+  smtp_type:            string;
+  smtp_type_display:    string;
   host:                 string;
   port:                 number;
   username:             string;
@@ -26,7 +28,13 @@ export interface ApiSmtpEntry {
   updated_at:           string;
 }
 
-export type ApiSmtpResponse = ApiSmtpEntry[];
+export interface ApiSmtpResponse {
+  count:       number;
+  page:        number;
+  page_size:   number;
+  total_pages: number;
+  results:     ApiSmtpEntry[];
+}
 
 // ─── Form state ───────────────────────────────────────────────────────────────
 

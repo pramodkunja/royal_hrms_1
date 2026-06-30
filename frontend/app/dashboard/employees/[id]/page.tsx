@@ -11,11 +11,28 @@ import {
   type TableRow,
   type Employee,
   type EmployeeStatus,
+  type Gender,
 } from "../_data";
 import ProfileHeader from "./_components/ProfileHeader";
 import ProfileTabBar from "./_components/ProfileTabBar";
 import ProfileSidebar from "./_components/ProfileSidebar";
 import ProfileForm from "./_components/ProfileForm";
+import { ReportingManagerCard } from "./_components/ReportingManagerCard";
+import { ApprovalMatrixTab } from "./_components/ApprovalMatrixTab";
+
+interface ApiProfile {
+  date_of_birth?: string; gender?: string; marital_status?: string;
+  father_name?: string; blood_group?: string;
+  current_address?: string; permanent_address?: string;
+  highest_qualification?: string; institution?: string;
+  year_of_passing?: string | number; specialization?: string;
+  total_experience_years?: string; previous_employer?: string;
+  previous_designation?: string; leaving_reason?: string;
+  account_number?: string; ifsc_code?: string; bank_name?: string;
+  bank_branch_name?: string; account_holder_name?: string; account_type?: string;
+  emergency_name?: string; emergency_relationship?: string;
+  emergency_phone?: string; emergency_email?: string;
+}
 
 interface ApiEmployee {
   id: string; employee_id: string;
@@ -24,9 +41,13 @@ interface ApiEmployee {
   department: string; designation: string; branch: string;
   role: string; role_display: string;
   date_of_joining: string; is_active: boolean; status: string;
+  reporting_manager_id:   string | null;
+  reporting_manager_name: string | null;
+  profile?: ApiProfile;
 }
 
 function apiToEmployee(u: ApiEmployee): Employee {
+  const p: ApiProfile = u.profile ?? {};
   return {
     id:            u.employee_id || u.id,
     code:          u.employee_id || u.id,
@@ -38,17 +59,18 @@ function apiToEmployee(u: ApiEmployee): Employee {
     department:    u.department || "",
     designation:   u.designation || "",
     dateOfJoining: u.date_of_joining || "",
-    dateOfBirth:   "",
+    dateOfBirth:   p.date_of_birth || "",
     location:      u.branch || "",
-    gender:        "male",
+    gender:        (p.gender as Gender) || "male",
     status:        (u.status as EmployeeStatus) || (u.is_active ? "active" : "inactive"),
     details: {
+      // Basic
       code:          u.employee_id,
       firstName:     u.first_name,
       middleName:    "",
       lastName:      u.last_name,
-      gender:        "",
-      dateOfBirth:   "",
+      gender:        p.gender || "",
+      dateOfBirth:   p.date_of_birth || "",
       dateOfJoining: u.date_of_joining || "",
       department:    u.department || "",
       designation:   u.designation || "",
@@ -58,12 +80,38 @@ function apiToEmployee(u: ApiEmployee): Employee {
       metroTds:      "Metro",
       esiDispensary: "N/A",
       nationality:   "Indian",
-      country:       "India",
       loginEmail:    u.email,
       personalEmail: u.email,
       ssRole:        u.role_display || "Employee",
       portalAccess:  "enabled",
       mobileNumber:  u.phone || "",
+      // Personal (from onboarding profile)
+      maritalStatus:    p.marital_status || "",
+      fatherName:       p.father_name || "",
+      bloodGroup:       p.blood_group || "",
+      currentAddress:   p.current_address || "",
+      permanentAddress: p.permanent_address || "",
+      // Education & experience (from onboarding profile)
+      highestQualification: p.highest_qualification || "",
+      specialization:       p.specialization || "",
+      institution:          p.institution || "",
+      yearOfPassing:        p.year_of_passing != null ? String(p.year_of_passing) : "",
+      totalExperienceYears: p.total_experience_years || "",
+      previousEmployer:     p.previous_employer || "",
+      previousDesignation:  p.previous_designation || "",
+      leavingReason:        p.leaving_reason || "",
+      // Bank details
+      accountHolderName: p.account_holder_name || "",
+      accountType:       p.account_type || "",
+      accountNumber:     p.account_number || "",
+      ifscCode:          p.ifsc_code || "",
+      bankName:          p.bank_name || "",
+      bankBranch:        p.bank_branch_name || "",
+      // Emergency contact
+      emergencyName:         p.emergency_name || "",
+      emergencyRelationship: p.emergency_relationship || "",
+      emergencyPhone:        p.emergency_phone || "",
+      emergencyEmail:        p.emergency_email || "",
     },
     tables: {},
   };
@@ -76,11 +124,13 @@ export default function EmployeeProfilePage({
 }) {
   const { id } = use(params);
   const [tab,       setTab]       = useState<string>("profile");
-  const [sectionId, setSectionId] = useState<string>("basic");
+  const [sectionId, setSectionId] = useState<string>("personal");
 
-  const [employee, setEmployee] = useState<Employee | null>(null);
-  const [loading,  setLoading]  = useState(true);
-  const [notFound, setNotFound] = useState(false);
+  const [employee,          setEmployee]          = useState<Employee | null>(null);
+  const [loading,           setLoading]           = useState(true);
+  const [notFound,          setNotFound]          = useState(false);
+  const [reportingMgrId,    setReportingMgrId]    = useState<string | null>(null);
+  const [reportingMgrName,  setReportingMgrName]  = useState<string | null>(null);
 
   const [values,     setValues]     = useState<DetailValues>({});
   const [tables,     setTables]     = useState<Record<string, TableRow[]>>({});
@@ -94,12 +144,15 @@ export default function EmployeeProfilePage({
     clientApi
       .get<{ data: ApiEmployee }>(API.employees.detail(id))
       .then(({ data }) => {
-        const emp = apiToEmployee(data.data);
+        const raw = data.data;
+        const emp = apiToEmployee(raw);
         setEmployee(emp);
         setValues({ ...emp.details });
         setBaseValues({ ...emp.details });
         setTables({});
         setBaseTables({});
+        setReportingMgrId(raw.reporting_manager_id ?? null);
+        setReportingMgrName(raw.reporting_manager_name ?? null);
       })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
@@ -178,6 +231,12 @@ export default function EmployeeProfilePage({
             <ProfileSidebar active={sectionId} onChange={setSectionId} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
+            <ReportingManagerCard
+              employeeCode={id}
+              currentManagerId={reportingMgrId}
+              currentManagerName={reportingMgrName}
+              onUpdated={(mgId, mgName) => { setReportingMgrId(mgId); setReportingMgrName(mgName); }}
+            />
             <ProfileForm
               section={section}
               values={values}
@@ -190,6 +249,8 @@ export default function EmployeeProfilePage({
             />
           </div>
         </div>
+      ) : tab === "approval" ? (
+        <ApprovalMatrixTab employeeCode={id} />
       ) : (
         <TabPlaceholder icon={activeTab.icon} label={activeTab.label} />
       )}

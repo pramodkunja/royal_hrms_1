@@ -31,6 +31,7 @@ interface ApiEmployee {
 function apiToEmployee(u: ApiEmployee): Employee {
   return {
     id:            u.employee_id || u.id,
+    uuid:          u.id,
     code:          u.employee_id || u.id,
     firstName:     u.first_name,
     middleName:    "",
@@ -87,10 +88,10 @@ const SEL_STYLE = {
 };
 
 export default function EmployeesPage() {
-  const router     = useRouter();
-  const storedUser = getStoredUser();
-  const isAdmin    = storedUser?.role === "system_admin";
-  const userBranch = storedUser?.branch ?? "";
+  const router = useRouter();
+
+  const [isAdmin,    setIsAdmin]    = useState(false);
+  const [userBranch, setUserBranch] = useState("");
 
   const [employees,  setEmployees]  = useState<Employee[]>([]);
   const [loading,    setLoading]    = useState(true);
@@ -100,13 +101,14 @@ export default function EmployeesPage() {
   const [dept,       setDept]       = useState("all");
   const [status,     setStatus]     = useState<"all" | EmployeeStatus>("all");
   const [showModal,  setShowModal]  = useState(false);
+  const [toggling,   setToggling]   = useState<string | null>(null);
 
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
     setFetchError("");
     try {
-      const { data } = await clientApi.get<{ data: ApiEmployee[] }>(API.employees.list);
-      setEmployees((data.data ?? []).map(apiToEmployee));
+      const { data } = await clientApi.get<{ data: { results: ApiEmployee[] } }>(API.employees.list);
+      setEmployees((data.data?.results ?? []).map(apiToEmployee));
     } catch {
       setFetchError("Could not load employees. Please refresh.");
     } finally {
@@ -115,6 +117,12 @@ export default function EmployeesPage() {
   }, []);
 
   useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
+
+  useEffect(() => {
+    const user = getStoredUser();
+    setIsAdmin(user?.role === "system_admin");
+    setUserBranch(user?.branch ?? "");
+  }, []);
 
   /* derive unique branches + departments from loaded data */
   const branchOptions = useMemo(
@@ -157,6 +165,25 @@ export default function EmployeesPage() {
 
   function open(id: string) {
     router.push(`/dashboard/employees/${id}`);
+  }
+
+  async function toggleStatus(employee: Employee) {
+    const isCurrentlyActive = employee.status !== "inactive";
+    const label = isCurrentlyActive ? "deactivate" : "activate";
+    if (!window.confirm(`Are you sure you want to ${label} ${fullName(employee)}?`)) return;
+    setToggling(employee.id);
+    try {
+      await clientApi.patch(API.employees.detail(employee.id), { is_active: !isCurrentlyActive });
+      setEmployees(prev => prev.map(e =>
+        e.id === employee.id
+          ? { ...e, status: isCurrentlyActive ? "inactive" : "active" }
+          : e
+      ));
+    } catch {
+      // silently ignore — employee list state unchanged
+    } finally {
+      setToggling(null);
+    }
   }
 
   return (
@@ -347,6 +374,25 @@ export default function EmployeesPage() {
                           <button onClick={() => open(e.id)} suppressHydrationWarning
                             className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--outline-v)] text-[var(--on-variant)] bg-white hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors">
                             <i className="ti ti-pencil text-[14px]" />
+                          </button>
+                          <button
+                            onClick={() => toggleStatus(e)}
+                            disabled={toggling === e.id}
+                            suppressHydrationWarning
+                            className={[
+                              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors",
+                              e.status === "inactive"
+                                ? "border-[var(--success)] text-[var(--success)] bg-white hover:bg-[var(--success-c)]"
+                                : "border-[var(--error)] text-[var(--error)] bg-white hover:bg-[var(--error-c)]",
+                              toggling === e.id ? "opacity-50 cursor-not-allowed" : "",
+                            ].join(" ")}
+                          >
+                            {toggling === e.id
+                              ? <i className="ti ti-loader-2 animate-spin text-[14px]" />
+                              : e.status === "inactive"
+                                ? <><i className="ti ti-user-check text-[14px]" /> Activate</>
+                                : <><i className="ti ti-user-off text-[14px]" /> Deactivate</>
+                            }
                           </button>
                         </div>
                       </td>

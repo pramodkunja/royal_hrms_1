@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import clientApi from "@/lib/clientApi";
 import { API } from "@/lib/api/endpoints";
 import { getStoredUser, setOnboardingStatus } from "@/lib/auth";
@@ -55,10 +55,19 @@ export default function OnboardingPage() {
   const [saveErr,  setSaveErr]  = useState<string | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
-  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const [draftStatus, setDraftStatus] = useState<"idle" | "saving" | "saved">("idle");
+
+  // Always-current copy of form for use inside timer callbacks
+  const formRef       = useRef<ProfileForm>(EMPTY);
+  const isDirty       = useRef(false);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fileRefs      = useRef<Record<string, HTMLInputElement | null>>({});
 
   const user = getStoredUser();
   const isAlreadySubmitted = user?.onboarding_status === "submitted";
+
+  // Keep formRef in sync so auto-save always captures the latest values
+  useEffect(() => { formRef.current = form; }, [form]);
 
   useEffect(() => {
     clientApi.get(API.onboarding.profile).then(r => {
@@ -72,14 +81,57 @@ export default function OnboardingPage() {
     }).catch(() => {});
   }, []);
 
+  // Warn before tab/window close if there are unsaved changes
+  useEffect(() => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (isDirty.current) {
+        e.preventDefault();
+      }
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
+  // Clean up pending timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    };
+  }, []);
+
+  // Silent auto-save — does not touch saveMsg / saveErr
+  const autoSave = useCallback(async () => {
+    if (!isDirty.current) return;
+    setDraftStatus("saving");
+    try {
+      await clientApi.patch(API.onboarding.profile, formRef.current);
+      isDirty.current = false;
+      setDraftStatus("saved");
+      setTimeout(() => setDraftStatus("idle"), 3000);
+    } catch {
+      setDraftStatus("idle");
+    }
+  }, []);
+
   function set(field: keyof ProfileForm, value: string) {
     setForm(prev => ({ ...prev, [field]: value }));
+    isDirty.current = true;
+    setDraftStatus("idle");
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(autoSave, 1500);
   }
 
   async function saveSection() {
+    // Cancel any pending auto-save — this manual save supersedes it
+    if (autoSaveTimer.current) {
+      clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = null;
+    }
+    isDirty.current = false;
+    setDraftStatus("idle");
     setSaving(true); setSaveMsg(null); setSaveErr(null);
     try {
-      await clientApi.patch(API.onboarding.profile, form);
+      await clientApi.patch(API.onboarding.profile, formRef.current);
       setSaveMsg("Saved.");
       setTimeout(() => setSaveMsg(null), 2000);
     } catch {
@@ -196,7 +248,7 @@ export default function OnboardingPage() {
         )}
 
         {/* Navigation */}
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "1.5rem", paddingTop: "1rem", borderTop: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1.5rem", paddingTop: "1rem", borderTop: "1px solid var(--border)" }}>
           <button
             className="btn btn-ghost"
             onClick={() => setTab(t => t - 1)}
@@ -205,6 +257,12 @@ export default function OnboardingPage() {
           >
             ← Previous
           </button>
+
+          {/* Auto-save status indicator */}
+          <span style={{ fontSize: ".8rem", color: "var(--text-muted)", flex: 1, textAlign: "center" }}>
+            {draftStatus === "saving" && "Saving draft…"}
+            {draftStatus === "saved"  && "✓ Draft saved"}
+          </span>
 
           {tab < TABS.length - 1 ? (
             <button className="btn btn-filled" onClick={next} disabled={saving} type="button">
@@ -420,7 +478,7 @@ function TabDocuments({
   docs: UploadedDoc[];
   uploadedTypes: Set<string>;
   uploading: string | null;
-  fileRefs: React.MutableRefObject<Record<string, HTMLInputElement | null>>;
+  fileRefs: React.RefObject<Record<string, HTMLInputElement | null>>;
   onUpload: (docType: string, file: File) => void;
 }) {
   return (

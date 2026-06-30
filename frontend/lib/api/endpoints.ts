@@ -36,9 +36,13 @@ export const API = {
   },
 
   employees: {
-    list:    "/employees/",
-    detail:  (id: string) => `/employees/${id}/`,
-    branches: "/branch/branches/",
+    list:              "/employees/",
+    me:                "/employees/me/",
+    detail:            (id: string) => `/employees/${id}/`,
+    profile:           (id: string) => `/employees/${id}/profile/`,
+    reportingManager:  (id: string) => `/employees/${id}/reporting-manager/`,
+    approvalMatrix:    (id: string) => `/employees/${id}/approval-matrix/`,
+    branches:          "/branch/branches/",
   },
 
   roles: {
@@ -55,6 +59,7 @@ export const API = {
     company:        "/settings/company/",
     employeeCode:   "/settings/employee-code/",
     emailTemplates: "/settings/email-templates/",
+    approvalRules:  "/settings/approval-rules/",
   },
 
   recruitment: {
@@ -69,10 +74,16 @@ export const API = {
   },
 
   onboarding: {
-    profile:   "/onboarding/profile/",
-    documents: "/onboarding/documents/",
-    submit:    "/onboarding/submit/",
-    approvals: "/onboarding/approvals/",
-    approve:   (userId: string) => `/onboarding/approvals/${userId}/approve/`,
+    profile:     "/onboarding/profile/",
+    profileStep: (step: number) => `/onboarding/profile/step/${step}/`,
+    documents:   "/onboarding/documents/",
+    submit:      "/onboarding/submit/",
+    approvals:   "/onboarding/approvals/",
+    approve:     (userId: string) => `/onboarding/approvals/${userId}/approve/`,
+  },
+
+  expenses: {
+    list:  "/expenses/",
+    stats: "/expenses/stats/",
   },
 } as const;

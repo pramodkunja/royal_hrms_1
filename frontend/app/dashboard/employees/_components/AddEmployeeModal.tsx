@@ -105,12 +105,12 @@ export default function AddEmployeeModal({
   useEffect(() => {
     Promise.all([
       clientApi.get<{ data: { results: ApiRole[]   } }>(API.roles.list,            { params: { page_size: 100 } }),
-      clientApi.get<{ data: ApiDept[]               }>(API.departments.list),
+      clientApi.get<{ data: { results: ApiDept[]   } }>(API.departments.list,   { params: { page_size: 100 } }),
       clientApi.get<{ data: { results: ApiBranch[] } }>(API.employees.branches,    { params: { page_size: 100 } }),
     ])
       .then(([r, d, b]) => {
         setRoles(r.data.data.results.filter(x => x.name !== "system_admin"));
-        setDepts(d.data.data);
+        setDepts(d.data.data?.results ?? []);
         setBranches(b.data.data.results);
       })
       .catch(() => {/* silently degrade to empty lists */})

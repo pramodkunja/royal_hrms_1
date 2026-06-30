@@ -5,7 +5,6 @@ const ACCESS_COOKIE = "royal_access_token";
 const USER_COOKIE   = "royal_hrms_user";
 
 const ROUTE_PERMISSIONS: Record<string, string> = {
-  "/dashboard/onboarding-approvals": "onboarding.approve",
   "/dashboard/announcements":    "announcements.view",
   "/dashboard/interview-list":   "recruitment.view",
   "/dashboard/candidate-review": "recruitment.view",
@@ -23,7 +22,10 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
   "/dashboard/documents":        "documents.view",
   "/dashboard/reports":          "reports.view",
   "/dashboard/audit":            "audit.view",
-  "/dashboard/settings":         "settings.view",
+  "/dashboard/settings":                      "settings.view",
+  "/dashboard/settings/leave-policy":        "settings.view",
+  "/dashboard/settings/leave-credit-rules":  "settings.view",
+  "/dashboard/settings/holiday-calendar":    "settings.view",
 };
 
 function decodeJwtPayload(token: string): Record<string, unknown> {
@@ -115,5 +117,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|public|api).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon\\.ico|api|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico|woff2?|ttf|otf|mp4|pdf)$).*)"],
 };

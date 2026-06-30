@@ -21,12 +21,14 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from core.pagination import paginate, paginated_data
 from core.responses import error, first_error, get_client_ip, success
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import (
+    ApprovalWorkflowRule,
     AuditLog,
     Company,
     Department,
@@ -35,6 +37,7 @@ from apps.accounts.models import (
     EmailTemplate,
     EmailTemplateAttachment,
     EmailTemplateCategory,
+    EmployeeApprovalOverride,
     EmployeeCodeSettings,
     OTPVerification,
     PasswordResetToken,
@@ -67,7 +70,7 @@ from apps.accounts.serializers import (
 )
 from apps.accounts.throttles import ForgotPasswordRateThrottle, LoginRateThrottle, OTPVerifyRateThrottle
 from apps.accounts.tokens import RoleBasedRefreshToken
-from apps.accounts.utils import send_otp_email, send_test_email
+from apps.accounts.utils import send_otp_email, send_template_email, send_test_email
 
 logger = logging.getLogger('accounts')
 
@@ -89,8 +92,52 @@ def _employee_dict(user: User) -> dict:
         emp_status = 'inactive'
     else:
         emp_status = 'active'
+
+    try:
+        p = user.profile
+    except Exception:
+        p = None
+
+    profile_data = {
+        # Personal
+        'date_of_birth':     str(p.date_of_birth) if (p and p.date_of_birth) else '',
+        'gender':            p.gender            if p else '',
+        'marital_status':    p.marital_status    if p else '',
+        'father_name':       p.father_name       if p else '',
+        'blood_group':       p.blood_group       if p else '',
+        'current_address':   p.current_address   if p else '',
+        'permanent_address': p.permanent_address if p else '',
+        # Education
+        'highest_qualification': p.highest_qualification if p else '',
+        'institution':           p.institution           if p else '',
+        'year_of_passing':       p.year_of_passing       if p else None,
+        'specialization':        p.specialization        if p else '',
+        # Experience
+        'total_experience_years': (
+            str(p.total_experience_years) if (p and p.total_experience_years is not None) else ''
+        ),
+        'previous_employer':    p.previous_employer    if p else '',
+        'previous_designation': p.previous_designation if p else '',
+        'leaving_reason':       p.leaving_reason       if p else '',
+        # Bank
+        'account_holder_name': p.account_holder_name if p else '',
+        'account_type':        p.account_type        if p else '',
+        'account_number':      p.account_number      if p else '',
+        'ifsc_code':           p.ifsc_code           if p else '',
+        'bank_name':           p.bank_name           if p else '',
+        'bank_branch_name':    p.bank_branch_name    if p else '',
+        # Emergency Contact
+        'emergency_name':         p.emergency_name         if p else '',
+        'emergency_relationship': p.emergency_relationship if p else '',
+        'emergency_phone':        p.emergency_phone        if p else '',
+        'emergency_email':        p.emergency_email        if p else '',
+    }
+
+    mgr = getattr(user, 'reporting_manager', None)
+
     return {
-        'id':             str(user.id),
+        'id':             user.employee_id,
+        'uuid':           str(user.id),
         'employee_id':    user.employee_id,
         'first_name':     first,
         'last_name':      last,
@@ -106,6 +153,9 @@ def _employee_dict(user: User) -> dict:
         'date_joined':    user.date_joined.date().isoformat(),
         'is_active':      user.is_active,
         'status':         emp_status,
+        'reporting_manager_id':   str(mgr.id)        if mgr else None,
+        'reporting_manager_name': mgr.full_name       if mgr else None,
+        'profile':        profile_data,
     }
 
 
@@ -440,6 +490,7 @@ class RoleListCreateView(APIView):
             Role.objects
             .prefetch_related('role_permissions__permission')
             .annotate(active_user_count=Count('users', filter=Q(users__is_active=True)))
+            .order_by('id')
         )
         try:
             page_num  = max(1, int(request.query_params.get('page', 1)))
@@ -722,9 +773,13 @@ class DepartmentListCreateView(APIView):
             'emp_counts': dict(emp_counts),
             'dept_roles': {k: sorted(v, key=lambda x: x[1]) for k, v in dept_roles.items()},
         }
+        page_obj, paginator = paginate(qs, request, default_page_size=50)
         return success(
             'Departments retrieved successfully.',
-            data=DepartmentSerializer(qs, many=True, context=ctx).data,
+            data=paginated_data(
+                paginator, page_obj,
+                DepartmentSerializer(page_obj.object_list, many=True, context=ctx).data,
+            ),
         )
 
     def post(self, request):
@@ -846,9 +901,13 @@ class DesignationListCreateView(APIView):
             if not Department.objects.filter(pk=dept_id).exists():
                 return error('Department not found.', http_status=status.HTTP_404_NOT_FOUND)
             qs = qs.filter(department_id=dept_id)
+        page_obj, paginator = paginate(qs, request, default_page_size=50)
         return success(
             'Designations retrieved successfully.',
-            data=DesignationSerializer(qs, many=True).data,
+            data=paginated_data(
+                paginator, page_obj,
+                DesignationSerializer(page_obj.object_list, many=True).data,
+            ),
         )
 
     def post(self, request):
@@ -973,9 +1032,13 @@ class SMTPSettingsListCreateView(APIView):
 
     def get(self, request):
         configs = SMTPSettings.objects.select_related('updated_by').order_by('name')
+        page_obj, paginator = paginate(configs, request, default_page_size=20)
         return success(
-            f'{configs.count()} SMTP configuration(s) found.',
-            data=SMTPSettingsSerializer(configs, many=True).data,
+            f'{paginator.count} SMTP configuration(s) found.',
+            data=paginated_data(
+                paginator, page_obj,
+                SMTPSettingsSerializer(page_obj.object_list, many=True).data,
+            ),
         )
 
     def post(self, request):
@@ -1150,11 +1213,15 @@ class EmailTemplateCategoryListCreateView(APIView):
             .annotate(n=Count('id'))
             .values_list('template_type', 'n')
         )
+        page_obj, paginator = paginate(cats, request, default_page_size=50)
         return success(
             'Categories retrieved successfully.',
-            data=EmailTemplateCategorySerializer(
-                cats, many=True, context={'template_counts': counts}
-            ).data,
+            data=paginated_data(
+                paginator, page_obj,
+                EmailTemplateCategorySerializer(
+                    page_obj.object_list, many=True, context={'template_counts': counts}
+                ).data,
+            ),
         )
 
     def post(self, request):
@@ -1220,22 +1287,31 @@ class EmailTemplateListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        templates = (
+        qs = (
             EmailTemplate.objects
             .select_related('updated_by')
             .prefetch_related('attachments')
             .all()
         )
+        # Optional filter by type so the frontend can fetch one category at a time
+        if tpl_type := request.query_params.get('type', '').strip():
+            qs = qs.filter(template_type=tpl_type)
+
+        page_obj, paginator = paginate(qs, request, default_page_size=20)
+
         category_map = dict(
             EmailTemplateCategory.objects.values_list('name', 'display_name')
         )
         ser_context = {'request': request, 'category_map': category_map}
         grouped: dict[str, list] = defaultdict(list)
-        for tpl in templates:
+        for tpl in page_obj.object_list:
             grouped[tpl.template_type].append(
                 EmailTemplateSerializer(tpl, context=ser_context).data
             )
-        return success('Email templates retrieved successfully.', data=dict(grouped))
+        return success(
+            'Email templates retrieved successfully.',
+            data=paginated_data(paginator, page_obj, dict(grouped)),
+        )
     
     
     def post(self, request):
@@ -1601,9 +1677,13 @@ class DocumentListCreateView(APIView):
                 Q(title__icontains=search) | Q(description__icontains=search)
             )
 
+        page_obj, paginator = paginate(qs, request, default_page_size=20)
         return success(
             'Documents retrieved successfully.',
-            data=DocumentSerializer(qs, many=True, context={'request': request}).data,
+            data=paginated_data(
+                paginator, page_obj,
+                DocumentSerializer(page_obj.object_list, many=True, context={'request': request}).data,
+            ),
         )
 
     def post(self, request):
@@ -1891,8 +1971,9 @@ class EmployeeListCreateView(APIView):
 
         qs = (
             User.objects
-            .select_related('role')
+            .select_related('role', 'profile', 'reporting_manager')
             .filter(is_active__in=[True, False])
+            .exclude(employee_id='')   # portal candidates have no employee_id until onboarding is approved
             .order_by('-date_joined')
         )
 
@@ -1912,7 +1993,22 @@ class EmployeeListCreateView(APIView):
         if dept:
             qs = qs.filter(department=dept)
 
-        return success('Employees retrieved.', data=[_employee_dict(u) for u in qs])
+        try:
+            page_num  = max(1, int(request.query_params.get('page', 1)))
+            page_size = min(50, max(1, int(request.query_params.get('page_size', 20))))
+        except (ValueError, TypeError):
+            page_num, page_size = 1, 20
+
+        paginator = Paginator(qs, page_size)
+        page_obj  = paginator.get_page(page_num)
+
+        return success('Employees retrieved.', data={
+            'count':       paginator.count,
+            'page':        page_obj.number,
+            'page_size':   page_size,
+            'total_pages': paginator.num_pages,
+            'results':     [_employee_dict(u) for u in page_obj.object_list],
+        })
 
     def post(self, request):
         if not _has_perm(request.user, 'employees.create'):
@@ -1938,6 +2034,29 @@ class EmployeeListCreateView(APIView):
         if not designation:     errs['designation']     = 'Designation is required.'
         if not branch:          errs['branch']          = 'Branch is required.'
         if not date_of_joining: errs['date_of_joining'] = 'Date of joining is required.'
+
+        # Length guards
+        if first_name  and len(first_name)  > 150: errs['first_name']  = 'First name must be 150 characters or fewer.'
+        if last_name   and len(last_name)   > 150: errs['last_name']   = 'Last name must be 150 characters or fewer.'
+        if email       and len(email)       > 254: errs['email']       = 'Email must be 254 characters or fewer.'
+        if phone       and len(phone)       > 20:  errs['phone']       = 'Phone must be 20 characters or fewer.'
+        if branch      and len(branch)      > 100: errs['branch']      = 'Branch must be 100 characters or fewer.'
+        if department  and len(department)  > 100: errs['department']  = 'Department must be 100 characters or fewer.'
+        if designation and len(designation) > 100: errs['designation'] = 'Designation must be 100 characters or fewer.'
+
+        # Date format check
+        if date_of_joining and 'date_of_joining' not in errs:
+            from datetime import datetime as _dt
+            try:
+                _dt.strptime(date_of_joining, '%Y-%m-%d')
+            except ValueError:
+                errs['date_of_joining'] = 'Date of joining must be in YYYY-MM-DD format.'
+
+        # Basic email format check
+        import re as _re
+        if email and 'email' not in errs and not _re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+            errs['email'] = 'Enter a valid email address.'
+
         if errs:
             return error('Please fix the errors below.', data=errs)
 
@@ -1972,8 +2091,9 @@ class EmployeeListCreateView(APIView):
                 designation     = designation,
                 branch          = branch,
                 phone           = phone,
-                date_of_joining = date_of_joining or None,
+                date_of_joining  = date_of_joining or None,
                 must_change_password = True,
+                onboarding_status    = User.ONBOARDING_COMPLETE,
             )
             AuditLog.objects.create(
                 user=request.user, action='employee_created', module='accounts',
@@ -1987,23 +2107,45 @@ class EmployeeListCreateView(APIView):
             )
 
         try:
-            from django.core.mail import send_mail
-            from django.conf import settings
-            send_mail(
-                subject=f'Welcome to Royal HRMS — Your Login Credentials',
-                message='',
-                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@royalhrms.com'),
-                recipient_list=[email],
-                html_message=(
-                    f'<p>Hi <strong>{full_name}</strong>,</p>'
-                    f'<p>Your Royal HRMS account has been created. Use the credentials below to log in:</p>'
-                    f'<p><strong>Employee ID:</strong> {employee_id}<br>'
-                    f'<strong>Login Email:</strong> {email}<br>'
-                    f'<strong>Temporary Password:</strong> {temp_password}</p>'
-                    f'<p>You will be asked to change your password on first login.</p>'
-                    f'<p>— Royal HRMS Team</p>'
-                ),
+            from apps.accounts.utils import (
+                _get_smtp_connection, _build_message, _company_email_wrapper,
             )
+            from apps.accounts.models import Company
+
+            company      = Company.objects.first()
+            company_name = company.company_name if company else 'Royal HRMS'
+            logo_url     = company.logo.url if (company and company.logo) else ''
+            website      = company.website  if company else ''
+            address      = ', '.join(p for p in [
+                getattr(company, 'address', ''),
+                getattr(company, 'city',    ''),
+                getattr(company, 'state',   ''),
+            ] if p) if company else ''
+
+            body = (
+                f'<p>Hi <strong>{full_name}</strong>,</p>'
+                f'<p>Your Royal HRMS account has been created.'
+                f' Use the credentials below to log in:</p>'
+                f'<p>'
+                f'<strong>Employee ID:</strong> {employee_id}<br>'
+                f'<strong>Login Email:</strong> {email}<br>'
+                f'<strong>Temporary Password:</strong> {temp_password}'
+                f'</p>'
+                f'<p>You will be asked to change your password on first login.</p>'
+                f'<p>— HR Team</p>'
+            )
+            html_body = _company_email_wrapper(body, company_name, logo_url, website, address)
+
+            connection, from_email = _get_smtp_connection()
+            msg = _build_message(
+                subject='Welcome to Royal HRMS — Your Login Credentials',
+                html_body=html_body,
+                from_email=from_email,
+                to=[email],
+                connection=connection,
+            )
+            msg.send(fail_silently=False)
+            logger.info('Welcome email sent to %s', email)
         except Exception as exc:
             logger.error('Welcome email failed for %s: %s', email, exc)
 
@@ -2015,17 +2157,83 @@ class EmployeeListCreateView(APIView):
         )
 
 
+def _get_employee(identifier: str):
+    """Look up an employee by employee_id code (e.g. EMP001)."""
+    try:
+        return (
+            User.objects
+            .select_related('role', 'profile', 'reporting_manager')
+            .get(employee_id=identifier)
+        )
+    except User.DoesNotExist:
+        return None
+
+
 class EmployeeDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, employee_id: str):
         if not _has_perm(request.user, 'employees.view'):
             return error('You do not have permission to perform this action.', http_status=status.HTTP_403_FORBIDDEN)
-        try:
-            user = User.objects.select_related('role').get(employee_id=employee_id)
-        except User.DoesNotExist:
+        employee = _get_employee(employee_id)
+        if employee is None:
             return error('Employee not found.', http_status=status.HTTP_404_NOT_FOUND)
-        return success('Employee retrieved.', data=_employee_dict(user))
+        return success('Employee retrieved.', data=_employee_dict(employee))
+
+    def patch(self, request, employee_id: str):
+        if not _has_perm(request.user, 'employees.edit'):
+            return error('You do not have permission to perform this action.', http_status=status.HTTP_403_FORBIDDEN)
+        employee = _get_employee(employee_id)
+        if employee is None:
+            return error('Employee not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        if 'is_active' not in request.data:
+            return error('is_active field is required.')
+
+        raw = request.data.get('is_active')
+        if isinstance(raw, bool):
+            new_status = raw
+        elif isinstance(raw, str) and raw.lower() in ('true', 'false'):
+            new_status = raw.lower() == 'true'
+        else:
+            return error('is_active must be true or false.')
+
+        if employee.id == request.user.id and not new_status:
+            return error('You cannot deactivate your own account.')
+
+        if not new_status:
+            role_name = employee.role.name if employee.role else ''
+            if role_name == 'system_admin':
+                active_admins = User.objects.filter(
+                    role__name='system_admin', is_active=True
+                ).count()
+                if active_admins <= 1:
+                    return error('Cannot deactivate the only active system administrator.')
+
+        old_status = employee.is_active
+        if old_status == new_status:
+            msg = 'Employee is already active.' if new_status else 'Employee is already inactive.'
+            return success(msg, data=_employee_dict(employee))
+
+        employee.is_active = new_status
+        employee.save(update_fields=['is_active', 'updated_at'])
+
+        action_label = 'employee_activated' if new_status else 'employee_deactivated'
+        AuditLog.objects.create(
+            user       = request.user,
+            action     = action_label,
+            module     = 'employees',
+            object_id  = str(employee.id),
+            changes    = {
+                'employee_id': employee.employee_id,
+                'full_name':   employee.full_name,
+                'is_active':   {'from': old_status, 'to': new_status},
+            },
+            ip_address = get_client_ip(request),
+        )
+
+        verb = 'activated' if new_status else 'deactivated'
+        return success(f'Employee {verb} successfully.', data=_employee_dict(employee))
 
 
 class AuditLogListView(APIView):
@@ -2050,9 +2258,19 @@ class AuditLogListView(APIView):
                 Q(user__email__icontains=search)
             )
         if date_from:
-            qs = qs.filter(created_at__date__gte=date_from)
+            from datetime import datetime as _dt
+            try:
+                _dt.strptime(date_from, '%Y-%m-%d')
+                qs = qs.filter(created_at__date__gte=date_from)
+            except ValueError:
+                return error('date_from must be in YYYY-MM-DD format.')
         if date_to:
-            qs = qs.filter(created_at__date__lte=date_to)
+            from datetime import datetime as _dt
+            try:
+                _dt.strptime(date_to, '%Y-%m-%d')
+                qs = qs.filter(created_at__date__lte=date_to)
+            except ValueError:
+                return error('date_to must be in YYYY-MM-DD format.')
 
         try:
             page_size = min(int(request.query_params.get('page_size', 25)), 100)
@@ -2101,6 +2319,34 @@ class EmployeeCodeSettingsView(APIView):
 
 # ─── Onboarding — Employee fills their own profile ────────────────────────────
 
+
+_STEP_REQUIRED_FIELDS = {
+    0: {
+        'date_of_birth':   'Date of Birth',
+        'gender':          'Gender',
+        'current_address': 'Current Address',
+    },
+    1: {
+        'highest_qualification': 'Highest Qualification',
+        'institution':           'Institution / University',
+        'year_of_passing':       'Year of Passing',
+    },
+    2: {
+        'account_holder_name': 'Account Holder Name',
+        'account_type':        'Account Type',
+        'account_number':      'Account Number',
+        'ifsc_code':           'IFSC Code',
+        'bank_name':           'Bank Name',
+    },
+    3: {
+        'emergency_name':         'Emergency Contact Name',
+        'emergency_relationship': 'Relationship',
+        'emergency_phone':        'Emergency Contact Phone',
+    },
+    4: {},
+}
+
+
 class EmployeeProfileView(APIView):
     """GET / PATCH the requesting user's own EmployeeProfile."""
     permission_classes = [IsAuthenticated]
@@ -2121,14 +2367,129 @@ class EmployeeProfileView(APIView):
         if request.user.onboarding_status == User.ONBOARDING_COMPLETE:
             return error('Onboarding is already complete.')
         profile = self._get_or_create_profile(request.user)
-        serializer = EmployeeProfileSerializer(profile, data=request.data, partial=True)
+        raw = dict(request.data)
+        step_raw = raw.pop('step', [None])
+        filled_data = {k: v for k, v in raw.items() if v not in ('', None)}
+
+        # Resolve step number — sent as int or string, absent on auto-saves
+        step = None
+        step_val = step_raw[0] if isinstance(step_raw, list) else step_raw
+        if step_val not in (None, '', 'null'):
+            try:
+                step = int(step_val)
+            except (ValueError, TypeError):
+                return error('step must be an integer between 0 and 3.')
+
+        if not filled_data:
+            return success('Nothing to save.', data=EmployeeProfileSerializer(profile).data)
+
+        if step is not None:
+            required = _STEP_REQUIRED_FIELDS.get(step, {})
+            missing = []
+            for field, label in required.items():
+                # Accept value from incoming data first, fall back to saved profile
+                incoming = filled_data.get(field)
+                saved    = getattr(profile, field, None)
+                value    = incoming if incoming not in (None, '') else saved
+                if not value or (isinstance(value, str) and not value.strip()):
+                    missing.append(label)
+            if missing:
+                return error(
+                    f'Please fill in the following required fields: {", ".join(missing)}.'
+                )
+
+        serializer = EmployeeProfileSerializer(profile, data=filled_data, partial=True)
         if not serializer.is_valid():
             return error(first_error(serializer.errors), data=serializer.errors)
         serializer.save()
-        # Mark in_progress so the user has started filling
-        if request.user.onboarding_status == User.ONBOARDING_PENDING:
-            User.objects.filter(pk=request.user.pk).update(onboarding_status=User.ONBOARDING_PENDING)
         return success('Profile saved.', data=serializer.data)
+
+
+def _save_profile_step(request, step: int):
+    """
+    Shared logic for step-specific saves.
+    Enforces required fields for the given step, then saves filled fields only.
+    Returns a DRF Response built by success() / error().
+    """
+    from apps.accounts.models import EmployeeProfile as EP
+    from apps.accounts.serializers import EmployeeProfileSerializer
+
+    if request.user.onboarding_status == User.ONBOARDING_COMPLETE:
+        return error('Onboarding is already complete.')
+
+    if step not in _STEP_REQUIRED_FIELDS:
+        return error(f'Invalid step {step}. Must be 0 to 4.')
+
+    # Step 4 — document upload step: verify required documents, nothing to save in profile
+    if step == 4:
+        from apps.accounts.models import EmployeeDocument as ED
+        uploaded = set(
+            ED.objects.filter(user=request.user).values_list('document_type', flat=True)
+        )
+        missing_docs = []
+        if ED.TYPE_PAN not in uploaded:
+            missing_docs.append('PAN Card')
+        if ED.TYPE_AADHAAR not in uploaded:
+            missing_docs.append('Aadhaar Card')
+        if ED.TYPE_DEGREE not in uploaded:
+            missing_docs.append('Degree Certificate')
+
+        # Experience letter is required only when previous_employer is filled
+        profile, _ = EP.objects.get_or_create(user=request.user)
+        has_experience = (
+            bool((profile.previous_employer or '').strip())
+            or (profile.total_experience_years is not None and profile.total_experience_years > 0)
+        )
+        if has_experience and ED.TYPE_EXPERIENCE not in uploaded:
+            missing_docs.append('Experience Certificate (required for experienced candidates)')
+
+        if missing_docs:
+            return error(
+                f'Please upload the following required documents: {", ".join(missing_docs)}.'
+            )
+        return success('Documents verified. You can proceed to submit.')
+
+    profile, _ = EP.objects.get_or_create(user=request.user)
+
+    # Strip empty strings — frontend sends all fields including blanks for other steps
+    filled_data = {k: v for k, v in request.data.items() if v not in ('', None)}
+
+    if not filled_data:
+        return success('Nothing to save.', data=EmployeeProfileSerializer(profile).data)
+
+    # Check required fields only when there is actual data being submitted
+    required = _STEP_REQUIRED_FIELDS[step]
+    missing = []
+    for field, label in required.items():
+        incoming = filled_data.get(field)
+        saved    = getattr(profile, field, None)
+        value    = incoming if incoming not in (None, '') else saved
+        if not value or (isinstance(value, str) and not value.strip()):
+            missing.append(label)
+    if missing:
+        return error(
+            f'Please fill in the following required fields: {", ".join(missing)}.'
+        )
+
+    serializer = EmployeeProfileSerializer(profile, data=filled_data, partial=True)
+    if not serializer.is_valid():
+        return error(first_error(serializer.errors), data=serializer.errors)
+    serializer.save()
+    return success('Profile saved.', data=serializer.data)
+
+
+class OnboardingStepSaveView(APIView):
+    """
+    PATCH /api/onboarding/profile/step/<step>/
+    Called by the frontend "Save & Continue" button on each step.
+    Enforces required fields for that step before saving.
+    Auto-save uses PATCH /api/onboarding/profile/ (no required-field check).
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes     = [JSONParser, FormParser, MultiPartParser]
+
+    def patch(self, request, step: int):
+        return _save_profile_step(request, step)
 
 
 # ─── Onboarding — Document upload ─────────────────────────────────────────────
@@ -2152,13 +2513,19 @@ class EmployeeDocumentView(APIView):
         if not serializer.is_valid():
             return error(first_error(serializer.errors), data=serializer.errors)
         file_obj = serializer.validated_data['file']
-        # Replace existing document of same type
-        ED.objects.filter(user=request.user, document_type=request.data.get('document_type')).delete()
-        doc = serializer.save(
-            user=request.user,
-            file_name=file_obj.name,
-            file_size=file_obj.size,
-        )
+        doc_type = serializer.validated_data['document_type']
+        # Save new file first, then delete old — avoids data loss if upload fails
+        from django.db import transaction as _tx
+        with _tx.atomic():
+            doc = serializer.save(
+                user=request.user,
+                file_name=file_obj.name,
+                file_size=file_obj.size,
+            )
+            ED.objects.filter(
+                user=request.user,
+                document_type=doc_type,
+            ).exclude(pk=doc.pk).delete()
         return success('Document uploaded.', data=EmployeeDocumentSerializer(doc).data,
                        http_status=status.HTTP_201_CREATED)
 
@@ -2173,9 +2540,149 @@ class SubmitOnboardingView(APIView):
             return error('Onboarding is already complete.')
         if request.user.onboarding_status == User.ONBOARDING_SUBMITTED:
             return error('Onboarding already submitted and awaiting approval.')
+
+        from apps.accounts.models import EmployeeProfile as EP
+        try:
+            profile = EP.objects.get(user=request.user)
+        except EP.DoesNotExist:
+            return error('Please fill in your profile details before submitting.')
+
+        missing = []
+        # Step 0 — Personal
+        if not profile.date_of_birth:
+            missing.append('Date of Birth (Personal)')
+        if not profile.gender:
+            missing.append('Gender (Personal)')
+        if not (profile.current_address or '').strip():
+            missing.append('Current Address (Personal)')
+        # Step 2 — Bank Details (required for payroll)
+        if not (profile.account_holder_name or '').strip():
+            missing.append('Account Holder Name (Bank Details)')
+        if not profile.account_type:
+            missing.append('Account Type (Bank Details)')
+        if not (profile.account_number or '').strip():
+            missing.append('Account Number (Bank Details)')
+        if not (profile.ifsc_code or '').strip():
+            missing.append('IFSC Code (Bank Details)')
+        if not (profile.bank_name or '').strip():
+            missing.append('Bank Name (Bank Details)')
+        # Step 3 — Emergency Contact
+        if not (profile.emergency_name or '').strip():
+            missing.append('Emergency Contact Name (Emergency Contact)')
+        if not (profile.emergency_relationship or '').strip():
+            missing.append('Relationship (Emergency Contact)')
+        if not (profile.emergency_phone or '').strip():
+            missing.append('Emergency Contact Phone (Emergency Contact)')
+        # Step 1 — Education
+        if not (profile.highest_qualification or '').strip():
+            missing.append('Highest Qualification (Education)')
+        if not (profile.institution or '').strip():
+            missing.append('Institution / University (Education)')
+        if not profile.year_of_passing:
+            missing.append('Year of Passing (Education)')
+
+        if missing:
+            return error(
+                f'Please complete the following required fields before submitting: '
+                f'{", ".join(missing)}.'
+            )
+
+        # Step 4 — Documents
+        from apps.accounts.models import EmployeeDocument as ED
+        uploaded = set(
+            ED.objects.filter(user=request.user).values_list('document_type', flat=True)
+        )
+        missing_docs = []
+        if ED.TYPE_PAN not in uploaded:
+            missing_docs.append('PAN Card')
+        if ED.TYPE_AADHAAR not in uploaded:
+            missing_docs.append('Aadhaar Card')
+        if ED.TYPE_DEGREE not in uploaded:
+            missing_docs.append('Degree Certificate')
+        has_experience = (
+            bool((profile.previous_employer or '').strip())
+            or (profile.total_experience_years is not None and profile.total_experience_years > 0)
+        )
+        if has_experience and ED.TYPE_EXPERIENCE not in uploaded:
+            missing_docs.append('Experience Certificate (required for experienced candidates)')
+        if missing_docs:
+            return error(
+                f'Please upload the following required documents before submitting: '
+                f'{", ".join(missing_docs)}.'
+            )
+
         User.objects.filter(pk=request.user.pk).update(onboarding_status=User.ONBOARDING_SUBMITTED)
         logger.info('User %s submitted onboarding wizard', request.user.email)
         return success('Onboarding submitted. Awaiting HR approval.')
+
+
+# ─── Onboarding — Pipeline (all in-progress: pending + submitted) ─────────────
+
+class OnboardingPipelineView(APIView):
+    """
+    GET /api/onboarding/pipeline/
+    Shows every user currently going through onboarding (pending or submitted).
+    Optional ?status=pending|submitted filter.
+    Includes recruitment linkage (candidate_id, position_applied) and summary stats.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _has_perm(request.user, 'onboarding.approve'):
+            return error('You do not have permission to view the onboarding pipeline.',
+                         http_status=status.HTTP_403_FORBIDDEN)
+
+        from apps.accounts.serializers import OnboardingPipelineSerializer
+        from apps.recruitment.models import Candidate
+
+        role_name = request.user.role.name if request.user.role else ''
+
+        # Only users who entered through the recruitment portal-invite flow
+        # (i.e. a Candidate record points to them via portal_user FK).
+        # Directly-added employees and seeded accounts are excluded.
+        base_qs = (
+            User.objects
+            .filter(
+                onboarding_status__in=[User.ONBOARDING_PENDING, User.ONBOARDING_SUBMITTED],
+                candidate_portal__isnull=False,
+            )
+            .select_related('role')
+            .distinct()
+            .order_by('-date_joined')
+        )
+        if role_name == 'hr_admin':
+            base_qs = base_qs.exclude(role__name__in=['hr_admin', 'system_admin'])
+
+        # Stats computed before applying status filter
+        stats = {
+            'pending':   base_qs.filter(onboarding_status=User.ONBOARDING_PENDING).count(),
+            'submitted': base_qs.filter(onboarding_status=User.ONBOARDING_SUBMITTED).count(),
+        }
+
+        status_param = request.query_params.get('status', '').strip()
+        if status_param:
+            allowed = {User.ONBOARDING_PENDING, User.ONBOARDING_SUBMITTED}
+            if status_param not in allowed:
+                return error(f'status must be one of: {", ".join(sorted(allowed))}.')
+            base_qs = base_qs.filter(onboarding_status=status_param)
+
+        page_obj, paginator = paginate(base_qs, request, default_page_size=20)
+
+        user_ids = [u.pk for u in page_obj.object_list]
+        candidates_by_user = {
+            c.portal_user_id: c
+            for c in Candidate.objects.filter(portal_user_id__in=user_ids)
+        }
+
+        data = paginated_data(
+            paginator, page_obj,
+            OnboardingPipelineSerializer(
+                page_obj.object_list, many=True,
+                context={'candidates_by_user': candidates_by_user},
+            ).data,
+        )
+        data['stats'] = stats
+        return success('Onboarding pipeline retrieved.', data=data)
 
 
 # ─── Onboarding — Approvals queue (HR / Admin) ────────────────────────────────
@@ -2189,35 +2696,37 @@ class OnboardingApprovalsListView(APIView):
                          http_status=status.HTTP_403_FORBIDDEN)
 
         from apps.accounts.serializers import OnboardingApprovalSerializer
+        from apps.recruitment.models import Candidate
 
         role_name = request.user.role.name if request.user.role else ''
-        qs = User.objects.filter(
-            onboarding_status=User.ONBOARDING_SUBMITTED
-        ).select_related('role').prefetch_related('employee_documents')
+        qs = (
+            User.objects
+            .filter(onboarding_status=User.ONBOARDING_SUBMITTED)
+            .select_related('role', 'profile')
+            .prefetch_related('employee_documents')
+            .order_by('date_joined')
+        )
 
         # hr_admin can only approve employees (not other hr_admins)
         if role_name == 'hr_admin':
             qs = qs.exclude(role__name__in=['hr_admin', 'system_admin'])
 
-        try:
-            page_num  = max(1, int(request.query_params.get('page', 1)))
-            page_size = min(50, max(1, int(request.query_params.get('page_size', 20))))
-        except (ValueError, TypeError):
-            page_num, page_size = 1, 20
+        page_obj, paginator = paginate(qs, request, default_page_size=20)
 
-        paginator = Paginator(qs, page_size)
-        page_obj  = paginator.get_page(page_num)
+        # Fetch recruitment candidate records for this page to avoid N+1
+        user_ids = [u.pk for u in page_obj.object_list]
+        candidates_by_user = {
+            c.portal_user_id: c
+            for c in Candidate.objects.filter(portal_user_id__in=user_ids)
+        }
 
-        return success('Onboarding approvals retrieved.', data={
-            'count':       paginator.count,
-            'page':        page_obj.number,
-            'page_size':   page_size,
-            'total_pages': paginator.num_pages,
-            'results':     OnboardingApprovalSerializer(
-                               page_obj.object_list, many=True,
-                               context={'request': request},
-                           ).data,
-        })
+        return success('Onboarding approvals retrieved.', data=paginated_data(
+            paginator, page_obj,
+            OnboardingApprovalSerializer(
+                page_obj.object_list, many=True,
+                context={'request': request, 'candidates_by_user': candidates_by_user},
+            ).data,
+        ))
 
 
 # ─── Onboarding — Approve / Reject one user ───────────────────────────────────
@@ -2246,12 +2755,25 @@ class OnboardingApproveView(APIView):
             return error('HR admin can only approve employee onboarding.',
                          http_status=status.HTTP_403_FORBIDDEN)
 
-        decision = request.data.get('decision')
-        remarks  = request.data.get('remarks', '')
+        decision    = request.data.get('decision')
+        remarks     = request.data.get('remarks', '')
+        req_designation = (request.data.get('designation') or '').strip()
+        req_department  = (request.data.get('department')  or '').strip()
         if decision not in ('approve', 'reject'):
             return error('decision must be "approve" or "reject".')
 
+        company      = Company.objects.first()
+        company_name = company.company_name if company else ''
+        portal_url   = (company.portal_url if company else '') or ''
+
         if decision == 'approve':
+            # Fetch linked candidate first so we can copy position and branch
+            from apps.recruitment.models import Candidate
+            try:
+                linked_candidate = Candidate.objects.select_related('branch').get(portal_user=target)
+            except Candidate.DoesNotExist:
+                linked_candidate = None
+
             # If this user came through recruitment (no role, no employee_id) → assign employee role
             needs_conversion = not target.role and not target.employee_id
             if needs_conversion:
@@ -2265,22 +2787,33 @@ class OnboardingApproveView(APIView):
                     from django.utils import timezone as tz
                     target.date_of_joining = tz.now().date()
 
+                # Copy position and branch from the recruitment record (fallback only)
+                if linked_candidate:
+                    if not target.branch and linked_candidate.branch:
+                        target.branch = linked_candidate.branch.branch_name
+
+            # HR-provided designation/department take priority; fall back to candidate record
+            if req_designation:
+                target.designation = req_designation
+            elif not target.designation and linked_candidate and linked_candidate.position_applied:
+                target.designation = linked_candidate.position_applied
+
+            if req_department:
+                target.department = req_department
+
             target.onboarding_status    = User.ONBOARDING_COMPLETE
             target.must_change_password = False
             target.save(update_fields=[
                 'onboarding_status', 'must_change_password',
                 'role', 'employee_id', 'date_of_joining',
+                'designation', 'department', 'branch',
             ])
 
             # Update linked candidate to converted
-            try:
-                from apps.recruitment.models import Candidate
-                candidate = Candidate.objects.get(portal_user=target)
-                candidate.status      = Candidate.STATUS_CONVERTED
-                candidate.hr_approved = True
-                candidate.save(update_fields=['status', 'hr_approved', 'updated_at'])
-            except Candidate.DoesNotExist:
-                pass
+            if linked_candidate:
+                linked_candidate.status      = Candidate.STATUS_CONVERTED
+                linked_candidate.hr_approved = True
+                linked_candidate.save(update_fields=['status', 'hr_approved', 'updated_at'])
 
             AuditLog.objects.create(
                 user=request.user, action='onboarding_approved', module='accounts',
@@ -2289,6 +2822,25 @@ class OnboardingApproveView(APIView):
                 ip_address=get_client_ip(request),
             )
             logger.info('Onboarding approved for %s by %s', target.email, request.user.email)
+
+            # Notify the new employee
+            try:
+                send_template_email(
+                    recipient_email=target.email,
+                    template_name='onboarding_approved',
+                    context={
+                        'employee_name':  target.full_name,
+                        'company_name':   company_name,
+                        'employee_id':    target.employee_id or '',
+                        'designation':    target.designation or '',
+                        'department':     target.department  or '',
+                        'date_of_joining': str(target.date_of_joining) if target.date_of_joining else '',
+                        'portal_url':     portal_url,
+                    },
+                )
+            except Exception:
+                logger.exception('Failed to send onboarding approval email to %s', target.email)
+
             return success(f'{target.full_name} onboarding approved.')
 
         else:
@@ -2302,4 +2854,259 @@ class OnboardingApproveView(APIView):
                 ip_address=get_client_ip(request),
             )
             logger.info('Onboarding rejected for %s by %s', target.email, request.user.email)
+
+            # Notify the employee so they know to return and fix their profile
+            try:
+                send_template_email(
+                    recipient_email=target.email,
+                    template_name='onboarding_rejected',
+                    context={
+                        'employee_name': target.full_name,
+                        'company_name':  company_name,
+                        'remarks':       remarks or 'Please contact HR for details.',
+                        'portal_url':    portal_url,
+                    },
+                )
+            except Exception:
+                logger.exception('Failed to send onboarding rejection email to %s', target.email)
+
             return success(f'Onboarding sent back to {target.full_name} for corrections.')
+
+
+# ─── My Profile ───────────────────────────────────────────────────────────────
+
+class MyProfileView(APIView):
+    """GET / PATCH the authenticated user's own profile (post-onboarding)."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.accounts.models import EmployeeProfile
+        from apps.accounts.serializers import MyProfileSerializer
+        EmployeeProfile.objects.get_or_create(user=request.user)
+        user = User.objects.select_related('role', 'profile').get(pk=request.user.pk)
+        return success('Profile retrieved.', MyProfileSerializer(user).data)
+
+    def patch(self, request):
+        from apps.accounts.models import EmployeeProfile
+        from apps.accounts.serializers import MyProfileUpdateSerializer
+        serializer = MyProfileUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error(first_error(serializer.errors))
+        data = serializer.validated_data
+
+        if 'phone' in data:
+            request.user.phone = data['phone']
+            request.user.save(update_fields=['phone', 'updated_at'])
+
+        profile_fields = [
+            'current_address', 'permanent_address',
+            'emergency_name', 'emergency_relationship',
+            'emergency_phone', 'emergency_email',
+        ]
+        profile_data = {k: v for k, v in data.items() if k in profile_fields}
+        if profile_data:
+            profile, _ = EmployeeProfile.objects.get_or_create(user=request.user)
+            for key, value in profile_data.items():
+                setattr(profile, key, value)
+            profile.save(update_fields=list(profile_data.keys()) + ['updated_at'])
+
+        logger.info('Profile updated by %s', request.user.email)
+        return success('Profile updated successfully.')
+
+
+# ─── Reporting Manager ────────────────────────────────────────────────────────
+
+class EmployeeReportingManagerView(APIView):
+    """PATCH to assign or clear a reporting manager for a specific employee."""
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, employee_id: str):
+        if not _has_perm(request.user, 'employees.edit'):
+            return error('You do not have permission to perform this action.', http_status=status.HTTP_403_FORBIDDEN)
+
+        employee = _get_employee(employee_id)
+        if employee is None:
+            return error('Employee not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        manager_id = request.data.get('reporting_manager_id')
+
+        if manager_id is None:
+            employee.reporting_manager = None
+        else:
+            try:
+                manager = User.objects.get(id=manager_id, is_active=True)
+            except (User.DoesNotExist, Exception):
+                return error('Reporting manager not found or is inactive.')
+
+            if manager.id == employee.id:
+                return error('An employee cannot be their own reporting manager.')
+
+            employee.reporting_manager = manager
+
+        employee.save(update_fields=['reporting_manager', 'updated_at'])
+        logger.info(
+            'Reporting manager for %s set to %s by %s',
+            employee.employee_id,
+            employee.reporting_manager.full_name if employee.reporting_manager else 'None',
+            request.user.email,
+        )
+        return success('Reporting manager updated.', data=_employee_dict(employee))
+
+
+# ─── Global Approval Workflow Rules ──────────────────────────────────────────
+
+_WORKFLOW_ORDER = [
+    ApprovalWorkflowRule.WORKFLOW_LEAVE,
+    ApprovalWorkflowRule.WORKFLOW_EXPENSE,
+    ApprovalWorkflowRule.WORKFLOW_RESIGNATION,
+    ApprovalWorkflowRule.WORKFLOW_LOAN,
+]
+
+
+def _ensure_default_rules():
+    """Create default global rules for all workflow types if missing."""
+    defaults = {
+        ApprovalWorkflowRule.WORKFLOW_LEAVE:       (ApprovalWorkflowRule.ROLE_REPORTING_MANAGER, ApprovalWorkflowRule.ROLE_HR_MANAGER),
+        ApprovalWorkflowRule.WORKFLOW_EXPENSE:      (ApprovalWorkflowRule.ROLE_REPORTING_MANAGER, ApprovalWorkflowRule.ROLE_HR_MANAGER),
+        ApprovalWorkflowRule.WORKFLOW_RESIGNATION:  (ApprovalWorkflowRule.ROLE_REPORTING_MANAGER, ApprovalWorkflowRule.ROLE_ADMIN),
+        ApprovalWorkflowRule.WORKFLOW_LOAN:         (ApprovalWorkflowRule.ROLE_HR_MANAGER, ApprovalWorkflowRule.ROLE_ADMIN),
+    }
+    for wf, (l1, l2) in defaults.items():
+        ApprovalWorkflowRule.objects.get_or_create(
+            workflow_type=wf,
+            defaults={'l1_approver_role': l1, 'l2_approver_role': l2},
+        )
+
+
+def _serialize_rule(rule: ApprovalWorkflowRule) -> dict:
+    role_labels = dict(ApprovalWorkflowRule.APPROVER_ROLE_CHOICES)
+    return {
+        'workflow_type':      rule.workflow_type,
+        'workflow_label':     rule.get_workflow_type_display(),
+        'l1_approver_role':   rule.l1_approver_role,
+        'l1_approver_label':  role_labels.get(rule.l1_approver_role, ''),
+        'l2_approver_role':   rule.l2_approver_role,
+        'l2_approver_label':  role_labels.get(rule.l2_approver_role, '') if rule.l2_approver_role else '',
+    }
+
+
+class ApprovalWorkflowRuleView(APIView):
+    """GET all global workflow rules; PATCH a single rule."""
+    permission_classes = [IsAuthenticated, CanManageRoles]
+
+    def get(self, request):
+        _ensure_default_rules()
+        rules = {r.workflow_type: r for r in ApprovalWorkflowRule.objects.all()}
+        data  = [_serialize_rule(rules[wf]) for wf in _WORKFLOW_ORDER if wf in rules]
+        return success('Approval rules retrieved.', data=data)
+
+    def patch(self, request):
+        from apps.accounts.serializers import ApprovalWorkflowRuleUpdateSerializer
+        serializer = ApprovalWorkflowRuleUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error(first_error(serializer.errors))
+
+        data = serializer.validated_data
+        _ensure_default_rules()
+
+        rule = ApprovalWorkflowRule.objects.get(workflow_type=data['workflow_type'])
+        rule.l1_approver_role = data['l1_approver_role']
+        rule.l2_approver_role = data.get('l2_approver_role', '')
+        rule.updated_by       = request.user
+        rule.save(update_fields=['l1_approver_role', 'l2_approver_role', 'updated_by', 'updated_at'])
+
+        logger.info('Approval rule for %s updated by %s', data['workflow_type'], request.user.email)
+        return success('Approval rule updated.', data=_serialize_rule(rule))
+
+
+# ─── Employee Approval Matrix ─────────────────────────────────────────────────
+
+def _build_matrix_row(rule: ApprovalWorkflowRule, override) -> dict:
+    role_labels = dict(ApprovalWorkflowRule.APPROVER_ROLE_CHOICES)
+    return {
+        'workflow_type':     rule.workflow_type,
+        'workflow_label':    rule.get_workflow_type_display(),
+        'l1_approver_role':  rule.l1_approver_role,
+        'l1_approver_label': role_labels.get(rule.l1_approver_role, ''),
+        'l1_override_id':    str(override.l1_override.id) if (override and override.l1_override) else None,
+        'l1_override_name':  override.l1_override.full_name if (override and override.l1_override) else None,
+        'l2_approver_role':  rule.l2_approver_role,
+        'l2_approver_label': role_labels.get(rule.l2_approver_role, '') if rule.l2_approver_role else '',
+        'l2_override_id':    str(override.l2_override.id) if (override and override.l2_override) else None,
+        'l2_override_name':  override.l2_override.full_name if (override and override.l2_override) else None,
+    }
+
+
+class EmployeeApprovalMatrixView(APIView):
+    """GET/PATCH the approval matrix for a specific employee."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, employee_id: str):
+        if not _has_perm(request.user, 'employees.view'):
+            return error('You do not have permission to perform this action.', http_status=status.HTTP_403_FORBIDDEN)
+
+        employee = _get_employee(employee_id)
+        if employee is None:
+            return error('Employee not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        _ensure_default_rules()
+        rules     = {r.workflow_type: r for r in ApprovalWorkflowRule.objects.all()}
+        overrides = {
+            o.workflow_type: o
+            for o in EmployeeApprovalOverride.objects
+                        .filter(employee=employee)
+                        .select_related('l1_override', 'l2_override')
+        }
+
+        data = [
+            _build_matrix_row(rules[wf], overrides.get(wf))
+            for wf in _WORKFLOW_ORDER
+            if wf in rules
+        ]
+        return success('Approval matrix retrieved.', data=data)
+
+    def patch(self, request, employee_id: str):
+        if not _has_perm(request.user, 'employees.edit'):
+            return error('You do not have permission to perform this action.', http_status=status.HTTP_403_FORBIDDEN)
+
+        employee = _get_employee(employee_id)
+        if employee is None:
+            return error('Employee not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        workflow_type = request.data.get('workflow_type')
+        valid_types   = [c[0] for c in ApprovalWorkflowRule.WORKFLOW_CHOICES]
+        if workflow_type not in valid_types:
+            return error(f'workflow_type must be one of: {", ".join(valid_types)}.')
+
+        def _resolve_user(uid):
+            if uid is None:
+                return None, None
+            try:
+                return User.objects.get(id=uid, is_active=True), None
+            except (User.DoesNotExist, Exception):
+                return None, f'User {uid} not found or inactive.'
+
+        l1_id = request.data.get('l1_override_id')
+        l2_id = request.data.get('l2_override_id')
+
+        l1_user, l1_err = _resolve_user(l1_id)
+        if l1_err:
+            return error(l1_err)
+
+        l2_user, l2_err = _resolve_user(l2_id)
+        if l2_err:
+            return error(l2_err)
+
+        override, _ = EmployeeApprovalOverride.objects.get_or_create(
+            employee=employee,
+            workflow_type=workflow_type,
+        )
+        override.l1_override = l1_user
+        override.l2_override = l2_user
+        override.updated_by  = request.user
+        override.save(update_fields=['l1_override', 'l2_override', 'updated_by', 'updated_at'])
+
+        _ensure_default_rules()
+        rule = ApprovalWorkflowRule.objects.get(workflow_type=workflow_type)
+        override.refresh_from_db()
+        return success('Approval matrix updated.', data=_build_matrix_row(rule, override))
