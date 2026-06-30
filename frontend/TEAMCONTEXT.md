@@ -1591,3 +1591,112 @@ Four dropdown lists fetched in parallel on page mount in `[id]/page.tsx`:
 - **`DocPreviewModal` handles images and PDFs** — detects by file extension. For other file types (DOCX, XLSX) it falls back to an iframe which may not render inline; extend `isImage()` or add a download fallback if needed.
 - **Role slugs** — `ROLE_SLUG` map in `page.tsx` must stay in sync with backend role names. If a new role is added in the backend, add its `display_name → slug` mapping there.
 - **`is_active` is required by the PUT endpoint** — always include it in the payload. Derived from `employee.status !== "inactive"`.
+
+---
+
+## Session 9 — G. Durga Prasad (30 June 2026)
+
+**Branch:** `Employee_Onboarding`
+**Commits:** `be47e9e` · `6b6cea8`
+
+---
+
+### 1. Employee Detail — Documents Included in Response
+
+`_get_employee()` now uses `prefetch_related('employee_documents')` and `_employee_dict()` builds a `documents` list in the response. Each document entry includes the Cloudinary URL. Frontend's `buildDocEntries()` in `[id]/page.tsx` maps these directly — no static base list.
+
+### 2. Employee Profile PUT Endpoint
+
+**Problem:** `PATCH /api/employees/<id>/` only handled `is_active` toggling. Sending `{ role, department, designation, branch }` returned `"Employee is already active."`.
+
+**Fix:** Added `PUT /api/employees/<id>/` to `EmployeeDetailView`.
+
+| Field | Behaviour |
+|---|---|
+| `role` | Looked up by `name` slug — 400 if slug missing |
+| `department` / `designation` / `branch` / `phone` / `full_name` | Plain strings, saved directly |
+| `date_of_joining` | `YYYY-MM-DD`, validated with `strptime` |
+
+- Only fields present in the request body are written (`update_fields` built dynamically)
+- `dict.fromkeys()` de-duplicates `update_fields` before `save()`
+- Re-fetches via `_get_employee()` after save so `role.display_name` is fresh
+- Writes `AuditLog` entry with `before/after` for every changed field
+- `PATCH` remains unchanged — `is_active` toggle only
+
+**Frontend note:** call `PUT /api/employees/<employee_id>/` for profile field edits; use `PATCH` only for activate/deactivate.
+
+---
+
+## Session 10 — Surya (30 June 2026)
+
+**Branch:** `demo`
+
+---
+
+### 1. Reporting Manager — Self-referential FK on User
+
+Added `reporting_manager` FK to the `User` model:
+
+```python
+reporting_manager = models.ForeignKey(
+    'self', on_delete=models.SET_NULL, null=True, blank=True,
+    related_name='direct_reports',
+)
+```
+
+**Backend changes:**
+- `models.py` — `reporting_manager` FK on `User`; new `ApprovalWorkflowRule` model (`db_table='hrms_approval_workflow_rules'`); new `EmployeeApprovalOverride` model (`db_table='hrms_employee_approval_overrides'`)
+- `migrations/0026_approval_matrix_reporting_manager.py` — covers all three schema additions
+- `views.py` — `_employee_dict` includes `reporting_manager_id` + `reporting_manager_name`; `_get_employee` and `EmployeeListCreateView.get` both use `select_related('reporting_manager')` (N+1 fix)
+- Three new views: `EmployeeReportingManagerView` (PATCH), `ApprovalWorkflowRuleView` (GET/PATCH), `EmployeeApprovalMatrixView` (GET/PATCH)
+- `urls.py` — 3 new routes added before the catch-all `<str:employee_id>/` pattern:
+  - `employees/<str:employee_id>/reporting-manager/`
+  - `employees/<str:employee_id>/approval-matrix/`
+  - `settings/approval-rules/`
+
+**Default workflow rules seeded on first GET** (`_ensure_default_rules`):
+
+| Workflow | L1 Approver Role | L2 Approver Role |
+|---|---|---|
+| Leave | Reporting Manager | HR Admin |
+| Expense | Reporting Manager | HR Admin |
+| Resignation | Reporting Manager | System Admin |
+| Loan | HR Admin | System Admin |
+
+**Frontend changes:**
+- `lib/api/endpoints.ts` — `employees.reportingManager(id)`, `employees.approvalMatrix(id)`, `settings.approvalRules`
+- `types/approvalMatrix.ts` — `ApprovalWorkflowType`, `ApproverRole`, `WorkflowMatrixRow`, `GlobalApprovalRule`
+- `app/dashboard/employees/[id]/_components/ReportingManagerCard.tsx` — shows current manager, search-as-you-type (2+ chars), PATCH on select, remove button; visible to `hr_admin` / `system_admin` only
+- `app/dashboard/employees/[id]/_components/ApprovalMatrixTab.tsx` — 4-row table (Leave / Expense / Resignation / Loan); per-row Override modal with separate L1/L2 employee search; PATCH on save
+- `app/dashboard/employees/[id]/page.tsx` — Profile tab now includes `<ReportingManagerCard>`; new Approval tab renders `<ApprovalMatrixTab>`
+- `app/dashboard/settings/approval-rules/page.tsx` — global default rules table; Edit modal with L1/L2 role dropdowns; PATCH on save
+- `app/dashboard/settings/page.tsx` — "Approval Rules" card added to settings grid
+
+---
+
+### Key Files Changed (30 June 2026 — Session 10)
+
+| File | Change |
+|------|--------|
+| `backend/apps/accounts/models.py` | `reporting_manager` FK on `User`; `ApprovalWorkflowRule`; `EmployeeApprovalOverride` models |
+| `backend/apps/accounts/migrations/0026_…` | Schema migration for all three additions |
+| `backend/apps/accounts/serializers.py` | `ApprovalWorkflowRuleSerializer`, `ApprovalWorkflowRuleUpdateSerializer` |
+| `backend/apps/accounts/views.py` | `_employee_dict` + `select_related` fix; 3 new views + helper functions |
+| `backend/apps/accounts/urls.py` | 3 new URL patterns |
+| `frontend/lib/api/endpoints.ts` | `reportingManager`, `approvalMatrix`, `approvalRules` paths |
+| `frontend/types/approvalMatrix.ts` | **NEW** — approval matrix type definitions |
+| `frontend/app/dashboard/employees/[id]/_components/ReportingManagerCard.tsx` | **NEW** |
+| `frontend/app/dashboard/employees/[id]/_components/ApprovalMatrixTab.tsx` | **NEW** |
+| `frontend/app/dashboard/employees/[id]/page.tsx` | Profile tab: `ReportingManagerCard`; Approval tab: `ApprovalMatrixTab` |
+| `frontend/app/dashboard/settings/approval-rules/page.tsx` | **NEW** — global approval rules page |
+| `frontend/app/dashboard/settings/page.tsx` | Approval Rules card + route added |
+
+---
+
+### Notes for Next Developer (Session 10)
+
+- **Approval matrix is hybrid** — global role-based defaults (`ApprovalWorkflowRule`) + specific-person overrides per employee (`EmployeeApprovalOverride`). At runtime: if an override exists, use that person; if not, fall back to the global role.
+- **L2 is optional** — leave `l2_approver_role` blank in the global rule for single-level approval. The override modal's L2 field can also be left blank.
+- **`EmployeeSearchInput` must stay at module level** in `ApprovalMatrixTab.tsx` — if defined inside another component it gets a new function reference on every re-render, causing unmount/remount on every keystroke and losing input focus.
+- **Search uses dynamic useFetch URL** — `useFetch` accepts only a URL string. Pass `?search=query&page_size=8` inline to trigger employee search.
+- **Reporting manager is set post-onboarding** — it lives in the Employee Profile tab, not the onboarding wizard. Only `hr_admin` / `system_admin` can assign or change it.

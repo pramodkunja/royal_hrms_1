@@ -59,7 +59,9 @@ class RoleSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'name', 'display_name', 'is_active',
             'permissions', 'permission_codenames', 'user_count',
+            'created_at', 'updated_at',
         )
+        read_only_fields = ('id', 'created_at', 'updated_at')
 
     def get_permissions(self, obj: Role) -> list[str]:
         # Uses prefetch_related('role_permissions__permission') cache — no extra query.
@@ -436,8 +438,8 @@ class DesignationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = Designation
-        fields = ('id', 'name', 'department', 'department_name', 'is_active', 'created_at')
-        read_only_fields = ('id', 'department_name', 'created_at')
+        fields = ('id', 'name', 'department', 'department_name', 'is_active', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'department_name', 'created_at', 'updated_at')
 
     def validate_name(self, value: str) -> str:
         value = value.strip()

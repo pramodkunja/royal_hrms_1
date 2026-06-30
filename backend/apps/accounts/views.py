@@ -133,6 +133,24 @@ def _employee_dict(user: User) -> dict:
         'emergency_email':        p.emergency_email        if p else '',
     }
 
+    documents = []
+    try:
+        for doc in user.employee_documents.all():
+            try:
+                file_url = doc.file.url if doc.file else ''
+            except Exception:
+                file_url = ''
+            documents.append({
+                'id':                   doc.id,
+                'document_type':        doc.document_type,
+                'document_type_display': doc.get_document_type_display(),
+                'file':                 file_url,
+                'file_name':            doc.file_name,
+                'file_size':            doc.file_size,
+                'uploaded_at':          doc.uploaded_at.isoformat() if doc.uploaded_at else '',
+            })
+    except Exception:
+        documents = []
     mgr = getattr(user, 'reporting_manager', None)
 
     return {
@@ -156,6 +174,7 @@ def _employee_dict(user: User) -> dict:
         'reporting_manager_id':   str(mgr.id)        if mgr else None,
         'reporting_manager_name': mgr.full_name       if mgr else None,
         'profile':        profile_data,
+        'documents':      documents,
     }
 
 
@@ -492,22 +511,14 @@ class RoleListCreateView(APIView):
             .annotate(active_user_count=Count('users', filter=Q(users__is_active=True)))
             .order_by('id')
         )
-        try:
-            page_num  = max(1, int(request.query_params.get('page', 1)))
-            page_size = min(50, max(1, int(request.query_params.get('page_size', 10))))
-        except (ValueError, TypeError):
-            page_num, page_size = 1, 10
+        if (is_active_param := request.query_params.get('is_active', '').strip().lower()) in ('true', 'false'):
+            qs = qs.filter(is_active=(is_active_param == 'true'))
 
-        paginator = Paginator(qs, page_size)
-        page_obj  = paginator.get_page(page_num)
-
-        return success('Roles retrieved successfully.', data={
-            'count':       paginator.count,
-            'page':        page_obj.number,
-            'page_size':   page_size,
-            'total_pages': paginator.num_pages,
-            'results':     RoleSerializer(page_obj.object_list, many=True).data,
-        })
+        page_obj, paginator = paginate(qs, request, default_page_size=20)
+        return success('Roles retrieved successfully.', data=paginated_data(
+            paginator, page_obj,
+            RoleSerializer(page_obj.object_list, many=True).data,
+        ))
 
     def post(self, request):
         serializer = RoleSerializer(data=request.data)
@@ -613,6 +624,13 @@ class RoleDetailView(APIView):
         if not role:
             return error('Role not found.', http_status=status.HTTP_404_NOT_FOUND)
 
+        _SYSTEM_ROLES = {'employee', 'hr_admin', 'system_admin'}
+        if role.name in _SYSTEM_ROLES:
+            return error(
+                f'Role "{role.display_name}" is a system role and cannot be deleted.',
+                http_status=status.HTTP_400_BAD_REQUEST,
+            )
+
         active_users = role.users.filter(is_active=True).count()
         if active_users:
             return error(
@@ -633,6 +651,7 @@ class RoleDetailView(APIView):
 
         AuditLog.objects.create(
             user=request.user, action='role_deleted', module='accounts',
+            object_id=str(pk),
             changes={'name': role_name},
             ip_address=get_client_ip(request),
         )
@@ -866,13 +885,25 @@ class DepartmentDetailView(APIView):
         dept = self._get(pk)
         if not dept:
             return error('Department not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        active_employees = User.objects.filter(department=dept.name, is_active=True).count()
+        if active_employees:
+            return error(
+                f'Cannot delete department "{dept.name}" — '
+                f'{active_employees} active employee(s) belong to it. '
+                'Reassign them first.',
+                http_status=status.HTTP_409_CONFLICT,
+            )
+
         if dept.designations.exists():
             return error(
-                'Cannot delete a department that has designations. '
+                f'Cannot delete department "{dept.name}" — it has designations. '
                 'Remove all designations first.',
                 http_status=status.HTTP_400_BAD_REQUEST,
             )
+
         name = dept.name
+        dept_pk = dept.pk
         try:
             dept.delete()
         except ProtectedError:
@@ -882,9 +913,10 @@ class DepartmentDetailView(APIView):
             )
         AuditLog.objects.create(
             user=request.user, action='dept_deleted', module='accounts',
-            object_id=str(dept.pk), changes={'name': name},
+            object_id=str(dept_pk), changes={'name': name},
             ip_address=get_client_ip(request),
         )
+        logger.info('Department "%s" deleted by %s', name, request.user.email)
         return success(f'Department "{name}" deleted successfully.')
 
 
@@ -2163,6 +2195,7 @@ def _get_employee(identifier: str):
         return (
             User.objects
             .select_related('role', 'profile', 'reporting_manager')
+            .prefetch_related('employee_documents')
             .get(employee_id=identifier)
         )
     except User.DoesNotExist:
@@ -2179,6 +2212,79 @@ class EmployeeDetailView(APIView):
         if employee is None:
             return error('Employee not found.', http_status=status.HTTP_404_NOT_FOUND)
         return success('Employee retrieved.', data=_employee_dict(employee))
+
+    def put(self, request, employee_id: str):
+        if not _has_perm(request.user, 'employees.edit'):
+            return error('You do not have permission to perform this action.', http_status=status.HTTP_403_FORBIDDEN)
+        employee = _get_employee(employee_id)
+        if employee is None:
+            return error('Employee not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        data          = request.data
+        update_fields = ['updated_at']
+        changes       = {}
+
+        role_name = (data.get('role') or '').strip()
+        if role_name:
+            try:
+                new_role = Role.objects.get(name=role_name)
+            except Role.DoesNotExist:
+                return error(f'Role "{role_name}" does not exist.')
+            old_role = employee.role.name if employee.role else None
+            if old_role != new_role.name:
+                changes['role'] = {'from': old_role, 'to': new_role.name}
+            employee.role = new_role
+            update_fields.append('role')
+
+        for field in ('department', 'designation', 'branch', 'phone'):
+            val = (data.get(field) or '').strip()
+            if field in data:
+                old_val = getattr(employee, field, '')
+                if old_val != val:
+                    changes[field] = {'from': old_val, 'to': val}
+                setattr(employee, field, val)
+                update_fields.append(field)
+
+        full_name = (data.get('full_name') or '').strip()
+        if full_name:
+            if employee.full_name != full_name:
+                changes['full_name'] = {'from': employee.full_name, 'to': full_name}
+            employee.full_name = full_name
+            update_fields.append('full_name')
+
+        doj = (data.get('date_of_joining') or '').strip()
+        if doj:
+            from datetime import datetime as _dt
+            try:
+                _dt.strptime(doj, '%Y-%m-%d')
+            except ValueError:
+                return error('date_of_joining must be in YYYY-MM-DD format.')
+            if str(employee.date_of_joining) != doj:
+                changes['date_of_joining'] = {'from': str(employee.date_of_joining), 'to': doj}
+            employee.date_of_joining = doj
+            update_fields.append('date_of_joining')
+
+        if len(update_fields) == 1:
+            return error('No updatable fields provided.')
+
+        employee.save(update_fields=list(dict.fromkeys(update_fields)))
+
+        if changes:
+            AuditLog.objects.create(
+                user       = request.user,
+                action     = 'employee_updated',
+                module     = 'employees',
+                object_id  = str(employee.id),
+                changes    = {
+                    'employee_id': employee.employee_id,
+                    'full_name':   employee.full_name,
+                    **changes,
+                },
+                ip_address = get_client_ip(request),
+            )
+
+        employee = _get_employee(employee_id)
+        return success('Employee updated successfully.', data=_employee_dict(employee))
 
     def patch(self, request, employee_id: str):
         if not _has_perm(request.user, 'employees.edit'):
