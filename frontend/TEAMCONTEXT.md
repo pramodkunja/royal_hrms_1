@@ -244,6 +244,64 @@ All CSS module files were removed. Styles were migrated to Tailwind classes + in
 
 ---
 
+## Session 3 — Onboarding Approval UI (2026-06-30)
+
+**Developer:** Vignesh Kumar Saka
+
+### What Was Built
+
+#### 1. Onboarding Approvals List (`app/dashboard/candidate-review/page.tsx`)
+
+Page already existed. Fixed error handling in `handleOnboardingAction`:
+
+**Before:** `(err as { message?: string })?.message ?? "Action failed."` — this reads `err.message` which on Axios errors is a generic `"Request failed with status code 400"`.
+
+**After:**
+```ts
+const msg =
+  (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+  (err as { message?: string })?.message ??
+  "Action failed.";
+```
+Backend puts the friendly error at `err.response.data.message` — this chain now surfaces it correctly.
+
+#### 2. OnboardingDrawer Rewrite (`app/dashboard/candidate-review/_components/OnboardingDrawer.tsx`)
+
+Full rewrite. Previous version had a two-step flow where HR had to click "Approve & Activate ✓" to reveal the department/designation dropdowns.
+
+**New behavior:**
+- ASSIGN ROLE section (department + designation selects) always visible — no toggle button
+- On mount: fetches all departments (`GET /api/departments/?page_size=100`) and all designations (`GET /api/designations/?page_size=200`) in parallel
+- Designations filtered client-side when department changes: `allDesigs.filter(d => d.department_name === selDept)`
+- Single "Confirm & Activate" button validates both fields; shows inline error if either is missing before calling `onAction`
+- `onAction(userId, "approve", { department: selDept, designation: selDesig })` — passes string names, not IDs (matches backend `OnboardingApproveView` expectation)
+
+**Backend note:** `POST /api/onboarding/approve/{userId}/` accepts `{ decision, remarks, department, designation }` as string names, not IDs. The view looks up dept/desig by name.
+
+### Key Files Changed
+
+| File | Change |
+|------|--------|
+| `app/dashboard/candidate-review/page.tsx` | Error message extraction chain — reads `response.data.message` |
+| `app/dashboard/candidate-review/_components/OnboardingDrawer.tsx` | Full rewrite — ASSIGN ROLE always visible, single-step confirm, parallel dept+desig load |
+
+### API Endpoints Used
+
+| Method | Endpoint | Used for |
+|--------|----------|----------|
+| `GET` | `/api/onboarding/approvals/` | List all onboarding submissions |
+| `POST` | `/api/onboarding/approve/{userId}/` | Approve or reject with dept/desig assignment |
+| `GET` | `/api/departments/?page_size=100` | Department list for ASSIGN ROLE dropdown |
+| `GET` | `/api/designations/?page_size=200` | All designations (filtered client-side by dept name) |
+
+### Notes
+
+- `API.onboarding.approvals` and `API.onboarding.approve(id)` must exist in `lib/api/endpoints.ts`
+- `API.departments.list` and `API.designations.list` must exist in `lib/api/endpoints.ts`
+- The `department_name` field on the designation object links designations to departments — client-side filter uses `d.department_name === selDept` where `selDept` is a string name
+
+---
+
 ## Session 2 Notes (24 June 2026)
 
 - **Hydration warning fix** — `fdprocessedid` browser-extension attributes injected into DOM elements cause React hydration mismatches. Fix: add `suppressHydrationWarning` to every `<button>` and `<input>` in DashboardShell. Adding it only to `<html>`/`<body>` in `layout.tsx` is not enough.

@@ -16,6 +16,54 @@ This file is updated at the end of each session. Read it at the start of any new
 
 ---
 
+## Session Log — 2026-06-30
+
+### Features Shipped
+
+**1. Employee Onboarding Wizard — Mobile (Bug Fixes + File Upload)**
+- Step 5 button row 39px overflow fixed: restructured to two-row layout (Previous alone top-left; Save Draft + Submit side-by-side on row 2)
+- Submit 400 error now shows backend's friendly message (extracted from `DioException.response.data.message`) — previously showed raw DioException string
+- File upload now works on Flutter Web/Chrome: `FilePicker` with `withData: true` + `MultipartFile.fromBytes` (web has no file path)
+- Multipart form field renamed from `doc_type` to `document_type` to match backend serializer
+- `onboarding_steps.dart` is a `part of` file — `file_picker` and `dio` imports added to host file `onboarding_screen.dart`
+
+**2. AwaitingApprovalScreen — Polling + Approved State**
+- Full rewrite as `ConsumerStatefulWidget`
+- `Timer.periodic(30s)` polls `GET /api/onboarding/profile/` for status change
+- When `status == 'complete'`: switches to green "Application Approved!" view with "Go to Dashboard" button
+- "Go to Dashboard" calls `authNotifier.updateOnboardingStatus('complete')` — triggers router redirect to `/dashboard`
+
+**3. `UserEntity` + `AuthNotifier` — Router Redirect Fix**
+- `UserEntity.operator==` and `hashCode` now include `onboardingStatus` — previously only compared `id`, so Riverpod listener never fired on status change
+- Added `UserEntity.copyWith({String? onboardingStatus})`
+- Added `AuthNotifier.updateOnboardingStatus(String status)` — updates auth state without full re-login
+
+**4. HR Web — Onboarding Approval UI**
+- `frontend/app/dashboard/candidate-review/page.tsx`: error handler now correctly extracts `err.response.data.message` (axios errors have message at response body, not `err.message`)
+- `frontend/app/dashboard/candidate-review/_components/OnboardingDrawer.tsx`: full rewrite — ASSIGN ROLE section (department + designation dropdowns) always visible, no two-step flow; departments and all designations loaded on mount in parallel; designations filtered client-side by selected department; single "Confirm & Activate" button validates both fields before calling `onAction`
+
+### Files Changed This Session
+
+```
+mobile_app/lib/
+  features/auth/
+    domain/entities/user_entity.dart               copyWith(), operator== + hashCode include onboardingStatus
+    presentation/controllers/auth_notifier.dart    updateOnboardingStatus() method
+  features/onboarding/
+    data/datasources/onboarding_datasource.dart    DioException handling, document_type field name
+    presentation/providers/onboarding_providers.dart  error string stripping, MultipartFile param
+    presentation/screens/onboarding_screen.dart    file_picker + dio imports, onUpload wired
+    presentation/screens/awaiting_approval_screen.dart  full rewrite — polling + approved state
+    presentation/widgets/onboarding_steps.dart     button layout fix, file picker, per-card spinner
+
+frontend/
+  app/dashboard/candidate-review/
+    page.tsx                   error handling fix (response.data.message chain)
+    _components/OnboardingDrawer.tsx  full rewrite — ASSIGN ROLE always visible, single-step confirm
+```
+
+---
+
 ## Session Log — 2026-06-26
 
 ### Bug Fixes Shipped

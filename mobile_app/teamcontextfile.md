@@ -1816,3 +1816,180 @@ if (user.awaitingApproval)   → /onboarding/awaiting-approval  (submitted)
 - [ ] HR Approval endpoint: `PATCH /api/onboarding/{candidate_id}/approve/` → sets status to `complete`, converts candidate to employee
 
 ---
+
+## Session 11 — Onboarding Wizard Fixes + AwaitingApproval Polling + File Uploads
+
+**Date:** 2026-06-30
+**Developer:** Vignesh Kumar Saka
+**Branch:** demo
+
+---
+
+### Overview
+
+Multiple bug fixes and feature completions for the Employee Onboarding Wizard implemented in Session 10.
+
+---
+
+### Fix 1 — Step 5 Button Row Overflow
+
+**File:** `features/onboarding/presentation/widgets/onboarding_steps.dart`
+
+**Problem:** "Previous", "Save Draft", and "Submit for Approval" were all in a single `Row`, causing 39px overflow on narrow screens.
+
+**Fix:** Restructured into two rows:
+- Row 1: "Previous" button aligned left
+- Row 2: `Row(Expanded("Save Draft"), SizedBox(12), Expanded("Submit for Approval"))` — both action buttons take equal width
+
+---
+
+### Fix 2 — Submit Error Message Extraction
+
+**Files:** `features/onboarding/data/datasources/onboarding_datasource.dart`, `features/onboarding/presentation/providers/onboarding_providers.dart`
+
+**Problem:** Backend returns `{"success": false, "message": "Please upload..."}` but the catch blocks returned `e.toString()` which gave raw `DioException [bad response]: ...` to the user.
+
+**Fix in datasource:** Added `DioException` catch in both `submitProfile` and `uploadDocument`:
+```dart
+on DioException catch (e) {
+  final data = e.response?.data;
+  if (data is Map && data['message'] is String) {
+    throw Exception(data['message'] as String);
+  }
+  rethrow;
+}
+```
+
+**Fix in provider:** Strip `"Exception: "` prefix before returning error string to UI:
+```dart
+final raw = e.toString();
+return raw.startsWith('Exception: ') ? raw.substring(11) : raw;
+```
+
+---
+
+### Fix 3 — `document_type` Field Name
+
+**File:** `features/onboarding/data/datasources/onboarding_datasource.dart`
+
+**Problem:** Datasource was sending `doc_type` in the multipart form body but backend `EmployeeDocumentSerializer` expects `document_type`.
+
+**Fix:** Changed multipart key from `'doc_type'` to `'document_type'`.
+
+---
+
+### Feature 4 — File Picker for Document Uploads (Flutter Web / Chrome)
+
+**Files:** `features/onboarding/presentation/screens/onboarding_screen.dart`, `features/onboarding/presentation/widgets/onboarding_steps.dart`
+
+**Problem:** "Upload" buttons on Step 5 did nothing — `onUpload` was a stub that never picked a file.
+
+**Implementation:**
+- Added `file_picker` and `dio` imports to `onboarding_screen.dart` (host file — `onboarding_steps.dart` is a `part of` file and cannot have its own imports)
+- Changed `onUpload` lambda signature: `Future<String?> Function(String docType, PlatformFile file)`
+- In `onboarding_screen.dart`, `onUpload` creates `MultipartFile.fromBytes(file.bytes!, filename: file.name)` — `withData: true` ensures `bytes` is populated on Flutter Web where no file path exists
+- In `_DocumentsStepState`, added `_pickAndUpload(String docType)`:
+  - Calls `FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf','jpg','jpeg','png'], withData: true)`
+  - Validates 5MB max size
+  - Shows spinner on the card's Upload button while uploading via `_uploading = <String>{}` set
+  - Shows `SnackBar` on error
+
+**Key technical note:** `part` files share the library host file's imports. Any package import needed in `onboarding_steps.dart` must be declared in `onboarding_screen.dart`.
+
+---
+
+### Feature 5 — AwaitingApprovalScreen with Polling
+
+**File:** `features/onboarding/presentation/screens/awaiting_approval_screen.dart`
+
+**Rewrite:** Full rewrite as `ConsumerStatefulWidget`.
+
+**Polling:** `Timer.periodic(Duration(seconds: 30))` in `initState` polls `GET /api/onboarding/profile/` every 30 seconds. Cancelled in `dispose()`.
+
+**Approval detection:** When `status == 'complete'`, sets `_approved = true` which switches the UI.
+
+**Waiting view:** Hourglass icon, 3-step timeline (Profile Submitted → HR Review → Account Activation), "Check Status" (manual poll) + "Logout" buttons.
+
+**Approved view:** Green checkmark, "Application Approved!" heading, full green timeline, "Go to Dashboard" button.
+
+**"Go to Dashboard"** calls:
+```dart
+ref.read(authStateProvider.notifier).updateOnboardingStatus('complete');
+```
+This triggers the router redirect via `_RouterRefreshNotifier`.
+
+---
+
+### Fix 6 — `UserEntity.operator==` Not Detecting Status Change
+
+**File:** `features/auth/domain/entities/user_entity.dart`
+
+**Problem:** The Riverpod `ref.listen` in `appRouterProvider` never fired when `onboarding_status` changed from `'submitted'` to `'complete'` because `UserEntity.operator==` only compared `id`. Two objects with same ID but different `onboardingStatus` were treated as equal.
+
+**Fix:**
+```dart
+@override
+bool operator ==(Object other) =>
+    identical(this, other) ||
+    other is UserEntity && other.id == id && other.onboardingStatus == onboardingStatus;
+
+@override
+int get hashCode => Object.hash(id, onboardingStatus);
+```
+
+Also added `copyWith({String? onboardingStatus})` method.
+
+---
+
+### Feature 7 — `AuthNotifier.updateOnboardingStatus()`
+
+**File:** `features/auth/presentation/controllers/auth_notifier.dart`
+
+Added method to update auth state with new onboarding status without full re-login:
+```dart
+void updateOnboardingStatus(String status) {
+  final user = state.value?.user;
+  if (user == null) return;
+  state = AsyncData(AuthState(user: user.copyWith(onboardingStatus: status)));
+}
+```
+The fixed `operator==` ensures this state change propagates to the router listener.
+
+---
+
+### Files Modified
+
+```
+mobile_app/lib/
+  features/
+    auth/
+      domain/entities/user_entity.dart               copyWith(), operator==, hashCode — include onboardingStatus
+      presentation/controllers/auth_notifier.dart    added updateOnboardingStatus() method
+    onboarding/
+      data/datasources/onboarding_datasource.dart    DioException handling, document_type field name fix
+      presentation/
+        providers/onboarding_providers.dart          error string prefix stripping, MultipartFile param type change
+        screens/
+          onboarding_screen.dart                     file_picker + dio imports, onUpload wired to MultipartFile
+          awaiting_approval_screen.dart              full rewrite — polling, approved state, router trigger
+        widgets/
+          onboarding_steps.dart                      button overflow fix (two-row layout), file picker integration, isUploading per-card spinner
+```
+
+### Key Architecture Notes
+
+- **`part` file imports**: A `part of` file cannot declare its own `import` statements — imports must be in the host library file. Any package needed in `onboarding_steps.dart` (a part file) must be imported in `onboarding_screen.dart`.
+- **Flutter Web file picking**: Use `withData: true` in `FilePicker.platform.pickFiles()` — this populates `PlatformFile.bytes`, required on web since no file path is available. `MultipartFile.fromBytes(bytes, filename: name)` then works on both web and native.
+- **Riverpod state equality**: If `operator==` only compares `id`, state changes to other fields are invisible to `ref.listen` and `ref.watch`. Always include all fields that should trigger re-evaluation.
+- **Backend status**: No `rejected` status exists in backend — status machine is `pending → draft → submitted → complete`. Rejected screen is not implementable without backend support.
+
+### Pending Tasks (updated)
+- [ ] Connect My Profile screen to real API
+- [ ] Backend team: add `access` token to login + refresh response bodies (from Session 4)
+- [ ] Test Document Center end-to-end
+- [ ] Employee module
+- [ ] Attendance module
+- [ ] Leave module
+- [ ] Payroll module
+
+---
