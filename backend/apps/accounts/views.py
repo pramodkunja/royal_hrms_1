@@ -131,6 +131,25 @@ def _employee_dict(user: User) -> dict:
         'emergency_email':        p.emergency_email        if p else '',
     }
 
+    documents = []
+    try:
+        for doc in user.employee_documents.all():
+            try:
+                file_url = doc.file.url if doc.file else ''
+            except Exception:
+                file_url = ''
+            documents.append({
+                'id':                   doc.id,
+                'document_type':        doc.document_type,
+                'document_type_display': doc.get_document_type_display(),
+                'file':                 file_url,
+                'file_name':            doc.file_name,
+                'file_size':            doc.file_size,
+                'uploaded_at':          doc.uploaded_at.isoformat() if doc.uploaded_at else '',
+            })
+    except Exception:
+        documents = []
+
     return {
         'id':             user.employee_id,
         'uuid':           str(user.id),
@@ -150,6 +169,7 @@ def _employee_dict(user: User) -> dict:
         'is_active':      user.is_active,
         'status':         emp_status,
         'profile':        profile_data,
+        'documents':      documents,
     }
 
 
@@ -2154,7 +2174,12 @@ class EmployeeListCreateView(APIView):
 def _get_employee(identifier: str):
     """Look up an employee by employee_id code (e.g. EMP001)."""
     try:
-        return User.objects.select_related('role', 'profile').get(employee_id=identifier)
+        return (
+            User.objects
+            .select_related('role', 'profile')
+            .prefetch_related('employee_documents')
+            .get(employee_id=identifier)
+        )
     except User.DoesNotExist:
         return None
 
