@@ -20,9 +20,9 @@ class UserModel extends UserEntity {
     return UserModel(
       id: json['id'] as String,
       email: json['email'] as String,
-      fullName: json['full_name'] as String,
-      role: json['role'] as String,
-      roleDisplay: json['role_display'] as String? ?? json['role'] as String,
+      fullName: json['full_name'] as String? ?? '',
+      role: json['role'] as String? ?? '',
+      roleDisplay: json['role_display'] as String? ?? json['role'] as String? ?? '',
       employeeId: json['employee_id'] as String?,
       department: json['department'] as String?,
       designation: json['designation'] as String?,
