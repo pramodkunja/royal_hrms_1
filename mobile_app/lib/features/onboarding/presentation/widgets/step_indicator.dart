@@ -47,7 +47,7 @@ class OnboardingStepIndicator extends StatelessWidget {
         const SizedBox(height: 12),
         // Step circles
         SizedBox(
-          height: 72,
+          height: 82,
           child: Row(
             children: List.generate(kTotalSteps, (i) {
               final isCurrent = i == currentStep;
@@ -117,7 +117,7 @@ class _StepDot extends StatelessWidget {
                 : Icon(icon, size: isCurrent ? 20 : 16, color: iconColor),
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Text(
           isDone ? 'DONE' : 'STEP ${index + 1}',
           style: TextStyle(

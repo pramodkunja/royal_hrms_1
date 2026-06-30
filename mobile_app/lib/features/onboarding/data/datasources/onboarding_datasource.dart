@@ -19,19 +19,27 @@ class OnboardingDatasource {
 
   Future<OnboardingDocModel> uploadDocument(
       String docType, MultipartFile file) async {
-    final formData = FormData.fromMap({
-      'doc_type': docType,
-      'file': file,
-    });
-    final response = await _dio.post(
-      ApiConstants.onboardingDocuments,
-      data: formData,
-    );
-    final data = response.data is Map &&
-            (response.data as Map).containsKey('data')
-        ? response.data['data'] as Map<String, dynamic>
-        : response.data as Map<String, dynamic>;
-    return OnboardingDocModel.fromJson(data);
+    try {
+      final formData = FormData.fromMap({
+        'document_type': docType,
+        'file': file,
+      });
+      final response = await _dio.post(
+        ApiConstants.onboardingDocuments,
+        data: formData,
+      );
+      final data = response.data is Map &&
+              (response.data as Map).containsKey('data')
+          ? response.data['data'] as Map<String, dynamic>
+          : response.data as Map<String, dynamic>;
+      return OnboardingDocModel.fromJson(data);
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] is String) {
+        throw Exception(data['message'] as String);
+      }
+      rethrow;
+    }
   }
 
   Future<void> deleteDocument(int id) async {
@@ -39,6 +47,14 @@ class OnboardingDatasource {
   }
 
   Future<void> submitProfile() async {
-    await _dio.post(ApiConstants.onboardingSubmit);
+    try {
+      await _dio.post(ApiConstants.onboardingSubmit);
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] is String) {
+        throw Exception(data['message'] as String);
+      }
+      rethrow;
+    }
   }
 }

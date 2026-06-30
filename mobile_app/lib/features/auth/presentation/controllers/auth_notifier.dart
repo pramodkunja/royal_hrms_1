@@ -52,4 +52,10 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     }
     state = const AsyncData(AuthState.initial());
   }
+
+  void updateOnboardingStatus(String status) {
+    final user = state.value?.user;
+    if (user == null) return;
+    state = AsyncData(AuthState(user: user.copyWith(onboardingStatus: status)));
+  }
 }

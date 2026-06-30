@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
 import '../../data/datasources/onboarding_datasource.dart';
@@ -18,15 +19,25 @@ final onboardingProfileProvider =
 
 class OnboardingProfileNotifier
     extends AutoDisposeAsyncNotifier<OnboardingProfileEntity> {
+  // Guard: only restore the saved step on first fetch, not on every re-fetch
+  // triggered by invalidateSelf() after saves/uploads. Without this flag,
+  // re-fetching after a step save resets the step indicator back to 0.
+  bool _stepInitialized = false;
+
   @override
   Future<OnboardingProfileEntity> build() async {
     final ds = ref.watch(onboardingDatasourceProvider);
     try {
       final profile = await ds.fetchProfile();
-      // Restore the saved step
-      ref.read(onboardingStepProvider.notifier).state = profile.currentStep;
+      if (!_stepInitialized) {
+        _stepInitialized = true;
+        ref.read(onboardingStepProvider.notifier).state = profile.currentStep;
+      }
       return profile;
     } catch (_) {
+      if (!_stepInitialized) {
+        _stepInitialized = true;
+      }
       return OnboardingProfileEntity.empty();
     }
   }
@@ -42,15 +53,15 @@ class OnboardingProfileNotifier
     }
   }
 
-  Future<String?> uploadDocument(
-      String docType, OnboardingDocUploadRequest request) async {
+  Future<String?> uploadDocument(String docType, MultipartFile file) async {
     final ds = ref.read(onboardingDatasourceProvider);
     try {
-      await ds.uploadDocument(docType, request.file);
+      await ds.uploadDocument(docType, file);
       ref.invalidateSelf();
       return null;
     } catch (e) {
-      return e.toString();
+      final raw = e.toString();
+      return raw.startsWith('Exception: ') ? raw.substring(11) : raw;
     }
   }
 
@@ -71,13 +82,9 @@ class OnboardingProfileNotifier
       await ds.submitProfile();
       return null;
     } catch (e) {
-      return e.toString();
+      final raw = e.toString();
+      return raw.startsWith('Exception: ') ? raw.substring(11) : raw;
     }
   }
 }
 
-// Wrapper for file upload request
-class OnboardingDocUploadRequest {
-  final dynamic file; // MultipartFile in practice
-  const OnboardingDocUploadRequest(this.file);
-}

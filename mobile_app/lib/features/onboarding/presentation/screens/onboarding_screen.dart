@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -88,12 +90,14 @@ class OnboardingScreen extends ConsumerWidget {
                   }
                   return err;
                 },
-                onUpload: (docType) async {
+                onUpload: (docType, file) async {
+                  final multipart = MultipartFile.fromBytes(
+                    file.bytes!,
+                    filename: file.name,
+                  );
                   return await ref
                       .read(onboardingProfileProvider.notifier)
-                      .uploadDocument(
-                          docType,
-                          const OnboardingDocUploadRequest(null));
+                      .uploadDocument(docType, multipart);
                 },
                 onDelete: (id) async {
                   return await ref
@@ -144,7 +148,7 @@ class _StepContent extends StatelessWidget {
   final VoidCallback? onPrevious;
   final Future<String?> Function(int step, Map<String, dynamic> data)
       onStepSaved;
-  final Future<String?> Function(String docType) onUpload;
+  final Future<String?> Function(String docType, PlatformFile file) onUpload;
   final Future<String?> Function(int id) onDelete;
   final Future<void> Function() onSaveDraft;
   final Future<void> Function() onSubmit;

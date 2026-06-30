@@ -42,13 +42,16 @@ export default function CandidateReviewPage() {
     try {
       await clientApi.post(API.onboarding.approve(userId), { decision, remarks, ...extras });
       setDrawer(null); setRemarks("");
+      loadAll();
       if (decision === "approve") {
         router.push("/dashboard/employees");
-      } else {
-        loadAll();
       }
     } catch (err: unknown) {
-      setActionErr((err as { message?: string })?.message ?? "Action failed.");
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        (err as { message?: string })?.message ??
+        "Action failed.";
+      setActionErr(msg);
     } finally {
       setActing(false);
     }

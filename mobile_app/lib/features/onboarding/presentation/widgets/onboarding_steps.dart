@@ -721,7 +721,7 @@ class _DocumentsStep extends StatefulWidget {
   });
 
   final List<OnboardingDocEntity> documents;
-  final Future<String?> Function(String docType) onUpload;
+  final Future<String?> Function(String docType, PlatformFile file) onUpload;
   final Future<String?> Function(int id) onDelete;
   final Future<void> Function() onSaveDraft;
   final Future<void> Function() onSubmit;
@@ -734,6 +734,37 @@ class _DocumentsStep extends StatefulWidget {
 class _DocumentsStepState extends State<_DocumentsStep> {
   bool _submitting = false;
   bool _savingDraft = false;
+  final _uploading = <String>{};
+
+  Future<void> _pickAndUpload(String docType) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.size > 5 * 1024 * 1024) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('File must be under 5 MB.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+    setState(() => _uploading.add(docType));
+    final err = await widget.onUpload(docType, file);
+    if (!mounted) return;
+    setState(() => _uploading.remove(docType));
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err), backgroundColor: AppColors.error),
+      );
+    }
+  }
 
   Future<void> _handleSubmit() async {
     final confirmed = await showDialog<bool>(
@@ -786,31 +817,20 @@ class _DocumentsStepState extends State<_DocumentsStep> {
               docType: doc['value']!,
               label: doc['label']!,
               uploaded: uploaded,
-              onUpload: () => widget.onUpload(doc['value']!),
+              isUploading: _uploading.contains(doc['value']),
+              onUpload: () => _pickAndUpload(doc['value']!),
               onDelete: widget.onDelete,
             );
           }),
           const SizedBox(height: 32),
-          // Navigation row
-          Row(
-            children: [
-              if (widget.onPrevious != null)
-                OutlinedButton.icon(
-                  onPressed: widget.onPrevious,
-                  icon: const Icon(Icons.arrow_back, size: 16),
-                  label: const Text('Previous'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textSecondary,
-                    side: const BorderSide(color: AppColors.border),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-              const Spacer(),
-              OutlinedButton(
-                onPressed: _savingDraft ? null : _handleSaveDraft,
+          // Row 1: Previous (left-aligned)
+          if (widget.onPrevious != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: widget.onPrevious,
+                icon: const Icon(Icons.arrow_back, size: 16),
+                label: const Text('Previous'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.textSecondary,
                   side: const BorderSide(color: AppColors.border),
@@ -819,32 +839,49 @@ class _DocumentsStepState extends State<_DocumentsStep> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10)),
                 ),
-                child: _savingDraft
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.textSecondary))
-                    : const Text('Save Draft'),
+              ),
+            ),
+          const SizedBox(height: 12),
+          // Row 2: Save Draft | Submit for Approval (full width split)
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _savingDraft ? null : _handleSaveDraft,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    side: const BorderSide(color: AppColors.border),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: _savingDraft
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.textSecondary))
+                      : const Text('Save Draft'),
+                ),
               ),
               const SizedBox(width: 12),
-              FilledButton.icon(
-                onPressed: _submitting ? null : _handleSubmit,
-                icon: _submitting
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.check_circle_outline, size: 18),
-                label: const Text('Submit for Approval'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _submitting ? null : _handleSubmit,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: _submitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Text('Submit for Approval'),
                 ),
               ),
             ],
@@ -861,6 +898,7 @@ class _DocTypeCard extends StatelessWidget {
     required this.docType,
     required this.label,
     required this.uploaded,
+    required this.isUploading,
     required this.onUpload,
     required this.onDelete,
   });
@@ -868,6 +906,7 @@ class _DocTypeCard extends StatelessWidget {
   final String docType;
   final String label;
   final List<OnboardingDocEntity> uploaded;
+  final bool isUploading;
   final VoidCallback onUpload;
   final Future<String?> Function(int id) onDelete;
 
@@ -902,12 +941,18 @@ class _DocTypeCard extends StatelessWidget {
             ),
           ),
           TextButton(
-            onPressed: onUpload,
+            onPressed: isUploading ? null : onUpload,
             style: TextButton.styleFrom(
               foregroundColor: AppColors.primary,
               visualDensity: VisualDensity.compact,
             ),
-            child: const Text('Upload'),
+            child: isUploading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: AppColors.primary))
+                : const Text('Upload'),
           ),
         ],
       ),

@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import clientApi from "@/lib/clientApi";
 import { API } from "@/lib/api/endpoints";
 
-interface OnboardingDocument { id: number; document_type_display: string; file_name: string; file?: string; }
+interface OnboardingDocument {
+  id: number;
+  document_type_display: string;
+  file_name: string;
+  file?: string;
+}
 
 interface ProfileData {
   date_of_birth?: string; gender?: string; marital_status?: string;
@@ -64,17 +69,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export default function OnboardingDrawer({ user, remarks, acting, actionErr, onRemarksChange, onAction, onClose }: Props) {
-  const [showAssign, setShowAssign] = useState(false);
-  const [depts,      setDepts]      = useState<ApiDept[]>([]);
-  const [desigs,     setDesigs]     = useState<ApiDesig[]>([]);
-  const [selDept,    setSelDept]    = useState(user.department || "");
-  const [selDesig,   setSelDesig]   = useState(user.designation || "");
-  const [loadDepts,  setLoadDepts]  = useState(false);
-  const [assignErr,  setAssignErr]  = useState("");
+  const [depts,     setDepts]     = useState<ApiDept[]>([]);
+  const [desigs,    setDesigs]    = useState<ApiDesig[]>([]);
+  const [allDesigs, setAllDesigs] = useState<ApiDesig[]>([]);
+  const [selDept,   setSelDept]   = useState(user.department || "");
+  const [selDesig,  setSelDesig]  = useState(user.designation || "");
+  const [loadDepts, setLoadDepts] = useState(false);
+  const [assignErr, setAssignErr] = useState("");
 
-  // Fetch departments the first time the assign section appears
+  // Load departments on mount
   useEffect(() => {
-    if (!showAssign || depts.length > 0) return;
     setLoadDepts(true);
     clientApi
       .get<{ data: unknown }>(API.departments.list, { params: { page_size: 100 } })
@@ -87,29 +91,26 @@ export default function OnboardingDrawer({ user, remarks, acting, actionErr, onR
       })
       .catch(() => setDepts([]))
       .finally(() => setLoadDepts(false));
-  }, [showAssign, depts.length]);
 
-  // Refresh designations whenever selected department changes
-  useEffect(() => {
-    if (!selDept) { setDesigs([]); return; }
     clientApi
-      .get<{ data: unknown }>(API.designations.list, { params: { page_size: 100 } })
+      .get<{ data: unknown }>(API.designations.list, { params: { page_size: 200 } })
       .then(r => {
         const raw = r.data?.data;
         const all: ApiDesig[] = Array.isArray(raw)
           ? (raw as ApiDesig[])
           : ((raw as { results?: ApiDesig[] })?.results ?? []);
-        setDesigs(all.filter(d => d.department_name === selDept));
+        setAllDesigs(all);
       })
-      .catch(() => setDesigs([]));
-  }, [selDept]);
+      .catch(() => setAllDesigs([]));
+  }, []);
 
-  function handleApproveClick() {
-    setShowAssign(true);
-    setAssignErr("");
-  }
+  // Filter designations when department changes
+  useEffect(() => {
+    if (!selDept) { setDesigs([]); return; }
+    setDesigs(allDesigs.filter(d => d.department_name === selDept));
+  }, [selDept, allDesigs]);
 
-  function handleConfirm() {
+  function handleApprove() {
     if (!selDept || !selDesig) {
       setAssignErr("Please select both Department and Designation before confirming.");
       return;
@@ -127,15 +128,15 @@ export default function OnboardingDrawer({ user, remarks, acting, actionErr, onR
         </div>
 
         <div className="modal-body">
-          {actionErr && <div className="alert alert-error" style={{ marginBottom: "1rem" }}>{actionErr}</div>}
+          {actionErr && (
+            <div className="alert alert-error" style={{ marginBottom: "1rem" }}>
+              <i className="ti ti-alert-circle" /><span>{actionErr}</span>
+            </div>
+          )}
 
           <Section title="Basic Info">
-            <Row label="Email"       value={user.email} />
-            <Row label="Phone"       value={user.phone} />
-            <Row label="Department"  value={user.department} />
-            <Row label="Designation" value={user.designation} />
-            <Row label="Branch"      value={user.branch} />
-            <Row label="Role"        value={user.role_display || "Candidate"} />
+            <Row label="Email" value={user.email} />
+            <Row label="Role"  value={user.role_display || "Candidate"} />
           </Section>
 
           {user.profile && (
@@ -148,13 +149,16 @@ export default function OnboardingDrawer({ user, remarks, acting, actionErr, onR
                 <Row label="Blood Group"     value={user.profile.blood_group} />
                 <Row label="Current Address" value={user.profile.current_address} />
               </Section>
+
               <Section title="Education & Experience">
-                <Row label="Qualification"    value={user.profile.highest_qualification} />
-                <Row label="Institution"      value={user.profile.institution} />
-                <Row label="Year of Passing"  value={user.profile.year_of_passing?.toString()} />
+                <Row label="Qualification"   value={user.profile.highest_qualification} />
+                <Row label="Institution"     value={user.profile.institution} />
+                <Row label="Year of Passing" value={user.profile.year_of_passing?.toString()} />
+                <Row label="Specialization"  value={user.profile.specialization} />
                 <Row label="Experience (yrs)" value={user.profile.total_experience_years} />
-                <Row label="Prev Employer"    value={user.profile.previous_employer} />
+                <Row label="Prev Employer"   value={user.profile.previous_employer} />
               </Section>
+
               <Section title="Bank Details">
                 <Row label="Account Holder" value={user.profile.account_holder_name} />
                 <Row label="Account No."    value={user.profile.account_number ? `••••${user.profile.account_number.slice(-4)}` : undefined} />
@@ -163,6 +167,7 @@ export default function OnboardingDrawer({ user, remarks, acting, actionErr, onR
                 <Row label="Branch"         value={user.profile.bank_branch_name} />
                 <Row label="Account Type"   value={user.profile.account_type} />
               </Section>
+
               <Section title="Emergency Contact">
                 <Row label="Name"         value={user.profile.emergency_name} />
                 <Row label="Relationship" value={user.profile.emergency_relationship} />
@@ -172,27 +177,33 @@ export default function OnboardingDrawer({ user, remarks, acting, actionErr, onR
           )}
 
           <Section title={`Documents (${user.documents.length})`}>
-            {user.documents.length === 0
-              ? <p style={{ color: "var(--on-variant)", fontSize: ".85rem" }}>No documents uploaded.</p>
-              : user.documents.map(d => (
+            {user.documents.length === 0 ? (
+              <p style={{ color: "var(--on-variant)", fontSize: ".85rem" }}>No documents uploaded.</p>
+            ) : (
+              user.documents.map(d => (
                 <div key={d.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: ".4rem 0", borderBottom: "1px solid var(--outline-v)", fontSize: ".85rem" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                     <i className="ti ti-file-text" style={{ color: "var(--primary)", fontSize: 16, flexShrink: 0 }} />
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 600 }}>{d.document_type_display}</div>
-                      <div style={{ color: "var(--on-variant)", fontSize: ".78rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 200 }}>{d.file_name}</div>
+                      <div style={{ color: "var(--on-variant)", fontSize: ".78rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 220 }}>{d.file_name}</div>
                     </div>
                   </div>
-                  {d.file
-                    ? <a href={d.file} target="_blank" rel="noopener noreferrer"
-                        style={{ display: "flex", alignItems: "center", gap: 4, fontSize: ".8rem", color: "var(--primary)", fontWeight: 500, textDecoration: "none", flexShrink: 0 }}>
-                        <i className="ti ti-external-link" style={{ fontSize: 13 }} /> View
-                      </a>
-                    : <span style={{ fontSize: ".78rem", color: "var(--outline)" }}>No link</span>
-                  }
+                  {d.file ? (
+                    <a
+                      href={d.file}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: "flex", alignItems: "center", gap: 4, fontSize: ".8rem", color: "var(--primary)", fontWeight: 500, textDecoration: "none", flexShrink: 0 }}
+                    >
+                      <i className="ti ti-external-link" style={{ fontSize: 13 }} /> View
+                    </a>
+                  ) : (
+                    <span style={{ fontSize: ".78rem", color: "var(--outline)" }}>No link</span>
+                  )}
                 </div>
               ))
-            }
+            )}
           </Section>
 
           <div className="field-group" style={{ marginTop: "1rem" }}>
@@ -206,52 +217,55 @@ export default function OnboardingDrawer({ user, remarks, acting, actionErr, onR
             />
           </div>
 
-          {/* Assign dept/designation — revealed on approve click */}
-          {showAssign && (
-            <div style={{ marginTop: "1.25rem", padding: "1rem", borderRadius: 8, border: "1px solid var(--outline-v)", background: "var(--bg-mid)" }}>
-              <div style={{ fontWeight: 700, fontSize: ".82rem", textTransform: "uppercase", letterSpacing: ".05em", color: "var(--primary)", marginBottom: ".75rem" }}>
-                <i className="ti ti-user-check" style={{ marginRight: 6 }} />Assign Role
-              </div>
+          {/* Assign Role — always visible for approve flow */}
+          <div style={{ marginTop: "1.25rem", padding: "1rem", borderRadius: 8, border: "1px solid var(--outline-v)", background: "var(--bg-mid)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: ".82rem", textTransform: "uppercase", letterSpacing: ".05em", color: "var(--primary)", marginBottom: ".75rem" }}>
+              <i className="ti ti-user-check" />
+              Assign Role
+            </div>
 
-              {assignErr && (
-                <div className="alert alert-error" style={{ marginBottom: ".75rem", padding: "6px 10px", fontSize: ".82rem" }}>
-                  <i className="ti ti-alert-circle" /><span>{assignErr}</span>
+            {assignErr && (
+              <div className="alert alert-error" style={{ marginBottom: ".75rem", padding: "6px 10px", fontSize: ".82rem" }}>
+                <i className="ti ti-alert-circle" /><span>{assignErr}</span>
+              </div>
+            )}
+
+            <div className="field-group" style={{ marginBottom: ".75rem" }}>
+              <label className="field-label">Department <span style={{ color: "var(--error)" }}>*</span></label>
+              {loadDepts ? (
+                <div style={{ fontSize: ".85rem", color: "var(--on-variant)", padding: ".5rem 0" }}>
+                  <i className="ti ti-loader-2 spin" /> Loading…
                 </div>
-              )}
-
-              <div className="field-group" style={{ marginBottom: ".75rem" }}>
-                <label className="field-label">Department <span style={{ color: "var(--error)" }}>*</span></label>
-                {loadDepts ? (
-                  <div style={{ fontSize: ".85rem", color: "var(--on-variant)" }}><i className="ti ti-loader-2 spin" /> Loading…</div>
-                ) : (
-                  <select
-                    className="field-input field-select"
-                    value={selDept}
-                    onChange={e => { setSelDept(e.target.value); setSelDesig(""); setAssignErr(""); }}
-                  >
-                    <option value="">— Select Department —</option>
-                    {depts.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-                  </select>
-                )}
-              </div>
-
-              <div className="field-group">
-                <label className="field-label">Designation <span style={{ color: "var(--error)" }}>*</span></label>
+              ) : (
                 <select
                   className="field-input field-select"
-                  value={selDesig}
-                  onChange={e => { setSelDesig(e.target.value); setAssignErr(""); }}
-                  disabled={!selDept}
+                  value={selDept}
+                  onChange={e => { setSelDept(e.target.value); setSelDesig(""); setAssignErr(""); }}
                 >
-                  <option value="">— Select Designation —</option>
-                  {desigs.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                  <option value="">— Select Department —</option>
+                  {depts.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
                 </select>
-                {selDept && desigs.length === 0 && !loadDepts && (
-                  <div style={{ fontSize: ".75rem", color: "var(--on-variant)", marginTop: 4 }}>No designations found for this department.</div>
-                )}
-              </div>
+              )}
             </div>
-          )}
+
+            <div className="field-group">
+              <label className="field-label">Designation <span style={{ color: "var(--error)" }}>*</span></label>
+              <select
+                className="field-input field-select"
+                value={selDesig}
+                onChange={e => { setSelDesig(e.target.value); setAssignErr(""); }}
+                disabled={!selDept}
+              >
+                <option value="">— Select Designation —</option>
+                {desigs.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+              </select>
+              {selDept && desigs.length === 0 && !loadDepts && (
+                <div style={{ fontSize: ".75rem", color: "var(--on-variant)", marginTop: 4 }}>
+                  No designations found for this department.
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="modal-footer">
@@ -261,21 +275,15 @@ export default function OnboardingDrawer({ user, remarks, acting, actionErr, onR
             onClick={() => onAction(user.id, "reject")}
             disabled={acting}
           >
-            {acting ? "…" : "Send Back for Corrections"}
+            {acting ? <i className="ti ti-loader-2 spin" /> : "Send Back for Corrections"}
           </button>
 
-          {showAssign ? (
-            <button className="btn btn-filled" onClick={handleConfirm} disabled={acting}>
-              {acting
-                ? <><i className="ti ti-loader-2 spin" /> Activating…</>
-                : <><i className="ti ti-check" /> Confirm & Activate</>
-              }
-            </button>
-          ) : (
-            <button className="btn btn-filled" onClick={handleApproveClick} disabled={acting}>
-              Approve & Activate ✓
-            </button>
-          )}
+          <button className="btn btn-filled" onClick={handleApprove} disabled={acting}>
+            {acting
+              ? <><i className="ti ti-loader-2 spin" /> Activating…</>
+              : <><i className="ti ti-check" /> Confirm & Activate</>
+            }
+          </button>
         </div>
       </div>
     </div>

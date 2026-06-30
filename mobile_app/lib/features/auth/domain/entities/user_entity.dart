@@ -34,12 +34,30 @@ class UserEntity {
 
   bool hasPermission(String permission) => permissions.contains(permission);
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) || other is UserEntity && other.id == id;
+  UserEntity copyWith({String? onboardingStatus}) => UserEntity(
+        id: id,
+        email: email,
+        fullName: fullName,
+        role: role,
+        roleDisplay: roleDisplay,
+        employeeId: employeeId,
+        department: department,
+        designation: designation,
+        branch: branch,
+        mustChangePassword: mustChangePassword,
+        permissions: permissions,
+        onboardingStatus: onboardingStatus ?? this.onboardingStatus,
+      );
 
   @override
-  int get hashCode => id.hashCode;
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UserEntity &&
+          other.id == id &&
+          other.onboardingStatus == onboardingStatus;
+
+  @override
+  int get hashCode => Object.hash(id, onboardingStatus);
 
   @override
   String toString() => 'UserEntity(id: $id, email: $email, role: $role)';
