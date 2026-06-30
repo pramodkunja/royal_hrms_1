@@ -8,8 +8,8 @@ from rest_framework.views import APIView
 
 from core.responses import error, first_error, success
 
-from .models import Expense, ExpenseReceipt
-from .serializers import (
+from ..models import Expense, ExpenseReceipt
+from ..serializers import (
     ExpenseCreateSerializer,
     ExpenseSerializer,
     validate_receipt_file,
@@ -25,7 +25,6 @@ def _has_perm(user, codename: str) -> bool:
 
 
 def _resolve_branch(user):
-    """Return a Branch instance matching the user's branch CharField, or None."""
     branch_name = getattr(user, 'branch', None)
     if not branch_name:
         return None
@@ -87,7 +86,6 @@ class ExpenseListCreateView(APIView):
 
         logger.info('Expense submitted: %s by %s (%d receipts)', expense.title, request.user.email, len(receipt_files))
 
-        expense.refresh_from_db()
         out = ExpenseSerializer(
             Expense.objects.select_related('employee', 'branch')
                            .prefetch_related('receipts')

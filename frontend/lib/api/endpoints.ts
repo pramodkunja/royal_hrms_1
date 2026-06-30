@@ -86,4 +86,17 @@ export const API = {
     list:  "/expenses/",
     stats: "/expenses/stats/",
   },
+
+  leave: {
+    policy:       "/leave/policy/",
+    policyDetail: (leaveType: string) => `/leave/policy/${leaveType}/`,
+    balance:      "/leave/balance/",
+    balanceCredit: "/leave/balance/credit/",
+    balanceAdjust: (id: string) => `/leave/balance/${id}/`,
+    requests:     "/leave/requests/",
+    requestDetail: (id: string) => `/leave/requests/${id}/`,
+    approve:      (id: string) => `/leave/requests/${id}/approve/`,
+    stats:        "/leave/stats/",
+    calendar:     "/leave/calendar/",
+  },
 } as const;

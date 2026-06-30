@@ -7,8 +7,9 @@ const USER_COOKIE   = "royal_hrms_user";
 const ROUTE_PERMISSIONS: Record<string, string> = {
   "/dashboard/announcements":    "announcements.view",
   "/dashboard/interview-list":   "recruitment.view",
-  "/dashboard/candidate-review": "recruitment.view",
-  "/dashboard/email-logs":       "recruitment.view",
+  "/dashboard/candidate-review":        "recruitment.view",
+  "/dashboard/onboarding-approvals":   "onboarding.approve",
+  "/dashboard/email-logs":             "recruitment.view",
   "/dashboard/employees":        "employees.view",
   "/dashboard/org-chart":        "employees.view",
   "/dashboard/branches":         "branches.view",
