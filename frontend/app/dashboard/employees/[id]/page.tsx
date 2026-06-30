@@ -17,6 +17,8 @@ import ProfileHeader from "./_components/ProfileHeader";
 import ProfileTabBar from "./_components/ProfileTabBar";
 import ProfileSidebar from "./_components/ProfileSidebar";
 import ProfileForm from "./_components/ProfileForm";
+import { ReportingManagerCard } from "./_components/ReportingManagerCard";
+import { ApprovalMatrixTab } from "./_components/ApprovalMatrixTab";
 
 interface ApiProfile {
   date_of_birth?: string; gender?: string; marital_status?: string;
@@ -39,6 +41,8 @@ interface ApiEmployee {
   department: string; designation: string; branch: string;
   role: string; role_display: string;
   date_of_joining: string; is_active: boolean; status: string;
+  reporting_manager_id:   string | null;
+  reporting_manager_name: string | null;
   profile?: ApiProfile;
 }
 
@@ -122,9 +126,11 @@ export default function EmployeeProfilePage({
   const [tab,       setTab]       = useState<string>("profile");
   const [sectionId, setSectionId] = useState<string>("personal");
 
-  const [employee, setEmployee] = useState<Employee | null>(null);
-  const [loading,  setLoading]  = useState(true);
-  const [notFound, setNotFound] = useState(false);
+  const [employee,          setEmployee]          = useState<Employee | null>(null);
+  const [loading,           setLoading]           = useState(true);
+  const [notFound,          setNotFound]          = useState(false);
+  const [reportingMgrId,    setReportingMgrId]    = useState<string | null>(null);
+  const [reportingMgrName,  setReportingMgrName]  = useState<string | null>(null);
 
   const [values,     setValues]     = useState<DetailValues>({});
   const [tables,     setTables]     = useState<Record<string, TableRow[]>>({});
@@ -138,12 +144,15 @@ export default function EmployeeProfilePage({
     clientApi
       .get<{ data: ApiEmployee }>(API.employees.detail(id))
       .then(({ data }) => {
-        const emp = apiToEmployee(data.data);
+        const raw = data.data;
+        const emp = apiToEmployee(raw);
         setEmployee(emp);
         setValues({ ...emp.details });
         setBaseValues({ ...emp.details });
         setTables({});
         setBaseTables({});
+        setReportingMgrId(raw.reporting_manager_id ?? null);
+        setReportingMgrName(raw.reporting_manager_name ?? null);
       })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
@@ -222,6 +231,12 @@ export default function EmployeeProfilePage({
             <ProfileSidebar active={sectionId} onChange={setSectionId} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
+            <ReportingManagerCard
+              employeeCode={id}
+              currentManagerId={reportingMgrId}
+              currentManagerName={reportingMgrName}
+              onUpdated={(mgId, mgName) => { setReportingMgrId(mgId); setReportingMgrName(mgName); }}
+            />
             <ProfileForm
               section={section}
               values={values}
@@ -234,6 +249,8 @@ export default function EmployeeProfilePage({
             />
           </div>
         </div>
+      ) : tab === "approval" ? (
+        <ApprovalMatrixTab employeeCode={id} />
       ) : (
         <TabPlaceholder icon={activeTab.icon} label={activeTab.label} />
       )}

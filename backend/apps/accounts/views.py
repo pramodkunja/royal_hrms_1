@@ -28,6 +28,7 @@ from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import (
+    ApprovalWorkflowRule,
     AuditLog,
     Company,
     Department,
@@ -36,6 +37,7 @@ from apps.accounts.models import (
     EmailTemplate,
     EmailTemplateAttachment,
     EmailTemplateCategory,
+    EmployeeApprovalOverride,
     EmployeeCodeSettings,
     OTPVerification,
     PasswordResetToken,
@@ -149,6 +151,7 @@ def _employee_dict(user: User) -> dict:
             })
     except Exception:
         documents = []
+    mgr = getattr(user, 'reporting_manager', None)
 
     return {
         'id':             user.employee_id,
@@ -168,6 +171,8 @@ def _employee_dict(user: User) -> dict:
         'date_joined':    user.date_joined.date().isoformat(),
         'is_active':      user.is_active,
         'status':         emp_status,
+        'reporting_manager_id':   str(mgr.id)        if mgr else None,
+        'reporting_manager_name': mgr.full_name       if mgr else None,
         'profile':        profile_data,
         'documents':      documents,
     }
@@ -1985,7 +1990,7 @@ class EmployeeListCreateView(APIView):
 
         qs = (
             User.objects
-            .select_related('role', 'profile')
+            .select_related('role', 'profile', 'reporting_manager')
             .filter(is_active__in=[True, False])
             .exclude(employee_id='')   # portal candidates have no employee_id until onboarding is approved
             .order_by('-date_joined')
@@ -2176,7 +2181,7 @@ def _get_employee(identifier: str):
     try:
         return (
             User.objects
-            .select_related('role', 'profile')
+            .select_related('role', 'profile', 'reporting_manager')
             .prefetch_related('employee_documents')
             .get(employee_id=identifier)
         )
@@ -2927,3 +2932,201 @@ class MyProfileView(APIView):
 
         logger.info('Profile updated by %s', request.user.email)
         return success('Profile updated successfully.')
+
+
+# ─── Reporting Manager ────────────────────────────────────────────────────────
+
+class EmployeeReportingManagerView(APIView):
+    """PATCH to assign or clear a reporting manager for a specific employee."""
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, employee_id: str):
+        if not _has_perm(request.user, 'employees.edit'):
+            return error('You do not have permission to perform this action.', http_status=status.HTTP_403_FORBIDDEN)
+
+        employee = _get_employee(employee_id)
+        if employee is None:
+            return error('Employee not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        manager_id = request.data.get('reporting_manager_id')
+
+        if manager_id is None:
+            employee.reporting_manager = None
+        else:
+            try:
+                manager = User.objects.get(id=manager_id, is_active=True)
+            except (User.DoesNotExist, Exception):
+                return error('Reporting manager not found or is inactive.')
+
+            if manager.id == employee.id:
+                return error('An employee cannot be their own reporting manager.')
+
+            employee.reporting_manager = manager
+
+        employee.save(update_fields=['reporting_manager', 'updated_at'])
+        logger.info(
+            'Reporting manager for %s set to %s by %s',
+            employee.employee_id,
+            employee.reporting_manager.full_name if employee.reporting_manager else 'None',
+            request.user.email,
+        )
+        return success('Reporting manager updated.', data=_employee_dict(employee))
+
+
+# ─── Global Approval Workflow Rules ──────────────────────────────────────────
+
+_WORKFLOW_ORDER = [
+    ApprovalWorkflowRule.WORKFLOW_LEAVE,
+    ApprovalWorkflowRule.WORKFLOW_EXPENSE,
+    ApprovalWorkflowRule.WORKFLOW_RESIGNATION,
+    ApprovalWorkflowRule.WORKFLOW_LOAN,
+]
+
+
+def _ensure_default_rules():
+    """Create default global rules for all workflow types if missing."""
+    defaults = {
+        ApprovalWorkflowRule.WORKFLOW_LEAVE:       (ApprovalWorkflowRule.ROLE_REPORTING_MANAGER, ApprovalWorkflowRule.ROLE_HR_MANAGER),
+        ApprovalWorkflowRule.WORKFLOW_EXPENSE:      (ApprovalWorkflowRule.ROLE_REPORTING_MANAGER, ApprovalWorkflowRule.ROLE_HR_MANAGER),
+        ApprovalWorkflowRule.WORKFLOW_RESIGNATION:  (ApprovalWorkflowRule.ROLE_REPORTING_MANAGER, ApprovalWorkflowRule.ROLE_ADMIN),
+        ApprovalWorkflowRule.WORKFLOW_LOAN:         (ApprovalWorkflowRule.ROLE_HR_MANAGER, ApprovalWorkflowRule.ROLE_ADMIN),
+    }
+    for wf, (l1, l2) in defaults.items():
+        ApprovalWorkflowRule.objects.get_or_create(
+            workflow_type=wf,
+            defaults={'l1_approver_role': l1, 'l2_approver_role': l2},
+        )
+
+
+def _serialize_rule(rule: ApprovalWorkflowRule) -> dict:
+    role_labels = dict(ApprovalWorkflowRule.APPROVER_ROLE_CHOICES)
+    return {
+        'workflow_type':      rule.workflow_type,
+        'workflow_label':     rule.get_workflow_type_display(),
+        'l1_approver_role':   rule.l1_approver_role,
+        'l1_approver_label':  role_labels.get(rule.l1_approver_role, ''),
+        'l2_approver_role':   rule.l2_approver_role,
+        'l2_approver_label':  role_labels.get(rule.l2_approver_role, '') if rule.l2_approver_role else '',
+    }
+
+
+class ApprovalWorkflowRuleView(APIView):
+    """GET all global workflow rules; PATCH a single rule."""
+    permission_classes = [IsAuthenticated, CanManageRoles]
+
+    def get(self, request):
+        _ensure_default_rules()
+        rules = {r.workflow_type: r for r in ApprovalWorkflowRule.objects.all()}
+        data  = [_serialize_rule(rules[wf]) for wf in _WORKFLOW_ORDER if wf in rules]
+        return success('Approval rules retrieved.', data=data)
+
+    def patch(self, request):
+        from apps.accounts.serializers import ApprovalWorkflowRuleUpdateSerializer
+        serializer = ApprovalWorkflowRuleUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error(first_error(serializer.errors))
+
+        data = serializer.validated_data
+        _ensure_default_rules()
+
+        rule = ApprovalWorkflowRule.objects.get(workflow_type=data['workflow_type'])
+        rule.l1_approver_role = data['l1_approver_role']
+        rule.l2_approver_role = data.get('l2_approver_role', '')
+        rule.updated_by       = request.user
+        rule.save(update_fields=['l1_approver_role', 'l2_approver_role', 'updated_by', 'updated_at'])
+
+        logger.info('Approval rule for %s updated by %s', data['workflow_type'], request.user.email)
+        return success('Approval rule updated.', data=_serialize_rule(rule))
+
+
+# ─── Employee Approval Matrix ─────────────────────────────────────────────────
+
+def _build_matrix_row(rule: ApprovalWorkflowRule, override) -> dict:
+    role_labels = dict(ApprovalWorkflowRule.APPROVER_ROLE_CHOICES)
+    return {
+        'workflow_type':     rule.workflow_type,
+        'workflow_label':    rule.get_workflow_type_display(),
+        'l1_approver_role':  rule.l1_approver_role,
+        'l1_approver_label': role_labels.get(rule.l1_approver_role, ''),
+        'l1_override_id':    str(override.l1_override.id) if (override and override.l1_override) else None,
+        'l1_override_name':  override.l1_override.full_name if (override and override.l1_override) else None,
+        'l2_approver_role':  rule.l2_approver_role,
+        'l2_approver_label': role_labels.get(rule.l2_approver_role, '') if rule.l2_approver_role else '',
+        'l2_override_id':    str(override.l2_override.id) if (override and override.l2_override) else None,
+        'l2_override_name':  override.l2_override.full_name if (override and override.l2_override) else None,
+    }
+
+
+class EmployeeApprovalMatrixView(APIView):
+    """GET/PATCH the approval matrix for a specific employee."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, employee_id: str):
+        if not _has_perm(request.user, 'employees.view'):
+            return error('You do not have permission to perform this action.', http_status=status.HTTP_403_FORBIDDEN)
+
+        employee = _get_employee(employee_id)
+        if employee is None:
+            return error('Employee not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        _ensure_default_rules()
+        rules     = {r.workflow_type: r for r in ApprovalWorkflowRule.objects.all()}
+        overrides = {
+            o.workflow_type: o
+            for o in EmployeeApprovalOverride.objects
+                        .filter(employee=employee)
+                        .select_related('l1_override', 'l2_override')
+        }
+
+        data = [
+            _build_matrix_row(rules[wf], overrides.get(wf))
+            for wf in _WORKFLOW_ORDER
+            if wf in rules
+        ]
+        return success('Approval matrix retrieved.', data=data)
+
+    def patch(self, request, employee_id: str):
+        if not _has_perm(request.user, 'employees.edit'):
+            return error('You do not have permission to perform this action.', http_status=status.HTTP_403_FORBIDDEN)
+
+        employee = _get_employee(employee_id)
+        if employee is None:
+            return error('Employee not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        workflow_type = request.data.get('workflow_type')
+        valid_types   = [c[0] for c in ApprovalWorkflowRule.WORKFLOW_CHOICES]
+        if workflow_type not in valid_types:
+            return error(f'workflow_type must be one of: {", ".join(valid_types)}.')
+
+        def _resolve_user(uid):
+            if uid is None:
+                return None, None
+            try:
+                return User.objects.get(id=uid, is_active=True), None
+            except (User.DoesNotExist, Exception):
+                return None, f'User {uid} not found or inactive.'
+
+        l1_id = request.data.get('l1_override_id')
+        l2_id = request.data.get('l2_override_id')
+
+        l1_user, l1_err = _resolve_user(l1_id)
+        if l1_err:
+            return error(l1_err)
+
+        l2_user, l2_err = _resolve_user(l2_id)
+        if l2_err:
+            return error(l2_err)
+
+        override, _ = EmployeeApprovalOverride.objects.get_or_create(
+            employee=employee,
+            workflow_type=workflow_type,
+        )
+        override.l1_override = l1_user
+        override.l2_override = l2_user
+        override.updated_by  = request.user
+        override.save(update_fields=['l1_override', 'l2_override', 'updated_by', 'updated_at'])
+
+        _ensure_default_rules()
+        rule = ApprovalWorkflowRule.objects.get(workflow_type=workflow_type)
+        override.refresh_from_db()
+        return success('Approval matrix updated.', data=_build_matrix_row(rule, override))
