@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import type {
   DetailValues,
   DocEntry,
+  FieldOption,
   ProfileSection,
   TableColumn,
   TableRow,
@@ -21,6 +22,9 @@ export default function ProfileForm({
   values,
   rows,
   dirty,
+  saving,
+  liveDocuments,
+  fieldOptions,
   onFieldChange,
   onRowsChange,
   onSave,
@@ -30,6 +34,9 @@ export default function ProfileForm({
   values: DetailValues;
   rows: TableRow[];
   dirty: boolean;
+  saving?: boolean;
+  liveDocuments?: DocEntry[];
+  fieldOptions?: Record<string, FieldOption[]>;
   onFieldChange: (key: string, val: string) => void;
   onRowsChange: (rows: TableRow[]) => void;
   onSave: () => void;
@@ -59,14 +66,18 @@ export default function ProfileForm({
       <div className="p-7 flex-1">
         {section.kind === "grid" && (
           <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-            {section.fields.map((f) => (
-              <FormField
-                key={f.key}
-                field={f}
-                value={values[f.key] ?? ""}
-                onChange={onFieldChange}
-              />
-            ))}
+            {section.fields.map((f) => {
+              const overrideOpts = fieldOptions?.[f.key];
+              const mergedField = overrideOpts ? { ...f, options: overrideOpts } : f;
+              return (
+                <FormField
+                  key={f.key}
+                  field={mergedField}
+                  value={values[f.key] ?? ""}
+                  onChange={onFieldChange}
+                />
+              );
+            })}
           </div>
         )}
 
@@ -76,8 +87,8 @@ export default function ProfileForm({
 
         {section.kind === "docs" && (
           section.variant === "table"
-            ? <DocsTable documents={section.documents} />
-            : <DocsCards documents={section.documents} />
+            ? <DocsTable documents={liveDocuments ?? section.documents} />
+            : <DocsCards documents={liveDocuments ?? section.documents} />
         )}
       </div>
 
@@ -97,12 +108,13 @@ export default function ProfileForm({
         </button>
         <button
           onClick={onSave}
+          disabled={saving}
           suppressHydrationWarning
-          className="flex items-center gap-2 px-5 py-2 rounded-lg text-[13px] font-semibold text-white transition-colors shadow-sm"
+          className="flex items-center gap-2 px-5 py-2 rounded-lg text-[13px] font-semibold text-white transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
           style={{ background: "var(--primary)" }}
         >
-          <i className="ti ti-device-floppy text-[15px]" />
-          Save
+          <i className={`ti ${saving ? "ti-loader-2 animate-spin" : "ti-device-floppy"} text-[15px]`} />
+          {saving ? "Saving…" : "Save"}
         </button>
       </div>
     </div>
@@ -363,64 +375,180 @@ function CellInput({
   );
 }
 
-/* ── Employee Documents — 4-col card grid ───────────────────── */
-function DocsCards({ documents }: { documents: DocEntry[] }) {
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-5">
-        <p className="text-[13px]" style={{ color: "var(--on-variant)" }}>
-          All documents uploaded by the employee or{" "}
-          <span className="font-semibold" style={{ color: "var(--primary)" }}>HR</span>
-        </p>
-        <label
-          className="flex items-center gap-2 px-4 py-2 rounded-lg border text-[13px] font-medium cursor-pointer transition-colors hover:bg-[var(--bg-mid)]"
-          style={{ borderColor: "var(--outline-v)", color: "var(--primary)", background: "#fff" }}
-        >
-          <i className="ti ti-upload text-[14px]" />
-          Upload Document
-          <input type="file" className="hidden" />
-        </label>
-      </div>
+function fmtBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem" }}>
-        {documents.map((doc) => (
-          <div
-            key={doc.name}
-            className="flex items-center gap-3 px-3.5 py-3 rounded-xl border bg-white"
-            style={{ borderColor: "var(--outline-v)" }}
-          >
-            <div
-              className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{ background: "rgba(27,138,107,0.10)" }}
-            >
-              <i className="ti ti-file-check text-[18px]" style={{ color: "#1b8a6b" }} />
+function isImage(fileName: string): boolean {
+  return /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(fileName);
+}
+
+/* ── Document preview modal ─────────────────────────────────── */
+function DocPreviewModal({
+  doc,
+  onClose,
+}: {
+  doc: DocEntry;
+  onClose: () => void;
+}) {
+  const close = useCallback(onClose, [onClose]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [close]);
+
+  const fileIsImage = isImage(doc.fileName ?? "");
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-6"
+      style={{ background: "rgba(0,0,0,0.55)" }}
+      onClick={onClose}
+    >
+      <div
+        className="relative flex flex-col rounded-2xl overflow-hidden shadow-2xl"
+        style={{ background: "#fff", width: "min(860px, 92vw)", maxHeight: "88vh" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-5 py-3.5 flex-shrink-0"
+          style={{ background: "var(--primary)" }}
+        >
+          <div className="flex items-center gap-2.5">
+            <i className="ti ti-file-description text-white text-[18px]" />
+            <div>
+              <p className="text-[14px] font-semibold text-white leading-tight">{doc.name}</p>
+              {doc.fileName && (
+                <p className="text-[11.5px] text-white/70 leading-tight">{doc.fileName}{doc.fileSize ? ` · ${fmtBytes(doc.fileSize)}` : ""}</p>
+              )}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold truncate leading-snug" style={{ color: "var(--on-bg)" }}>
-                {doc.name}
-              </p>
-              <p className="text-[11.5px] leading-snug" style={{ color: "var(--on-variant)" }}>
-                {doc.uploadedOn ? `Uploaded ${doc.uploadedOn}` : "Not uploaded"}
-              </p>
-            </div>
-            <button
-              title="View"
-              suppressHydrationWarning
-              className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-[var(--bg-mid)] flex-shrink-0"
-              style={{ color: "var(--on-variant)" }}
-            >
-              <i className="ti ti-eye text-[15px]" />
-            </button>
           </div>
-        ))}
+          <button
+            onClick={onClose}
+            suppressHydrationWarning
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-white/80 hover:bg-white/15 transition-colors"
+          >
+            <i className="ti ti-x text-[18px]" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-auto bg-[#f4f6fb] flex items-center justify-center p-4" style={{ minHeight: 0 }}>
+          {fileIsImage ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={doc.fileUrl}
+              alt={doc.name}
+              className="max-w-full max-h-full rounded-lg shadow object-contain"
+              style={{ maxHeight: "calc(88vh - 120px)" }}
+            />
+          ) : (
+            <iframe
+              src={doc.fileUrl}
+              title={doc.name}
+              className="w-full rounded-lg border-0"
+              style={{ height: "calc(88vh - 120px)" }}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
+/* ── Employee Documents — 4-col card grid ───────────────────── */
+function DocsCards({ documents }: { documents: DocEntry[] }) {
+  const [preview, setPreview] = useState<DocEntry | null>(null);
+
+  return (
+    <>
+      {preview && <DocPreviewModal doc={preview} onClose={() => setPreview(null)} />}
+
+      <div>
+        <div className="flex items-center justify-between mb-5">
+          <p className="text-[13px]" style={{ color: "var(--on-variant)" }}>
+            All documents uploaded by the employee or{" "}
+            <span className="font-semibold" style={{ color: "var(--primary)" }}>HR</span>
+          </p>
+          <label
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border text-[13px] font-medium cursor-pointer transition-colors hover:bg-[var(--bg-mid)]"
+            style={{ borderColor: "var(--outline-v)", color: "var(--primary)", background: "#fff" }}
+          >
+            <i className="ti ti-upload text-[14px]" />
+            Upload Document
+            <input type="file" className="hidden" />
+          </label>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem" }}>
+          {documents.map((doc) => {
+            const uploaded = !!doc.fileUrl;
+            return (
+              <div
+                key={doc.name}
+                className="flex items-center gap-3 px-3.5 py-3 rounded-xl border bg-white"
+                style={{ borderColor: "var(--outline-v)" }}
+              >
+                <div
+                  className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: uploaded ? "rgba(27,138,107,0.10)" : "var(--bg-mid)" }}
+                >
+                  <i
+                    className={`ti ${uploaded ? "ti-file-check" : "ti-file-off"} text-[18px]`}
+                    style={{ color: uploaded ? "#1b8a6b" : "var(--on-variant)" }}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-semibold truncate leading-snug" style={{ color: "var(--on-bg)" }}>
+                    {doc.name}
+                  </p>
+                  <p className="text-[11.5px] leading-snug" style={{ color: "var(--on-variant)" }}>
+                    {uploaded
+                      ? `${doc.uploadedOn}${doc.fileSize ? ` · ${fmtBytes(doc.fileSize)}` : ""}`
+                      : "Not uploaded"}
+                  </p>
+                </div>
+                {uploaded && (
+                  <label
+                    title="Replace document"
+                    suppressHydrationWarning
+                    className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-[var(--bg-mid)] flex-shrink-0 cursor-pointer transition-colors"
+                    style={{ color: "var(--on-variant)" }}
+                  >
+                    <i className="ti ti-refresh text-[15px]" />
+                    <input type="file" className="hidden" />
+                  </label>
+                )}
+                <button
+                  title={uploaded ? "Preview document" : "Not uploaded"}
+                  disabled={!uploaded}
+                  onClick={() => uploaded && setPreview(doc)}
+                  suppressHydrationWarning
+                  className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-[var(--bg-mid)] flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  style={{ color: uploaded ? "var(--primary)" : "var(--on-variant)" }}
+                >
+                  <i className="ti ti-eye text-[15px]" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
+
 /* ── Joining Document — table with Verified / Pending status ── */
 function DocsTable({ documents }: { documents: DocEntry[] }) {
+  const [preview, setPreview] = useState<DocEntry | null>(null);
   return (
+    <>
+      {preview && <DocPreviewModal doc={preview} onClose={() => setPreview(null)} />}
     <div>
       {/* Info banner */}
       <div
@@ -507,7 +635,9 @@ function DocsTable({ documents }: { documents: DocEntry[] }) {
                 <td className="px-4 py-3.5">
                   <button
                     suppressHydrationWarning
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12.5px] font-medium transition-colors hover:bg-[var(--bg-mid)]"
+                    disabled={!doc.fileUrl}
+                    onClick={() => doc.fileUrl && setPreview(doc)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12.5px] font-medium transition-colors hover:bg-[var(--bg-mid)] disabled:opacity-30 disabled:cursor-not-allowed"
                     style={{ borderColor: "var(--outline-v)", color: "var(--on-bg)", background: "#fff" }}
                   >
                     <i className="ti ti-eye text-[13px]" />
@@ -520,5 +650,6 @@ function DocsTable({ documents }: { documents: DocEntry[] }) {
         </table>
       </div>
     </div>
+    </>
   );
 }

@@ -1502,3 +1502,92 @@ Always access `.results` for the array. The email templates endpoint is special 
 - **Departments and Designations APIs are paginated** — always pass `page_size=100` and access `.results`. Never treat the response root as an array.
 - **Email templates `results` is a grouped object, not an array** — use `flattenTemplates()` from `_data.ts` after accessing `.results`.
 - **Template variable names are UPPERCASE** — `{FULL_NAME}`, `{FNAME}`, `{LNAME}`, `{EMAIL}`, `{POSITION}`, `{COMPANY}`. Keep `AUTO_KEYS` in uppercase in any modal that uses `renderTemplateVars`.
+
+---
+
+## Session 8 — Safura Samreen (30 June 2026)
+
+**Branch:** `demo`
+
+---
+
+### 1. Employee Documents — Show Only API Documents
+
+- Removed the static placeholder document list (PAN Card, Aadhaar Card, etc.)
+- Added `ApiDocument` interface and `documents?: ApiDocument[]` to `ApiEmployee` in `[id]/page.tsx`
+- Added `fileUrl`, `fileName`, `fileSize` fields to `DocEntry` in `_data.ts`
+- Added `documents?: DocEntry[]` to `Employee` type in `_data.ts`
+- `buildDocEntries()` now maps only what the backend returns — no static base list merged in
+- Only uploaded documents appear; the count matches exactly what `GET /employees/{id}/` returns
+
+---
+
+### 2. Document Preview Modal (same page, no new tab)
+
+- Clicking the eye icon on a document card opens a modal overlay on the same page
+- Images (PNG/JPG/etc.) rendered with `<img>`, PDFs with `<iframe>`
+- Modal closes on backdrop click or `Escape` key
+- Header shows document name, filename, and file size (`fmtBytes` helper)
+- Added `DocPreviewModal` component in `ProfileForm.tsx`
+- Added replace button (`ti-refresh`) on each uploaded document card (triggers hidden file input)
+- `isImage()` helper detects image vs PDF/other by filename extension
+
+---
+
+### 3. Personal Section — Read-only + Editable Fields
+
+Updated `PROFILE_SECTIONS.personal` in `_data.ts`:
+- `Employee ID` (`code`), `First Name`, `Last Name` → `type: "readonly"` (disabled, styled blue/grey)
+- `Department`, `Designation`, `Role`, `Branch` → `type: "select"` with empty options (filled at runtime from API)
+- All other personal fields remain editable (DOB, gender, marital status, etc.)
+
+---
+
+### 4. Dynamic Dropdowns from API
+
+Four dropdown lists fetched in parallel on page mount in `[id]/page.tsx`:
+
+| Field | Endpoint | Notes |
+|-------|----------|-------|
+| Department | `GET /departments/` | `.results[]` → `{ value: name, label: name }` |
+| Designation | `GET /designations/` | Flat array or paginated — handled with `Array.isArray` check; filtered client-side by selected department |
+| Role | `GET /roles/?page_size=100` | `.results[]`, `system_admin` excluded; uses `display_name` as value |
+| Branch | `GET /branch/branches/` | `.results[]` → `{ value: branch_name, label: branch_name }` |
+
+- Selecting a different department automatically resets and re-filters the Designation dropdown
+- Options injected via `fieldOptions: Record<string, FieldOption[]>` prop passed from `page.tsx` → `ProfileForm` → `FormField`
+- `FormField` merges `fieldOptions[field.key]` over the static `field.options` at render time
+
+**Bug fixed:** Designations endpoint returned paginated `{ results: [...] }` not a plain array — caused `allDesigs.filter is not a function`. Fixed with `Array.isArray` guard.
+
+---
+
+### 5. Save → PUT to Backend
+
+- Save button calls `PUT /employees/{id}/` with: `department`, `designation`, `branch`, `role` (slug-mapped), `is_active`
+- Only the main employee endpoint is called — profile endpoint not triggered
+- `ROLE_SLUG` map converts display names (e.g. `"HR Admin"`) to backend slugs (e.g. `"hr_admin"`)
+- `is_active` derived from `employee.status !== "inactive"`
+- Save button shows spinner + "Saving…" while in flight, disabled to prevent double-submit
+- Green success banner on completion, red error banner on failure
+- `saving` and `saveError` states added to `EmployeeProfilePage`
+
+---
+
+### Key Files Changed (30 June 2026)
+
+| File | Change |
+|------|--------|
+| `app/dashboard/employees/_data.ts` | `DocEntry` + `fileUrl/fileName/fileSize`; `Employee.documents`; Personal section fields updated to readonly/select |
+| `app/dashboard/employees/[id]/page.tsx` | `ApiDocument` interface; `buildDocEntries()`; dropdown option states + fetch effects; `fieldOptions` passed to `ProfileForm`; `onSave` → async PUT; `saving`/`saveError` states |
+| `app/dashboard/employees/[id]/_components/ProfileForm.tsx` | `liveDocuments` + `fieldOptions` + `saving` props; `DocPreviewModal` component; `DocsCards` replace button; dynamic field option merge |
+
+---
+
+### Notes for Next Developer (30 June 2026)
+
+- **Designation filter is client-side** — all designations are fetched once and filtered by `department_name`. If departments/designations grow large, switch to a server-side query param (`?department=<name>`).
+- **`buildDocEntries()` maps API docs directly** — no static list. If the backend adds new document types they will appear automatically.
+- **`DocPreviewModal` handles images and PDFs** — detects by file extension. For other file types (DOCX, XLSX) it falls back to an iframe which may not render inline; extend `isImage()` or add a download fallback if needed.
+- **Role slugs** — `ROLE_SLUG` map in `page.tsx` must stay in sync with backend role names. If a new role is added in the backend, add its `display_name → slug` mapping there.
+- **`is_active` is required by the PUT endpoint** — always include it in the payload. Derived from `employee.status !== "inactive"`.
