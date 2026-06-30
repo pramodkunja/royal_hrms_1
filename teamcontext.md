@@ -1,7 +1,7 @@
 # Royal HRMS — Team Context
 
 > Single source of truth for the full project. Replaces `backend/TEAMCONTEXT.md` and `frontend/TEAMCONTEXT.md`.
-> **Last updated:** 2026-06-30 — G. Durga Prasad
+> **Last updated:** 2026-06-30 — G. Durga Prasad (Employee PUT · Onboarding validators · Step filtering · Draft status)
 
 ---
 
@@ -288,6 +288,9 @@ onboarding:    approve
 |---|---|---|
 | GET/POST | `/api/employees/` | List (paginated) / Create |
 | GET/PUT/PATCH | `/api/employees/{employee_id}/` | Detail / Update (response includes `documents`) |
+| PATCH | `/api/employees/{employee_id}/reporting-manager/` | Set / clear reporting manager |
+| GET/PATCH | `/api/employees/{employee_id}/approval-matrix/` | Per-employee approval overrides |
+| GET/PATCH | `/api/settings/approval-rules/` | Global workflow approval defaults |
 
 ### Onboarding
 
@@ -375,7 +378,7 @@ All list endpoints return paginated data:
 
 ---
 
-### 2026-06-30 — G. Durga Prasad (Employee Profile Update + Teamcontext Merge)
+### 2026-06-30 — G. Durga Prasad (Employee PUT, Onboarding Validators, Step Filtering, Draft Status)
 
 **Branch:** `Employee_Onboarding`
 
@@ -406,6 +409,74 @@ All list endpoints return paginated data:
 #### 2. Teamcontext Files Merged
 
 Combined `backend/TEAMCONTEXT.md`, `frontend/TEAMCONTEXT.md`, and the root `teamcontext.md` into a single `teamcontext.md` at the repo root. Both subdirectory files deleted.
+
+#### 3. Portal URL Fix in Portal Invite Email
+
+**Problem:** The portal invite email was showing a blank "Portal URL" field. The `Company.portal_url` field had never been populated after it was added to the model.
+
+**Fix:** Updated `Company.portal_url` in the database via Django shell:
+```
+Company.portal_url = 'https://royalhrms.nxsys.in'
+```
+`SendPortalLoginView` and `ResendPortalLoginView` already read `company.portal_url` — no code change needed, only the DB record was empty.
+
+#### 4. EmployeeProfileSerializer Validators Added
+
+Added 5 missing field-level validators to `EmployeeProfileSerializer`:
+
+| Validator | What it checks |
+|---|---|
+| `validate_gender` | Value must be in `GENDER_CHOICES` |
+| `validate_marital_status` | Value must be in `MARITAL_CHOICES` |
+| `validate_blood_group` | Value must be in `BLOOD_CHOICES` |
+| `validate_account_type` | Value must be in `ACCOUNT_CHOICES` |
+| `validate_emergency_email` | Runs Django's `validate_email` |
+
+All choice validators read valid values dynamically from `self.Meta.model.<FIELD>_CHOICES` — no hardcoding.
+
+#### 5. Onboarding Required Fields Expanded
+
+Updated `_STEP_REQUIRED_FIELDS` in `views.py` to enforce all missing required fields:
+
+- **Step 0** — added `marital_status`, `father_name`
+- **Step 2** — added `bank_branch_name`
+
+Updated `SubmitOnboardingView` to check the same complete set at final submission (steps 0–4), keeping step-save validation and submit-gate validation in sync.
+
+#### 6. Onboarding Step Cross-Save Bug Fixed
+
+**Problem:** `_save_profile_step` built `filled_data` from ALL non-empty request fields, so if the frontend sent the full form payload (all steps at once), saving step 0 also silently saved step 1–3 fields.
+
+**Fix:** Added `_STEP_ALL_FIELDS` dict mapping each step to its exact set of `EmployeeProfile` fields. `filled_data` is now filtered to only the current step's fields before any save:
+
+```python
+step_fields = _STEP_ALL_FIELDS.get(step, frozenset())
+filled_data = {k: v for k, v in request.data.items()
+               if v not in ('', None) and k in step_fields}
+```
+
+Step → fields mapping:
+- Step 0: `date_of_birth`, `gender`, `marital_status`, `father_name`, `blood_group`, `current_address`, `permanent_address`
+- Step 1: `highest_qualification`, `institution`, `year_of_passing`, `specialization`, `total_experience_years`, `previous_employer`, `previous_designation`, `leaving_reason`
+- Step 2: `account_number`, `ifsc_code`, `bank_name`, `bank_branch_name`, `account_holder_name`, `account_type`
+- Step 3: `emergency_name`, `emergency_relationship`, `emergency_phone`, `emergency_email`
+- Step 4: *(no profile fields — documents only)*
+
+#### 7. Onboarding Draft Status Added
+
+**Problem:** `onboarding_status` had no intermediate state between `pending` (not started) and `submitted`. HR couldn't distinguish employees who had started filling the wizard from those who hadn't touched it.
+
+**Fix:** Added `ONBOARDING_DRAFT = 'draft'` (`'In Progress'`) to `User.ONBOARDING_CHOICES` (migration `0028`).
+
+- After any step saves successfully and status was `pending`, it is bumped to `draft` automatically
+- HR admin pipeline list now includes `pending + draft + submitted`; stats expose all three counts separately
+- `SubmitOnboardingView` allows submission from both `pending` and `draft` (no guard change needed)
+
+#### 8. Required Fields Check Moved Before Empty-Data Early Return
+
+**Problem:** `_save_profile_step` returned `success('Nothing to save.')` before checking required fields, so clicking "Save & Continue" on a completely empty step returned success instead of a validation error.
+
+**Fix:** Required fields check now always runs first — against incoming data first, falling back to saved profile values — before the "nothing to save" early return. An empty-step click now returns a proper error listing all missing required fields.
 
 ---
 
@@ -642,6 +713,101 @@ Leave management module completed — Leave Dashboard, Apply Leave workflow, App
 
 ---
 
+### 2026-06-30 — Safura Samreen (Employee Profile API Wiring)
+
+**Branch:** `demo`
+
+#### 1. Employee Documents — API-Only (No Static List)
+
+Removed the static placeholder document list (PAN Card, Aadhaar Card, etc.) from the employee profile page. `buildDocEntries()` now maps only what `GET /api/employees/{id}/` returns — added `fileUrl`, `fileName`, `fileSize` to `DocEntry` and `documents?: DocEntry[]` to the `Employee` type. Document count matches the backend exactly.
+
+#### 2. Document Preview Modal
+
+Eye icon on each document card opens an inline modal overlay (no new tab). Images render with `<img>`, PDFs with `<iframe>`. Closes on backdrop click or `Escape`. Header shows document name + filename + file size (`fmtBytes` helper). Replace button (`ti-refresh`) on each card triggers a hidden file input. `isImage()` helper detects image vs PDF by extension.
+
+#### 3. Personal Section — Read-only + Editable + Select Fields
+
+Updated `PROFILE_SECTIONS.personal` in `_data.ts`:
+- `Employee ID`, `First Name`, `Last Name` → `type: "readonly"` (disabled, styled blue/grey)
+- `Department`, `Designation`, `Role`, `Branch` → `type: "select"` with options filled at runtime from API
+- All other personal fields remain editable
+
+#### 4. Dynamic Dropdowns from API
+
+Four dropdown lists fetched in parallel on page mount:
+
+| Field | Endpoint | Notes |
+|---|---|---|
+| Department | `GET /api/departments/` | `.results[]` → `{ value: name, label: name }` |
+| Designation | `GET /api/designations/` | Paginated or flat — `Array.isArray` guard; filtered client-side by selected department |
+| Role | `GET /api/roles/?page_size=100` | `.results[]`, `system_admin` excluded; uses `display_name` as value |
+| Branch | `GET /api/branch/branches/` | `.results[]` → `{ value: branch_name, label: branch_name }` |
+
+Selecting a department automatically resets + re-filters the Designation dropdown. Options injected via `fieldOptions: Record<string, FieldOption[]>` prop passed from `page.tsx` → `ProfileForm` → `FormField`.
+
+#### 5. Save → PUT to Backend
+
+Save button calls `PUT /api/employees/{id}/` with `department`, `designation`, `branch`, `role` (slug-mapped via `ROLE_SLUG` map), `is_active`. Only the main employee endpoint is called — profile endpoint not triggered. Save button shows spinner + "Saving…" while in flight. Green success / red error banner on completion.
+
+**Files changed:** `employees/_data.ts`, `employees/[id]/page.tsx`, `employees/[id]/_components/ProfileForm.tsx`
+
+---
+
+### 2026-06-30 — Surya (Reporting Manager + Approval Matrix)
+
+**Branch:** `demo`
+
+#### 1. Reporting Manager — Self-referential FK on User
+
+```python
+reporting_manager = models.ForeignKey(
+    'self', on_delete=models.SET_NULL, null=True, blank=True,
+    related_name='direct_reports',
+)
+```
+
+`_employee_dict` now includes `reporting_manager_id` + `reporting_manager_name`. `_get_employee` and `EmployeeListCreateView.get` both use `select_related('reporting_manager')` (N+1 fix).
+
+#### 2. Approval Workflow Models
+
+**`ApprovalWorkflowRule`** (`hrms_approval_workflow_rules`) — global default rules:
+
+| Workflow | L1 Approver | L2 Approver |
+|---|---|---|
+| Leave | Reporting Manager | HR Admin |
+| Expense | Reporting Manager | HR Admin |
+| Resignation | Reporting Manager | System Admin |
+| Loan | HR Admin | System Admin |
+
+Seeded automatically on first GET via `_ensure_default_rules`.
+
+**`EmployeeApprovalOverride`** (`hrms_employee_approval_overrides`) — per-employee person-specific overrides that take priority over global role defaults.
+
+**Migration:** `accounts/0026_approval_matrix_reporting_manager.py`
+
+#### 3. New Backend Views + Routes
+
+| View | Method | Route |
+|---|---|---|
+| `EmployeeReportingManagerView` | PATCH | `employees/<employee_id>/reporting-manager/` |
+| `ApprovalWorkflowRuleView` | GET/PATCH | `settings/approval-rules/` |
+| `EmployeeApprovalMatrixView` | GET/PATCH | `employees/<employee_id>/approval-matrix/` |
+
+All three routes added **before** the catch-all `<str:employee_id>/` pattern in `urls.py`.
+
+#### 4. Frontend — Approval Matrix
+
+- `types/approvalMatrix.ts` — NEW: `ApprovalWorkflowType`, `ApproverRole`, `WorkflowMatrixRow`, `GlobalApprovalRule`
+- `ReportingManagerCard.tsx` — shows current manager, search-as-you-type (2+ chars), PATCH on select, remove button; visible to `hr_admin`/`system_admin` only
+- `ApprovalMatrixTab.tsx` — 4-row table (Leave/Expense/Resignation/Loan); per-row Override modal with L1/L2 employee search; PATCH on save
+- `app/dashboard/settings/approval-rules/page.tsx` — global default rules table; Edit modal with L1/L2 role dropdowns; PATCH on save
+- Employee profile page: Profile tab includes `ReportingManagerCard`; new **Approval** tab renders `ApprovalMatrixTab`
+- Settings landing page: "Approval Rules" card added
+
+**Key note:** `EmployeeSearchInput` inside `ApprovalMatrixTab` must be defined at module level — if defined inside another component it gets a new reference on each render, causing unmount/remount and losing input focus.
+
+---
+
 ### 2026-06-29 — Safura Samreen (Frontend Onboarding + Employee Fixes)
 
 **Branch:** `Frontend/Employee_Onboarding`
@@ -686,6 +852,8 @@ Leave management module completed — Leave Dashboard, Apply Leave workflow, App
 - [x] Onboarding flow (wizard, submit, HR approval queue, pipeline endpoint, emails)
 - [x] Portal login (send + resend credentials via email)
 - [x] Employee management (list, create, detail with documents)
+- [x] Reporting Manager (self-referential FK, PATCH endpoint)
+- [x] Approval Workflow (global rules + per-employee overrides)
 - [x] Announcements module
 - [x] Leave management module
 
@@ -701,7 +869,9 @@ Leave management module completed — Leave Dashboard, Apply Leave workflow, App
 - [x] Candidate Review / HR Decision
 - [x] Onboarding wizard (`/onboarding`)
 - [x] Onboarding approval queue
-- [x] Employee management (list, add, profile)
+- [x] Employee management (list, add, profile with API-wired dropdowns + document preview)
+- [x] Reporting Manager card (employee profile tab)
+- [x] Approval Matrix tab + global Approval Rules settings page
 - [x] Announcements
 - [x] Org Chart (static)
 - [x] Expense Claims (static — wire to backend when ready)

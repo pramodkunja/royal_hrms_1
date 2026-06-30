@@ -2427,29 +2427,58 @@ class EmployeeCodeSettingsView(APIView):
 
 
 _STEP_REQUIRED_FIELDS = {
+    # Step 0 — Personal Information
     0: {
         'date_of_birth':   'Date of Birth',
         'gender':          'Gender',
+        'marital_status':  'Marital Status',
+        'father_name':     "Father's Name",
         'current_address': 'Current Address',
     },
+    # Step 1 — Education & Experience
     1: {
         'highest_qualification': 'Highest Qualification',
         'institution':           'Institution / University',
         'year_of_passing':       'Year of Passing',
     },
+    # Step 2 — Bank Details
     2: {
         'account_holder_name': 'Account Holder Name',
         'account_type':        'Account Type',
         'account_number':      'Account Number',
         'ifsc_code':           'IFSC Code',
         'bank_name':           'Bank Name',
+        'bank_branch_name':    'Bank Branch Name',
     },
+    # Step 3 — Emergency Contact
     3: {
         'emergency_name':         'Emergency Contact Name',
         'emergency_relationship': 'Relationship',
         'emergency_phone':        'Emergency Contact Phone',
     },
+    # Step 4 — Documents (handled separately via EmployeeDocument records)
     4: {},
+}
+
+# All profile fields that belong to each step — prevents cross-step writes when
+# the frontend sends the full form payload on every "Save & Continue" call.
+_STEP_ALL_FIELDS: dict = {
+    0: frozenset({
+        'date_of_birth', 'gender', 'marital_status', 'father_name',
+        'blood_group', 'current_address', 'permanent_address',
+    }),
+    1: frozenset({
+        'highest_qualification', 'institution', 'year_of_passing', 'specialization',
+        'total_experience_years', 'previous_employer', 'previous_designation', 'leaving_reason',
+    }),
+    2: frozenset({
+        'account_number', 'ifsc_code', 'bank_name', 'bank_branch_name',
+        'account_holder_name', 'account_type',
+    }),
+    3: frozenset({
+        'emergency_name', 'emergency_relationship', 'emergency_phone', 'emergency_email',
+    }),
+    4: frozenset(),
 }
 
 
@@ -2557,13 +2586,16 @@ def _save_profile_step(request, step: int):
 
     profile, _ = EP.objects.get_or_create(user=request.user)
 
-    # Strip empty strings — frontend sends all fields including blanks for other steps
-    filled_data = {k: v for k, v in request.data.items() if v not in ('', None)}
+    # Only accept fields that belong to this step — prevents cross-step writes when
+    # the frontend sends the full form payload on every "Save & Continue" call.
+    step_fields = _STEP_ALL_FIELDS.get(step, frozenset())
+    filled_data = {
+        k: v for k, v in request.data.items()
+        if v not in ('', None) and k in step_fields
+    }
 
-    if not filled_data:
-        return success('Nothing to save.', data=EmployeeProfileSerializer(profile).data)
-
-    # Check required fields only when there is actual data being submitted
+    # Always enforce required fields on step-specific saves — check incoming data
+    # first, fall back to whatever is already saved on the profile.
     required = _STEP_REQUIRED_FIELDS[step]
     missing = []
     for field, label in required.items():
@@ -2577,10 +2609,18 @@ def _save_profile_step(request, step: int):
             f'Please fill in the following required fields: {", ".join(missing)}.'
         )
 
+    if not filled_data:
+        return success('Nothing to save.', data=EmployeeProfileSerializer(profile).data)
+
     serializer = EmployeeProfileSerializer(profile, data=filled_data, partial=True)
     if not serializer.is_valid():
         return error(first_error(serializer.errors), data=serializer.errors)
     serializer.save()
+
+    # Move status to 'draft' (in-progress) on first step save
+    if request.user.onboarding_status == User.ONBOARDING_PENDING:
+        User.objects.filter(pk=request.user.pk).update(onboarding_status=User.ONBOARDING_DRAFT)
+
     return success('Profile saved.', data=serializer.data)
 
 
@@ -2659,8 +2699,19 @@ class SubmitOnboardingView(APIView):
             missing.append('Date of Birth (Personal)')
         if not profile.gender:
             missing.append('Gender (Personal)')
+        if not profile.marital_status:
+            missing.append('Marital Status (Personal)')
+        if not (profile.father_name or '').strip():
+            missing.append("Father's Name (Personal)")
         if not (profile.current_address or '').strip():
             missing.append('Current Address (Personal)')
+        # Step 1 — Education
+        if not (profile.highest_qualification or '').strip():
+            missing.append('Highest Qualification (Education)')
+        if not (profile.institution or '').strip():
+            missing.append('Institution / University (Education)')
+        if not profile.year_of_passing:
+            missing.append('Year of Passing (Education)')
         # Step 2 — Bank Details (required for payroll)
         if not (profile.account_holder_name or '').strip():
             missing.append('Account Holder Name (Bank Details)')
@@ -2672,6 +2723,8 @@ class SubmitOnboardingView(APIView):
             missing.append('IFSC Code (Bank Details)')
         if not (profile.bank_name or '').strip():
             missing.append('Bank Name (Bank Details)')
+        if not (profile.bank_branch_name or '').strip():
+            missing.append('Bank Branch Name (Bank Details)')
         # Step 3 — Emergency Contact
         if not (profile.emergency_name or '').strip():
             missing.append('Emergency Contact Name (Emergency Contact)')
@@ -2679,13 +2732,6 @@ class SubmitOnboardingView(APIView):
             missing.append('Relationship (Emergency Contact)')
         if not (profile.emergency_phone or '').strip():
             missing.append('Emergency Contact Phone (Emergency Contact)')
-        # Step 1 — Education
-        if not (profile.highest_qualification or '').strip():
-            missing.append('Highest Qualification (Education)')
-        if not (profile.institution or '').strip():
-            missing.append('Institution / University (Education)')
-        if not profile.year_of_passing:
-            missing.append('Year of Passing (Education)')
 
         if missing:
             return error(
@@ -2749,7 +2795,11 @@ class OnboardingPipelineView(APIView):
         base_qs = (
             User.objects
             .filter(
-                onboarding_status__in=[User.ONBOARDING_PENDING, User.ONBOARDING_SUBMITTED],
+                onboarding_status__in=[
+                    User.ONBOARDING_PENDING,
+                    User.ONBOARDING_DRAFT,
+                    User.ONBOARDING_SUBMITTED,
+                ],
                 candidate_portal__isnull=False,
             )
             .select_related('role')
@@ -2762,12 +2812,13 @@ class OnboardingPipelineView(APIView):
         # Stats computed before applying status filter
         stats = {
             'pending':   base_qs.filter(onboarding_status=User.ONBOARDING_PENDING).count(),
+            'draft':     base_qs.filter(onboarding_status=User.ONBOARDING_DRAFT).count(),
             'submitted': base_qs.filter(onboarding_status=User.ONBOARDING_SUBMITTED).count(),
         }
 
         status_param = request.query_params.get('status', '').strip()
         if status_param:
-            allowed = {User.ONBOARDING_PENDING, User.ONBOARDING_SUBMITTED}
+            allowed = {User.ONBOARDING_PENDING, User.ONBOARDING_DRAFT, User.ONBOARDING_SUBMITTED}
             if status_param not in allowed:
                 return error(f'status must be one of: {", ".join(sorted(allowed))}.')
             base_qs = base_qs.filter(onboarding_status=status_param)
