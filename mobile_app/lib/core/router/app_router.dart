@@ -24,6 +24,7 @@ import '../../features/branches/presentation/screens/branches_screen.dart';
 import '../../features/documents/presentation/screens/documents_screen.dart';
 import '../../features/org_chart/presentation/screens/org_chart_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
+import '../../features/interview_list/presentation/screens/interview_list_screen.dart';
 
 // ─── Route path constants ─────────────────────────────────────────────────────
 
@@ -167,9 +168,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           // Recruitment
           GoRoute(
             path: AppRoutes.interviewList,
-            pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'Interview List', icon: Icons.people_outline),
-            ),
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: InterviewListScreen()),
           ),
           GoRoute(
             path: AppRoutes.candidateReview,
