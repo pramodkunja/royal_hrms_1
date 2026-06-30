@@ -18,6 +18,8 @@ class Role(models.Model):
     name         = models.CharField(max_length=50, unique=True)
     display_name = models.CharField(max_length=100)
     is_active    = models.BooleanField(default=True)
+    created_at   = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at   = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'hrms_roles'
@@ -86,10 +88,12 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
 
     ONBOARDING_PENDING   = 'pending'
+    ONBOARDING_DRAFT     = 'draft'
     ONBOARDING_SUBMITTED = 'submitted'
     ONBOARDING_COMPLETE  = 'complete'
     ONBOARDING_CHOICES   = [
         (ONBOARDING_PENDING,   'Pending'),
+        (ONBOARDING_DRAFT,     'In Progress'),
         (ONBOARDING_SUBMITTED, 'Submitted — awaiting approval'),
         (ONBOARDING_COMPLETE,  'Complete'),
     ]
@@ -220,6 +224,7 @@ class Designation(models.Model):
                   )
     is_active   = models.BooleanField(default=True)
     created_at  = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table        = 'hrms_designations'

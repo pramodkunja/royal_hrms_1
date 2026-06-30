@@ -36,6 +36,8 @@ export interface Employee {
   details: DetailValues;
   /** repeatable sections, keyed by TableSection.id */
   tables: Record<string, TableRow[]>;
+  /** real uploaded documents from the API */
+  documents?: DocEntry[];
 }
 
 // ────────────────────────────────────────────────────────────
@@ -88,6 +90,9 @@ export interface DocEntry {
   required: boolean;
   status?: DocStatus;
   uploadedOn?: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileSize?: number;
 }
 export interface DocSection {
   id: string;
@@ -125,8 +130,19 @@ export const PROFILE_SECTIONS: ProfileSection[] = [
     icon: "ti-user",
     kind: "grid",
     fields: [
-      { key: "department",  label: "Department",  type: "text", required: true, placeholder: "e.g. Engineering" },
-      { key: "designation", label: "Designation", type: "text", required: true, placeholder: "e.g. Software Engineer" },
+      // ── read-only identity fields (set by system, not editable) ──
+      { key: "code",          label: "Employee ID",    type: "readonly" },
+      { key: "firstName",     label: "First Name",     type: "readonly" },
+      { key: "lastName",      label: "Last Name",      type: "readonly" },
+      { key: "dateOfJoining", label: "Date of Joining", type: "readonly" },
+      { key: "loginEmail",    label: "Login Email",    type: "readonly" },
+      { key: "mobileNumber",  label: "Phone",          type: "readonly" },
+      // ── editable employment fields (options injected at runtime from API) ──
+      { key: "department",  label: "Department",  type: "select", required: true, options: [] },
+      { key: "designation", label: "Designation", type: "select", required: true, options: [] },
+      { key: "ssRole",      label: "Role",        type: "select", required: true, options: [] },
+      { key: "branch",      label: "Branch",      type: "select", options: [] },
+      // ── personal details ─────────────────────────────────────────
       { key: "dateOfBirth",    label: "Date of Birth",   type: "date",     required: true },
       {
         key: "gender", label: "Gender", type: "radio", required: true,

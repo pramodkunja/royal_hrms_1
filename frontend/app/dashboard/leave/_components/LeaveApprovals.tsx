@@ -1,52 +1,48 @@
 "use client";
 
 import { useState } from "react";
-
-type Status = "pending" | "approved" | "rejected";
-
-interface ApprovalRequest {
-  id:      number;
-  employee: string;
-  dept:    string;
-  type:    string;
-  from:    string;
-  to:      string;
-  days:    number;
-  applied: string;
-  status:  Status;
-}
-
-const SEED: ApprovalRequest[] = [
-  { id: 1, employee: "Arjun Mehta",  dept: "Engineering", type: "Casual Leave", from: "Jun 25", to: "Jun 26", days: 2, applied: "Jun 19", status: "pending"  },
-  { id: 2, employee: "Meena Iyer",   dept: "HR",          type: "Earned Leave", from: "Jul 1",  to: "Jul 5",  days: 5, applied: "Jun 18", status: "pending"  },
-  { id: 3, employee: "Rahul Singh",  dept: "Engineering", type: "Earned Leave", from: "Jul 10", to: "Jul 14", days: 5, applied: "Jun 20", status: "pending"  },
-  { id: 4, employee: "Suresh Kumar", dept: "Sales",       type: "Sick Leave",   from: "Jun 20", to: "Jun 20", days: 1, applied: "Jun 15", status: "approved" },
-  { id: 5, employee: "Priya Sharma", dept: "Finance",     type: "Casual Leave", from: "Jun 28", to: "Jun 28", days: 1, applied: "Jun 22", status: "approved" },
-  { id: 6, employee: "Kavya Nair",   dept: "Marketing",   type: "Casual Leave", from: "Jun 30", to: "Jun 30", days: 1, applied: "Jun 28", status: "rejected" },
-];
-
-const STATUS_BADGE: Record<Status, string> = {
-  pending:  "bg-amber-100 text-amber-700",
-  approved: "bg-green-100 text-green-700",
-  rejected: "bg-red-100   text-red-600",
-};
+import { useFetch } from "@/hooks/useFetch";
+import { API } from "@/lib/api/endpoints";
+import clientApi from "@/lib/clientApi";
+import { LeaveRequest, STATUS_BADGE, STATUS_LABEL, fmtShortDate } from "../_data";
 
 type Tab = "pending" | "history";
 
 export default function LeaveApprovals() {
-  const [requests, setRequests] = useState<ApprovalRequest[]>(SEED);
-  const [tab,      setTab]      = useState<Tab>("pending");
+  const [tab,       setTab]       = useState<Tab>("pending");
+  const [actioning, setActioning] = useState<string | null>(null);
+  const [rejectId,  setRejectId]  = useState<string | null>(null);
+  const [remarks,   setRemarks]   = useState("");
 
-  const pending = requests.filter(r => r.status === "pending");
-  const history = requests.filter(r => r.status !== "pending");
-  const rows    = tab === "pending" ? pending : history;
+  const { data: pending,  refetch: refetchPending, loading: loadingPending }  =
+    useFetch<LeaveRequest[]>(API.leave.requests + "?status=pending");
 
-  function approve(id: number) {
-    setRequests(prev => prev.map(r => r.id === id ? { ...r, status: "approved" } : r));
+  const { data: l2pending, refetch: refetchL2, loading: loadingL2 } =
+    useFetch<LeaveRequest[]>(API.leave.requests + "?status=l2_pending");
+
+  const { data: history, refetch: refetchHistory, loading: loadingHistory } =
+    useFetch<LeaveRequest[]>(API.leave.requests + "?status=approved,rejected,cancelled");
+
+  const allPending = [...(pending ?? []), ...(l2pending ?? [])];
+  const rows       = tab === "pending" ? allPending : (history ?? []);
+  const loading    = tab === "pending" ? (loadingPending || loadingL2) : loadingHistory;
+
+  function refetchAll() {
+    refetchPending();
+    refetchL2();
+    refetchHistory();
   }
 
-  function reject(id: number) {
-    setRequests(prev => prev.map(r => r.id === id ? { ...r, status: "rejected" } : r));
+  async function act(id: string, action: "approve" | "reject", rejectRemarks = "") {
+    setActioning(id);
+    try {
+      await clientApi.post(API.leave.approve(id), { action, remarks: rejectRemarks });
+      refetchAll();
+    } finally {
+      setActioning(null);
+      setRejectId(null);
+      setRemarks("");
+    }
   }
 
   return (
@@ -54,131 +50,126 @@ export default function LeaveApprovals() {
 
       {/* Sub-tabs */}
       <div className="flex gap-2">
-        <button
-          onClick={() => setTab("pending")}
-          className={[
-            "px-4 py-1.5 rounded-full text-sm font-medium border transition-all",
-            tab === "pending"
-              ? "bg-blue-700 text-white border-blue-700"
-              : "bg-white text-gray-500 border-gray-200 hover:border-blue-600 hover:text-blue-600",
-          ].join(" ")}
-        >
-          Pending
-          {pending.length > 0 && (
-            <span className={[
-              "ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold",
-              tab === "pending" ? "bg-white text-blue-700" : "bg-amber-100 text-amber-700",
-            ].join(" ")}>
-              {pending.length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setTab("history")}
-          className={[
-            "px-4 py-1.5 rounded-full text-sm font-medium border transition-all",
-            tab === "history"
-              ? "bg-blue-700 text-white border-blue-700"
-              : "bg-white text-gray-500 border-gray-200 hover:border-blue-600 hover:text-blue-600",
-          ].join(" ")}
-        >
-          History
-        </button>
+        {(["pending", "history"] as const).map(t => (
+          <button key={t}
+            onClick={() => setTab(t)}
+            className={["px-4 py-1.5 rounded-full text-sm font-medium border transition-all",
+              tab === t ? "bg-blue-700 text-white border-blue-700" : "bg-white text-gray-500 border-gray-200 hover:border-blue-600 hover:text-blue-600"].join(" ")}>
+            {t === "pending" ? "Pending" : "History"}
+            {t === "pending" && allPending.length > 0 && (
+              <span className={["ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold",
+                tab === "pending" ? "bg-white text-blue-700" : "bg-amber-100 text-amber-700"].join(" ")}>
+                {allPending.length}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* Table card */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-
-        {/* Card header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
-            <i className="ti ti-checks text-sm text-green-600" />
-          </div>
-          <span className="text-sm font-bold text-gray-800">
-            {tab === "pending" ? "Pending Approvals" : "Approval History"}
-          </span>
-          {tab === "pending" && pending.length > 0 && (
-            <span className="ml-auto text-xs font-medium text-amber-600 bg-amber-50 border border-amber-100 rounded-full px-2.5 py-0.5">
-              {pending.length} awaiting action
-            </span>
-          )}
-        </div>
-
-        {rows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
-            <i className="ti ti-circle-check text-4xl text-green-400" />
-            <p className="text-sm font-medium">
-              {tab === "pending" ? "All caught up — no pending requests." : "No history to show."}
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
+      {/* Table */}
+      <div className="card">
+        <div className="table-wrap">
+          {loading ? (
+            <div style={{ padding: "40px 20px", textAlign: "center" }}>
+              <i className="ti ti-loader-2" style={{ fontSize: 24, color: "var(--outline-v)" }} />
+            </div>
+          ) : rows.length === 0 ? (
+            <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--on-variant)", fontSize: 13 }}>
+              {tab === "pending" ? "No pending leave requests." : "No leave history yet."}
+            </div>
+          ) : (
+            <table>
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="px-5 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Employee</th>
-                  <th className="px-5 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Type</th>
-                  <th className="px-5 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Duration</th>
-                  <th className="px-5 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Applied On</th>
-                  <th className="px-5 py-3 text-center text-xs font-bold text-gray-400 uppercase tracking-wider">
-                    {tab === "pending" ? "Action" : "Status"}
-                  </th>
+                <tr>
+                  <th>Employee</th>
+                  <th>Dept</th>
+                  <th>Leave Type</th>
+                  <th>From</th>
+                  <th>To</th>
+                  <th style={{ textAlign: "center" }}>Days</th>
+                  <th>Applied</th>
+                  <th style={{ textAlign: "center" }}>Status</th>
+                  {tab === "pending" && <th style={{ textAlign: "center" }}>Action</th>}
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, idx) => (
-                  <tr
-                    key={r.id}
-                    className={[
-                      "transition-colors hover:bg-gray-50",
-                      idx < rows.length - 1 ? "border-b border-gray-100" : "",
-                    ].join(" ")}
-                  >
-                    <td className="px-5 py-4">
-                      <div className="font-semibold text-gray-800 text-sm">{r.employee}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{r.dept}</div>
+                {rows.map(r => (
+                  <tr key={r.id}>
+                    <td style={{ fontWeight: 600 }}>{r.employee_name}</td>
+                    <td style={{ color: "var(--on-variant)", fontSize: 13 }}>{r.employee_dept || "—"}</td>
+                    <td>{r.leave_type_display}</td>
+                    <td>{fmtShortDate(r.start_date)}</td>
+                    <td>{fmtShortDate(r.end_date)}</td>
+                    <td style={{ textAlign: "center", fontWeight: 700 }}>{r.total_days}</td>
+                    <td style={{ fontSize: 12, color: "var(--on-variant)" }}>{fmtShortDate(r.created_at?.slice(0, 10))}</td>
+                    <td style={{ textAlign: "center" }}>
+                      <span className={STATUS_BADGE[r.status]}>{STATUS_LABEL[r.status]}</span>
                     </td>
-
-                    <td className="px-5 py-4 text-sm text-gray-700">{r.type}</td>
-
-                    <td className="px-5 py-4">
-                      <span className="text-sm text-gray-700">{r.from} – {r.to}</span>
-                      <span className="ml-2 text-xs font-semibold text-blue-700 bg-blue-50 rounded px-1.5 py-0.5">
-                        {r.days}d
-                      </span>
-                    </td>
-
-                    <td className="px-5 py-4 text-sm text-gray-500">{r.applied}</td>
-
-                    <td className="px-5 py-4 text-center">
-                      {tab === "pending" ? (
-                        <div className="flex items-center justify-center gap-2">
+                    {tab === "pending" && (
+                      <td style={{ textAlign: "center" }}>
+                        <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
                           <button
-                            onClick={() => approve(r.id)}
-                            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold transition-colors"
+                            className="btn btn-sm btn-success"
+                            onClick={() => act(r.id, "approve")}
+                            disabled={actioning === r.id}
+                            style={{ padding: "4px 10px" }}
+                            title="Approve"
                           >
-                            <i className="ti ti-check" /> Approve
+                            {actioning === r.id ? <i className="ti ti-loader-2" /> : <i className="ti ti-check" />}
                           </button>
                           <button
-                            onClick={() => reject(r.id)}
-                            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors"
+                            className="btn btn-sm btn-danger"
+                            onClick={() => { setRejectId(r.id); setRemarks(""); }}
+                            disabled={actioning === r.id}
+                            style={{ padding: "4px 10px" }}
+                            title="Reject"
                           >
-                            <i className="ti ti-x" /> Reject
+                            <i className="ti ti-x" />
                           </button>
                         </div>
-                      ) : (
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${STATUS_BADGE[r.status]}`}>
-                          {r.status}
-                        </span>
-                      )}
-                    </td>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
+          )}
+        </div>
       </div>
+
+      {/* Reject modal */}
+      {rejectId && (
+        <div className="modal-backdrop" onClick={() => setRejectId(null)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="modal-header">
+              <div className="modal-title">Reject Leave Request</div>
+              <button className="modal-close" onClick={() => setRejectId(null)}>
+                <i className="ti ti-x" />
+              </button>
+            </div>
+            <div className="modal-body">
+              <label className="form-label">Reason for rejection</label>
+              <textarea
+                className="form-input"
+                rows={3}
+                placeholder="Provide a reason for the employee…"
+                value={remarks}
+                onChange={e => setRemarks(e.target.value)}
+              />
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setRejectId(null)}>Cancel</button>
+              <button
+                className="btn btn-filled btn-danger"
+                onClick={() => act(rejectId, "reject", remarks)}
+                disabled={actioning === rejectId}
+              >
+                {actioning === rejectId ? <><i className="ti ti-loader-2" /> Rejecting…</> : "Reject"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

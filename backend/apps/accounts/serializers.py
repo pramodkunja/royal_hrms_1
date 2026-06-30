@@ -59,7 +59,9 @@ class RoleSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'name', 'display_name', 'is_active',
             'permissions', 'permission_codenames', 'user_count',
+            'created_at', 'updated_at',
         )
+        read_only_fields = ('id', 'created_at', 'updated_at')
 
     def get_permissions(self, obj: Role) -> list[str]:
         # Uses prefetch_related('role_permissions__permission') cache — no extra query.
@@ -436,8 +438,8 @@ class DesignationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = Designation
-        fields = ('id', 'name', 'department', 'department_name', 'is_active', 'created_at')
-        read_only_fields = ('id', 'department_name', 'created_at')
+        fields = ('id', 'name', 'department', 'department_name', 'is_active', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'department_name', 'created_at', 'updated_at')
 
     def validate_name(self, value: str) -> str:
         value = value.strip()
@@ -999,6 +1001,50 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
             return value
         return value.strip()
 
+    # ── Step 0 — Choice fields ────────────────────────────────────────────────
+
+    def validate_gender(self, value: str) -> str:
+        if not value:
+            return value
+        valid = {c[0] for c in self.Meta.model.GENDER_CHOICES}
+        if value not in valid:
+            raise serializers.ValidationError(
+                f'Invalid gender. Choose from: {", ".join(sorted(valid))}.'
+            )
+        return value
+
+    def validate_marital_status(self, value: str) -> str:
+        if not value:
+            return value
+        valid = {c[0] for c in self.Meta.model.MARITAL_CHOICES}
+        if value not in valid:
+            raise serializers.ValidationError(
+                f'Invalid marital status. Choose from: {", ".join(sorted(valid))}.'
+            )
+        return value
+
+    def validate_blood_group(self, value: str) -> str:
+        if not value:
+            return value
+        valid = {c[0] for c in self.Meta.model.BLOOD_CHOICES}
+        if value not in valid:
+            raise serializers.ValidationError(
+                f'Invalid blood group. Choose from: {", ".join(sorted(valid))}.'
+            )
+        return value
+
+    # ── Step 2 — Account type ─────────────────────────────────────────────────
+
+    def validate_account_type(self, value: str) -> str:
+        if not value:
+            return value
+        valid = {c[0] for c in self.Meta.model.ACCOUNT_CHOICES}
+        if value not in valid:
+            raise serializers.ValidationError(
+                f'Invalid account type. Choose from: {", ".join(sorted(valid))}.'
+            )
+        return value
+
     # ── Step 3 — Emergency Contact ────────────────────────────────────────────
 
     def validate_emergency_relationship(self, value: str) -> str:
@@ -1009,6 +1055,18 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Relationship must not be blank.')
         if len(value) > 50:
             raise serializers.ValidationError('Relationship must be 50 characters or fewer.')
+        return value
+
+    def validate_emergency_email(self, value: str) -> str:
+        if not value:
+            return value
+        value = value.strip()
+        from django.core.validators import validate_email as _validate_email
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        try:
+            _validate_email(value)
+        except DjangoValidationError:
+            raise serializers.ValidationError('Enter a valid email address.')
         return value
 
 

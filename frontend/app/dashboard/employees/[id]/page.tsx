@@ -8,6 +8,7 @@ import {
   PROFILE_SECTIONS,
   PROFILE_TABS,
   type DetailValues,
+  type FieldOption,
   type TableRow,
   type Employee,
   type EmployeeStatus,
@@ -34,6 +35,16 @@ interface ApiProfile {
   emergency_phone?: string; emergency_email?: string;
 }
 
+interface ApiDocument {
+  id: number;
+  document_type: string;
+  document_type_display: string;
+  file: string;
+  file_name: string;
+  file_size: number;
+  uploaded_at: string;
+}
+
 interface ApiEmployee {
   id: string; employee_id: string;
   first_name: string; last_name: string; full_name: string;
@@ -44,6 +55,24 @@ interface ApiEmployee {
   reporting_manager_id:   string | null;
   reporting_manager_name: string | null;
   profile?: ApiProfile;
+  documents?: ApiDocument[];
+}
+
+const DOC_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function buildDocEntries(apiDocs: ApiDocument[]) {
+  return apiDocs.map(api => {
+    const dt = new Date(api.uploaded_at);
+    return {
+      name: api.document_type_display,
+      required: false,
+      status: "pending" as const,
+      uploadedOn: `${DOC_MONTHS[dt.getMonth()]} ${dt.getDate()}, ${dt.getFullYear()}`,
+      fileUrl: api.file,
+      fileName: api.file_name,
+      fileSize: api.file_size,
+    };
+  });
 }
 
 function apiToEmployee(u: ApiEmployee): Employee {
@@ -114,6 +143,7 @@ function apiToEmployee(u: ApiEmployee): Employee {
       emergencyEmail:        p.emergency_email || "",
     },
     tables: {},
+    documents: buildDocEntries(u.documents ?? []),
   };
 }
 
@@ -137,6 +167,45 @@ export default function EmployeeProfilePage({
   const [baseValues, setBaseValues] = useState<DetailValues>({});
   const [baseTables, setBaseTables] = useState<Record<string, TableRow[]>>({});
   const [justSaved,  setJustSaved]  = useState(false);
+  const [saving,     setSaving]     = useState(false);
+  const [saveError,  setSaveError]  = useState(false);
+
+  const [deptOptions,     setDeptOptions]     = useState<FieldOption[]>([]);
+  const [allDesigs,       setAllDesigs]       = useState<{ name: string; department_name: string }[]>([]);
+  const [desigOptions,    setDesigOptions]    = useState<FieldOption[]>([]);
+  const [roleOptions,     setRoleOptions]     = useState<FieldOption[]>([]);
+  const [branchOptions,   setBranchOptions]   = useState<FieldOption[]>([]);
+
+  // fetch dropdown lists once on mount
+  useEffect(() => {
+    Promise.all([
+      clientApi.get<{ data: { results: { id: number; name: string }[] } }>(API.departments.list),
+      clientApi.get<{ data: unknown }>(API.designations.list),
+      clientApi.get<{ data: { results: { id: number; name: string; display_name: string }[] } }>(`${API.roles.list}?page_size=100`),
+      clientApi.get<{ data: { results: { id: number; branch_name: string }[] } }>(API.branches.list),
+    ]).then(([depts, desigs, roles, branches]) => {
+      setDeptOptions(depts.data.data.results.map(d => ({ value: d.name, label: d.name })));
+      const desigData = desigs.data.data as { results?: { name: string; department_name: string }[] } | { name: string; department_name: string }[];
+      const desigArray = Array.isArray(desigData) ? desigData : (desigData.results ?? []);
+      setAllDesigs(desigArray);
+      setRoleOptions(
+        roles.data.data.results
+          .filter(r => r.name !== "system_admin")
+          .map(r => ({ value: r.display_name, label: r.display_name }))
+      );
+      setBranchOptions(branches.data.data.results.map(b => ({ value: b.branch_name, label: b.branch_name })));
+    }).catch(() => {});
+  }, []);
+
+  // filter designations whenever the selected department changes
+  useEffect(() => {
+    const dept = values.department;
+    if (!dept) { setDesigOptions([]); return; }
+    const filtered = allDesigs
+      .filter(d => d.department_name === dept)
+      .map(d => ({ value: d.name, label: d.name }));
+    setDesigOptions(filtered);
+  }, [values.department, allDesigs]);
 
   useEffect(() => {
     setLoading(true);
@@ -200,10 +269,34 @@ export default function EmployeeProfilePage({
     setTables(t => ({ ...t, [sectionId]: rows }));
     setJustSaved(false);
   }
-  function onSave() {
-    setBaseValues(values);
-    setBaseTables(tables);
-    setJustSaved(true);
+  const ROLE_SLUG: Record<string, string> = {
+    "Employee": "employee", "HR Admin": "hr_admin", "Manager": "manager",
+    "System Admin": "system_admin", "Finance Manager": "finance_manager",
+  };
+
+  async function onSave() {
+    setSaving(true);
+    setSaveError(false);
+    setJustSaved(false);
+    try {
+      const employeePayload = {
+        department:  values.department  || null,
+        designation: values.designation || null,
+        branch:      values.branch      || null,
+        role:        ROLE_SLUG[values.ssRole] || null,
+        is_active:   employee?.status !== "inactive",
+      };
+
+      await clientApi.put(API.employees.detail(id), employeePayload);
+
+      setBaseValues(values);
+      setBaseTables(tables);
+      setJustSaved(true);
+    } catch {
+      setSaveError(true);
+    } finally {
+      setSaving(false);
+    }
   }
   function onCancel() {
     setValues(baseValues);
@@ -224,6 +317,12 @@ export default function EmployeeProfilePage({
           Changes saved successfully.
         </div>
       )}
+      {saveError && (
+        <div className="flex items-center gap-2 px-4 py-2.5 mb-4 rounded-lg bg-[var(--error-c)] text-[var(--error)] text-[13px] font-medium">
+          <i className="ti ti-alert-circle text-[16px]" />
+          Failed to save changes. Please try again.
+        </div>
+      )}
 
       {tab === "profile" ? (
         <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
@@ -242,6 +341,14 @@ export default function EmployeeProfilePage({
               values={values}
               rows={tables[sectionId] ?? []}
               dirty={dirty}
+              saving={saving}
+              liveDocuments={sectionId === "documents" ? employee.documents : undefined}
+              fieldOptions={{
+                department:  [{ value: "", label: "Select department" }, ...deptOptions],
+                designation: [{ value: "", label: desigOptions.length ? "Select designation" : "Select a department first" }, ...desigOptions],
+                ssRole:      [{ value: "", label: "Select role" }, ...roleOptions],
+                branch:      [{ value: "", label: "Select branch" }, ...branchOptions],
+              }}
               onFieldChange={onFieldChange}
               onRowsChange={onRowsChange}
               onSave={onSave}
