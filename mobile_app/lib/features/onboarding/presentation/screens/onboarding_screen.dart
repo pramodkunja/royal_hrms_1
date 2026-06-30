@@ -19,6 +19,12 @@ class OnboardingScreen extends ConsumerWidget {
     final profileAsync = ref.watch(onboardingProfileProvider);
     final currentStep = ref.watch(onboardingStepProvider);
 
+    void goBack() {
+      if (currentStep > 0) {
+        ref.read(onboardingStepProvider.notifier).state = currentStep - 1;
+      }
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -27,11 +33,13 @@ class OnboardingScreen extends ConsumerWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Employee Onboarding',
-                style: AppTextStyles.label
-                    .copyWith(fontWeight: FontWeight.w700, fontSize: 16)),
             Text(
-              'Step ${currentStep + 1} of ${kStepLabels.length} — ${kStepLabels[currentStep]}',
+              'Complete Your Profile',
+              style: AppTextStyles.label
+                  .copyWith(fontWeight: FontWeight.w700, fontSize: 15),
+            ),
+            Text(
+              'Step ${currentStep + 1} of $kTotalSteps — ${kStepLabels[currentStep]}',
               style: AppTextStyles.caption
                   .copyWith(color: AppColors.textSecondary),
             ),
@@ -58,20 +66,22 @@ class OnboardingScreen extends ConsumerWidget {
           Expanded(
             child: profileAsync.when(
               loading: () => const Center(
-                  child: CircularProgressIndicator(color: AppColors.primary)),
+                  child:
+                      CircularProgressIndicator(color: AppColors.primary)),
               error: (e, _) => _ErrorView(
-                  message: e.toString(),
-                  onRetry: () =>
-                      ref.invalidate(onboardingProfileProvider)),
+                message: e.toString(),
+                onRetry: () => ref.invalidate(onboardingProfileProvider),
+              ),
               data: (profile) => _StepContent(
                 profile: profile,
                 currentStep: currentStep,
+                onPrevious: currentStep > 0 ? goBack : null,
                 onStepSaved: (step, data) async {
                   final err = await ref
                       .read(onboardingProfileProvider.notifier)
                       .saveStep(step, data);
                   if (err == null && context.mounted) {
-                    if (step < kStepLabels.length - 1) {
+                    if (step < kTotalSteps - 1) {
                       ref.read(onboardingStepProvider.notifier).state =
                           step + 1;
                     }
@@ -81,12 +91,20 @@ class OnboardingScreen extends ConsumerWidget {
                 onUpload: (docType) async {
                   return await ref
                       .read(onboardingProfileProvider.notifier)
-                      .uploadDocument(docType, const OnboardingDocUploadRequest(null));
+                      .uploadDocument(
+                          docType,
+                          const OnboardingDocUploadRequest(null));
                 },
                 onDelete: (id) async {
                   return await ref
                       .read(onboardingProfileProvider.notifier)
                       .deleteDocument(id);
+                },
+                onSaveDraft: () async {
+                  // Save draft calls step 4 with empty data (no submit)
+                  await ref
+                      .read(onboardingProfileProvider.notifier)
+                      .saveStep(4, {});
                 },
                 onSubmit: () async {
                   final err = await ref
@@ -95,10 +113,9 @@ class OnboardingScreen extends ConsumerWidget {
                   if (err == null && context.mounted) {
                     context.go(AppRoutes.onboardingAwaiting);
                   } else if (err != null && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(err),
-                            backgroundColor: AppColors.error));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(err),
+                        backgroundColor: AppColors.error));
                   }
                 },
               ),
@@ -114,17 +131,22 @@ class _StepContent extends StatelessWidget {
   const _StepContent({
     required this.profile,
     required this.currentStep,
+    required this.onPrevious,
     required this.onStepSaved,
     required this.onUpload,
     required this.onDelete,
+    required this.onSaveDraft,
     required this.onSubmit,
   });
 
   final OnboardingProfileEntity profile;
   final int currentStep;
-  final Future<String?> Function(int step, Map<String, dynamic> data) onStepSaved;
+  final VoidCallback? onPrevious;
+  final Future<String?> Function(int step, Map<String, dynamic> data)
+      onStepSaved;
   final Future<String?> Function(String docType) onUpload;
   final Future<String?> Function(int id) onDelete;
+  final Future<void> Function() onSaveDraft;
   final Future<void> Function() onSubmit;
 
   @override
@@ -134,28 +156,34 @@ class _StepContent extends StatelessWidget {
         return _PersonalStep(
           initial: profile.personal,
           onSave: (data) => onStepSaved(0, data),
+          onPrevious: onPrevious,
         );
       case 1:
         return _EducationStep(
           initial: profile.education,
           onSave: (data) => onStepSaved(1, data),
+          onPrevious: onPrevious,
         );
       case 2:
         return _BankStep(
           initial: profile.bank,
           onSave: (data) => onStepSaved(2, data),
+          onPrevious: onPrevious,
         );
       case 3:
         return _EmergencyStep(
           initial: profile.emergency,
           onSave: (data) => onStepSaved(3, data),
+          onPrevious: onPrevious,
         );
       case 4:
         return _DocumentsStep(
           documents: profile.documents,
           onUpload: onUpload,
           onDelete: onDelete,
+          onSaveDraft: onSaveDraft,
           onSubmit: onSubmit,
+          onPrevious: onPrevious,
         );
       default:
         return const SizedBox.shrink();

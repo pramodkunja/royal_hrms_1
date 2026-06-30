@@ -1,84 +1,74 @@
 class OnboardingPersonalEntity {
-  final String? firstName;
-  final String? lastName;
   final String? dateOfBirth;
   final String? gender;
-  final String? nationality;
   final String? bloodGroup;
   final String? maritalStatus;
   final String? fatherName;
-  final String? phone;
-  final String? addressLine1;
-  final String? addressLine2;
-  final String? city;
-  final String? state;
-  final String? pincode;
-  final String? country;
+  final String? currentAddress;
+  final String? permanentAddress;
 
   const OnboardingPersonalEntity({
-    this.firstName,
-    this.lastName,
     this.dateOfBirth,
     this.gender,
-    this.nationality,
     this.bloodGroup,
     this.maritalStatus,
     this.fatherName,
-    this.phone,
-    this.addressLine1,
-    this.addressLine2,
-    this.city,
-    this.state,
-    this.pincode,
-    this.country,
+    this.currentAddress,
+    this.permanentAddress,
   });
 }
 
 class OnboardingEducationEntity {
-  final String? qualification;
+  final String? highestQualification;
   final String? institution;
-  final String? specialization;
   final String? yearOfPassing;
-  final String? grade;
+  final String? specialization;
+  final String? totalExperienceYears;
+  final String? previousEmployer;
+  final String? previousDesignation;
+  final String? leavingReason;
 
   const OnboardingEducationEntity({
-    this.qualification,
+    this.highestQualification,
     this.institution,
-    this.specialization,
     this.yearOfPassing,
-    this.grade,
+    this.specialization,
+    this.totalExperienceYears,
+    this.previousEmployer,
+    this.previousDesignation,
+    this.leavingReason,
   });
 }
 
 class OnboardingBankEntity {
-  final String? bankName;
+  final String? accountHolderName;
+  final String? accountType;
   final String? accountNumber;
   final String? ifscCode;
-  final String? branchName;
-  final String? accountType;
+  final String? bankName;
+  final String? bankBranchName;
 
   const OnboardingBankEntity({
-    this.bankName,
+    this.accountHolderName,
+    this.accountType,
     this.accountNumber,
     this.ifscCode,
-    this.branchName,
-    this.accountType,
+    this.bankName,
+    this.bankBranchName,
   });
 }
 
 class OnboardingEmergencyEntity {
-  final String? contactName;
-  final String? relationship;
-  final String? phone;
-  final String? email;
-  final String? address;
+  final String? emergencyName;
+  final String? emergencyRelationship;
+  final String? emergencyPhone;
+  final String? emergencyEmail;
 
   const OnboardingEmergencyEntity({
-    this.contactName,
-    this.relationship,
-    this.phone,
-    this.email,
-    this.address,
+    this.emergencyName,
+    this.emergencyRelationship,
+    this.emergencyPhone,
+    this.emergencyEmail,
   });
 }
 

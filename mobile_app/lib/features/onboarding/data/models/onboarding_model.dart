@@ -2,139 +2,128 @@ import '../../domain/entities/onboarding_entity.dart';
 
 class OnboardingPersonalModel extends OnboardingPersonalEntity {
   const OnboardingPersonalModel({
-    super.firstName,
-    super.lastName,
     super.dateOfBirth,
     super.gender,
-    super.nationality,
     super.bloodGroup,
     super.maritalStatus,
     super.fatherName,
-    super.phone,
-    super.addressLine1,
-    super.addressLine2,
-    super.city,
-    super.state,
-    super.pincode,
-    super.country,
+    super.currentAddress,
+    super.permanentAddress,
   });
 
   factory OnboardingPersonalModel.fromJson(Map<String, dynamic> json) =>
       OnboardingPersonalModel(
-        firstName: json['first_name'] as String?,
-        lastName: json['last_name'] as String?,
         dateOfBirth: json['date_of_birth'] as String?,
         gender: json['gender'] as String?,
-        nationality: json['nationality'] as String?,
         bloodGroup: json['blood_group'] as String?,
         maritalStatus: json['marital_status'] as String?,
         fatherName: json['father_name'] as String?,
-        phone: json['phone'] as String?,
-        addressLine1: json['address_line1'] as String?,
-        addressLine2: json['address_line2'] as String?,
-        city: json['city'] as String?,
-        state: json['state'] as String?,
-        pincode: json['pincode'] as String?,
-        country: json['country'] as String?,
+        currentAddress: json['current_address'] as String?,
+        permanentAddress: json['permanent_address'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
-        'first_name': firstName,
-        'last_name': lastName,
         'date_of_birth': dateOfBirth,
         'gender': gender,
-        'nationality': nationality,
         'blood_group': bloodGroup,
         'marital_status': maritalStatus,
         'father_name': fatherName,
-        'phone': phone,
-        'address_line1': addressLine1,
-        'address_line2': addressLine2,
-        'city': city,
-        'state': state,
-        'pincode': pincode,
-        'country': country,
+        'current_address': currentAddress,
+        'permanent_address': permanentAddress,
       }..removeWhere((_, v) => v == null);
 }
 
 class OnboardingEducationModel extends OnboardingEducationEntity {
   const OnboardingEducationModel({
-    super.qualification,
+    super.highestQualification,
     super.institution,
-    super.specialization,
     super.yearOfPassing,
-    super.grade,
+    super.specialization,
+    super.totalExperienceYears,
+    super.previousEmployer,
+    super.previousDesignation,
+    super.leavingReason,
   });
 
   factory OnboardingEducationModel.fromJson(Map<String, dynamic> json) =>
       OnboardingEducationModel(
-        qualification: json['qualification'] as String?,
+        highestQualification: json['highest_qualification'] as String?,
         institution: json['institution'] as String?,
+        yearOfPassing: json['year_of_passing']?.toString(),
         specialization: json['specialization'] as String?,
-        yearOfPassing: json['year_of_passing'] as String?,
-        grade: json['grade'] as String?,
+        totalExperienceYears: json['total_experience_years']?.toString(),
+        previousEmployer: json['previous_employer'] as String?,
+        previousDesignation: json['previous_designation'] as String?,
+        leavingReason: json['leaving_reason'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
-        'qualification': qualification,
+        'highest_qualification': highestQualification,
         'institution': institution,
+        'year_of_passing': yearOfPassing != null
+            ? int.tryParse(yearOfPassing!)
+            : null,
         'specialization': specialization,
-        'year_of_passing': yearOfPassing,
-        'grade': grade,
+        'total_experience_years': totalExperienceYears != null
+            ? double.tryParse(totalExperienceYears!)
+            : null,
+        'previous_employer': previousEmployer,
+        'previous_designation': previousDesignation,
+        'leaving_reason': leavingReason,
       }..removeWhere((_, v) => v == null);
 }
 
 class OnboardingBankModel extends OnboardingBankEntity {
   const OnboardingBankModel({
-    super.bankName,
+    super.accountHolderName,
+    super.accountType,
     super.accountNumber,
     super.ifscCode,
-    super.branchName,
-    super.accountType,
+    super.bankName,
+    super.bankBranchName,
   });
 
   factory OnboardingBankModel.fromJson(Map<String, dynamic> json) =>
       OnboardingBankModel(
-        bankName: json['bank_name'] as String?,
+        accountHolderName: json['account_holder_name'] as String?,
+        accountType: json['account_type'] as String?,
         accountNumber: json['account_number'] as String?,
         ifscCode: json['ifsc_code'] as String?,
-        branchName: json['branch_name'] as String?,
-        accountType: json['account_type'] as String?,
+        bankName: json['bank_name'] as String?,
+        bankBranchName: json['bank_branch_name'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
-        'bank_name': bankName,
+        'account_holder_name': accountHolderName,
+        'account_type': accountType,
         'account_number': accountNumber,
         'ifsc_code': ifscCode,
-        'branch_name': branchName,
-        'account_type': accountType,
+        'bank_name': bankName,
+        'bank_branch_name': bankBranchName,
       }..removeWhere((_, v) => v == null);
 }
 
 class OnboardingEmergencyModel extends OnboardingEmergencyEntity {
   const OnboardingEmergencyModel({
-    super.contactName,
-    super.relationship,
-    super.phone,
-    super.email,
-    super.address,
+    super.emergencyName,
+    super.emergencyRelationship,
+    super.emergencyPhone,
+    super.emergencyEmail,
   });
 
   factory OnboardingEmergencyModel.fromJson(Map<String, dynamic> json) =>
       OnboardingEmergencyModel(
-        contactName: json['contact_name'] as String?,
-        relationship: json['relationship'] as String?,
-        phone: json['phone'] as String?,
-        email: json['email'] as String?,
-        address: json['address'] as String?,
+        emergencyName: json['emergency_name'] as String?,
+        emergencyRelationship: json['emergency_relationship'] as String?,
+        emergencyPhone: json['emergency_phone'] as String?,
+        emergencyEmail: json['emergency_email'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
-        'contact_name': contactName,
-        'relationship': relationship,
-        'phone': phone,
-        'email': email,
-        'address': address,
+        'emergency_name': emergencyName,
+        'emergency_relationship': emergencyRelationship,
+        'emergency_phone': emergencyPhone,
+        'emergency_email': emergencyEmail,
       }..removeWhere((_, v) => v == null);
 }
 
@@ -150,9 +139,12 @@ class OnboardingDocModel extends OnboardingDocEntity {
   factory OnboardingDocModel.fromJson(Map<String, dynamic> json) =>
       OnboardingDocModel(
         id: json['id'] as int,
-        docType: json['doc_type'] as String,
-        docTypeDisplay: json['doc_type_display'] as String? ?? json['doc_type'] as String,
-        fileUrl: json['file_url'] as String? ?? json['file'] as String? ?? '',
+        docType: json['document_type'] as String? ??
+            json['doc_type'] as String? ?? '',
+        docTypeDisplay: json['document_type_display'] as String? ??
+            json['doc_type_display'] as String? ??
+            json['document_type'] as String? ?? '',
+        fileUrl: json['file'] as String? ?? json['file_url'] as String? ?? '',
         fileName: json['file_name'] as String? ?? '',
       );
 }
@@ -169,7 +161,9 @@ class OnboardingProfileModel extends OnboardingProfileEntity {
   });
 
   factory OnboardingProfileModel.fromJson(Map<String, dynamic> json) {
-    final data = json['data'] is Map ? json['data'] as Map<String, dynamic> : json;
+    final data = json['data'] is Map
+        ? json['data'] as Map<String, dynamic>
+        : json;
     return OnboardingProfileModel(
       status: data['status'] as String? ?? 'pending',
       currentStep: data['current_step'] as int? ?? 0,
@@ -182,7 +176,8 @@ class OnboardingProfileModel extends OnboardingProfileEntity {
               data['education'] as Map<String, dynamic>)
           : const OnboardingEducationModel(),
       bank: data['bank'] != null
-          ? OnboardingBankModel.fromJson(data['bank'] as Map<String, dynamic>)
+          ? OnboardingBankModel.fromJson(
+              data['bank'] as Map<String, dynamic>)
           : const OnboardingBankModel(),
       emergency: data['emergency'] != null
           ? OnboardingEmergencyModel.fromJson(
