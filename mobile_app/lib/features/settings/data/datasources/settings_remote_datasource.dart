@@ -52,7 +52,8 @@ class SettingsRemoteDataSource {
       ApiConstants.settingsEmployeeCode,
       data: model.toJson(),
     );
-    return EmployeeCodeModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+    return EmployeeCodeModel.fromJson(
+        _unwrap(res.data) as Map<String, dynamic>);
   }
 
   // ── SMTP ───────────────────────────────────────────────────────────────────
@@ -60,11 +61,14 @@ class SettingsRemoteDataSource {
   Future<List<SmtpModel>> fetchSmtpList() async {
     final res = await _dio.get(ApiConstants.settingsSmtp);
     final data = _unwrap(res.data);
-    return _toList(data).map((e) => SmtpModel.fromJson(e as Map<String, dynamic>)).toList();
+    return _toList(data)
+        .map((e) => SmtpModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<SmtpModel> createSmtp(SmtpFormData form) async {
-    final res = await _dio.post(ApiConstants.settingsSmtp, data: form.toJson(isAdd: true));
+    final res = await _dio.post(ApiConstants.settingsSmtp,
+        data: form.toJson(isAdd: true));
     return SmtpModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
@@ -84,16 +88,17 @@ class SettingsRemoteDataSource {
     await _dio.delete(ApiConstants.settingsSmtpDetail(id));
   }
 
-  Future<void> testSmtp(SmtpModel entry, String recipient, String password) async {
+  Future<void> testSmtp(
+      SmtpModel entry, String recipient, String password) async {
     await _dio.post(ApiConstants.settingsSmtpTest, data: {
-      'host':           entry.host,
-      'port':           entry.port,
-      'username':       entry.username,
-      'password':       password,
-      'use_tls':        entry.useTls,
-      'sender_name':    entry.senderName,
-      'from_email':     entry.fromEmail,
-      'bcc_email':      entry.bccEmail,
+      'host': entry.host,
+      'port': entry.port,
+      'username': entry.username,
+      'password': password,
+      'use_tls': entry.useTls,
+      'sender_name': entry.senderName,
+      'from_email': entry.fromEmail,
+      'bcc_email': entry.bccEmail,
       'test_recipient': recipient,
     });
   }
@@ -103,39 +108,51 @@ class SettingsRemoteDataSource {
   Future<List<EmailTemplateCategoryModel>> fetchTemplateCategories() async {
     final res = await _dio.get(ApiConstants.settingsEmailTemplateCategories);
     final data = _unwrap(res.data);
-    return _toList(data).map((e) => EmailTemplateCategoryModel.fromJson(e as Map<String, dynamic>)).toList();
+    return _toList(data)
+        .map((e) =>
+            EmailTemplateCategoryModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<EmailTemplateModel>> fetchTemplates() async {
     final res = await _dio.get(ApiConstants.settingsEmailTemplates);
     final data = _unwrap(res.data);
     // Backend returns paginated with results as grouped dict: {template_type: [templates...], ...}
-    final grouped = (data is Map<String, dynamic>) ? (data['results'] ?? data) : data;
+    final grouped =
+        (data is Map<String, dynamic>) ? (data['results'] ?? data) : data;
     final result = <EmailTemplateModel>[];
     if (grouped is Map<String, dynamic>) {
       for (final group in grouped.values) {
         if (group is List) {
-          result.addAll(group.map((e) => EmailTemplateModel.fromJson(e as Map<String, dynamic>)));
+          result.addAll(group.map(
+              (e) => EmailTemplateModel.fromJson(e as Map<String, dynamic>)));
         }
       }
     } else if (grouped is List) {
-      result.addAll(grouped.map((e) => EmailTemplateModel.fromJson(e as Map<String, dynamic>)));
+      result.addAll(grouped
+          .map((e) => EmailTemplateModel.fromJson(e as Map<String, dynamic>)));
     }
     return result;
   }
 
   Future<EmailTemplateModel> createTemplate(EmailTemplateFormData form) async {
-    final res = await _dio.post(ApiConstants.settingsEmailTemplates, data: form.toJson(isAdd: true));
-    return EmailTemplateModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+    final res = await _dio.post(ApiConstants.settingsEmailTemplates,
+        data: form.toJson(isAdd: true));
+    return EmailTemplateModel.fromJson(
+        _unwrap(res.data) as Map<String, dynamic>);
   }
 
-  Future<EmailTemplateModel> updateTemplate(int id, EmailTemplateFormData form) async {
-    final res = await _dio.patch(ApiConstants.settingsEmailTemplateDetail(id), data: form.toJson(isAdd: false));
-    return EmailTemplateModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  Future<EmailTemplateModel> updateTemplate(
+      int id, EmailTemplateFormData form) async {
+    final res = await _dio.patch(ApiConstants.settingsEmailTemplateDetail(id),
+        data: form.toJson(isAdd: false));
+    return EmailTemplateModel.fromJson(
+        _unwrap(res.data) as Map<String, dynamic>);
   }
 
   Future<void> toggleTemplateActive(int id, bool isActive) async {
-    await _dio.patch(ApiConstants.settingsEmailTemplateDetail(id), data: {'is_active': isActive});
+    await _dio.patch(ApiConstants.settingsEmailTemplateDetail(id),
+        data: {'is_active': isActive});
   }
 
   Future<void> deleteTemplate(int id) async {
@@ -145,9 +162,12 @@ class SettingsRemoteDataSource {
   // ── Departments ────────────────────────────────────────────────────────────
 
   Future<List<DepartmentModel>> fetchDepartments() async {
-    final res = await _dio.get(ApiConstants.departments, queryParameters: {'page_size': 200});
+    final res = await _dio
+        .get(ApiConstants.departments, queryParameters: {'page_size': 200});
     final data = _unwrap(res.data);
-    return _toList(data).map((e) => DepartmentModel.fromJson(e as Map<String, dynamic>)).toList();
+    return _toList(data)
+        .map((e) => DepartmentModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<DepartmentModel> createDepartment(DeptFormData form) async {
@@ -156,7 +176,8 @@ class SettingsRemoteDataSource {
   }
 
   Future<DepartmentModel> updateDepartment(int id, DeptFormData form) async {
-    final res = await _dio.put(ApiConstants.departmentDetail(id), data: form.toJson());
+    final res =
+        await _dio.put(ApiConstants.departmentDetail(id), data: form.toJson());
     return DepartmentModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
@@ -172,29 +193,39 @@ class SettingsRemoteDataSource {
   Future<List<LeavePolicyModel>> fetchLeavePolicies() async {
     final res = await _dio.get(ApiConstants.leaveTypes);
     final data = _unwrap(res.data);
-    return _toList(data).map((e) => LeavePolicyModel.fromJson(e as Map<String, dynamic>)).toList();
+    return _toList(data)
+        .map((e) => LeavePolicyModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
-  Future<LeavePolicyModel> updateLeavePolicy(String leaveType, LeavePolicyFormData form) async {
-    final res = await _dio.put(ApiConstants.leavePolicyDetail(leaveType), data: form.toJson());
+  Future<LeavePolicyModel> updateLeavePolicy(
+      String leaveType, LeavePolicyFormData form) async {
+    final res = await _dio.put(ApiConstants.leavePolicyDetail(leaveType),
+        data: form.toJson());
     return LeavePolicyModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
   // Real, working backend action (apps/hrms/views/leave.py LeaveBalanceView.post) —
   // credits each active employee's annual leave balance for the given year based
   // on LeavePolicy.annual_days. Requires 'leave.approve' permission.
-  Future<CreditBalancesResult> creditLeaveBalances({int? year, String? employeeId}) async {
+  Future<CreditBalancesResult> creditLeaveBalances(
+      {int? year, String? employeeId}) async {
     final res = await _dio.post(ApiConstants.leaveBalanceCredit, data: {
       if (year != null) 'year': year,
-      if (employeeId != null && employeeId.isNotEmpty) 'employee_id': employeeId,
+      if (employeeId != null && employeeId.isNotEmpty)
+        'employee_id': employeeId,
     });
-    return CreditBalancesResult.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+    return CreditBalancesResult.fromJson(
+        _unwrap(res.data) as Map<String, dynamic>);
   }
 
   Future<List<DesignationModel>> fetchDesignations() async {
-    final res = await _dio.get(ApiConstants.designations, queryParameters: {'page_size': 200});
+    final res = await _dio
+        .get(ApiConstants.designations, queryParameters: {'page_size': 200});
     final data = _unwrap(res.data);
-    return _toList(data).map((e) => DesignationModel.fromJson(e as Map<String, dynamic>)).toList();
+    return _toList(data)
+        .map((e) => DesignationModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<DesignationModel> createDesignation(DesignationFormData form) async {
@@ -202,8 +233,10 @@ class SettingsRemoteDataSource {
     return DesignationModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
-  Future<DesignationModel> updateDesignation(int id, DesignationFormData form) async {
-    final res = await _dio.put(ApiConstants.designationDetail(id), data: form.toJson());
+  Future<DesignationModel> updateDesignation(
+      int id, DesignationFormData form) async {
+    final res =
+        await _dio.put(ApiConstants.designationDetail(id), data: form.toJson());
     return DesignationModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
@@ -222,14 +255,17 @@ class SettingsRemoteDataSource {
       for (final group in data.values) {
         if (group is List) {
           result.addAll(
-            group.map((e) => PermissionModel.fromJson(e as Map<String, dynamic>)),
+            group.map(
+                (e) => PermissionModel.fromJson(e as Map<String, dynamic>)),
           );
         }
       }
       return result;
     }
     if (data is List) {
-      return data.map((e) => PermissionModel.fromJson(e as Map<String, dynamic>)).toList();
+      return data
+          .map((e) => PermissionModel.fromJson(e as Map<String, dynamic>))
+          .toList();
     }
     return [];
   }
@@ -240,11 +276,16 @@ class SettingsRemoteDataSource {
     // Backend returns paginated: {count, page, page_size, total_pages, results}
     if (data is Map<String, dynamic>) {
       final results = data['results'] as List<dynamic>? ?? [];
-      final roles = results.map((e) => RoleModel.fromJson(e as Map<String, dynamic>)).toList();
-      return RolesPage(roles: roles, count: data['count'] as int? ?? roles.length);
+      final roles = results
+          .map((e) => RoleModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+      return RolesPage(
+          roles: roles, count: data['count'] as int? ?? roles.length);
     }
     if (data is List) {
-      final roles = data.map((e) => RoleModel.fromJson(e as Map<String, dynamic>)).toList();
+      final roles = data
+          .map((e) => RoleModel.fromJson(e as Map<String, dynamic>))
+          .toList();
       return RolesPage(roles: roles, count: roles.length);
     }
     return RolesPage.empty();
@@ -256,12 +297,14 @@ class SettingsRemoteDataSource {
   }
 
   Future<RoleModel> updateRole(dynamic id, RoleFormData form) async {
-    final res = await _dio.put(ApiConstants.roleDetail(id), data: form.toJson());
+    final res =
+        await _dio.put(ApiConstants.roleDetail(id), data: form.toJson());
     return RoleModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
   Future<void> toggleRole(dynamic id, bool isActive) async {
-    await _dio.patch(ApiConstants.roleDetail(id), data: {'is_active': isActive});
+    await _dio
+        .patch(ApiConstants.roleDetail(id), data: {'is_active': isActive});
   }
 
   // ── Audit Log ──────────────────────────────────────────────────────────────
@@ -275,14 +318,16 @@ class SettingsRemoteDataSource {
 
     if (data is Map<String, dynamic>) {
       final results = data['results'] as List<dynamic>? ?? [];
-      final count      = data['count'] as int? ?? results.length;
+      final count = data['count'] as int? ?? results.length;
       final totalPages = data['total_pages'] as int? ?? 1;
       return AuditLogPage(
-        entries:     results.map((e) => AuditLogEntry.fromJson(e as Map<String, dynamic>)).toList(),
-        total:       count,
+        entries: results
+            .map((e) => AuditLogEntry.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        total: count,
         currentPage: data['page'] as int? ?? filters.page,
-        totalPages:  totalPages,
-        hasNext:     filters.page < totalPages,
+        totalPages: totalPages,
+        hasNext: filters.page < totalPages,
       );
     }
     return AuditLogPage.empty();
@@ -303,7 +348,8 @@ class SettingsRemoteDataSource {
   // plain list if the endpoint ever returns one directly.
   List<dynamic> _toList(dynamic data) {
     if (data is List) return data;
-    if (data is Map<String, dynamic>) return data['results'] as List<dynamic>? ?? [];
+    if (data is Map<String, dynamic>)
+      return data['results'] as List<dynamic>? ?? [];
     return [];
   }
 }

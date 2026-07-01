@@ -43,50 +43,50 @@ class AppRoutes {
   AppRoutes._();
 
   // Auth
-  static const String splash          = '/';
-  static const String login           = '/login';
-  static const String forgotPassword  = '/forgot-password';
+  static const String splash = '/';
+  static const String login = '/login';
+  static const String forgotPassword = '/forgot-password';
 
   // Dashboard shell + sub-routes (mirror navConfig.ts paths)
-  static const String dashboard       = '/dashboard';
-  static const String announcements   = '/dashboard/announcements';
-  static const String interviewList   = '/dashboard/interview-list';
+  static const String dashboard = '/dashboard';
+  static const String announcements = '/dashboard/announcements';
+  static const String interviewList = '/dashboard/interview-list';
   static const String candidateReview = '/dashboard/candidate-review';
-  static const String emailLogs       = '/dashboard/email-logs';
-  static const String employees       = '/dashboard/employees';
+  static const String emailLogs = '/dashboard/email-logs';
+  static const String employees = '/dashboard/employees';
   static String employeeProfilePath(String employeeId) =>
       '/dashboard/employees/$employeeId';
-  static const String orgChart        = '/dashboard/org-chart';
-  static const String branches        = '/dashboard/branches';
-  static const String attendance      = '/dashboard/attendance';
-  static const String payroll         = '/dashboard/payroll';
-  static const String myPayslip       = '/dashboard/my-payslip';
-  static const String leave           = '/dashboard/leave';
-  static const String expenses        = '/dashboard/expenses';
-  static const String approvals       = '/dashboard/approvals';
-  static const String separation      = '/dashboard/separation';
-  static const String documents       = '/dashboard/documents';
-  static const String myAttendance     = '/dashboard/my-attendance';
-  static const String myRequests      = '/dashboard/my-requests';
-  static const String profile         = '/dashboard/profile';
-  static const String reports         = '/dashboard/reports';
-  static const String audit           = '/dashboard/audit';
-  static const String settings        = '/dashboard/settings';
+  static const String orgChart = '/dashboard/org-chart';
+  static const String branches = '/dashboard/branches';
+  static const String attendance = '/dashboard/attendance';
+  static const String payroll = '/dashboard/payroll';
+  static const String myPayslip = '/dashboard/my-payslip';
+  static const String leave = '/dashboard/leave';
+  static const String expenses = '/dashboard/expenses';
+  static const String approvals = '/dashboard/approvals';
+  static const String separation = '/dashboard/separation';
+  static const String documents = '/dashboard/documents';
+  static const String myAttendance = '/dashboard/my-attendance';
+  static const String myRequests = '/dashboard/my-requests';
+  static const String profile = '/dashboard/profile';
+  static const String reports = '/dashboard/reports';
+  static const String audit = '/dashboard/audit';
+  static const String settings = '/dashboard/settings';
 
   // Onboarding
-  static const String onboarding        = '/onboarding';
+  static const String onboarding = '/onboarding';
   static const String onboardingAwaiting = '/onboarding/awaiting-approval';
 
   // Settings sub-screens — pushed on top of the shell (full-screen with back arrow)
-  static const String settingsCompany        = '/settings/company';
-  static const String settingsDepartments    = '/settings/departments';
-  static const String settingsRoles          = '/settings/roles';
-  static const String settingsEmployeeCode   = '/settings/employee-code';
+  static const String settingsCompany = '/settings/company';
+  static const String settingsDepartments = '/settings/departments';
+  static const String settingsRoles = '/settings/roles';
+  static const String settingsEmployeeCode = '/settings/employee-code';
   static const String settingsEmailTemplates = '/settings/email-templates';
-  static const String settingsSmtp           = '/settings/smtp';
-  static const String settingsAuditLog       = '/settings/audit';
-  static const String settingsLeavePolicy    = '/settings/leave-policy';
-  static const String settingsPayrollRules   = '/settings/payroll-rules';
+  static const String settingsSmtp = '/settings/smtp';
+  static const String settingsAuditLog = '/settings/audit';
+  static const String settingsLeavePolicy = '/settings/leave-policy';
+  static const String settingsPayrollRules = '/settings/payroll-rules';
 }
 
 // ─── Router provider ──────────────────────────────────────────────────────────
@@ -107,7 +107,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: AppRoutes.splash,
     refreshListenable: notifier,
-
     redirect: (context, state) {
       final authAsync = ref.read(authStateProvider);
       final authState = authAsync.valueOrNull;
@@ -150,7 +149,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       return null;
     },
-
     routes: [
       // ── Auth routes ────────────────────────────────────────────────────
       GoRoute(
@@ -240,12 +238,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.candidateReview,
-            pageBuilder: (_, __) => const NoTransitionPage(child: CandidateReviewScreen()),
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: CandidateReviewScreen()),
           ),
           GoRoute(
             path: AppRoutes.emailLogs,
             pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'Email Logs', icon: Icons.mail_outline),
+              child: PlaceholderScreen(
+                  title: 'Email Logs', icon: Icons.mail_outline),
             ),
           ),
 
@@ -266,11 +266,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.orgChart,
-            pageBuilder: (_, __) => const NoTransitionPage(child: OrgChartScreen()),
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: OrgChartScreen()),
           ),
           GoRoute(
             path: AppRoutes.branches,
-            pageBuilder: (_, __) => const NoTransitionPage(child: BranchesScreen()),
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: BranchesScreen()),
           ),
 
           // Time & Pay
@@ -291,7 +293,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.leave,
-            pageBuilder: (_, __) => const NoTransitionPage(child: LeaveScreen()),
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: LeaveScreen()),
           ),
           GoRoute(
             path: AppRoutes.expenses,
@@ -303,13 +306,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.approvals,
             pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'Team Approvals', icon: Icons.checklist_outlined),
+              child: PlaceholderScreen(
+                  title: 'Team Approvals', icon: Icons.checklist_outlined),
             ),
           ),
           GoRoute(
             path: AppRoutes.separation,
             pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'Separation & FnF', icon: Icons.exit_to_app_outlined),
+              child: PlaceholderScreen(
+                  title: 'Separation & FnF', icon: Icons.exit_to_app_outlined),
             ),
           ),
           GoRoute(
@@ -327,7 +332,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.myRequests,
             pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'My Requests', icon: Icons.inbox_outlined),
+              child: PlaceholderScreen(
+                  title: 'My Requests', icon: Icons.inbox_outlined),
             ),
           ),
           GoRoute(
@@ -340,23 +346,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.reports,
             pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'Reports', icon: Icons.bar_chart_outlined),
+              child: PlaceholderScreen(
+                  title: 'Reports', icon: Icons.bar_chart_outlined),
             ),
           ),
           GoRoute(
             path: AppRoutes.audit,
             pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'Audit Log', icon: Icons.security_outlined),
+              child: PlaceholderScreen(
+                  title: 'Audit Log', icon: Icons.security_outlined),
             ),
           ),
           GoRoute(
             path: AppRoutes.settings,
-            pageBuilder: (_, __) => const NoTransitionPage(child: SettingsScreen()),
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: SettingsScreen()),
           ),
         ],
       ),
     ],
-
     errorBuilder: (context, state) => Scaffold(
       body: Center(child: Text('Page not found: ${state.uri}')),
     ),
