@@ -83,6 +83,7 @@ const _kTiles = <_Tile>[
     icon: Icons.payments_outlined, iconColor: Color(0xFF4A148C), iconBg: Color(0xFFF3E5F5),
     label: 'Payroll Rules',
     desc: 'Salary components, tax slabs and statutory',
+    route: AppRoutes.settingsPayrollRules,
   ),
   _Tile(
     cat: _Tab.modules,

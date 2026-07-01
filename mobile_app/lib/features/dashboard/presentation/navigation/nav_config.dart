@@ -42,7 +42,7 @@ const kAllNav = <NavEntry>[
 
   NavSection('Recruitment'),
   NavItem(id: 'interview-list',   icon: Icons.people_outline,                  label: 'Interview List',   path: '/dashboard/interview-list',   permission: 'recruitment.view'),
-  NavItem(id: 'candidate-review', icon: Icons.how_to_reg_outlined,             label: 'Candidate Review', path: '/dashboard/candidate-review', permission: 'recruitment.view'),
+  NavItem(id: 'candidate-review', icon: Icons.how_to_reg_outlined,             label: 'Review & Onboarding', path: '/dashboard/candidate-review', permission: 'recruitment.view'),
   NavItem(id: 'email-logs',       icon: Icons.mail_outline,                    label: 'Email Logs',       path: '/dashboard/email-logs',       permission: 'recruitment.view'),
 
   NavSection('Workforce'),
@@ -63,6 +63,7 @@ const kAllNav = <NavEntry>[
   NavItem(id: 'documents',        icon: Icons.folder_outlined,                 label: 'Document Center',  path: '/dashboard/documents',        permission: 'documents.view'),
 
   NavSection('My'),
+  NavItem(id: 'my-attendance',    icon: Icons.fingerprint,                     label: 'My Attendance',    path: '/dashboard/my-attendance',    permission: null),
   NavItem(id: 'my-requests',      icon: Icons.inbox_outlined,                  label: 'My Requests',      path: '/dashboard/my-requests',      permission: null),
   NavItem(id: 'profile',          icon: Icons.account_circle_outlined,         label: 'My Profile',       path: '/dashboard/profile',          permission: null),
 
@@ -109,7 +110,7 @@ const kPageTitles = <String, String>{
   '/dashboard':                 'Dashboard',
   '/dashboard/announcements':   'Announcements',
   '/dashboard/interview-list':  'Interview List',
-  '/dashboard/candidate-review':'Candidate Review',
+  '/dashboard/candidate-review':'Candidate Review & Onboarding',
   '/dashboard/email-logs':      'Email Logs',
   '/dashboard/employees':       'Employees',
   '/dashboard/org-chart':       'Organisation Chart',
@@ -122,6 +123,7 @@ const kPageTitles = <String, String>{
   '/dashboard/approvals':       'Team Approvals',
   '/dashboard/separation':      'Separation & FnF',
   '/dashboard/documents':       'Document Center',
+  '/dashboard/my-attendance':   'My Attendance',
   '/dashboard/my-requests':     'My Requests',
   '/dashboard/profile':         'My Profile',
   '/dashboard/reports':         'Reports',

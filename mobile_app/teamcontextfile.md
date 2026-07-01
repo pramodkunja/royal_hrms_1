@@ -2129,3 +2129,254 @@ mobile_app/lib/
 - [ ] Leave history side-cards in apply form (replace mock `_kLeaveHistory` with real requests)
 
 ---
+
+## Session 13 — Payroll Static UI: Run Payroll Wizard, Payslips, Payroll Rules
+
+**Date:** 2026-07-01
+**Developer:** Vignesh Kumar Saka
+
+### Overview
+This session completed four major static UI screens — Run Payroll 8-step Wizard, Payroll Rules Settings, My Payslips, and wired them all into the router. All screens are 100% static (no API calls); they demonstrate the complete UX flow with interactive state toggles. A recurring overflow crash caused by the app theme's `ElevatedButton` minimumSize was also fixed.
+
+---
+
+### 1. Run Payroll — 8-Step Wizard (`run_payroll_screen.dart`)
+
+**File:** `lib/features/payroll/presentation/screens/run_payroll_screen.dart`
+
+**Trigger:** "Run Payroll" button in `PayrollScreen` header — now navigates via `Navigator.push(MaterialPageRoute(...))`.
+
+**Architecture:**
+- `RunPayrollScreen` is a `StatefulWidget` with a single `int _step` (0–7) and per-step state booleans: `_calculated`, `_issueStates` (List of 3), `_approvalComplete`, `_payslipsGenerated`.
+- A shared `_StepperBar` widget at the top of the AppBar renders 8 step circles connected by lines — green check for completed, filled navy for current, grey for future.
+- Footer row: Back (OutlinedButton) + Continue/Finish Payroll (ElevatedButton) — both use `minimumSize: const Size(0, 44)` to avoid theme crash.
+- Step 8 "Finish Payroll" button pops the navigator back to the Payroll screen.
+
+**Step-by-step breakdown:**
+
+| Step | Widget | Interactive |
+|---|---|---|
+| 1 · Period Setup | 6 dropdowns (Month, Year, Branch, Dept, Employee Type, Payroll Type, Salary Date) + employee count info banner (248 employees) | Static |
+| 2 · Earn. & Deduct. | Horizontally scrollable Earnings table (7 cols × 5 employees + totals row) + Deductions table (9 cols × 5 employees + totals row) | Static |
+| 3 · Reimb. & Bonuses | Reimbursements table (7 cols × 5 employees) + Bonuses & Incentives table (6 cols × 5 employees) | Static |
+| 4 · Calculation | 4 stat cards (Gross/Deductions/Net/Employees) + pre-state empty view with "Calculate All Salaries" button → post-state shows 5-employee salary list | Button toggles `_calculated` |
+| 5 · Validation | Red/amber error banner + 3 issue cards (1 critical, 2 warning) each with Fix/Ignore buttons; Continue disabled until all issues are fixed or ignored | Fix/Ignore toggle `_issueStates` |
+| 6 · Approval | 3-level approval timeline (Rajan Pillai approved, Divya Krishnan pending with textarea + Approve/Reject/Send Back buttons, CEO Office pending) → tapping Approve sets `_approvalComplete` true, all 3 show approved | Button toggles `_approvalComplete` |
+| 7 · Payslips | 5-employee table with Pending/Generated status badges + download/email/preview icons (grey until generated); "Generate All" button + 0/5 counter | Button toggles `_payslipsGenerated` |
+| 8 · Bank Transfer | Bank/Account/IFSC/NetPay/Status table + per-row tap-to-mark-paid toggle + "Mark All Paid" button; Generate Bank File + Export Excel (OutlinedButtons); total row ₹3,01,283 | Per-row `_paidRows` list + Mark All |
+
+**Shared helpers in this file:**
+- `_card()` — standard white rounded card builder
+- `_tableHeader()` / `_tableRow()` — flex-ratio column table helpers
+- `_empAvatar()` — circular avatar from `_Emp` data
+- `_kEmps` — shared list of 5 static employees used across Steps 2–8
+
+---
+
+### 2. Payroll Rules Settings Screen (`payroll_rules_screen.dart`)
+
+**File:** `lib/features/settings/presentation/payroll_rules/payroll_rules_screen.dart`
+
+**Route:** `/settings/payroll-rules` — pushed from Settings hub (Modules → Payroll Rules tile, previously "Soon", now tappable).
+
+**Screen structure:**
+- `SettingsAppBar` with "Payroll Rules" title + **Save All Changes** button (navy, `minimumSize: Size(0, 34)`).
+- AppBar `bottom:` = `TabBar(isScrollable: true)` with 3 tabs: Earnings Rules | Deduction Rules | Payroll Run Settings.
+- 4 live stat chips below AppBar (count updates as toggles change):
+  - **10** Earning Components · **9** Deduction Rules · **5** Statutory Rules · **17** Active Rules
+
+**Tab 1 — Earnings Rules:**
+- 10 components: Basic Salary (40% of CTC), HRA (50% of Basic), DA (15%), Special Allow. (10%), Conveyance (₹1,600/mo), Medical (₹1,250/mo), Travel (₹2,000/mo), Internet (₹500/mo, disabled), Incentives (Variable), Overtime (Variable).
+- Each row: component name + `_typeBadge` (Percentage=blue, Fixed Amount=grey, Variable=green, Slab-based=amber) + value + `Switch` toggle + effective date chip + applies-on chip + edit icon.
+- Internet Allowance starts disabled (grey row).
+
+**Tab 2 — Deduction Rules:**
+- 9 components: PF (12%), ESI (0.75%), Professional Tax (₹200), Income Tax/TDS (slab-based), Labour Welfare Fund (₹25), Loan EMI (variable), Salary Advance Recovery (variable), LOP (variable), Other Deductions (disabled).
+- Same row structure as Earnings; statutory rows (PF, ESI, PT, TDS, LWF) additionally show a purple "Statutory" chip.
+
+**Tab 3 — Payroll Run Settings:**
+- 4 rows of 2-column form using real `DropdownButtonFormField` and `TextField` widgets:
+  - Pay Frequency (Monthly) | Payroll Lock Date (25)
+  - Pay Day (28) | ESI Ceiling Gross ₹ (21000)
+  - PT State (Karnataka) | LOP Calculation (Working Days)
+  - Auto-approve Threshold (0) | Employer PF % (12)
+- **Save Run Settings** button (navy, `minimumSize: Size(0, 44)`, aligned right).
+
+**Bug fixed in this screen:**
+- `Transform.scale(scale: 0.78)` on `Switch` inside a `SizedBox(width: 56)` caused a 4px RenderFlex overflow on every row because `Transform` does not affect layout box size — the Switch's native ~60px width overflowed the 56px container.
+- **Fix:** Removed the `SizedBox`/`Row` wrapper. Used `Transform.scale(scale: 0.78, alignment: Alignment.centerRight)` directly, letting the switch occupy its native layout width without constraint.
+
+---
+
+### 3. My Payslips Screen (`my_payslip_screen.dart`)
+
+**File:** `lib/features/payroll/presentation/screens/my_payslip_screen.dart`
+
+**Route:** `/dashboard/my-payslip` (was `PlaceholderScreen`, now replaced).
+
+**Screen structure (single scrollable column inside dashboard shell):**
+
+**Page header row:**
+- "My Payslips" title + subtitle
+- **Email** OutlinedButton + **Download PDF** ElevatedButton (both `minimumSize: Size(0, 34)`)
+
+**Employee card:**
+- Navy gradient banner (LinearGradient 1B3A6B→2A5298) with circular avatar "AM" + name/role/emp-code pill
+- 4-column detail row below: Department | Date of Join | PAN | UAN
+
+**Month selector:**
+- `SELECT MONTH` label + horizontally scrollable chip row
+- 4 months: June 2026 (default selected, navy), May, April, March 2026
+- Each chip: month name + salary date + green "Paid" badge
+- Tapping a chip calls `setState(() => _selectedMonth = i)` — rebuilds the payslip document below
+
+**Payslip document (white card, rounded, full-width):**
+
+| Section | Details |
+|---|---|
+| Company header | Navy gradient — "Royal Staffing Services LLP" + address + CIN on left; "PAYSLIP" badge + month + salary date on right |
+| Employee meta | 4-column row: Employee ID (EMP-0042) · Bank (HDFC Bank) · Account No. (XXXX4521) · IFSC Code (HDFC0001234) |
+| Stats row | 3 equal blocks with VerticalDividers: **26** Working Days in June 2026 · **26** Paid Days (days credited) · **0** Loss of Pay (no LOP) |
+| Earnings | 6 line items (Basic ₹45k, HRA ₹18k, DA ₹4.5k, Special Allow. ₹6k, Bonus ₹5k, OT ₹2k) + highlighted **Gross Earnings ₹80,500** row |
+| Deductions | Red-tinted container — 4 items (PF ₹5,400 · PT ₹200 · TDS ₹3,500 · Loan EMI ₹5,000) + **Total Deductions ₹14,100** in red |
+| Reimbursements | Icon + total ₹4,000 + 4 blue chips: TRAVEL ₹2,000 · MEDICAL ₹500 · INTERNET ₹500 · FOOD ₹1,000 |
+| Net Salary | Formula chips (Gross ₹80,500 − Ded. ₹14,100 + Reimb. ₹4,000) + navy gradient bar showing **₹70,400** + LinearProgressIndicator (87.4% of gross) |
+| Footer | "Computer-generated payslip" disclaimer text |
+
+---
+
+### 4. Router & Navigation Updates
+
+**File:** `lib/core/router/app_router.dart`
+
+Changes made this session:
+- Added import: `payroll/presentation/screens/run_payroll_screen.dart`
+- Added import: `payroll/presentation/screens/my_payslip_screen.dart`
+- Added import: `settings/presentation/payroll_rules/payroll_rules_screen.dart`
+- Added route constant: `static const String settingsPayrollRules = '/settings/payroll-rules'`
+- `/dashboard/my-payslip` → replaced `PlaceholderScreen` with `MyPayslipScreen()`
+- `/settings/payroll-rules` → new `GoRoute` → `PayrollRulesScreen()`
+- `RunPayrollScreen` is NOT a GoRouter route — it is pushed via `Navigator.push(MaterialPageRoute(...))` from the Run Payroll button in `PayrollScreen`, keeping it outside the shell.
+
+**File:** `lib/features/settings/presentation/settings_hub/settings_screen.dart`
+- Payroll Rules tile: added `route: AppRoutes.settingsPayrollRules` (was `null`, tile was showing "Soon" badge and was non-tappable)
+
+---
+
+### 5. Critical Bug — ElevatedButton Infinite Width in Rows
+
+**Root cause (documented for the whole codebase):**
+`AppTheme` sets `minimumSize: const Size.fromHeight(48)` on all `ElevatedButton`. `Size.fromHeight(48)` resolves to `Size(double.infinity, 48)`. When an `ElevatedButton` is placed inside a `Row` (unbounded horizontal), Flutter's `_InputPadding` ConstrainedBox applies `minWidth: double.infinity` which cannot be satisfied → crash: *"BoxConstraints forces an infinite width"*.
+
+**Rule:** Every `ElevatedButton` or `OutlinedButton` placed inside a `Row` MUST override with:
+```dart
+style: ElevatedButton.styleFrom(minimumSize: const Size(0, 36), ...)
+```
+
+This was applied to all buttons in Row widgets in `PayrollScreen`, `RunPayrollScreen`, `MyPayslipScreen`, and `PayrollRulesScreen`.
+
+---
+
+### Files Created This Session
+```
+lib/features/payroll/presentation/screens/
+  run_payroll_screen.dart    (NEW — 8-step Run Payroll wizard)
+  my_payslip_screen.dart     (NEW — My Payslips screen)
+
+lib/features/settings/presentation/payroll_rules/
+  payroll_rules_screen.dart  (NEW — Payroll Rules settings screen)
+```
+
+### Files Modified This Session
+```
+lib/core/router/app_router.dart
+  — added 3 imports, 1 new route constant, 1 new GoRoute, replaced 1 PlaceholderScreen
+
+lib/features/payroll/presentation/screens/payroll_screen.dart
+  — added import run_payroll_screen.dart
+  — Run Payroll button onPressed: now Navigator.push to RunPayrollScreen
+
+lib/features/settings/presentation/settings_hub/settings_screen.dart
+  — Payroll Rules tile route: null → AppRoutes.settingsPayrollRules
+```
+
+### Pending Tasks (updated)
+- [ ] Connect My Profile screen to real API
+- [ ] Backend team: add `access` token to login + refresh response bodies (from Session 4)
+- [ ] Test Document Center end-to-end
+- [ ] Wire team calendar tab to real calendar API (`/leave/calendar/`)
+- [ ] Leave history side-cards in apply form (replace mock `_kLeaveHistory` with real requests)
+- [ ] My Payslips — wire month selector to real payslip API (currently all static data)
+- [ ] Run Payroll wizard — wire Period Setup to real employees/branches/departments providers
+- [ ] Run Payroll wizard — wire Calculation step to real payroll calculation API
+- [ ] Run Payroll wizard — wire Bank Transfer step to real disbursement API
+- [ ] Payroll Rules — wire toggles + Save buttons to real settings API
+- [ ] Payroll Run Settings — wire Save Run Settings to real API
+- [ ] Add "My Requests" screen (currently PlaceholderScreen)
+- [ ] Add "Approvals" screen (currently PlaceholderScreen)
+- [ ] Add "Separation & FnF" screen (currently PlaceholderScreen)
+- [ ] Add "Reports" screen (currently PlaceholderScreen)
+
+---
+
+## Session 14 — Settings: Leave Policy + Credit Rules Merged Into Tabbed Screen
+
+**Date:** 2026-07-01
+**Developer:** Pramod Kunja
+
+### Module Worked On
+- Settings → Leave Policy — merged the separate "Leave Policy" and "Leave Credit Rules" screens into one tabbed screen (matching web mockup screenshots), fixed Credit Rules visual design, wired a real backend action that was previously unused.
+
+### What Changed
+
+**1. Tabbed screen (`leave_policy_screen.dart`)**
+- `LeavePolicyScreen` now hosts a `TabController` with 2 tabs — "Policy" and "Credit Rules" — via `SettingsAppBar(bottom: TabBar(...))`.
+- The standalone Credit Rules route/screen was removed; `CreditRulesTab` is now a tab body (`ConsumerStatefulWidget`, no own Scaffold/AppBar) shown inside a `TabBarView`.
+- `floatingActionButton` shows "Add Rule" (FAB) only while the Credit Rules tab is active, driven by `GlobalKey<CreditRulesTabState>` + `_tabController.index == 1` — reverted from an inline header button per direct feedback that it should stay a FAB.
+
+**2. Real backend action discovered and wired**
+- `POST /leave/balance/credit/` (`LeaveBalanceView.post` in `apps/hrms/views/leave.py`, permission `leave.approve`) credits every active employee's annual leave balance for a year from each policy's `annual_days`. It existed on the backend and even had a dead constant in the web frontend (`endpoints.ts: balanceCredit`), but no UI anywhere called it.
+- Added `SettingsRemoteDataSource.creditLeaveBalances({year, employeeId})`, `LeavePoliciesNotifier.creditAnnualLeave()`, and `CreditBalancesResult` model. Wired to a real "Credit Annual Leave" card in the Credit Rules tab with a year field + confirm dialog + snackbar result — this is a genuine, working backend call, not a preview.
+
+**3. Local-only "preview" mode for what the backend can't do**
+- Confirmed via repo-wide grep (`accrual|creditrule|credit_rule|encash`) that the backend has **zero** support for per-type accrual rules or custom leave types — `LeavePolicy.leave_type` is a fixed 6-choice enum with no create endpoint.
+- "Add Leave Type" (Policy tab) and the accrual "Credit Rules" list are therefore local-only, in-memory previews: `LeavePolicyModel.isPreview` / grey color + amber "PREVIEW" badge instead of a real leave-type color, and an "AUTOMATION COMING SOON" pill on the rules list. Per explicit instruction, these are placeholders for backend wiring the user will add later — not fake data dressed up as real.
+
+**4. Bug fixes**
+- DRF serializes `DecimalField`s (e.g. `annual_days`) as JSON **strings** (`"12.0"`), not numbers — `as num?` casts were throwing and silently killing the whole list parse. Added a shared tolerant `_toDouble()` parser in `leave_policy_model.dart`.
+- Dialog overflow in both `LeavePolicyFormSheet` and `CreditRuleFormSheet`: `SingleChildScrollView` in an unbounded `Column` doesn't scroll. Fixed with `ConstrainedBox(maxHeight: 85%) → Column[header, Flexible(scrollable body)]`.
+- "Credit All Employees" button was cramped next to a fixed-width year field in a `Row`; changed to a stacked layout (full-width year field, then full-width button).
+
+### Files Added
+```
+mobile_app/lib/features/settings/
+  data/models/
+    leave_policy_model.dart          (LeavePolicyModel + isPreview, LeavePolicyFormData, CreditBalancesResult)
+    leave_credit_rule_model.dart     (local-preview accrual rule model, kSeedCreditRules)
+  presentation/leave_policy/
+    leave_policy_screen.dart         (tabbed screen, _PolicyTab, _StatsRow, _PolicyCard)
+    widgets/leave_policy_form_sheet.dart
+  presentation/leave_credit_rules/
+    leave_credit_rules_screen.dart   (CreditRulesTab — real Credit Annual Leave card + preview rules list)
+    widgets/credit_rule_form_sheet.dart
+```
+
+### Files Modified
+```
+mobile_app/lib/
+  core/constants/api_constants.dart              leavePolicyDetail(), leaveBalanceCredit
+  features/settings/
+    data/datasources/settings_remote_datasource.dart   fetchLeavePolicies, updateLeavePolicy, creditLeaveBalances
+    presentation/providers/settings_providers.dart      LeavePoliciesNotifier.updatePolicy/creditAnnualLeave
+    presentation/settings_hub/settings_screen.dart      single "Leave Policy" tile (desc covers credit/encashment)
+```
+
+### Architecture Notes
+- Real-vs-preview is now an explicit, labeled distinction in this codebase: never let a locally-added item look identical to a backend-persisted one (color, badge, or explanatory text must differ).
+- `LeaveTypeColors` (`features/leave/domain/entities/leave_entity.dart`) is the single source of truth for the 6 fixed leave-type codes/colors/labels, reused by both the Leave feature and this Settings screen.
+- `GlobalKey<State>` is the established pattern here for a parent screen's FAB to trigger a method on a specific `TabBarView` child.
+
+### Pending Tasks (updated)
+- [ ] Backend: real create/delete support for custom leave types, if the business actually needs more than the fixed 6
+- [ ] Backend: an accrual/credit-rule model — the Credit Rules list is local-only preview until this exists
+- [ ] Wire `LeaveBalanceAdjustView` (per-balance PATCH) to a mobile UI — currently unused, like `balance/credit/` was

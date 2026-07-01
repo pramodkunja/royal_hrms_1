@@ -103,6 +103,11 @@ class ApiConstants {
       '/onboarding/documents/$id/';
   static const String onboardingSubmit = '/onboarding/submit/';
 
+  // Onboarding Approvals (HR)
+  static const String onboardingApprovals = '/onboarding/approvals/';
+  static String onboardingApprove(String userId) =>
+      '/onboarding/approvals/$userId/approve/';
+
   // Leave management — paths match backend /api/leave/...
   static const String leaveTypes    = '/leave/policy/';
   static const String leaveBalances = '/leave/balance/';

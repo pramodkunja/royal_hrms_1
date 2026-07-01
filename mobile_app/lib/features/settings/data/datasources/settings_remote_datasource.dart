@@ -145,7 +145,7 @@ class SettingsRemoteDataSource {
   // ── Departments ────────────────────────────────────────────────────────────
 
   Future<List<DepartmentModel>> fetchDepartments() async {
-    final res = await _dio.get(ApiConstants.departments);
+    final res = await _dio.get(ApiConstants.departments, queryParameters: {'page_size': 200});
     final data = _unwrap(res.data);
     return _toList(data).map((e) => DepartmentModel.fromJson(e as Map<String, dynamic>)).toList();
   }
@@ -192,7 +192,7 @@ class SettingsRemoteDataSource {
   }
 
   Future<List<DesignationModel>> fetchDesignations() async {
-    final res = await _dio.get(ApiConstants.designations);
+    final res = await _dio.get(ApiConstants.designations, queryParameters: {'page_size': 200});
     final data = _unwrap(res.data);
     return _toList(data).map((e) => DesignationModel.fromJson(e as Map<String, dynamic>)).toList();
   }
