@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 
 @immutable
 class EmployeeModel {
-  final String id;             // UUID
-  final String employeeId;     // e.g. EMP001
+  final String id;
+  final String employeeId;
   final String firstName;
   final String lastName;
   final String fullName;
@@ -16,8 +16,43 @@ class EmployeeModel {
   final String branch;
   final String roleDisplay;
   final bool isActive;
-  final String status;         // 'active' | 'onboarding' | 'inactive'
-  final String dateOfJoining;  // ISO date string yyyy-MM-dd
+  final String status;
+  final String dateOfJoining;
+  final String? reportingManagerId;
+  final String? reportingManagerName;
+
+  // Profile: personal
+  final String dateOfBirth;
+  final String gender;
+  final String maritalStatus;
+  final String fatherName;
+  final String bloodGroup;
+  final String currentAddress;
+  final String permanentAddress;
+
+  // Profile: education & experience
+  final String highestQualification;
+  final String specialization;
+  final String institution;
+  final String yearOfPassing;
+  final String totalExperienceYears;
+  final String previousEmployer;
+  final String previousDesignation;
+  final String leavingReason;
+
+  // Profile: bank details
+  final String accountHolderName;
+  final String accountType;
+  final String accountNumber;
+  final String ifscCode;
+  final String bankName;
+  final String bankBranch;
+
+  // Profile: emergency contact
+  final String emergencyName;
+  final String emergencyRelationship;
+  final String emergencyPhone;
+  final String emergencyEmail;
 
   const EmployeeModel({
     required this.id,
@@ -34,24 +69,81 @@ class EmployeeModel {
     required this.isActive,
     required this.status,
     required this.dateOfJoining,
+    this.reportingManagerId,
+    this.reportingManagerName,
+    this.dateOfBirth = '',
+    this.gender = '',
+    this.maritalStatus = '',
+    this.fatherName = '',
+    this.bloodGroup = '',
+    this.currentAddress = '',
+    this.permanentAddress = '',
+    this.highestQualification = '',
+    this.specialization = '',
+    this.institution = '',
+    this.yearOfPassing = '',
+    this.totalExperienceYears = '',
+    this.previousEmployer = '',
+    this.previousDesignation = '',
+    this.leavingReason = '',
+    this.accountHolderName = '',
+    this.accountType = '',
+    this.accountNumber = '',
+    this.ifscCode = '',
+    this.bankName = '',
+    this.bankBranch = '',
+    this.emergencyName = '',
+    this.emergencyRelationship = '',
+    this.emergencyPhone = '',
+    this.emergencyEmail = '',
   });
 
-  factory EmployeeModel.fromJson(Map<String, dynamic> json) => EmployeeModel(
-        id:            json['id']?.toString() ?? '',
-        employeeId:    json['employee_id'] as String? ?? '',
-        firstName:     json['first_name'] as String? ?? '',
-        lastName:      json['last_name'] as String? ?? '',
-        fullName:      json['full_name'] as String? ?? '',
-        email:         json['email'] as String? ?? '',
-        phone:         json['phone'] as String? ?? '',
-        department:    json['department'] as String? ?? '',
-        designation:   json['designation'] as String? ?? '',
-        branch:        json['branch'] as String? ?? '',
-        roleDisplay:   json['role_display'] as String? ?? '',
-        isActive:      json['is_active'] as bool? ?? false,
-        status:        json['status'] as String? ?? 'inactive',
-        dateOfJoining: json['date_of_joining'] as String? ?? '',
-      );
+  factory EmployeeModel.fromJson(Map<String, dynamic> json) {
+    final profile = (json['profile'] as Map<String, dynamic>?) ?? {};
+    return EmployeeModel(
+      id:            json['id']?.toString() ?? '',
+      employeeId:    json['employee_id'] as String? ?? '',
+      firstName:     json['first_name'] as String? ?? '',
+      lastName:      json['last_name'] as String? ?? '',
+      fullName:      json['full_name'] as String? ?? '',
+      email:         json['email'] as String? ?? '',
+      phone:         json['phone'] as String? ?? '',
+      department:    json['department'] as String? ?? '',
+      designation:   json['designation'] as String? ?? '',
+      branch:        json['branch'] as String? ?? '',
+      roleDisplay:   json['role_display'] as String? ?? '',
+      isActive:      json['is_active'] as bool? ?? false,
+      status:        json['status'] as String? ?? 'inactive',
+      dateOfJoining: json['date_of_joining'] as String? ?? '',
+      reportingManagerId:   json['reporting_manager_id'] as String?,
+      reportingManagerName: json['reporting_manager_name'] as String?,
+      dateOfBirth:          profile['date_of_birth'] as String? ?? '',
+      gender:               profile['gender'] as String? ?? '',
+      maritalStatus:        profile['marital_status'] as String? ?? '',
+      fatherName:           profile['father_name'] as String? ?? '',
+      bloodGroup:           profile['blood_group'] as String? ?? '',
+      currentAddress:       profile['current_address'] as String? ?? '',
+      permanentAddress:     profile['permanent_address'] as String? ?? '',
+      highestQualification: profile['highest_qualification'] as String? ?? '',
+      specialization:       profile['specialization'] as String? ?? '',
+      institution:          profile['institution'] as String? ?? '',
+      yearOfPassing:        profile['year_of_passing']?.toString() ?? '',
+      totalExperienceYears: profile['total_experience_years'] as String? ?? '',
+      previousEmployer:     profile['previous_employer'] as String? ?? '',
+      previousDesignation:  profile['previous_designation'] as String? ?? '',
+      leavingReason:        profile['leaving_reason'] as String? ?? '',
+      accountHolderName:    profile['account_holder_name'] as String? ?? '',
+      accountType:          profile['account_type'] as String? ?? '',
+      accountNumber:        profile['account_number'] as String? ?? '',
+      ifscCode:             profile['ifsc_code'] as String? ?? '',
+      bankName:             profile['bank_name'] as String? ?? '',
+      bankBranch:           profile['bank_branch_name'] as String? ?? '',
+      emergencyName:         profile['emergency_name'] as String? ?? '',
+      emergencyRelationship: profile['emergency_relationship'] as String? ?? '',
+      emergencyPhone:        profile['emergency_phone'] as String? ?? '',
+      emergencyEmail:        profile['emergency_email'] as String? ?? '',
+    );
+  }
 
   String get initials {
     final parts = fullName.trim().split(RegExp(r'\s+'));
@@ -177,13 +269,13 @@ class EmployeeFormData {
   String lastName;
   String email;
   String phone;
-  dynamic roleId;      // matches RoleModel.id (dynamic)
-  int? departmentId;   // used to filter designations dropdown
-  String department;   // dept name string — sent to backend
-  String designation;  // designation name string — sent to backend
-  String branch;       // branch name string — sent to backend
+  dynamic roleId;
+  int? departmentId;
+  String department;
+  String designation;
+  String branch;
   String employeeType;
-  String dateOfJoining; // yyyy-MM-dd
+  String dateOfJoining;
 
   EmployeeFormData({
     this.firstName = '',

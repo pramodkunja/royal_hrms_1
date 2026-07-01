@@ -27,6 +27,8 @@ import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/interview_list/presentation/screens/interview_list_screen.dart';
 import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../../features/onboarding/presentation/screens/awaiting_approval_screen.dart';
+import '../../features/leave/presentation/screens/leave_screen.dart';
+import '../../features/expenses/presentation/screens/expense_screen.dart';
 
 // ─── Route path constants ─────────────────────────────────────────────────────
 
@@ -276,15 +278,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.leave,
-            pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'Leave Management', icon: Icons.beach_access_outlined),
-            ),
+            pageBuilder: (_, __) => const NoTransitionPage(child: LeaveScreen()),
           ),
           GoRoute(
             path: AppRoutes.expenses,
-            pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'Expenses', icon: Icons.account_balance_wallet_outlined),
-            ),
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: ExpenseScreen()),
           ),
 
           // HR Ops

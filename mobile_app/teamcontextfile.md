@@ -1989,7 +1989,143 @@ mobile_app/lib/
 - [ ] Test Document Center end-to-end
 - [ ] Employee module
 - [ ] Attendance module
-- [ ] Leave module
+- [x] Leave module — fully wired (Session 12)
 - [ ] Payroll module
+
+---
+
+## Session 12 — Leave Module Full Backend Integration
+
+**Date:** 2026-07-01
+**Developer:** Pramod Kunja
+
+### Module Worked On
+- Leave Management — complete backend connection for all 5 tabs
+
+### Root Cause Fixes
+
+**1. Wrong API path prefix (`api_constants.dart`)**
+All 7 leave endpoints used `/leaves/...` but the backend serves them at `/leave/...`.
+Fixed every constant and removed the stale `leaveTeam` path (backend has no team endpoint — uses `leaveCalendar`):
+```dart
+static const String leaveTypes    = '/leave/policy/';
+static const String leaveBalances = '/leave/balance/';
+static const String leaveStats    = '/leave/stats/';
+static const String leaves        = '/leave/requests/';
+static const String leaveCalendar = '/leave/calendar/';
+static String leaveDetail(dynamic id) => '/leave/requests/$id/';
+static String leaveAction(dynamic id) => '/leave/requests/$id/approve/';
+```
+
+**2. Wrong field names in every model (`leave_models.dart`)**
+Backend serializer field names did not match what the models expected:
+
+| Model | Old (wrong) field | Correct field |
+|---|---|---|
+| `LeaveTypeModel` | `type_code` | `leave_type` |
+| `LeaveTypeModel` | `display_name` | `leave_type_display` |
+| `LeaveTypeModel` | `max_days` | `annual_days` |
+| `LeaveBalanceModel` | `leave_type_id` (int) | `leave_type` (String code) |
+| `LeaveBalanceModel` | `used` | `used_days` |
+| `LeaveBalanceModel` | `total` | `total_days` |
+| `LeaveRequestModel` | `employee` | `employee_name` |
+| `LeaveRequestModel` | `dept` | `employee_dept` |
+| `LeaveRequestModel` | `from_date` | `start_date` |
+| `LeaveRequestModel` | `to_date` | `end_date` |
+
+**3. UUID primary key on LeaveRequest**
+Backend `LeaveRequest.id` is a `UUIDField`. The model was casting `json['id'] as num` → crash at runtime.
+Fixed `LeaveRequestEntity.id` from `int` to `String` throughout entity → model → repository → datasource → providers.
+
+**4. LeaveBalance has no integer ID**
+`LeaveBalanceEntity` previously carried a `leaveTypeId: int`. The backend returns only the string code (`leave_type: 'CL'`). Removed the integer field; the code string is now the sole key.
+
+**5. Wrong POST body for applyLeave (`leave_remote_datasource.dart`)**
+```dart
+// Before (wrong)
+'leave_type_id': leaveTypeId,  // int
+'from_date': fromDate,
+'to_date': toDate,
+
+// After (correct)
+'leave_type':  leaveTypeCode,  // 'CL', 'EL', etc.
+'start_date':  fromDate,
+'end_date':    toDate,
+'duration':    duration,       // 'full_day' | 'half_day_morning' | 'half_day_afternoon'
+```
+
+### Widget Rewrites
+
+**`leave_dashboard_tab.dart`** → `ConsumerStatefulWidget`
+- Watches `leaveBalancesProvider` (horizontal scroll of balance cards)
+- Watches `leaveRequestsProvider` (request list with approve/reject buttons)
+- Pull-to-refresh invalidates both providers
+- Branch filter applied client-side on `request.branch`
+- ISO date formatter `_fmtIso()` converts `'YYYY-MM-DD'` → `'D MMM'`
+- Approve/reject dialogs call `leaveRequestsProvider.notifier.approveRequest(id)` / `rejectRequest(id, reason)`
+
+**`leave_approvals_tab.dart`** → `ConsumerStatefulWidget`
+- Same provider wiring as dashboard
+- Pending/History sub-tabs filter `isPending` client-side
+- Real approve/reject wired to notifier methods with `String id` (UUID)
+
+**`apply_leave_type_selector.dart`** — dynamic data support
+- `LeaveTypeOption.fromEntities(LeaveTypeEntity, LeaveBalanceEntity?)` factory
+- `LeaveTypeOption.listFromEntities(types, balances)` static builder
+- `_colorForCode(String code)` helper maps 'CL'→primary, 'EL'→success, etc.
+- `LeaveTypeSelector` now accepts `List<LeaveTypeOption> types` parameter (no more `kLeaveTypes` const)
+
+**`apply_leave_tab.dart`** → `ConsumerStatefulWidget`
+- Watches `leaveTypesProvider` + `leaveBalancesProvider` → builds `LeaveTypeOption` list
+- `ref.listen(leaveTypesProvider, ...)` auto-selects first type once data loads
+- `_EmployeeBanner` reads `authStateProvider` — shows real `fullName`, `employeeId`, `designation`, `department`
+- `_submit()` calls `leaveRequestsProvider.notifier.applyLeave(leaveTypeCode: ..., duration: ...)` then invalidates balance + stats providers
+- Duration enum maps: `fullDay` → `'full_day'`, `halfMorning` → `'half_day_morning'`, `halfAfternoon` → `'half_day_afternoon'`
+
+**`leave_analytics_tab.dart`** → `ConsumerWidget`
+- Watches `leaveStatsProvider` for the 4 KPI cards (total / pending / approved / rejected)
+- Department breakdown + monthly trend + top takers remain mock (no backend endpoint for these aggregations yet)
+- Pull-to-refresh invalidates `leaveStatsProvider`
+
+**`leave_screen.dart`** → `ConsumerStatefulWidget`
+- `_openBranchSheet()` reads `branchListProvider.valueOrNull` → maps `b.branchName` → passes as `branches:` to `_BranchSheet`
+- `_BranchSheet` now accepts `branches: List<String>` instead of the removed `_kBranches` const
+- Empty state shown if provider hasn't loaded yet
+
+### Architecture Notes
+- `leaveRequestsProvider` is a single provider for all roles — pending/history split is client-side only
+- `leaveStatsProvider` is autoDispose; invalidate after apply/approve/reject to keep KPIs fresh
+- `branchListProvider` is imported from `features/branches/presentation/providers/branch_providers.dart`
+- `BranchEntity.branchName` is the display field (not `.name`)
+
+### Files Modified
+```
+mobile_app/lib/
+  core/constants/api_constants.dart
+  features/leave/
+    domain/entities/leave_entity.dart
+    domain/repositories/leave_repository.dart
+    data/models/leave_models.dart
+    data/datasources/leave_remote_datasource.dart
+    data/repositories/leave_repository_impl.dart
+    presentation/
+      providers/leave_providers.dart
+      screens/leave_screen.dart
+      widgets/
+        leave_dashboard_tab.dart
+        leave_approvals_tab.dart
+        apply_leave_type_selector.dart
+        apply_leave_tab.dart
+        leave_analytics_tab.dart
+```
+
+### Pending Tasks (updated)
+- [ ] Connect My Profile screen to real API
+- [ ] Backend team: add `access` token to login + refresh response bodies (from Session 4)
+- [ ] Test Document Center end-to-end
+- [ ] Employee module — attendance tracking
+- [ ] Payroll module
+- [ ] Wire team calendar tab to real calendar API (`/leave/calendar/`)
+- [ ] Leave history side-cards in apply form (replace mock `_kLeaveHistory` with real requests)
 
 ---

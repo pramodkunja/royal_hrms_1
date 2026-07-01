@@ -10,8 +10,15 @@ class EmployeesRemoteDataSource {
 
   Future<List<EmployeeModel>> fetchEmployees() async {
     final res = await _dio.get(ApiConstants.employees);
-    final list = _unwrap(res.data);
-    if (list is! List) return [];
+    final raw = _unwrap(res.data);
+    final List<dynamic> list;
+    if (raw is List) {
+      list = raw;
+    } else if (raw is Map<String, dynamic>) {
+      list = raw['results'] as List<dynamic>? ?? [];
+    } else {
+      return [];
+    }
     return list
         .whereType<Map<String, dynamic>>()
         .map(EmployeeModel.fromJson)

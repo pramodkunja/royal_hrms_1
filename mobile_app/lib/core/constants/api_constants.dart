@@ -102,4 +102,17 @@ class ApiConstants {
   static String onboardingDocumentDetail(int id) =>
       '/onboarding/documents/$id/';
   static const String onboardingSubmit = '/onboarding/submit/';
+
+  // Leave management — paths match backend /api/leave/...
+  static const String leaveTypes    = '/leave/policy/';
+  static const String leaveBalances = '/leave/balance/';
+  static const String leaveStats    = '/leave/stats/';
+  static const String leaves        = '/leave/requests/';
+  static const String leaveCalendar = '/leave/calendar/';
+  static String leaveDetail(dynamic id)  => '/leave/requests/$id/';
+  static String leaveAction(dynamic id)  => '/leave/requests/$id/approve/';
+
+  // Expenses
+  static const String expenses     = '/expenses/';
+  static const String expenseStats = '/expenses/stats/';
 }

@@ -167,7 +167,6 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
           : null,
       body: NestedScrollView(
         headerSliverBuilder: (_, __) => [
-          // ── Profile card ─────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
@@ -180,7 +179,6 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
             ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 10)),
-          // ── Main tab bar ─────────────────────────────────────────────
           SliverPersistentHeader(
             pinned: true,
             delegate: _TabBarDelegate(
@@ -224,6 +222,24 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
   }
 }
 
+// ── Date helper ───────────────────────────────────────────────────────────────
+
+String _fmtDate(String raw) {
+  if (raw.isEmpty) return '—';
+  try {
+    final dt = DateTime.parse(raw);
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+  } catch (_) {
+    return raw;
+  }
+}
+
+String _cap(String s) => s.isEmpty ? '' : s[0].toUpperCase() + s.substring(1);
+
 // ── Profile card ──────────────────────────────────────────────────────────────
 
 class _ProfileCard extends StatelessWidget {
@@ -241,6 +257,7 @@ class _ProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final emp = employee;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -277,7 +294,7 @@ class _ProfileCard extends StatelessWidget {
                       ),
                       child: Center(
                         child: Text(
-                          employee.initials,
+                          emp.initials,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 28,
@@ -307,7 +324,7 @@ class _ProfileCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  employee.fullName,
+                  emp.fullName,
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
@@ -319,11 +336,10 @@ class _ProfileCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 8),
-                // ID + Status pill
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    if (employee.employeeId.isNotEmpty)
+                    if (emp.employeeId.isNotEmpty)
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 3),
@@ -332,7 +348,7 @@ class _ProfileCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          '#${employee.employeeId}',
+                          '#${emp.employeeId}',
                           style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
@@ -340,8 +356,8 @@ class _ProfileCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                    if (employee.employeeId.isNotEmpty &&
-                        employee.status.isNotEmpty) ...[
+                    if (emp.employeeId.isNotEmpty &&
+                        emp.status.isNotEmpty) ...[
                       const SizedBox(width: 6),
                       Container(
                           width: 4,
@@ -352,9 +368,9 @@ class _ProfileCard extends StatelessWidget {
                           )),
                       const SizedBox(width: 6),
                     ],
-                    if (employee.status.isNotEmpty)
+                    if (emp.status.isNotEmpty)
                       Text(
-                        _capFirst(employee.status),
+                        _cap(emp.status),
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -363,11 +379,11 @@ class _ProfileCard extends StatelessWidget {
                       ),
                   ],
                 ),
-                if (employee.designation.isNotEmpty ||
-                    employee.department.isNotEmpty) ...[
+                if (emp.designation.isNotEmpty ||
+                    emp.department.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Text(
-                    [employee.designation, employee.department]
+                    [emp.designation, emp.department]
                         .where((s) => s.isNotEmpty)
                         .join(' · '),
                     style: TextStyle(
@@ -390,7 +406,7 @@ class _ProfileCard extends StatelessWidget {
                 Expanded(
                   child: _InfoCell(
                     label: 'JOINED',
-                    value: _fmtDate(employee.dateOfJoining),
+                    value: _fmtDate(emp.dateOfJoining),
                     icon: Icons.calendar_today_outlined,
                   ),
                 ),
@@ -398,8 +414,8 @@ class _ProfileCard extends StatelessWidget {
                     width: 1, thickness: 1, color: AppColors.border),
                 Expanded(
                   child: _InfoCell(
-                    label: 'LOCATION',
-                    value: employee.branch.isEmpty ? '—' : employee.branch,
+                    label: 'BRANCH',
+                    value: emp.branch.isEmpty ? '—' : emp.branch,
                     icon: Icons.location_on_outlined,
                   ),
                 ),
@@ -408,10 +424,33 @@ class _ProfileCard extends StatelessWidget {
                 Expanded(
                   child: _InfoCell(
                     label: 'DEPT',
-                    value: employee.department.isEmpty
-                        ? '—'
-                        : employee.department,
+                    value: emp.department.isEmpty ? '—' : emp.department,
                     icon: Icons.business_outlined,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── 2-column info row: DOB + Phone ────────────────────────────
+          const Divider(height: 1, color: AppColors.border),
+          IntrinsicHeight(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _InfoCell(
+                    label: 'DATE OF BIRTH',
+                    value: _fmtDate(emp.dateOfBirth),
+                    icon: Icons.cake_outlined,
+                  ),
+                ),
+                const VerticalDivider(
+                    width: 1, thickness: 1, color: AppColors.border),
+                Expanded(
+                  child: _InfoCell(
+                    label: 'PHONE',
+                    value: emp.phone.isEmpty ? '—' : emp.phone,
+                    icon: Icons.phone_outlined,
                   ),
                 ),
               ],
@@ -462,23 +501,6 @@ class _ProfileCard extends StatelessWidget {
       ),
     );
   }
-
-  String _fmtDate(String raw) {
-    if (raw.isEmpty) return '—';
-    try {
-      final dt = DateTime.parse(raw);
-      const m = [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-      ];
-      return '${m[dt.month - 1]} ${dt.day}, ${dt.year}';
-    } catch (_) {
-      return raw;
-    }
-  }
-
-  String _capFirst(String s) =>
-      s.isEmpty ? '' : s[0].toUpperCase() + s.substring(1);
 }
 
 class _InfoCell extends StatelessWidget {
@@ -531,7 +553,7 @@ class _InfoCell extends StatelessWidget {
   }
 }
 
-// ── Profile tab (sub-tabs + section content) ───────────────────────────────────
+// ── Profile tab ───────────────────────────────────────────────────────────────
 
 class _ProfileTab extends StatefulWidget {
   final EmployeeModel employee;
@@ -544,45 +566,65 @@ class _ProfileTab extends StatefulWidget {
 class _ProfileTabState extends State<_ProfileTab> {
   int _sub = 0;
 
+  static const _sections = [
+    'Personal',
+    'Education & Experience',
+    'Bank Details',
+    'Emergency Contact',
+    'Documents',
+  ];
+
+  static const _icons = [
+    Icons.person_outlined,
+    Icons.school_outlined,
+    Icons.account_balance_outlined,
+    Icons.local_phone_outlined,
+    Icons.folder_outlined,
+  ];
+
   @override
   Widget build(BuildContext context) {
     final emp = widget.employee;
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        // ── Sub-tab pills ──────────────────────────────────────────────
+        // ── Section pills ──────────────────────────────────────────────
         Container(
           color: AppColors.surface,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
             child: Row(
-              children: ['Basic Detail', 'Employee Detail', 'Personal Detail']
-                  .asMap()
-                  .entries
-                  .map((e) {
-                final isSel = e.key == _sub;
+              children: _sections.asMap().entries.map((entry) {
+                final index = entry.key;
+                final label = entry.value;
+                final isSelected = index == _sub;
                 return GestureDetector(
-                  onTap: () => setState(() => _sub = e.key),
+                  onTap: () => setState(() => _sub = index),
                   child: Container(
-                    margin: EdgeInsets.only(right: e.key < 2 ? 10 : 0),
+                    margin: EdgeInsets.only(
+                        right: index < _sections.length - 1 ? 10 : 0),
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isSel
+                      color: isSelected
                           ? AppColors.primary.withValues(alpha: 0.10)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: isSel ? AppColors.primary : AppColors.border,
+                        color: isSelected
+                            ? AppColors.primary
+                            : AppColors.border,
                       ),
                     ),
                     child: Text(
-                      e.value,
+                      label,
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
-                        color: isSel
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        color: isSelected
                             ? AppColors.primary
                             : AppColors.textSecondary,
                       ),
@@ -608,7 +650,7 @@ class _ProfileTabState extends State<_ProfileTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // clean section header with left accent
+                // Section header
                 Container(
                   padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                   decoration: BoxDecoration(
@@ -628,19 +670,14 @@ class _ProfileTabState extends State<_ProfileTab> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
-                          [
-                            Icons.list_alt_outlined,
-                            Icons.badge_outlined,
-                            Icons.person_outlined
-                          ][_sub],
+                          _icons[_sub],
                           size: 16,
                           color: AppColors.primary,
                         ),
                       ),
                       const SizedBox(width: 10),
                       Text(
-                        ['Basic Detail', 'Employee Detail', 'Personal Detail']
-                            [_sub],
+                        _sections[_sub],
                         style: AppTextStyles.label.copyWith(
                           fontWeight: FontWeight.w700,
                           color: AppColors.primary,
@@ -656,14 +693,16 @@ class _ProfileTabState extends State<_ProfileTab> {
                     ],
                   ),
                 ),
-                // field content
+                // Section content
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
-                  child: _sub == 0
-                      ? _BasicDetailContent(emp: emp)
-                      : _sub == 1
-                          ? _EmployeeDetailContent(emp: emp)
-                          : _PersonalDetailContent(emp: emp),
+                  padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
+                  child: [
+                    _PersonalContent(emp: emp),
+                    _EducationContent(emp: emp),
+                    _BankContent(emp: emp),
+                    _EmergencyContent(emp: emp),
+                    const _DocumentsContent(),
+                  ][_sub],
                 ),
               ],
             ),
@@ -674,11 +713,11 @@ class _ProfileTabState extends State<_ProfileTab> {
   }
 }
 
-// ── Basic Detail content ──────────────────────────────────────────────────────
+// ── Personal section ──────────────────────────────────────────────────────────
 
-class _BasicDetailContent extends StatelessWidget {
+class _PersonalContent extends StatelessWidget {
   final EmployeeModel emp;
-  const _BasicDetailContent({required this.emp});
+  const _PersonalContent({required this.emp});
 
   @override
   Widget build(BuildContext context) {
@@ -686,162 +725,229 @@ class _BasicDetailContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _FieldRow(
-          label1: 'Employee Code', value1: _str(emp.employeeId), req1: true,
-          label2: 'First Name',   value2: _str(emp.firstName),  req2: true,
+          label1: 'Department',  value1: _s(emp.department),
+          label2: 'Designation', value2: _s(emp.designation),
         ),
         _FieldRow(
-          label1: 'Middle Name', value1: '—',
-          label2: 'Last Name',   value2: _str(emp.lastName), req2: true,
-        ),
-        const _FieldRow(
-          label1: 'Gender',   value1: '—', req1: true,
-          label2: 'Category', value2: '—', req2: true,
-        ),
-        const _FieldRow(
-          label1: 'Prof Tax Location', value1: '—',
-          label2: 'Date Of Birth',     value2: '—', req2: true,
+          label1: 'Date of Birth', value1: _fmtDate(emp.dateOfBirth),
+          label2: 'Gender',        value2: _s(emp.gender),
         ),
         _FieldRow(
-          label1: 'Date of Joining', value1: _fmt(emp.dateOfJoining), req1: true,
-          label2: 'ESI Location',    value2: '—', req2: true,
-        ),
-        const _FieldRow(
-          label1: 'Metro/Non-Metro (TDS)', value1: '—', req1: true,
-          label2: 'ESI Dispensary',        value2: '—', req2: true,
-        ),
-        const _DisplayField(label: 'Contract Period', value: '—'),
-      ],
-    );
-  }
-
-  String _str(String v) => v.isEmpty ? '—' : v;
-
-  String _fmt(String raw) {
-    if (raw.isEmpty) return '—';
-    try {
-      final dt = DateTime.parse(raw);
-      return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
-    } catch (_) {
-      return raw;
-    }
-  }
-}
-
-// ── Employee Detail content ───────────────────────────────────────────────────
-
-class _EmployeeDetailContent extends StatelessWidget {
-  final EmployeeModel emp;
-  const _EmployeeDetailContent({required this.emp});
-
-  @override
-  Widget build(BuildContext context) {
-    final status = emp.status.isEmpty
-        ? '—'
-        : emp.status[0].toUpperCase() + emp.status.substring(1);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _FieldRow(
-          label1: 'Department',  value1: _str(emp.department),  req1: true,
-          label2: 'Designation', value2: _str(emp.designation), req2: true,
+          label1: 'Marital Status', value1: _s(emp.maritalStatus),
+          label2: "Father's Name",  value2: _s(emp.fatherName),
         ),
         _FieldRow(
-          label1: 'Branch',              value1: _str(emp.branch), req1: true,
-          label2: 'Reporting Manager',   value2: '—', req2: true,
+          label1: 'Blood Group', value1: _s(emp.bloodGroup),
+          label2: 'Phone',       value2: _s(emp.phone),
         ),
-        _FieldRow(
-          label1: 'Employment Type', value1: '—', req1: true,
-          label2: 'Work Location',   value2: _str(emp.branch),
-        ),
-        const _FieldRow(
-          label1: 'Cost Centre',  value1: '—',
-          label2: 'Probation End', value2: '—',
-        ),
-        const _FieldRow(
-          label1: 'Confirmation Status', value1: '—',
-          label2: 'Grade',               value2: '—',
-        ),
-        _FieldRow(
-          label1: 'Band',            value1: '—',
-          label2: 'Employee Status', value2: status,
+        _DisplayField(label: 'Work Email', value: _s(emp.email)),
+        _DisplayField(
+          label: 'Current Address',
+          value: _s(emp.currentAddress),
+          maxLines: 3,
         ),
         _DisplayField(
-          label: 'Self Service Role',
-          value: _str(emp.roleDisplay),
+          label: 'Permanent Address',
+          value: _s(emp.permanentAddress),
+          maxLines: 3,
+          padBottom: false,
         ),
       ],
     );
   }
 
-  String _str(String v) => v.isEmpty ? '—' : v;
+  String _s(String v) => v.isEmpty ? '—' : v;
 }
 
-// ── Personal Detail content ───────────────────────────────────────────────────
+// ── Education & Experience section ────────────────────────────────────────────
 
-class _PersonalDetailContent extends StatelessWidget {
+class _EducationContent extends StatelessWidget {
   final EmployeeModel emp;
-  const _PersonalDetailContent({required this.emp});
+  const _EducationContent({required this.emp});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _FieldRow(
-          label1: 'Marital Status', value1: '—',
-          label2: 'Spouse Name',    value2: '—',
-        ),
-        const _FieldRow(
-          label1: 'Nationality', value1: '—', req1: true,
-          label2: 'Religion',    value2: '—',
-        ),
-        const _FieldRow(
-          label1: 'Blood Group',       value1: '—',
-          label2: 'Differently Abled', value2: '—',
-        ),
         _FieldRow(
-          label1: 'Personal Email', value1: _str(emp.email),
-          label2: 'Mobile Number',  value2: _str(emp.phone), req2: true,
-        ),
-        const _FieldRow(
-          label1: 'PAN',     value1: '—', req1: true,
-          label2: 'Aadhaar', value2: '—', req2: true,
+          label1: 'Highest Qualification', value1: _s(emp.highestQualification),
+          label2: 'Specialization',        value2: _s(emp.specialization),
         ),
         _DisplayField(
-          label: 'Login (Work) Email',
-          value: _str(emp.email),
-          required: true,
+          label: 'Institution / University',
+          value: _s(emp.institution),
+        ),
+        _FieldRow(
+          label1: 'Year of Passing',      value1: _s(emp.yearOfPassing),
+          label2: 'Total Experience (yrs)', value2: _s(emp.totalExperienceYears),
+        ),
+        _FieldRow(
+          label1: 'Previous Employer',    value1: _s(emp.previousEmployer),
+          label2: 'Previous Designation', value2: _s(emp.previousDesignation),
+        ),
+        _DisplayField(
+          label: 'Reason for Leaving',
+          value: _s(emp.leavingReason),
+          maxLines: 3,
+          padBottom: false,
         ),
       ],
     );
   }
 
-  String _str(String v) => v.isEmpty ? '—' : v;
+  String _s(String v) => v.isEmpty ? '—' : v;
 }
 
-// ── Field row (2-column layout) ────────────────────────────────────────────────
+// ── Bank Details section ──────────────────────────────────────────────────────
+
+class _BankContent extends StatelessWidget {
+  final EmployeeModel emp;
+  const _BankContent({required this.emp});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FieldRow(
+          label1: 'Account Holder Name', value1: _s(emp.accountHolderName),
+          label2: 'Account Type',        value2: _s(emp.accountType),
+        ),
+        _FieldRow(
+          label1: 'Account Number', value1: _s(emp.accountNumber),
+          label2: 'IFSC Code',      value2: _s(emp.ifscCode),
+        ),
+        _FieldRow(
+          label1: 'Bank Name',   value1: _s(emp.bankName),
+          label2: 'Bank Branch', value2: _s(emp.bankBranch),
+        ),
+      ],
+    );
+  }
+
+  String _s(String v) => v.isEmpty ? '—' : v;
+}
+
+// ── Emergency Contact section ─────────────────────────────────────────────────
+
+class _EmergencyContent extends StatelessWidget {
+  final EmployeeModel emp;
+  const _EmergencyContent({required this.emp});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FieldRow(
+          label1: 'Contact Name', value1: _s(emp.emergencyName),
+          label2: 'Relationship', value2: _s(emp.emergencyRelationship),
+        ),
+        _FieldRow(
+          label1: 'Phone Number', value1: _s(emp.emergencyPhone),
+          label2: 'Email',        value2: _s(emp.emergencyEmail),
+          padBottom: false,
+        ),
+      ],
+    );
+  }
+
+  String _s(String v) => v.isEmpty ? '—' : v;
+}
+
+// ── Documents section ─────────────────────────────────────────────────────────
+
+class _DocumentsContent extends StatelessWidget {
+  const _DocumentsContent();
+
+  static const _docTypes = [
+    'PAN Card',
+    'Aadhaar Card',
+    'Degree Certificate',
+    'Experience Letter',
+    'Passport Photo',
+    'Cancelled Cheque',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: _docTypes
+          .map((doc) => _DocCard(label: doc))
+          .toList(),
+    );
+  }
+}
+
+class _DocCard extends StatelessWidget {
+  final String label;
+  const _DocCard({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.insert_drive_file_outlined,
+                size: 18, color: AppColors.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: AppTextStyles.label
+                        .copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text('Not uploaded', style: AppTextStyles.caption),
+              ],
+            ),
+          ),
+          const Icon(Icons.upload_outlined,
+              size: 18, color: AppColors.textHint),
+        ],
+      ),
+    );
+  }
+}
+
+// ── 2-column field row ────────────────────────────────────────────────────────
 
 class _FieldRow extends StatelessWidget {
   final String label1;
   final String value1;
   final String label2;
   final String value2;
-  final bool req1;
-  final bool req2;
+  final bool padBottom;
 
   const _FieldRow({
     required this.label1,
     required this.value1,
     required this.label2,
     required this.value2,
-    this.req1 = false,
-    this.req2 = false,
+    this.padBottom = true,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: EdgeInsets.only(bottom: padBottom ? 14 : 0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -849,7 +955,6 @@ class _FieldRow extends StatelessWidget {
             child: _DisplayField(
               label: label1,
               value: value1,
-              required: req1,
               padBottom: false,
             ),
           ),
@@ -858,7 +963,6 @@ class _FieldRow extends StatelessWidget {
             child: _DisplayField(
               label: label2,
               value: value2,
-              required: req2,
               padBottom: false,
             ),
           ),
@@ -868,45 +972,35 @@ class _FieldRow extends StatelessWidget {
   }
 }
 
-// ── Display field (read-only form-field style) ────────────────────────────────
+// ── Read-only display field ───────────────────────────────────────────────────
 
 class _DisplayField extends StatelessWidget {
   final String label;
   final String value;
-  final bool required;
   final bool padBottom;
+  final int maxLines;
 
   const _DisplayField({
     required this.label,
     required this.value,
-    this.required = false,
     this.padBottom = true,
+    this.maxLines = 1,
   });
 
   @override
   Widget build(BuildContext context) {
     final isEmpty = value.isEmpty || value == '—';
     return Padding(
-      padding: EdgeInsets.only(bottom: padBottom ? 16 : 0),
+      padding: EdgeInsets.only(bottom: padBottom ? 14 : 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          RichText(
-            text: TextSpan(
-              text: label,
-              style: AppTextStyles.caption.copyWith(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w600,
-                fontSize: 11,
-              ),
-              children: required
-                  ? const [
-                      TextSpan(
-                        text: ' *',
-                        style: TextStyle(color: Colors.red),
-                      )
-                    ]
-                  : [],
+          Text(
+            label,
+            style: AppTextStyles.caption.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
             ),
           ),
           const SizedBox(height: 5),
@@ -925,8 +1019,10 @@ class _DisplayField extends StatelessWidget {
                 fontWeight: FontWeight.w500,
                 fontSize: 13,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+              maxLines: maxLines,
+              overflow: maxLines > 1
+                  ? TextOverflow.visible
+                  : TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -935,7 +1031,7 @@ class _DisplayField extends StatelessWidget {
   }
 }
 
-// ── Bottom bar (Cancel + Save) ────────────────────────────────────────────────
+// ── Bottom bar ────────────────────────────────────────────────────────────────
 
 class _BottomBar extends StatelessWidget {
   final VoidCallback onCancel;
@@ -1043,7 +1139,8 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
   @override double get maxExtent => tabBar.preferredSize.height;
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(color: AppColors.surface, child: tabBar);
   }
 
