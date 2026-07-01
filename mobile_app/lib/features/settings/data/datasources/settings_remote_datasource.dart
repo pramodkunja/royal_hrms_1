@@ -59,10 +59,8 @@ class SettingsRemoteDataSource {
   Future<List<SmtpModel>> fetchSmtpList() async {
     final res = await _dio.get(ApiConstants.settingsSmtp);
     final data = _unwrap(res.data);
-    if (data is List) {
-      return data.map((e) => SmtpModel.fromJson(e as Map<String, dynamic>)).toList();
-    }
-    return [];
+    final items = _toList(data);
+    return items.map((e) => SmtpModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<SmtpModel> createSmtp(SmtpFormData form) async {
@@ -105,31 +103,25 @@ class SettingsRemoteDataSource {
   Future<List<EmailTemplateCategoryModel>> fetchTemplateCategories() async {
     final res = await _dio.get(ApiConstants.settingsEmailTemplateCategories);
     final data = _unwrap(res.data);
-    if (data is List) {
-      return data.map((e) => EmailTemplateCategoryModel.fromJson(e as Map<String, dynamic>)).toList();
-    }
-    return [];
+    final items = _toList(data);
+    return items.map((e) => EmailTemplateCategoryModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<List<EmailTemplateModel>> fetchTemplates() async {
     final res = await _dio.get(ApiConstants.settingsEmailTemplates);
     final data = _unwrap(res.data);
-    // Backend returns grouped by template_type: {type: [{...}, ...], ...}
-    if (data is Map<String, dynamic>) {
-      final result = <EmailTemplateModel>[];
-      for (final group in data.values) {
-        if (group is List) {
-          result.addAll(
-            group.map((e) => EmailTemplateModel.fromJson(e as Map<String, dynamic>)),
-          );
-        }
+    // Backend paginates with grouped results: {count, page, ..., results: {type: [{...}], ...}}
+    // Extract the grouped map from results, then flatten all type-buckets into one list.
+    final grouped = _extractGrouped(data);
+    final result = <EmailTemplateModel>[];
+    for (final group in grouped.values) {
+      if (group is List) {
+        result.addAll(
+          group.map((e) => EmailTemplateModel.fromJson(e as Map<String, dynamic>)),
+        );
       }
-      return result;
     }
-    if (data is List) {
-      return data.map((e) => EmailTemplateModel.fromJson(e as Map<String, dynamic>)).toList();
-    }
-    return [];
+    return result;
   }
 
   Future<EmailTemplateModel> createTemplate(EmailTemplateFormData form) async {
@@ -153,12 +145,10 @@ class SettingsRemoteDataSource {
   // ── Departments ────────────────────────────────────────────────────────────
 
   Future<List<DepartmentModel>> fetchDepartments() async {
-    final res = await _dio.get(ApiConstants.departments);
+    final res = await _dio.get(ApiConstants.departments, queryParameters: {'page_size': 200});
     final data = _unwrap(res.data);
-    if (data is List) {
-      return data.map((e) => DepartmentModel.fromJson(e as Map<String, dynamic>)).toList();
-    }
-    return [];
+    final items = _toList(data);
+    return items.map((e) => DepartmentModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<DepartmentModel> createDepartment(DeptFormData form) async {
@@ -176,12 +166,10 @@ class SettingsRemoteDataSource {
   }
 
   Future<List<DesignationModel>> fetchDesignations() async {
-    final res = await _dio.get(ApiConstants.designations);
+    final res = await _dio.get(ApiConstants.designations, queryParameters: {'page_size': 200});
     final data = _unwrap(res.data);
-    if (data is List) {
-      return data.map((e) => DesignationModel.fromJson(e as Map<String, dynamic>)).toList();
-    }
-    return [];
+    final items = _toList(data);
+    return items.map((e) => DesignationModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<DesignationModel> createDesignation(DesignationFormData form) async {
@@ -275,7 +263,7 @@ class SettingsRemoteDataSource {
     return AuditLogPage.empty();
   }
 
-  // ── Helper ─────────────────────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   // Backend envelope: {status: "success", message: "...", data: ...}
   dynamic _unwrap(dynamic body) {
@@ -284,5 +272,30 @@ class SettingsRemoteDataSource {
       if (body.containsKey('status')) return body; // paginated root
     }
     return body;
+  }
+
+  // Extracts a flat List from paginated or plain-list responses.
+  // Paginated:  {count, page, page_size, total_pages, results: [...]}  → results
+  // Plain list: [...]                                                   → as-is
+  List<dynamic> _toList(dynamic data) {
+    if (data is List) return data;
+    if (data is Map<String, dynamic>) {
+      final results = data['results'];
+      if (results is List) return results;
+    }
+    return [];
+  }
+
+  // Extracts the grouped map from a paginated email-template response.
+  // Paginated:  {count, ..., results: {"type": [...]}}  → inner map
+  // Plain map:  {"type": [...]}                         → as-is
+  Map<String, dynamic> _extractGrouped(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      final results = data['results'];
+      if (results is Map<String, dynamic>) return results;
+      // Already a grouped map (no pagination wrapper)
+      return data;
+    }
+    return {};
   }
 }

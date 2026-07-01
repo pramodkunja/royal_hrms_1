@@ -25,10 +25,16 @@ import '../../features/documents/presentation/screens/documents_screen.dart';
 import '../../features/org_chart/presentation/screens/org_chart_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/interview_list/presentation/screens/interview_list_screen.dart';
+import '../../features/candidate_review/presentation/screens/candidate_review_screen.dart';
 import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../../features/onboarding/presentation/screens/awaiting_approval_screen.dart';
 import '../../features/leave/presentation/screens/leave_screen.dart';
 import '../../features/expenses/presentation/screens/expense_screen.dart';
+import '../../features/attendance/presentation/screens/attendance_screen.dart';
+import '../../features/attendance/presentation/screens/my_attendance_screen.dart';
+import '../../features/payroll/presentation/screens/payroll_screen.dart';
+import '../../features/payroll/presentation/screens/my_payslip_screen.dart';
+import '../../features/settings/presentation/payroll_rules/payroll_rules_screen.dart';
 
 // ─── Route path constants ─────────────────────────────────────────────────────
 
@@ -59,6 +65,7 @@ class AppRoutes {
   static const String approvals       = '/dashboard/approvals';
   static const String separation      = '/dashboard/separation';
   static const String documents       = '/dashboard/documents';
+  static const String myAttendance     = '/dashboard/my-attendance';
   static const String myRequests      = '/dashboard/my-requests';
   static const String profile         = '/dashboard/profile';
   static const String reports         = '/dashboard/reports';
@@ -77,6 +84,7 @@ class AppRoutes {
   static const String settingsEmailTemplates = '/settings/email-templates';
   static const String settingsSmtp           = '/settings/smtp';
   static const String settingsAuditLog       = '/settings/audit';
+  static const String settingsPayrollRules   = '/settings/payroll-rules';
 }
 
 // ─── Router provider ──────────────────────────────────────────────────────────
@@ -197,6 +205,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.settingsAuditLog,
         builder: (_, __) => const AuditScreen(),
       ),
+      GoRoute(
+        path: AppRoutes.settingsPayrollRules,
+        builder: (_, __) => const PayrollRulesScreen(),
+      ),
 
       // ── Dashboard shell ────────────────────────────────────────────────
       ShellRoute(
@@ -222,9 +234,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.candidateReview,
-            pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'Candidate Review', icon: Icons.how_to_reg_outlined),
-            ),
+            pageBuilder: (_, __) => const NoTransitionPage(child: CandidateReviewScreen()),
           ),
           GoRoute(
             path: AppRoutes.emailLogs,
@@ -260,21 +270,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           // Time & Pay
           GoRoute(
             path: AppRoutes.attendance,
-            pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'Attendance & Time', icon: Icons.access_time_outlined),
-            ),
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: AttendanceScreen()),
           ),
           GoRoute(
             path: AppRoutes.payroll,
-            pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'Payroll Management', icon: Icons.payments_outlined),
-            ),
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: PayrollScreen()),
           ),
           GoRoute(
             path: AppRoutes.myPayslip,
-            pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(title: 'My Payslips', icon: Icons.receipt_long_outlined),
-            ),
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: MyPayslipScreen()),
           ),
           GoRoute(
             path: AppRoutes.leave,
@@ -306,6 +313,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
 
           // My
+          GoRoute(
+            path: AppRoutes.myAttendance,
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: MyAttendanceScreen()),
+          ),
           GoRoute(
             path: AppRoutes.myRequests,
             pageBuilder: (_, __) => const NoTransitionPage(
