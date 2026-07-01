@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import '../entities/leave_entity.dart';
 
 abstract class LeaveRepository {
@@ -11,8 +12,16 @@ abstract class LeaveRepository {
     required String toDate,
     required String reason,
     required String duration,
+    String? handoverTo,
+    String? contactDuringLeave,
+    String? handoverNotes,
+    MultipartFile? document,
   });
   Future<void> cancelLeave(String id);
   Future<void> approveLeave(String id);
   Future<void> rejectLeave(String id, String rejectReason);
+  Future<List<LeaveCalendarEventEntity>> getLeaveCalendar({
+    int? year,
+    int? month,
+  });
 }

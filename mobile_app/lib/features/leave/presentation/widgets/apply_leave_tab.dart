@@ -1,28 +1,23 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../documents/presentation/widgets/document_file_picker.dart';
+import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
 import 'apply_leave_type_selector.dart';
+import 'leave_type_icons.dart';
 
 // ── Duration options ───────────────────────────────────────────────────────────
 
 enum _Duration { fullDay, halfMorning, halfAfternoon }
 
-// ── Static sidebar data (team on leave / history stay as mock) ────────────────
-
-const _kTeamOnLeave = <(String, String, String, String, String)>[
-  ('Priya Sharma', 'PS', 'EL', 'Jun 24', 'Jun 28'),
-  ('Rahul Singh',  'RS', 'CL', 'Jun 26', 'Jun 26'),
-];
-
-const _kLeaveHistory = <(String, String, int, String)>[
-  ('Casual Leave', 'May 12', 2, 'approved'),
-  ('Sick Leave',   'Apr 3',  1, 'approved'),
-  ('Earned Leave', 'Mar 20', 6, 'rejected'),
-];
+// Must match backend LeaveRequestCreateSerializer.validate_document.
+const _kMaxDocBytes = 5 * 1024 * 1024;
+const _kAllowedDocExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
 
 // ── Apply Leave Tab ───────────────────────────────────────────────────────────
 
@@ -48,6 +43,26 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
   bool _submitted = false;
   String? _error;
   String? _submittedTypeName;
+  PlatformFile? _pickedDoc;
+  String? _docError;
+
+  Future<void> _pickDocument() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: _kAllowedDocExtensions,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.path == null) return;
+    if (file.size > _kMaxDocBytes) {
+      setState(() => _docError = 'File exceeds 5 MB.');
+      return;
+    }
+    setState(() {
+      _pickedDoc = file;
+      _docError  = null;
+    });
+  }
 
   @override
   void dispose() {
@@ -79,10 +94,11 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
 
+  // Must match backend DURATION_CHOICES in apps/hrms/models.py exactly.
   String _durationCode() => switch (_duration) {
     _Duration.fullDay       => 'full_day',
-    _Duration.halfMorning   => 'half_day_morning',
-    _Duration.halfAfternoon => 'half_day_afternoon',
+    _Duration.halfMorning   => 'half_morning',
+    _Duration.halfAfternoon => 'half_afternoon',
   };
 
   Future<void> _pickDate(bool isFrom) async {
@@ -128,21 +144,29 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
     final lt =
         typeOptions.firstWhere((t) => t.key == _selectedType, orElse: () => typeOptions.first);
     final days = _isHalfDay ? 0.5 : _workingDays(_fromDate!, _toDate).toDouble();
-    final isLwp = lt.code == 'LWP';
+    final isLwp = LeaveTypeColors.isLwp(lt.code);
     if (!isLwp && days > lt.balance && days > 0) {
       setState(() => _error =
           'Requested days exceed your ${lt.label} balance (${lt.balance}d).');
+      return;
+    }
+    if (lt.docRequired && _pickedDoc == null) {
+      setState(() => _docError = 'Supporting document is required for this leave type.');
       return;
     }
 
     setState(() { _loading = true; _error = null; });
 
     final err = await ref.read(leaveRequestsProvider.notifier).applyLeave(
-          leaveTypeCode: lt.code,
-          fromDate:      _toIso(_fromDate!),
-          toDate:        _toIso(_isHalfDay ? _fromDate! : _toDate!),
-          reason:        _reasonCtrl.text.trim(),
-          duration:      _durationCode(),
+          leaveTypeCode:      lt.code,
+          fromDate:           _toIso(_fromDate!),
+          toDate:             _toIso(_isHalfDay ? _fromDate! : _toDate!),
+          reason:             _reasonCtrl.text.trim(),
+          duration:           _durationCode(),
+          handoverTo:         _handoverCtrl.text.trim(),
+          contactDuringLeave: _contactCtrl.text.trim(),
+          handoverNotes:      _handoverNoteCtrl.text.trim(),
+          document:           _pickedDoc,
         );
 
     if (!mounted) return;
@@ -189,6 +213,8 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
       _error        = null;
       _submitted    = false;
       _submittedTypeName = null;
+      _pickedDoc    = null;
+      _docError     = null;
     });
   }
 
@@ -333,9 +359,7 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
         ? (_isHalfDay ? 0.5 : _workingDays(_fromDate!, _toDate).toDouble())
         : 0.0;
     final overLimit = lt != null &&
-        lt.code != 'LWP' &&
-        lt.code != 'ML' &&
-        lt.code != 'PL' &&
+        !LeaveTypeColors.isLwp(lt.code) &&
         days > lt.balance &&
         days > 0;
 
@@ -432,7 +456,7 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
                     _WorkingDaysChip(
                       days: days,
                       balance: lt?.balance.toDouble() ?? 0,
-                      isLwp: lt?.code == 'LWP',
+                      isLwp: lt != null && LeaveTypeColors.isLwp(lt.code),
                       overLimit: overLimit,
                     ),
                   ],
@@ -487,37 +511,11 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  GestureDetector(
-                    onTap: () {},
-                    child: Container(
-                      width: double.infinity,
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 18),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: (lt?.docRequired ?? false)
-                              ? AppColors.warning.withValues(alpha: 0.5)
-                              : AppColors.border,
-                          style: BorderStyle.solid,
-                          width: 1.5,
-                        ),
-                        borderRadius: BorderRadius.circular(10),
-                        color: AppColors.backgroundLow,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.cloud_upload_outlined,
-                              size: 24, color: AppColors.textHint),
-                          const SizedBox(height: 4),
-                          Text('Tap to upload',
-                              style: AppTextStyles.caption),
-                          Text('PDF, JPG, PNG · Max 5 MB',
-                              style: AppTextStyles.caption
-                                  .copyWith(fontSize: 10)),
-                        ],
-                      ),
-                    ),
+                  DocumentFilePicker(
+                    picked: _pickedDoc,
+                    error: _docError,
+                    onPick: _pickDocument,
+                    hintText: 'PDF, JPG, PNG · Max 5 MB',
                   ),
                 ],
               ),
@@ -616,9 +614,7 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
             const SizedBox(height: 10),
             const _ApprovalChainSideCard(),
             const SizedBox(height: 10),
-            const _TeamOnLeaveSideCard(),
-            const SizedBox(height: 10),
-            const _MyLeaveHistorySideCard(),
+            const _MyLeaveRequestsSideCard(),
 
             if (_error != null) ...[
               const SizedBox(height: 10),
@@ -1176,7 +1172,7 @@ class _LeaveBalanceSideCard extends StatelessWidget {
         ),
       );
     }
-    final isLwp      = lt!.code == 'LWP';
+    final isLwp      = LeaveTypeColors.isLwp(lt!.code);
     final balancePct =
         isLwp ? 1.0 : (lt!.total > 0 ? (lt!.balance / lt!.total).clamp(0.0, 1.0) : 0.0);
 
@@ -1196,11 +1192,8 @@ class _LeaveBalanceSideCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: Center(
-                  child: Text(lt!.code,
-                      style: AppTextStyles.caption.copyWith(
-                          color: lt!.color,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 9)),
+                  child: Icon(leaveTypeIconForCode(lt!.code),
+                      size: 16, color: lt!.color),
                 ),
               ),
               const SizedBox(width: 10),
@@ -1360,131 +1353,69 @@ class _ApprovalChainSideCard extends StatelessWidget {
   }
 }
 
-// ── Team on Leave ─────────────────────────────────────────────────────────────
+// ── My Leave Requests (real data — mirrors web's "My Leave Requests" table) ───
 
-class _TeamOnLeaveSideCard extends StatelessWidget {
-  const _TeamOnLeaveSideCard();
+class _MyLeaveRequestsSideCard extends ConsumerWidget {
+  const _MyLeaveRequestsSideCard();
 
-  @override
-  Widget build(BuildContext context) {
-    const avatarColors = [AppColors.info, AppColors.primary];
-    return _SideCard(
-      icon: Icons.people_outline,
-      title: 'Team on Leave',
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Text(
-                '${_kTeamOnLeave.length} teammate${_kTeamOnLeave.length == 1 ? "" : "s"} on leave',
-                style: AppTextStyles.caption
-                    .copyWith(fontSize: 10, color: AppColors.textHint),
-              ),
-              const Spacer(),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.warning.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text('${_kTeamOnLeave.length}',
-                    style: AppTextStyles.caption.copyWith(
-                        color: AppColors.warning,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 10)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ...List.generate(_kTeamOnLeave.length, (i) {
-            final member = _kTeamOnLeave[i];
-            final color  = avatarColors[i % avatarColors.length];
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  Container(
-                    width: 30, height: 30,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(member.$2,
-                          style: AppTextStyles.caption.copyWith(
-                              color: color,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 9)),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(member.$1,
-                            style: AppTextStyles.caption.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                        Text('${member.$4} – ${member.$5}',
-                            style: AppTextStyles.caption
-                                .copyWith(fontSize: 10)),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(member.$3,
-                        style: AppTextStyles.caption.copyWith(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 9)),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
+  static Color _statusColor(String s) => switch (s) {
+    'approved'  => AppColors.success,
+    'rejected'  => AppColors.error,
+    'cancelled' => AppColors.textSecondary,
+    _           => AppColors.warning,
+  };
+
+  static String _fmtIso(String iso) {
+    if (iso.isEmpty) return '—';
+    try {
+      final d = DateTime.parse(iso);
+      const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return '${d.day} ${m[d.month]}';
+    } catch (_) {
+      return iso;
+    }
   }
-}
-
-// ── My Leave History ──────────────────────────────────────────────────────────
-
-class _MyLeaveHistorySideCard extends StatelessWidget {
-  const _MyLeaveHistorySideCard();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final requestsAsync = ref.watch(leaveRequestsProvider);
+    final requests = requestsAsync.valueOrNull ?? [];
+
+    if (requestsAsync.isLoading) {
+      return const _SideCard(
+        icon: Icons.history_outlined,
+        title: 'My Leave Requests',
+        child: SizedBox(
+          height: 40,
+          child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        ),
+      );
+    }
+
+    if (requests.isEmpty) {
+      return _SideCard(
+        icon: Icons.history_outlined,
+        title: 'My Leave Requests',
+        child: Text('No leave requests yet.',
+            style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+      );
+    }
+
     return _SideCard(
       icon: Icons.history_outlined,
-      title: 'My Leave History',
+      title: 'My Leave Requests',
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        children: List.generate(_kLeaveHistory.length, (i) {
-          final record     = _kLeaveHistory[i];
-          final isApproved = record.$4 == 'approved';
-          final statusColor =
-              isApproved ? AppColors.success : AppColors.error;
+        children: requests.take(5).map((r) {
+          final sc = _statusColor(r.status);
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Row(
               children: [
                 Container(
                   width: 8, height: 8,
-                  decoration: BoxDecoration(
-                      color: statusColor, shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: sc, shape: BoxShape.circle),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1492,35 +1423,36 @@ class _MyLeaveHistorySideCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(record.$1,
+                      Text(r.leaveType,
                           style: AppTextStyles.caption.copyWith(
                               fontWeight: FontWeight.w600,
                               color: AppColors.textPrimary),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
-                      Text('${record.$2}  ·  ${record.$3}d',
-                          style:
-                              AppTextStyles.caption.copyWith(fontSize: 10)),
+                      Text(
+                        '${_fmtIso(r.from)} – ${_fmtIso(r.to)}  ·  ${r.days}d'
+                        '${r.l1ApproverName.isNotEmpty ? "  ·  ${r.l1ApproverName}" : ""}',
+                        style: AppTextStyles.caption.copyWith(fontSize: 10),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 7, vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1),
+                    color: sc.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Text(isApproved ? '✓' : '✗',
+                  child: Text(r.status,
                       style: AppTextStyles.caption.copyWith(
-                          color: statusColor,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 10)),
+                          color: sc, fontWeight: FontWeight.w700, fontSize: 9)),
                 ),
               ],
             ),
           );
-        }),
+        }).toList(),
       ),
     );
   }

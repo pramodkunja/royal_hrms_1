@@ -75,7 +75,8 @@ const _kTiles = <_Tile>[
     cat: _Tab.modules,
     icon: Icons.beach_access_outlined, iconColor: Color(0xFFB5651D), iconBg: Color(0xFFFAF0E6),
     label: 'Leave Policy',
-    desc: 'Configure leave types, accruals and limits',
+    desc: 'Leave types, accruals, credit and encashment',
+    route: AppRoutes.settingsLeavePolicy,
   ),
   _Tile(
     cat: _Tab.modules,

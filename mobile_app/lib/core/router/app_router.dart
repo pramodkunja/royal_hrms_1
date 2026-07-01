@@ -16,6 +16,7 @@ import '../../features/settings/presentation/departments/departments_screen.dart
 import '../../features/settings/presentation/employee_code/employee_code_screen.dart';
 import '../../features/settings/presentation/roles/roles_screen.dart';
 import '../../features/settings/presentation/audit/audit_screen.dart';
+import '../../features/settings/presentation/leave_policy/leave_policy_screen.dart';
 import '../../features/announcements/presentation/announcements_screen.dart';
 import '../../features/employees/presentation/employees_screen.dart';
 import '../../features/employees/presentation/screens/employee_profile_screen.dart';
@@ -77,6 +78,7 @@ class AppRoutes {
   static const String settingsEmailTemplates = '/settings/email-templates';
   static const String settingsSmtp           = '/settings/smtp';
   static const String settingsAuditLog       = '/settings/audit';
+  static const String settingsLeavePolicy    = '/settings/leave-policy';
 }
 
 // ─── Router provider ──────────────────────────────────────────────────────────
@@ -196,6 +198,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.settingsAuditLog,
         builder: (_, __) => const AuditScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.settingsLeavePolicy,
+        builder: (_, __) => const LeavePolicyScreen(),
       ),
 
       // ── Dashboard shell ────────────────────────────────────────────────

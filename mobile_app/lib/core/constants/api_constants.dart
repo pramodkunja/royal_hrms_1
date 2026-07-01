@@ -111,6 +111,8 @@ class ApiConstants {
   static const String leaveCalendar = '/leave/calendar/';
   static String leaveDetail(dynamic id)  => '/leave/requests/$id/';
   static String leaveAction(dynamic id)  => '/leave/requests/$id/approve/';
+  static String leavePolicyDetail(String leaveType) => '/leave/policy/$leaveType/';
+  static const String leaveBalanceCredit = '/leave/balance/credit/';
 
   // Expenses
   static const String expenses     = '/expenses/';

@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
 import '../../data/datasources/leave_remote_datasource.dart';
@@ -87,14 +89,25 @@ class LeaveRequestsNotifier
     required String toDate,
     required String reason,
     required String duration,
+    String? handoverTo,
+    String? contactDuringLeave,
+    String? handoverNotes,
+    PlatformFile? document,
   }) async {
     try {
+      final documentFile = document?.path == null
+          ? null
+          : await MultipartFile.fromFile(document!.path!, filename: document.name);
       final created = await ref.read(leaveRepositoryProvider).applyLeave(
-            leaveTypeCode: leaveTypeCode,
-            fromDate:      fromDate,
-            toDate:        toDate,
-            reason:        reason,
-            duration:      duration,
+            leaveTypeCode:      leaveTypeCode,
+            fromDate:           fromDate,
+            toDate:             toDate,
+            reason:             reason,
+            duration:           duration,
+            handoverTo:         handoverTo,
+            contactDuringLeave: contactDuringLeave,
+            handoverNotes:      handoverNotes,
+            document:           documentFile,
           );
       state = AsyncData([created, ...state.valueOrNull ?? []]);
       ref.invalidate(leaveStatsProvider);
@@ -141,6 +154,16 @@ class LeaveRequestsNotifier
         () => ref.read(leaveRepositoryProvider).getLeaveRequests());
   }
 }
+
+// ── Leave Calendar ────────────────────────────────────────────────────────────
+
+final leaveCalendarProvider = FutureProvider.autoDispose
+    .family<List<LeaveCalendarEventEntity>, (int year, int month)>((ref, key) {
+  final (year, month) = key;
+  return ref
+      .read(leaveRepositoryProvider)
+      .getLeaveCalendar(year: year, month: month);
+});
 
 // ── Error helper ──────────────────────────────────────────────────────────────
 

@@ -7,12 +7,14 @@ class DocumentFilePicker extends StatelessWidget {
   final PlatformFile? picked;
   final String? error;
   final VoidCallback onPick;
+  final String hintText;
 
   const DocumentFilePicker({
     super.key,
     required this.picked,
     required this.error,
     required this.onPick,
+    this.hintText = 'PDF, Word, Excel, PPT, images, TXT, CSV',
   });
 
   @override
@@ -60,7 +62,7 @@ class DocumentFilePicker extends StatelessWidget {
                     )
                   else
                     Text(
-                      'PDF, Word, Excel, PPT, images, TXT, CSV',
+                      hintText,
                       style: AppTextStyles.caption.copyWith(fontSize: 10),
                     ),
                 ],

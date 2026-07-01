@@ -6,6 +6,7 @@ import '../../data/models/company_model.dart';
 import '../../data/models/departments_model.dart';
 import '../../data/models/email_template_model.dart';
 import '../../data/models/employee_code_model.dart';
+import '../../data/models/leave_policy_model.dart';
 import '../../data/models/roles_model.dart';
 import '../../data/models/smtp_model.dart';
 
@@ -302,6 +303,49 @@ class DesignationsNotifier
       return null;
     } catch (e) {
       return _friendly(e);
+    }
+  }
+}
+
+// ── Leave Policy ──────────────────────────────────────────────────────────────
+// No create/removeX methods — the 6 leave types are fixed by the backend
+// (LeavePolicy.leave_type is a unique choices field); only editing is supported.
+
+final leavePoliciesProvider =
+    AsyncNotifierProvider.autoDispose<LeavePoliciesNotifier, List<LeavePolicyModel>>(
+  LeavePoliciesNotifier.new,
+);
+
+class LeavePoliciesNotifier extends AutoDisposeAsyncNotifier<List<LeavePolicyModel>> {
+  SettingsRemoteDataSource get _ds => ref.read(settingsDataSourceProvider);
+
+  @override
+  Future<List<LeavePolicyModel>> build() => _ds.fetchLeavePolicies();
+
+  Future<String?> updatePolicy(String leaveType, LeavePolicyFormData form) async {
+    try {
+      final updated = await _ds.updateLeavePolicy(leaveType, form);
+      state = AsyncData(
+        (state.valueOrNull ?? [])
+            .map((p) => p.leaveType == leaveType ? updated : p)
+            .toList(),
+      );
+      return null;
+    } catch (e) {
+      return _friendly(e);
+    }
+  }
+
+  // Real backend action — credits annual leave for every active employee for
+  // [year] (or a single employee if [employeeId] is given). Requires
+  // 'leave.approve'. Returns a human-readable success message, or throws with
+  // a friendly message on failure.
+  Future<String> creditAnnualLeave({int? year, String? employeeId}) async {
+    try {
+      final result = await _ds.creditLeaveBalances(year: year, employeeId: employeeId);
+      return 'Credited ${result.credited} balance record${result.credited == 1 ? '' : 's'} for ${result.year}.';
+    } catch (e) {
+      throw Exception(_friendly(e));
     }
   }
 }

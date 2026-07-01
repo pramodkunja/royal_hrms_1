@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import '../../domain/entities/leave_entity.dart';
 import '../../domain/repositories/leave_repository.dart';
 import '../datasources/leave_remote_datasource.dart';
@@ -27,13 +28,21 @@ class LeaveRepositoryImpl implements LeaveRepository {
     required String toDate,
     required String reason,
     required String duration,
+    String? handoverTo,
+    String? contactDuringLeave,
+    String? handoverNotes,
+    MultipartFile? document,
   }) =>
       _ds.applyLeave(
-        leaveTypeCode: leaveTypeCode,
-        fromDate:      fromDate,
-        toDate:        toDate,
-        reason:        reason,
-        duration:      duration,
+        leaveTypeCode:      leaveTypeCode,
+        fromDate:           fromDate,
+        toDate:             toDate,
+        reason:             reason,
+        duration:           duration,
+        handoverTo:         handoverTo,
+        contactDuringLeave: contactDuringLeave,
+        handoverNotes:      handoverNotes,
+        document:           document,
       );
 
   @override
@@ -45,4 +54,11 @@ class LeaveRepositoryImpl implements LeaveRepository {
   @override
   Future<void> rejectLeave(String id, String rejectReason) =>
       _ds.rejectLeave(id, rejectReason);
+
+  @override
+  Future<List<LeaveCalendarEventEntity>> getLeaveCalendar({
+    int? year,
+    int? month,
+  }) =>
+      _ds.fetchCalendar(year: year, month: month);
 }

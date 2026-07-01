@@ -2,15 +2,16 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/leave_entity.dart';
+import 'leave_type_icons.dart';
 
 // ── Leave type option ─────────────────────────────────────────────────────────
 
 class LeaveTypeOption {
-  final String key;        // same as code — 'CL', 'EL', etc.
-  final String code;       // 'CL', 'EL', etc.
+  final String key; // same as code — 'CL', 'EL', etc.
+  final String code; // 'CL', 'EL', etc.
   final String label;
-  final int balance;       // available days (rounded)
-  final int total;         // total entitlement days
+  final int balance; // available days (rounded)
+  final int total; // total entitlement days
   final bool isPaid;
   final bool docRequired;
   final Color color;
@@ -34,40 +35,53 @@ class LeaveTypeOption {
     LeaveBalanceEntity? balance,
   ) {
     return LeaveTypeOption(
-      key:         type.code,
-      code:        type.code,
-      label:       type.name,
-      balance:     balance?.available.round() ?? 0,
-      total:       balance?.total.round() ?? type.maxDays,
-      isPaid:      type.isPaid,
+      key: type.code,
+      code: type.code,
+      label: type.name,
+      balance: balance?.available.round() ?? 0,
+      total: balance?.total.round() ?? type.maxDays,
+      isPaid: type.isPaid,
       docRequired: type.docRequired,
-      color:       _colorForCode(type.code),
-      policy:      type.policy,
+      color: _colorForCode(type.code),
+      policy: LeaveTypeColors.policyNoteForCode(type.code, type.policy),
     );
   }
 
+  // Mirrors web's ApplyLeaveForm — the type grid always shows all 6 canonical
+  // leave types (LeaveTypeColors.allCodes), regardless of whether the backend
+  // has a LeavePolicy record for each yet. Backend data (maxDays/docRequired/
+  // policy note) is used when present; otherwise sensible defaults apply.
   static List<LeaveTypeOption> listFromEntities(
     List<LeaveTypeEntity> types,
     List<LeaveBalanceEntity> balances,
   ) {
-    return types.map((t) {
-      final bal = balances.where((b) => b.typeCode == t.code).firstOrNull;
-      return LeaveTypeOption.fromEntities(t, bal);
+    final byCode = {for (final t in types) t.code.toLowerCase(): t};
+    return LeaveTypeColors.allCodes.map((code) {
+      final entity = byCode[code] ??
+          LeaveTypeEntity(
+            id: 0,
+            name: LeaveTypeColors.labelForCode(code),
+            code: code,
+            maxDays: 0,
+            isPaid: !LeaveTypeColors.isLwp(code),
+            carryForward: false,
+            docRequired: LeaveTypeColors.docRequiredForCode(code),
+            genderEligibility: 'All',
+            isActive: true,
+            description: '',
+            policy: '',
+          );
+      final bal =
+          balances.where((b) => b.typeCode.toLowerCase() == code).firstOrNull;
+      return LeaveTypeOption.fromEntities(entity, bal);
     }).toList();
   }
 }
 
-// ── Color by leave type code ──────────────────────────────────────────────────
+// ── Color by leave type code (shared with dashboard/calendar tabs) ────────────
 
-Color _colorForCode(String code) => switch (code.toUpperCase()) {
-  'CL'  => AppColors.primary,
-  'EL'  => AppColors.success,
-  'SL'  => AppColors.warning,
-  'LWP' => AppColors.textSecondary,
-  'ML'  => const Color(0xFFAD95CF),
-  'PL'  => AppColors.info,
-  _     => AppColors.primary,
-};
+Color _colorForCode(String code) =>
+    Color(LeaveTypeColors.colorValueForCode(code));
 
 // ── Leave Type Selector Grid ───────────────────────────────────────────────────
 
@@ -89,8 +103,8 @@ class LeaveTypeSelector extends StatelessWidget {
       return const _SectionLabel(text: 'Select Leave Type', required: true);
     }
 
-    final selected =
-        types.firstWhere((t) => t.key == selectedKey, orElse: () => types.first);
+    final selected = types.firstWhere((t) => t.key == selectedKey,
+        orElse: () => types.first);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -107,7 +121,7 @@ class LeaveTypeSelector extends StatelessWidget {
           childAspectRatio: 0.95,
           children: types.map((lt) {
             final isSelected = lt.key == selectedKey;
-            final isLwp = lt.code == 'LWP';
+            final isLwp = LeaveTypeColors.isLwp(lt.code);
             final pct = isLwp
                 ? 1.0
                 : lt.total > 0
@@ -136,22 +150,21 @@ class LeaveTypeSelector extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Container(
-                          width: 28, height: 28,
+                          width: 28,
+                          height: 28,
                           decoration: BoxDecoration(
                             color: lt.color.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(7),
                           ),
                           child: Center(
-                            child: Text(lt.code,
-                                style: AppTextStyles.caption.copyWith(
-                                    color: lt.color,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 9)),
+                            child: Icon(leaveTypeIconForCode(lt.code),
+                                size: 15, color: lt.color),
                           ),
                         ),
                         if (isSelected)
                           Container(
-                            width: 14, height: 14,
+                            width: 14,
+                            height: 14,
                             decoration: BoxDecoration(
                                 color: lt.color, shape: BoxShape.circle),
                             child: const Icon(Icons.check,
@@ -183,10 +196,8 @@ class LeaveTypeSelector extends StatelessWidget {
                         child: LinearProgressIndicator(
                           value: pct,
                           minHeight: 3,
-                          backgroundColor:
-                              lt.color.withValues(alpha: 0.12),
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(lt.color),
+                          backgroundColor: lt.color.withValues(alpha: 0.12),
+                          valueColor: AlwaysStoppedAnimation<Color>(lt.color),
                         ),
                       ),
                     ],
@@ -196,15 +207,16 @@ class LeaveTypeSelector extends StatelessWidget {
             );
           }).toList(),
         ),
+        // Policy note for selected type — always populated (real backend
+        // note, or a sensible default via LeaveTypeColors.policyNoteForCode),
+        // so this box is never left blank.
         const SizedBox(height: 10),
-        // Policy note for selected type
         Container(
           padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
           decoration: BoxDecoration(
             color: selected.color.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-                color: selected.color.withValues(alpha: 0.2)),
+            border: Border.all(color: selected.color.withValues(alpha: 0.2)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,8 +226,7 @@ class LeaveTypeSelector extends StatelessWidget {
               Expanded(
                 child: Text(selected.policy,
                     style: AppTextStyles.caption.copyWith(
-                        fontSize: 10,
-                        color: AppColors.textSecondary)),
+                        fontSize: 10, color: AppColors.textSecondary)),
               ),
             ],
           ),

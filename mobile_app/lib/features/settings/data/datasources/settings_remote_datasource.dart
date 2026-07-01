@@ -6,6 +6,7 @@ import '../models/company_model.dart';
 import '../models/departments_model.dart';
 import '../models/email_template_model.dart';
 import '../models/employee_code_model.dart';
+import '../models/leave_policy_model.dart';
 import '../models/roles_model.dart';
 import '../models/smtp_model.dart';
 
@@ -59,10 +60,7 @@ class SettingsRemoteDataSource {
   Future<List<SmtpModel>> fetchSmtpList() async {
     final res = await _dio.get(ApiConstants.settingsSmtp);
     final data = _unwrap(res.data);
-    if (data is List) {
-      return data.map((e) => SmtpModel.fromJson(e as Map<String, dynamic>)).toList();
-    }
-    return [];
+    return _toList(data).map((e) => SmtpModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<SmtpModel> createSmtp(SmtpFormData form) async {
@@ -105,31 +103,25 @@ class SettingsRemoteDataSource {
   Future<List<EmailTemplateCategoryModel>> fetchTemplateCategories() async {
     final res = await _dio.get(ApiConstants.settingsEmailTemplateCategories);
     final data = _unwrap(res.data);
-    if (data is List) {
-      return data.map((e) => EmailTemplateCategoryModel.fromJson(e as Map<String, dynamic>)).toList();
-    }
-    return [];
+    return _toList(data).map((e) => EmailTemplateCategoryModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<List<EmailTemplateModel>> fetchTemplates() async {
     final res = await _dio.get(ApiConstants.settingsEmailTemplates);
     final data = _unwrap(res.data);
-    // Backend returns grouped by template_type: {type: [{...}, ...], ...}
-    if (data is Map<String, dynamic>) {
-      final result = <EmailTemplateModel>[];
-      for (final group in data.values) {
+    // Backend returns paginated with results as grouped dict: {template_type: [templates...], ...}
+    final grouped = (data is Map<String, dynamic>) ? (data['results'] ?? data) : data;
+    final result = <EmailTemplateModel>[];
+    if (grouped is Map<String, dynamic>) {
+      for (final group in grouped.values) {
         if (group is List) {
-          result.addAll(
-            group.map((e) => EmailTemplateModel.fromJson(e as Map<String, dynamic>)),
-          );
+          result.addAll(group.map((e) => EmailTemplateModel.fromJson(e as Map<String, dynamic>)));
         }
       }
-      return result;
+    } else if (grouped is List) {
+      result.addAll(grouped.map((e) => EmailTemplateModel.fromJson(e as Map<String, dynamic>)));
     }
-    if (data is List) {
-      return data.map((e) => EmailTemplateModel.fromJson(e as Map<String, dynamic>)).toList();
-    }
-    return [];
+    return result;
   }
 
   Future<EmailTemplateModel> createTemplate(EmailTemplateFormData form) async {
@@ -155,10 +147,7 @@ class SettingsRemoteDataSource {
   Future<List<DepartmentModel>> fetchDepartments() async {
     final res = await _dio.get(ApiConstants.departments);
     final data = _unwrap(res.data);
-    if (data is List) {
-      return data.map((e) => DepartmentModel.fromJson(e as Map<String, dynamic>)).toList();
-    }
-    return [];
+    return _toList(data).map((e) => DepartmentModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<DepartmentModel> createDepartment(DeptFormData form) async {
@@ -175,13 +164,37 @@ class SettingsRemoteDataSource {
     await _dio.delete(ApiConstants.departmentDetail(id));
   }
 
+  // ── Leave Policy ───────────────────────────────────────────────────────────
+  // No create/delete — the 6 leave types are fixed; only their policy fields
+  // (annual_days, can_carry_forward, max_carry_forward_days, policy_note,
+  // is_active) can be edited. See apps/hrms/views/leave.py LeavePolicyView.
+
+  Future<List<LeavePolicyModel>> fetchLeavePolicies() async {
+    final res = await _dio.get(ApiConstants.leaveTypes);
+    final data = _unwrap(res.data);
+    return _toList(data).map((e) => LeavePolicyModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<LeavePolicyModel> updateLeavePolicy(String leaveType, LeavePolicyFormData form) async {
+    final res = await _dio.put(ApiConstants.leavePolicyDetail(leaveType), data: form.toJson());
+    return LeavePolicyModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  // Real, working backend action (apps/hrms/views/leave.py LeaveBalanceView.post) —
+  // credits each active employee's annual leave balance for the given year based
+  // on LeavePolicy.annual_days. Requires 'leave.approve' permission.
+  Future<CreditBalancesResult> creditLeaveBalances({int? year, String? employeeId}) async {
+    final res = await _dio.post(ApiConstants.leaveBalanceCredit, data: {
+      if (year != null) 'year': year,
+      if (employeeId != null && employeeId.isNotEmpty) 'employee_id': employeeId,
+    });
+    return CreditBalancesResult.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
   Future<List<DesignationModel>> fetchDesignations() async {
     final res = await _dio.get(ApiConstants.designations);
     final data = _unwrap(res.data);
-    if (data is List) {
-      return data.map((e) => DesignationModel.fromJson(e as Map<String, dynamic>)).toList();
-    }
-    return [];
+    return _toList(data).map((e) => DesignationModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<DesignationModel> createDesignation(DesignationFormData form) async {
@@ -275,14 +288,22 @@ class SettingsRemoteDataSource {
     return AuditLogPage.empty();
   }
 
-  // ── Helper ─────────────────────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
-  // Backend envelope: {status: "success", message: "...", data: ...}
+  // Backend envelope: {success: true, message: "...", data: ...}
   dynamic _unwrap(dynamic body) {
     if (body is Map<String, dynamic>) {
       if (body.containsKey('data')) return body['data'];
-      if (body.containsKey('status')) return body; // paginated root
     }
     return body;
+  }
+
+  // All list endpoints return a paginated object {count, page, results:[...]}.
+  // This extracts the results array from that wrapper, or falls back to a
+  // plain list if the endpoint ever returns one directly.
+  List<dynamic> _toList(dynamic data) {
+    if (data is List) return data;
+    if (data is Map<String, dynamic>) return data['results'] as List<dynamic>? ?? [];
+    return [];
   }
 }

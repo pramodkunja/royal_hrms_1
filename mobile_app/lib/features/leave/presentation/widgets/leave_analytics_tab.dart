@@ -4,59 +4,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../providers/leave_providers.dart';
 
-// ── Static data (mirrors LeaveAnalytics.tsx) ──────────────────────────────────
-
-class _DeptStat {
-  final String dept;
-  final int taken;
-  final int pending;
-  final Color color;
-  const _DeptStat(this.dept, this.taken, this.pending, this.color);
-}
-
-class _MonthStat {
-  final String month;
-  final int casual;
-  final int earned;
-  final int sick;
-  const _MonthStat(this.month, this.casual, this.earned, this.sick);
-  int get total => casual + earned + sick;
-}
-
-class _TopTaker {
-  final String name;
-  final String dept;
-  final int days;
-  final String initials;
-  const _TopTaker(this.name, this.dept, this.days, this.initials);
-}
-
-const _kDept = [
-  _DeptStat('Engineering', 42, 5, AppColors.primary),
-  _DeptStat('HR',          18, 2, AppColors.success),
-  _DeptStat('Sales',       35, 7, AppColors.warning),
-  _DeptStat('Finance',     14, 1, AppColors.info),
-  _DeptStat('Marketing',   22, 3, Color(0xFFAD95CF)),
-];
-
-const _kMonthly = [
-  _MonthStat('Jan', 12, 8,  4),
-  _MonthStat('Feb', 9,  10, 2),
-  _MonthStat('Mar', 15, 12, 6),
-  _MonthStat('Apr', 8,  9,  3),
-  _MonthStat('May', 11, 14, 5),
-  _MonthStat('Jun', 18, 16, 7),
-];
-
-const _kTopTakers = [
-  _TopTaker('Rahul Singh',  'Engineering', 18, 'RS'),
-  _TopTaker('Meena Iyer',   'HR',          15, 'MI'),
-  _TopTaker('Arjun Mehta',  'Sales',       12, 'AM'),
-  _TopTaker('Kavya Nair',   'Marketing',   11, 'KN'),
-  _TopTaker('Suresh Kumar', 'Sales',       9,  'SK'),
-];
-
-// ── Widget ────────────────────────────────────────────────────────────────────
+// ── Widget — mirrors web's LeaveAnalytics.tsx: KPI cards, real leave balance
+// breakdown (stats.balances), and request status distribution. No mock data.
 
 class LeaveAnalyticsTab extends ConsumerWidget {
   const LeaveAnalyticsTab({super.key});
@@ -65,244 +14,127 @@ class LeaveAnalyticsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final statsAsync = ref.watch(leaveStatsProvider);
     final stats      = statsAsync.valueOrNull;
+    final currentYear = stats?.year ?? DateTime.now().year;
 
-    final maxDept  = _kDept.map((d) => d.taken + d.pending).reduce((a, b) => a > b ? a : b);
-    final maxMonth = _kMonthly.map((m) => m.total).reduce((a, b) => a > b ? a : b);
+    final totalLabel    = statsAsync.isLoading ? '…' : '${stats?.total     ?? 0}';
+    final pendingLabel  = statsAsync.isLoading ? '…' : '${stats?.pending   ?? 0}';
+    final approvedLabel = statsAsync.isLoading ? '…' : '${stats?.approved  ?? 0}';
+    final rejectedLabel = statsAsync.isLoading ? '…' : '${stats?.rejected  ?? 0}';
 
-    final totalLabel   = statsAsync.isLoading ? '…' : '${stats?.total   ?? 0}';
-    final pendingLabel = statsAsync.isLoading ? '…' : '${stats?.pending ?? 0}';
-    final approvedLabel= statsAsync.isLoading ? '…' : '${stats?.approved ?? 0}';
-    final rejectedLabel= statsAsync.isLoading ? '…' : '${stats?.rejected ?? 0}';
+    final totalAll   = stats?.total ?? 0;
+    final balances    = stats?.balances ?? [];
 
     return RefreshIndicator(
       color: AppColors.primary,
       onRefresh: () async => ref.invalidate(leaveStatsProvider),
       child: SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 96),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── KPI cards 2×2 ──────────────────────────────────────────────────
-          Row(
-            children: [
-              Expanded(child: _KpiCard(icon: Icons.beach_access_outlined, color: AppColors.primary, label: 'Total Requests',   value: totalLabel)),
-              const SizedBox(width: 10),
-              Expanded(child: _KpiCard(icon: Icons.access_time_outlined,  color: AppColors.warning, label: 'Pending',          value: pendingLabel)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(child: _KpiCard(icon: Icons.check_circle_outline,  color: AppColors.success, label: 'Approved',         value: approvedLabel)),
-              const SizedBox(width: 10),
-              Expanded(child: _KpiCard(icon: Icons.event_busy_outlined,   color: AppColors.error,   label: 'Rejected',         value: rejectedLabel)),
-            ],
-          ),
-          const SizedBox(height: 16),
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 96),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── KPI cards 2×2 ──────────────────────────────────────────────────
+            Row(
+              children: [
+                Expanded(child: _KpiCard(icon: Icons.beach_access_outlined, color: AppColors.primary, label: 'Total Requests', value: totalLabel, sub: 'This year ($currentYear)')),
+                const SizedBox(width: 10),
+                Expanded(child: _KpiCard(icon: Icons.check_circle_outline,  color: AppColors.success, label: 'Approved',       value: approvedLabel, sub: 'This year ($currentYear)')),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: _KpiCard(icon: Icons.access_time_outlined,  color: AppColors.warning, label: 'Pending Approval', value: pendingLabel, sub: 'This year ($currentYear)')),
+                const SizedBox(width: 10),
+                Expanded(child: _KpiCard(icon: Icons.event_busy_outlined,   color: AppColors.error,   label: 'Rejected',         value: rejectedLabel, sub: 'This year ($currentYear)')),
+              ],
+            ),
+            const SizedBox(height: 16),
 
-          // ── Department breakdown ────────────────────────────────────────────
-          _SectionCard(
-            title: 'Leave by Department',
-            subtitle: 'Jan – Jun 2026',
-            icon: Icons.bar_chart_outlined,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: _kDept.map((d) {
-                final total    = d.taken + d.pending;
-                final takenW   = maxDept > 0 ? d.taken  / maxDept : 0.0;
-                final pendingW = maxDept > 0 ? d.pending / maxDept : 0.0;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
+            if (statsAsync.isLoading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+              )
+            else ...[
+              // ── Leave Balance Breakdown ───────────────────────────────────────
+              if (balances.isNotEmpty)
+                _SectionCard(
+                  title: 'Leave Balance Breakdown',
+                  icon: Icons.bar_chart_outlined,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(d.dept,
-                                style: AppTextStyles.caption.copyWith(
-                                    fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                          ),
-                          Text('${total}d',
-                              style: AppTextStyles.caption.copyWith(fontSize: 11)),
-                        ],
-                      ),
-                      const SizedBox(height: 5),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: SizedBox(
-                          height: 10,
-                          child: Row(
-                            children: [
-                              Flexible(
-                                flex: (takenW * 1000).round(),
-                                child: Container(color: d.color),
-                              ),
-                              Flexible(
-                                flex: (pendingW * 1000).round(),
-                                child: Container(color: d.color.withValues(alpha: 0.35)),
-                              ),
-                              Flexible(
-                                flex: ((1 - takenW - pendingW).clamp(0.0, 1.0) * 1000).round(),
-                                child: Container(color: AppColors.backgroundLow),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          _LegendChip(color: d.color, label: '${d.taken} taken'),
-                          const SizedBox(width: 10),
-                          _LegendChip(color: d.color.withValues(alpha: 0.4), label: '${d.pending} pending'),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // ── Top leave takers ───────────────────────────────────────────────
-          _SectionCard(
-            title: 'Top Leave Takers',
-            subtitle: 'YTD 2026',
-            icon: Icons.people_outline,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: List.generate(_kTopTakers.length, (i) {
-                final person = _kTopTakers[i];
-                const colors = [AppColors.primary, AppColors.info, AppColors.success, AppColors.warning, Color(0xFFAD95CF)];
-                final color  = colors[i % colors.length];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    children: [
-                      Text('${i + 1}',
-                          style: AppTextStyles.caption.copyWith(
-                              color: AppColors.textHint, fontWeight: FontWeight.w700, fontSize: 12),
-                          textAlign: TextAlign.center),
-                      const SizedBox(width: 10),
-                      Container(
-                        width: 34, height: 34,
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Center(
-                          child: Text(person.initials,
-                              style: AppTextStyles.caption.copyWith(
-                                  color: color, fontWeight: FontWeight.w800, fontSize: 11)),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
+                    children: balances.map((b) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(person.name,
-                                style: AppTextStyles.caption.copyWith(
-                                    fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                            Text(person.dept,
-                                style: AppTextStyles.caption.copyWith(fontSize: 10)),
-                          ],
-                        ),
-                      ),
-                      Text('${person.days}d',
-                          style: AppTextStyles.h4.copyWith(
-                              color: AppColors.primary, fontSize: 16)),
-                    ],
-                  ),
-                );
-              }),
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // ── Monthly trend ─────────────────────────────────────────────────
-          _SectionCard(
-            title: 'Monthly Trend — Leave Days',
-            subtitle: 'Jan – Jun 2026',
-            icon: Icons.show_chart_outlined,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Legend row
-                const Row(
-                  children: [
-                    _LegendChip(color: AppColors.primary, label: 'Casual'),
-                    SizedBox(width: 10),
-                    _LegendChip(color: AppColors.success, label: 'Earned'),
-                    SizedBox(width: 10),
-                    _LegendChip(color: AppColors.warning, label: 'Sick'),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                // Bar chart
-                SizedBox(
-                  height: 150,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: _kMonthly.map((m) {
-                      final sickH   = maxMonth > 0 ? (m.sick   / maxMonth) * 100 : 0.0;
-                      final earnedH = maxMonth > 0 ? (m.earned / maxMonth) * 100 : 0.0;
-                      final casualH = maxMonth > 0 ? (m.casual / maxMonth) * 100 : 0.0;
-                      return Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 2),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Stacked bar
-                              SizedBox(
-                                height: 100,
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Container(height: sickH,   color: AppColors.warning),
-                                          Container(height: earnedH, color: AppColors.success),
-                                          Container(height: casualH, color: AppColors.primary),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(b.leaveTypeDisplay,
+                                      style: AppTextStyles.caption.copyWith(
+                                          fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                                 ),
+                                Text(
+                                  '${_fmt(b.usedDays)} used / ${_fmt(b.totalDays)} total',
+                                  style: AppTextStyles.caption.copyWith(fontSize: 10),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 5),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: b.pct,
+                                minHeight: 8,
+                                backgroundColor: AppColors.backgroundLow,
+                                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
                               ),
-                              const SizedBox(height: 4),
-                              Text(m.month,
-                                  style: AppTextStyles.caption.copyWith(fontSize: 9, color: AppColors.textHint)),
-                              Text('${m.total}',
-                                  style: AppTextStyles.caption.copyWith(
-                                      fontSize: 9, color: AppColors.primary, fontWeight: FontWeight.w700)),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text('${_fmt(b.available)} remaining',
+                                style: AppTextStyles.caption.copyWith(
+                                    fontSize: 10, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                          ],
                         ),
                       );
                     }).toList(),
                   ),
+                )
+              else
+                _EmptyCard(
+                  icon: Icons.bar_chart_outlined,
+                  message: 'No leave balance data for $currentYear. Contact HR to credit your annual leave.',
                 ),
-              ],
-            ),
-          ),
-        ],
+              const SizedBox(height: 14),
+
+              // ── Request Status Distribution ───────────────────────────────────
+              if (totalAll > 0)
+                _SectionCard(
+                  title: 'Request Status Distribution',
+                  icon: Icons.donut_large_outlined,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _StatusRow(label: 'Approved',  value: stats?.approved  ?? 0, total: totalAll, color: AppColors.success),
+                      _StatusRow(label: 'Pending',   value: stats?.pending   ?? 0, total: totalAll, color: AppColors.warning),
+                      _StatusRow(label: 'Rejected',  value: stats?.rejected  ?? 0, total: totalAll, color: AppColors.error),
+                      _StatusRow(label: 'Cancelled', value: stats?.cancelled ?? 0, total: totalAll, color: AppColors.textSecondary),
+                    ],
+                  ),
+                ),
+            ],
+          ],
+        ),
       ),
-    ),
     );
   }
+
+  static String _fmt(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
 }
 
 // ── Sub-widgets ───────────────────────────────────────────────────────────────
@@ -312,7 +144,8 @@ class _KpiCard extends StatelessWidget {
   final Color color;
   final String label;
   final String value;
-  const _KpiCard({required this.icon, required this.color, required this.label, required this.value});
+  final String sub;
+  const _KpiCard({required this.icon, required this.color, required this.label, required this.value, required this.sub});
 
   @override
   Widget build(BuildContext context) {
@@ -347,6 +180,9 @@ class _KpiCard extends StatelessWidget {
                 Text(label,
                     style: AppTextStyles.caption.copyWith(fontSize: 10),
                     maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(sub,
+                    style: AppTextStyles.caption.copyWith(fontSize: 9, color: AppColors.textHint),
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -358,10 +194,9 @@ class _KpiCard extends StatelessWidget {
 
 class _SectionCard extends StatelessWidget {
   final String title;
-  final String subtitle;
   final IconData icon;
   final Widget child;
-  const _SectionCard({required this.title, required this.subtitle, required this.icon, required this.child});
+  const _SectionCard({required this.title, required this.icon, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -382,9 +217,6 @@ class _SectionCard extends StatelessWidget {
                 Icon(icon, size: 15, color: AppColors.primary),
                 const SizedBox(width: 6),
                 Text(title, style: AppTextStyles.label),
-                const Spacer(),
-                Text(subtitle,
-                    style: AppTextStyles.caption.copyWith(fontSize: 10)),
               ],
             ),
           ),
@@ -399,23 +231,74 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-class _LegendChip extends StatelessWidget {
-  final Color color;
-  final String label;
-  const _LegendChip({required this.color, required this.label});
+class _EmptyCard extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  const _EmptyCard({required this.icon, required this.message});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 10, height: 10,
-          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
-        ),
-        const SizedBox(width: 4),
-        Text(label, style: AppTextStyles.caption.copyWith(fontSize: 10)),
-      ],
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 32, color: AppColors.textHint),
+          const SizedBox(height: 8),
+          Text(message,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodySecondary),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusRow extends StatelessWidget {
+  final String label;
+  final int value;
+  final int total;
+  final Color color;
+  const _StatusRow({required this.label, required this.value, required this.total, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = total > 0 ? (value / total * 100).round() : 0;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(label,
+                    style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600)),
+              ),
+              Text('$value ($pct%)',
+                  style: AppTextStyles.caption.copyWith(fontSize: 11, color: AppColors.textHint)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: total > 0 ? value / total : 0,
+              minHeight: 8,
+              backgroundColor: AppColors.backgroundLow,
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

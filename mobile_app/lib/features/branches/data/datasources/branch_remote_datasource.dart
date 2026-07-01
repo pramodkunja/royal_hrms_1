@@ -11,12 +11,8 @@ class BranchRemoteDataSource {
   Future<List<StateModel>> fetchStates() async {
     final res = await _dio.get(ApiConstants.branchStates);
     final data = _unwrap(res.data);
-    if (data is List) {
-      return data
-          .map((item) => StateModel.fromJson(item as Map<String, dynamic>))
-          .toList();
-    }
-    return [];
+    final list = _toList(data);
+    return list.map((item) => StateModel.fromJson(item as Map<String, dynamic>)).toList();
   }
 
   // ── Cities ──────────────────────────────────────────────────────────────────
@@ -24,12 +20,8 @@ class BranchRemoteDataSource {
   Future<List<CityModel>> fetchCities(int stateId) async {
     final res = await _dio.get(ApiConstants.branchCities(stateId));
     final data = _unwrap(res.data);
-    if (data is List) {
-      return data
-          .map((item) => CityModel.fromJson(item as Map<String, dynamic>))
-          .toList();
-    }
-    return [];
+    final list = _toList(data);
+    return list.map((item) => CityModel.fromJson(item as Map<String, dynamic>)).toList();
   }
 
   // ── Preview Code ────────────────────────────────────────────────────────────
@@ -95,12 +87,18 @@ class BranchRemoteDataSource {
     await _dio.delete(ApiConstants.branchDetail(id));
   }
 
-  // ── Helper ──────────────────────────────────────────────────────────────────
+  // ── Helpers ─────────────────────────────────────────────────────────────────
 
   dynamic _unwrap(dynamic body) {
     if (body is Map<String, dynamic>) {
       if (body.containsKey('data')) return body['data'];
     }
     return body;
+  }
+
+  List<dynamic> _toList(dynamic data) {
+    if (data is List) return data;
+    if (data is Map<String, dynamic>) return data['results'] as List<dynamic>? ?? [];
+    return [];
   }
 }

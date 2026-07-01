@@ -2,19 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
 
-// ── Color by leave type code ──────────────────────────────────────────────────
+// Matches the reference web dashboard's BALANCE_DISPLAY exactly — icon + color
+// per type is deliberately distinct from the LEAVE_TYPE_CONFIG identity colors
+// used elsewhere (Apply tab, calendar): casual=success, earned=primary, sick=info.
+// Only these 3 leave types get a summary card here (LWP/maternity/paternity excluded too).
+const _kBalanceDisplay = [
+  (code: 'casual', icon: Icons.check_circle_outline,     color: AppColors.success),
+  (code: 'earned', icon: Icons.calendar_month_outlined,  color: AppColors.primary),
+  (code: 'sick',   icon: Icons.medical_services_outlined, color: AppColors.info),
+];
 
-Color _colorForCode(String code) => switch (code.toUpperCase()) {
-  'CL'  => AppColors.primary,
-  'EL'  => AppColors.success,
-  'SL'  => AppColors.warning,
-  'LWP' => AppColors.textSecondary,
-  'ML'  => const Color(0xFFAD95CF),
-  'PL'  => AppColors.info,
-  _     => AppColors.primary,
+// Web's LeaveDashboard.tsx scopeLabel — subtitle on the approver's Pending card.
+String _scopeLabel(String role) => switch (role) {
+  'manager'  => "Your team's requests",
+  'hr_admin' => 'Your branch requests',
+  _          => 'Organisation-wide requests',
 };
 
 // ── Date formatter (ISO → 'D MMM') ───────────────────────────────────────────
@@ -142,6 +148,10 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
   Widget build(BuildContext context) {
     final balancesAsync = ref.watch(leaveBalancesProvider);
     final requestsAsync = ref.watch(leaveRequestsProvider);
+    final authAsync     = ref.watch(authStateProvider);
+
+    final role       = authAsync.valueOrNull?.user?.role ?? 'employee';
+    final isEmployee = role == 'employee';
 
     final allRequests = requestsAsync.valueOrNull ?? [];
     final filteredRequests = widget.selectedBranches.isEmpty
@@ -175,7 +185,7 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
                           letterSpacing: 0.6)),
                 ),
                 SizedBox(
-                  height: 150,
+                  height: 116,
                   child: balancesAsync.when(
                     loading: () => const Center(
                       child: CircularProgressIndicator(color: AppColors.primary),
@@ -186,20 +196,49 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
                           style: AppTextStyles.caption
                               .copyWith(color: AppColors.error)),
                     ),
-                    data: (items) => ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                      children: [
-                        ...items.map((b) => Padding(
-                              padding: const EdgeInsets.only(right: 10),
-                              child: _BalanceCard(balance: b),
-                            )),
-                        _PendingCountCard(
-                          count: pendingCount,
-                          onTap: widget.onApprovals,
-                        ),
-                      ],
-                    ),
+                    data: (items) {
+                      final byType = {
+                        for (final b in items) b.typeCode.toLowerCase(): b
+                      };
+                      // Always render all 3 cards, defaulting to 0/0 when the
+                      // backend has no balance record yet — matches web's
+                      // BALANCE_DISPLAY.map(), which never hides a card for
+                      // missing data (see LeaveDashboard.tsx).
+                      final balanceCards = _kBalanceDisplay.map((d) {
+                        final b = byType[d.code];
+                        return _BalanceCard(
+                          label: isEmployee
+                              ? (b?.typeName ?? LeaveTypeColors.labelForCode(d.code))
+                              : 'My ${LeaveTypeColors.shortLabelForCode(d.code)}',
+                          available: b?.available ?? 0,
+                          total: b?.total ?? 0,
+                          icon: d.icon,
+                          color: d.color,
+                        );
+                      }).toList();
+
+                      return ListView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(right: 10),
+                            child: _PendingCountCard(
+                              count: pendingCount,
+                              label: isEmployee ? 'My Pending' : 'Pending Approvals',
+                              subtitle: isEmployee
+                                  ? 'Awaiting approval'
+                                  : _scopeLabel(role),
+                              onTap: isEmployee ? null : widget.onApprovals,
+                            ),
+                          ),
+                          ...balanceCards.map((c) => Padding(
+                                padding: const EdgeInsets.only(right: 10),
+                                child: c,
+                              )),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],
@@ -267,7 +306,7 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
                   FilledButton.icon(
                     onPressed: widget.onApply,
                     icon: const Icon(Icons.add, size: 14),
-                    label: const Text('Apply',
+                    label: const Text('Apply My Leave',
                         style: TextStyle(
                             fontSize: 12, fontWeight: FontWeight.w600)),
                     style: FilledButton.styleFrom(
@@ -359,15 +398,27 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
 // ── Balance Card ──────────────────────────────────────────────────────────────
 
 class _BalanceCard extends StatelessWidget {
-  final LeaveBalanceEntity balance;
-  const _BalanceCard({required this.balance});
+  final String label;
+  final double available;
+  final double total;
+  final IconData icon;
+  final Color color;
+  const _BalanceCard({
+    required this.label,
+    required this.available,
+    required this.total,
+    required this.icon,
+    required this.color,
+  });
+
+  static String _fmt(double v) => v.toStringAsFixed(v % 1 == 0 ? 0 : 1);
 
   @override
   Widget build(BuildContext context) {
-    final color = _colorForCode(balance.typeCode);
+    final pct = total > 0 ? (available / total).clamp(0.0, 1.0) : 0.0;
     return Container(
       width: 140,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
@@ -379,53 +430,46 @@ class _BalanceCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                width: 30, height: 30,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label,
+                        style: AppTextStyles.caption.copyWith(fontSize: 10),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 1),
+                    Text(_fmt(available),
+                        style: AppTextStyles.h3.copyWith(color: color, fontSize: 20)),
+                    Text('of ${_fmt(total)} days left',
+                        style: AppTextStyles.caption.copyWith(fontSize: 10)),
+                  ],
                 ),
-                child:
-                    Icon(Icons.beach_access_outlined, size: 15, color: color),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                width: 26, height: 26,
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(4),
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(7),
                 ),
-                child: Text(balance.typeCode,
-                    style: AppTextStyles.caption.copyWith(
-                        color: color,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 10)),
+                child: Icon(icon, size: 13, color: color),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          Text(balance.available.toStringAsFixed(balance.available % 1 == 0 ? 0 : 1),
-              style:
-                  AppTextStyles.h3.copyWith(color: color, fontSize: 22)),
-          Text('of ${balance.total.toStringAsFixed(balance.total % 1 == 0 ? 0 : 1)} days left',
-              style: AppTextStyles.caption.copyWith(fontSize: 10)),
-          const SizedBox(height: 8),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
-              value: balance.pct,
+              value: pct,
               backgroundColor: color.withValues(alpha: 0.12),
               valueColor: AlwaysStoppedAnimation<Color>(color),
               minHeight: 4,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(balance.typeName,
-              style: AppTextStyles.caption.copyWith(fontSize: 9),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
         ],
       ),
     );
@@ -436,8 +480,15 @@ class _BalanceCard extends StatelessWidget {
 
 class _PendingCountCard extends StatelessWidget {
   final int count;
+  final String label;
+  final String subtitle;
   final VoidCallback? onTap;
-  const _PendingCountCard({required this.count, this.onTap});
+  const _PendingCountCard({
+    required this.count,
+    required this.label,
+    required this.subtitle,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -445,7 +496,7 @@ class _PendingCountCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: 140,
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(14),
@@ -461,33 +512,52 @@ class _PendingCountCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label,
+                          style: AppTextStyles.caption.copyWith(fontSize: 10),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 1),
+                      Text('$count',
+                          style: AppTextStyles.h3
+                              .copyWith(color: AppColors.warning, fontSize: 20)),
+                      Text(
+                        subtitle,
+                        style: AppTextStyles.caption.copyWith(fontSize: 10),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
                 Container(
-                  width: 30, height: 30,
+                  width: 26, height: 26,
                   decoration: BoxDecoration(
                     color: AppColors.warning.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(7),
                   ),
-                  child: const Icon(Icons.pending_actions_outlined,
-                      size: 15, color: AppColors.warning),
+                  child: const Icon(Icons.done_all,
+                      size: 13, color: AppColors.warning),
                 ),
-                if (onTap != null)
-                  const Icon(Icons.chevron_right,
-                      size: 14, color: AppColors.textHint),
               ],
             ),
             const SizedBox(height: 8),
-            Text('$count',
-                style: AppTextStyles.h3
-                    .copyWith(color: AppColors.warning, fontSize: 22)),
-            Text('pending team',
-                style: AppTextStyles.caption.copyWith(fontSize: 10)),
-            const SizedBox(height: 8),
-            Text(
-              onTap != null ? 'Tap to review →' : 'Awaiting approval',
-              style:
-                  const TextStyle(fontSize: 9, color: AppColors.textHint),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: 0,
+                backgroundColor: AppColors.warning.withValues(alpha: 0.12),
+                valueColor:
+                    const AlwaysStoppedAnimation<Color>(AppColors.warning),
+                minHeight: 4,
+              ),
             ),
           ],
         ),
@@ -592,7 +662,9 @@ class _RequestCard extends StatelessWidget {
                         color: AppColors.primary.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Text(request.leaveTypeCode,
+                      child: Text(
+                          LeaveTypeColors.shortLabelForCode(
+                              request.leaveTypeCode),
                           style: AppTextStyles.caption.copyWith(
                               color: AppColors.primary,
                               fontWeight: FontWeight.w800,

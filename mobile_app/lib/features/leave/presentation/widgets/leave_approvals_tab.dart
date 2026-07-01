@@ -415,7 +415,9 @@ class _ApprovalCard extends StatelessWidget {
                             AppColors.primary.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Text(request.leaveTypeCode,
+                      child: Text(
+                          LeaveTypeColors.shortLabelForCode(
+                              request.leaveTypeCode),
                           style: AppTextStyles.caption.copyWith(
                               color: AppColors.primary,
                               fontWeight: FontWeight.w800,
