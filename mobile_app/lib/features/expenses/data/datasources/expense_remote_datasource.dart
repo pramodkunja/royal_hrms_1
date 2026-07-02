@@ -8,9 +8,18 @@ class ExpenseRemoteDataSource {
 
   // ── Fetch list ─────────────────────────────────────────────────────────────
 
-  Future<List<ExpenseModel>> fetchExpenses({String? category}) async {
+  // scope: pass 'own' to force "my expenses only" regardless of approve
+  // permission (matches leave's ?scope=own convention) — needed so an
+  // approver's "My Requests" view doesn't show the whole org's expenses.
+  Future<List<ExpenseModel>> fetchExpenses({
+    String? category,
+    String? status,
+    String? scope,
+  }) async {
     final params = <String, dynamic>{};
     if (category != null && category.isNotEmpty) params['category'] = category;
+    if (status != null && status.isNotEmpty) params['status'] = status;
+    if (scope != null && scope.isNotEmpty) params['scope'] = scope;
 
     try {
       final res = await _dio.get(ApiConstants.expenses, queryParameters: params);
@@ -31,6 +40,49 @@ class ExpenseRemoteDataSource {
       if (e.response?.statusCode == 404) return [];
       rethrow;
     }
+  }
+
+  // ── Approve / reject (PUT /expenses/{number}/ with a status field —
+  // see apps/hrms/views/expenses.py ExpenseDetailView._handle_approval) ──────
+
+  Future<ExpenseModel> updateExpenseStatus(int expenseNumber, String status) async {
+    try {
+      final res = await _dio.put(
+        ApiConstants.expenseDetail(expenseNumber),
+        data: {'status': status},
+      );
+      return ExpenseModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _extractError(e);
+    }
+  }
+
+  // ── Categories / status options ─────────────────────────────────────────────
+
+  Future<List<Map<String, String>>> fetchCategories() async {
+    final res = await _dio.get(ApiConstants.expenseCategories);
+    final data = _unwrap(res.data);
+    final List<dynamic> list = data is List ? data : [];
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map((e) => {
+              'value': e['value']?.toString() ?? '',
+              'label': e['label']?.toString() ?? '',
+            })
+        .toList();
+  }
+
+  Future<List<Map<String, String>>> fetchStatusOptions() async {
+    final res = await _dio.get(ApiConstants.expenseStatusList);
+    final data = _unwrap(res.data);
+    final List<dynamic> list = data is List ? data : [];
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map((e) => {
+              'value': e['value']?.toString() ?? '',
+              'label': e['label']?.toString() ?? '',
+            })
+        .toList();
   }
 
   // ── Fetch stats ─────────────────────────────────────────────────────────────

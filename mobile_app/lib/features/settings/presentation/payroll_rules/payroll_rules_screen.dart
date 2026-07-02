@@ -262,28 +262,34 @@ class _StatChip extends StatelessWidget {
         children: [
           Icon(icon, color: iconColor, size: 18),
           const SizedBox(width: 6),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '$count',
-                style: AppTextStyles.h4.copyWith(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: iconColor == AppColors.primary
-                      ? AppColors.primary
-                      : iconColor == const Color(0xFFEF4444)
-                          ? const Color(0xFFEF4444)
-                          : AppColors.textPrimary,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$count',
+                  style: AppTextStyles.h4.copyWith(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: iconColor == AppColors.primary
+                        ? AppColors.primary
+                        : iconColor == const Color(0xFFEF4444)
+                            ? const Color(0xFFEF4444)
+                            : AppColors.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-              Text(
-                label,
-                style: AppTextStyles.label
-                    .copyWith(color: AppColors.textSecondary, fontSize: 9, height: 1.2),
-              ),
-            ],
+                Text(
+                  label,
+                  style: AppTextStyles.label
+                      .copyWith(color: AppColors.textSecondary, fontSize: 9, height: 1.2),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -421,11 +427,16 @@ class _EarningsTab extends StatelessWidget {
                           color: AppColors.textSecondary, fontSize: 10)),
                 ],
               ),
-              const Spacer(),
-              Text(
-                'Toggle to enable/disable · Edit to configure',
-                style: AppTextStyles.label.copyWith(
-                    color: AppColors.textHint, fontSize: 9),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  'Toggle to enable/disable · Edit to configure',
+                  style: AppTextStyles.label.copyWith(
+                      color: AppColors.textHint, fontSize: 9),
+                  textAlign: TextAlign.right,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
@@ -609,11 +620,16 @@ class _DeductionsTab extends StatelessWidget {
                           color: AppColors.textSecondary, fontSize: 10)),
                 ],
               ),
-              const Spacer(),
-              Text(
-                'Toggle to enable/disable · Edit to configure',
-                style: AppTextStyles.label.copyWith(
-                    color: AppColors.textHint, fontSize: 9),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  'Toggle to enable/disable · Edit to configure',
+                  style: AppTextStyles.label.copyWith(
+                      color: AppColors.textHint, fontSize: 9),
+                  textAlign: TextAlign.right,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),

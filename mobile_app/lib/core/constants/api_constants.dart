@@ -120,6 +120,9 @@ class ApiConstants {
   static const String leaveBalanceCredit = '/leave/balance/credit/';
 
   // Expenses
-  static const String expenses     = '/expenses/';
-  static const String expenseStats = '/expenses/stats/';
+  static const String expenses           = '/expenses/';
+  static const String expenseStats       = '/expenses/stats/';
+  static const String expenseCategories  = '/expenses/categories/';
+  static const String expenseStatusList  = '/expenses/status/';
+  static String expenseDetail(dynamic expenseNumber) => '/expenses/$expenseNumber/';
 }

@@ -49,53 +49,99 @@ class _EmpPayroll {
 
 const _kPayrollRuns = <_PayrollRun>[
   _PayrollRun(
-    month: 'May 2026', employees: 246, grossPayroll: '₹33,90,500',
-    netPayroll: '₹29,84,200', salaryDate: '30 May 2026', isPaid: true,
+    month: 'May 2026',
+    employees: 246,
+    grossPayroll: '₹33,90,500',
+    netPayroll: '₹29,84,200',
+    salaryDate: '30 May 2026',
+    isPaid: true,
   ),
   _PayrollRun(
-    month: 'Apr 2026', employees: 244, grossPayroll: '₹33,10,000',
-    netPayroll: '₹29,12,800', salaryDate: '30 Apr 2026', isPaid: true,
+    month: 'Apr 2026',
+    employees: 244,
+    grossPayroll: '₹33,10,000',
+    netPayroll: '₹29,12,800',
+    salaryDate: '30 Apr 2026',
+    isPaid: true,
   ),
   _PayrollRun(
-    month: 'Mar 2026', employees: 243, grossPayroll: '₹32,50,000',
-    netPayroll: '₹28,60,500', salaryDate: '31 Mar 2026', isPaid: true,
+    month: 'Mar 2026',
+    employees: 243,
+    grossPayroll: '₹32,50,000',
+    netPayroll: '₹28,60,500',
+    salaryDate: '31 Mar 2026',
+    isPaid: true,
   ),
   _PayrollRun(
-    month: 'Jun 2026', employees: 248, grossPayroll: '₹34,55,000',
-    netPayroll: '₹30,30,830', salaryDate: 'Pending', isPaid: false,
+    month: 'Jun 2026',
+    employees: 248,
+    grossPayroll: '₹34,55,000',
+    netPayroll: '₹30,30,830',
+    salaryDate: 'Pending',
+    isPaid: false,
   ),
 ];
 
 const _kEmployees = <_EmpPayroll>[
   _EmpPayroll(
-    initials: 'AM', avatarColor: Color(0xFF6C5CE7),
-    name: 'Arjun Mehta', empCode: 'EMP001', department: 'Engineering',
-    basic: '₹45,000', hra: '₹18,000', grossEarnings: '₹80,500',
-    deductions: '₹14,415', netSalary: '₹70,085',
+    initials: 'AM',
+    avatarColor: Color(0xFF6C5CE7),
+    name: 'Arjun Mehta',
+    empCode: 'EMP001',
+    department: 'Engineering',
+    basic: '₹45,000',
+    hra: '₹18,000',
+    grossEarnings: '₹80,500',
+    deductions: '₹14,415',
+    netSalary: '₹70,085',
   ),
   _EmpPayroll(
-    initials: 'PS', avatarColor: Color(0xFF6C5CE7),
-    name: 'Priya Sharma', empCode: 'EMP002', department: 'HR',
-    basic: '₹35,000', hra: '₹14,000', grossEarnings: '₹56,500',
-    deductions: '₹9,312', netSalary: '₹49,188',
+    initials: 'PS',
+    avatarColor: Color(0xFF6C5CE7),
+    name: 'Priya Sharma',
+    empCode: 'EMP002',
+    department: 'HR',
+    basic: '₹35,000',
+    hra: '₹14,000',
+    grossEarnings: '₹56,500',
+    deductions: '₹9,312',
+    netSalary: '₹49,188',
   ),
   _EmpPayroll(
-    initials: 'RS', avatarColor: Color(0xFF0E7C86),
-    name: 'Rahul Singh', empCode: 'EMP003', department: 'Sales',
-    basic: '₹50,000', hra: '₹20,000', grossEarnings: '₹94,000',
-    deductions: '₹12,200', netSalary: '₹89,800',
+    initials: 'RS',
+    avatarColor: Color(0xFF0E7C86),
+    name: 'Rahul Singh',
+    empCode: 'EMP003',
+    department: 'Sales',
+    basic: '₹50,000',
+    hra: '₹20,000',
+    grossEarnings: '₹94,000',
+    deductions: '₹12,200',
+    netSalary: '₹89,800',
   ),
   _EmpPayroll(
-    initials: 'MI', avatarColor: Color(0xFF6C5CE7),
-    name: 'Meena Iyer', empCode: 'EMP004', department: 'Finance',
-    basic: '₹40,000', hra: '₹16,000', grossEarnings: '₹65,000',
-    deductions: '₹15,780', netSalary: '₹52,720',
+    initials: 'MI',
+    avatarColor: Color(0xFF6C5CE7),
+    name: 'Meena Iyer',
+    empCode: 'EMP004',
+    department: 'Finance',
+    basic: '₹40,000',
+    hra: '₹16,000',
+    grossEarnings: '₹65,000',
+    deductions: '₹15,780',
+    netSalary: '₹52,720',
   ),
   _EmpPayroll(
-    initials: 'SK', avatarColor: Color(0xFF0E7C86),
-    name: 'Suresh Kumar', empCode: 'EMP005', department: 'Operations',
-    basic: '₹30,000', hra: '₹12,000', grossEarnings: '₹49,500',
-    deductions: '₹9,510', netSalary: '₹41,290',
+    initials: 'SK',
+    avatarColor: Color(0xFF0E7C86),
+    name: 'Suresh Kumar',
+    empCode: 'EMP005',
+    department: 'Operations',
+    basic: '₹30,000',
+    hra: '₹12,000',
+    grossEarnings: '₹49,500',
+    deductions: '₹9,510',
+    netSalary: '₹41,290',
   ),
 ];
 
@@ -195,8 +241,8 @@ class _PayrollScreenState extends State<PayrollScreen>
                   Tab(text: 'Reports'),
                   Tab(text: 'Analytics'),
                 ],
-                labelStyle: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600),
+                labelStyle:
+                    const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 unselectedLabelStyle: const TextStyle(fontSize: 13),
                 labelColor: AppColors.primary,
                 unselectedLabelColor: AppColors.textSecondary,
@@ -251,31 +297,41 @@ class _DashboardTab extends StatelessWidget {
   Widget _buildStatCards() {
     final stats = [
       _StatItem(
-        label: 'Total Employees', value: '248', sub: 'Active this month',
+        label: 'Total Employees',
+        value: '248',
+        sub: 'Active this month',
         icon: Icons.people_outline,
         iconColor: const Color(0xFF0E7C86),
         iconBg: const Color(0xFFE6F1FB),
       ),
       _StatItem(
-        label: 'Gross Payroll', value: '₹34,55,000', sub: 'Before deductions',
+        label: 'Gross Payroll',
+        value: '₹34,55,000',
+        sub: 'Before deductions',
         icon: Icons.currency_rupee_rounded,
         iconColor: AppColors.primary,
         iconBg: const Color(0xFFE8EFFA),
       ),
       _StatItem(
-        label: 'Net Payroll', value: '₹30,30,830', sub: 'After all deductions',
+        label: 'Net Payroll',
+        value: '₹30,30,830',
+        sub: 'After all deductions',
         icon: Icons.account_balance_wallet_outlined,
         iconColor: AppColors.success,
         iconBg: AppColors.successContainer,
       ),
       _StatItem(
-        label: 'Pending Payroll', value: '3', sub: 'Awaiting approval',
+        label: 'Pending Payroll',
+        value: '3',
+        sub: 'Awaiting approval',
         icon: Icons.hourglass_empty_rounded,
         iconColor: AppColors.warning,
         iconBg: AppColors.warningContainer,
       ),
       _StatItem(
-        label: 'Processed Payroll', value: '12', sub: 'Disbursed this quarter',
+        label: 'Processed Payroll',
+        value: '12',
+        sub: 'Disbursed this quarter',
         icon: Icons.check_circle_outline,
         iconColor: AppColors.success,
         iconBg: AppColors.successContainer,
@@ -318,8 +374,13 @@ class _DashboardTab extends StatelessWidget {
               const Icon(Icons.calendar_month_outlined,
                   size: 16, color: AppColors.primary),
               const SizedBox(width: 6),
-              Text('Payroll Calendar', style: AppTextStyles.h4),
-              const Spacer(),
+              Expanded(
+                child: Text('Payroll Calendar',
+                    style: AppTextStyles.h4,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: 8),
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -412,30 +473,46 @@ class _DashboardTab extends StatelessWidget {
           const SizedBox(height: 10),
 
           // Legend
-          Row(
+          Wrap(
+            spacing: 6,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Container(
-                width: 10, height: 10,
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: const BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text('Salary Date — 30 Jun',
+                      style: TextStyle(
+                          fontSize: 11, color: AppColors.textSecondary)),
+                ],
               ),
-              const SizedBox(width: 6),
-              const Text('Salary Date — 30 Jun',
-                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-              const SizedBox(width: 14),
-              Container(
-                width: 10, height: 10,
-                decoration: BoxDecoration(
-                  color: AppColors.warningContainer,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.warning, width: 1),
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: AppColors.warningContainer,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.warning, width: 1),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text('Holidays (3)',
+                      style: TextStyle(
+                          fontSize: 11, color: AppColors.textSecondary)),
+                ],
               ),
-              const SizedBox(width: 6),
-              const Text('Holidays (3)',
-                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
             ],
           ),
           const SizedBox(height: 12),
@@ -454,8 +531,8 @@ class _DashboardTab extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
                 elevation: 0,
-                textStyle: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600),
+                textStyle:
+                    const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               ),
             ),
           ),
@@ -483,16 +560,21 @@ class _DashboardTab extends StatelessWidget {
                 const Icon(Icons.update_rounded,
                     size: 16, color: AppColors.primary),
                 const SizedBox(width: 8),
-                Text('Recent Payroll Runs', style: AppTextStyles.h4),
-                const Spacer(),
+                Expanded(
+                  child: Text('Recent Payroll Runs',
+                      style: AppTextStyles.h4,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ),
+                const SizedBox(width: 8),
                 OutlinedButton.icon(
                   onPressed: () {},
                   icon: const Icon(Icons.download_outlined, size: 13),
                   label: const Text('Export'),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(0, 32),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     textStyle: const TextStyle(fontSize: 11),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(6)),
@@ -508,18 +590,10 @@ class _DashboardTab extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: const [
-                Expanded(
-                    flex: 3,
-                    child: _ColHeader('MONTH')),
-                Expanded(
-                    flex: 2,
-                    child: _ColHeader('EMP')),
-                Expanded(
-                    flex: 3,
-                    child: _ColHeader('NET PAYROLL')),
-                Expanded(
-                    flex: 2,
-                    child: _ColHeader('STATUS')),
+                Expanded(flex: 3, child: _ColHeader('MONTH')),
+                Expanded(flex: 1, child: _ColHeader('EMP')),
+                Expanded(flex: 3, child: _ColHeader('NET PAYROLL')),
+                Expanded(flex: 3, child: _ColHeader('STATUS')),
               ],
             ),
           ),
@@ -555,7 +629,9 @@ class _DashboardTab extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text('Employee Payroll Preview — June 2026',
-                      style: AppTextStyles.h4),
+                      style: AppTextStyles.h4,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
                 ),
               ],
             ),
@@ -569,7 +645,6 @@ class _DashboardTab extends StatelessWidget {
             ),
           ),
           const Divider(height: 1, indent: 16, endIndent: 16),
-
           ..._kEmployees.map((e) => _EmployeePayrollCard(emp: e)),
           const SizedBox(height: 4),
         ],
@@ -704,21 +779,27 @@ class _PayrollRunRow extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                     color: AppColors.textPrimary,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   '${run.employees} emp · ${run.grossPayroll}',
-                  style: const TextStyle(
-                      fontSize: 10, color: AppColors.textHint),
+                  style:
+                      const TextStyle(fontSize: 10, color: AppColors.textHint),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 1,
             child: Text(
               '${run.employees}',
-              style: const TextStyle(
-                  fontSize: 12, color: AppColors.textSecondary),
+              style:
+                  const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           Expanded(
@@ -733,20 +814,24 @@ class _PayrollRunRow extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                     color: AppColors.success,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   run.salaryDate,
-                  style: const TextStyle(
-                      fontSize: 10, color: AppColors.textHint),
+                  style:
+                      const TextStyle(fontSize: 10, color: AppColors.textHint),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 3,
             child: Row(
               children: [
-                _StatusBadge(isPaid: run.isPaid),
+                Flexible(child: _StatusBadge(isPaid: run.isPaid)),
                 const SizedBox(width: 6),
                 GestureDetector(
                   onTap: () {},
@@ -781,6 +866,8 @@ class _StatusBadge extends StatelessWidget {
           fontWeight: FontWeight.w600,
           color: isPaid ? AppColors.success : AppColors.warning,
         ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
@@ -837,8 +924,7 @@ class _EmployeePayrollCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: AppColors.warningContainer,
                   borderRadius: BorderRadius.circular(12),
@@ -863,14 +949,18 @@ class _EmployeePayrollCard extends StatelessWidget {
               const SizedBox(width: 1),
               _SalaryItem(label: 'HRA', value: emp.hra),
               const SizedBox(width: 1),
-              _SalaryItem(label: 'Gross', value: emp.grossEarnings,
-                  bold: true),
+              _SalaryItem(label: 'Gross', value: emp.grossEarnings, bold: true),
               const SizedBox(width: 1),
-              _SalaryItem(label: 'Deductions', value: emp.deductions,
+              _SalaryItem(
+                  label: 'Deductions',
+                  value: emp.deductions,
                   valueColor: AppColors.error),
               const SizedBox(width: 1),
-              _SalaryItem(label: 'Net', value: emp.netSalary,
-                  valueColor: AppColors.success, bold: true),
+              _SalaryItem(
+                  label: 'Net',
+                  value: emp.netSalary,
+                  valueColor: AppColors.success,
+                  bold: true),
             ],
           ),
         ],
@@ -944,14 +1034,16 @@ class _ReportsTab extends StatelessWidget {
     _ReportItem(
       icon: Icons.description_outlined,
       title: 'PF Report',
-      description: 'Employee & employer PF contribution summary with UAN mapping',
+      description:
+          'Employee & employer PF contribution summary with UAN mapping',
       size: '48 KB',
       downloaded: true,
     ),
     _ReportItem(
       icon: Icons.health_and_safety_outlined,
       title: 'ESI Report',
-      description: 'ESI deductions for eligible employees below ₹21,000 threshold',
+      description:
+          'ESI deductions for eligible employees below ₹21,000 threshold',
       size: '32 KB',
     ),
     _ReportItem(
@@ -963,7 +1055,8 @@ class _ReportsTab extends StatelessWidget {
     _ReportItem(
       icon: Icons.account_balance_outlined,
       title: 'TDS Report (Form 16)',
-      description: 'Monthly TDS deducted per employee with annual projected liability',
+      description:
+          'Monthly TDS deducted per employee with annual projected liability',
       size: '124 KB',
     ),
   ];
@@ -972,13 +1065,15 @@ class _ReportsTab extends StatelessWidget {
     _ReportItem(
       icon: Icons.table_chart_outlined,
       title: 'Salary Register',
-      description: 'Detailed salary register with all earnings and deductions for all employees',
+      description:
+          'Detailed salary register with all earnings and deductions for all employees',
       size: '210 KB',
     ),
     _ReportItem(
       icon: Icons.bar_chart_outlined,
       title: 'Payroll Summary',
-      description: 'High-level payroll cost summary by department and employee type',
+      description:
+          'High-level payroll cost summary by department and employee type',
       size: '56 KB',
     ),
     _ReportItem(
@@ -990,7 +1085,8 @@ class _ReportsTab extends StatelessWidget {
     _ReportItem(
       icon: Icons.summarize_outlined,
       title: 'Monthly Payroll Report',
-      description: 'Complete monthly payroll report with variance analysis vs prior month',
+      description:
+          'Complete monthly payroll report with variance analysis vs prior month',
       size: '98 KB',
     ),
   ];
@@ -1017,19 +1113,11 @@ class _ReportsTab extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 1.05,
-            ),
-            itemCount: _statutory.length,
-            itemBuilder: (_, i) => _ReportCard(item: _statutory[i]),
-          ),
-          const SizedBox(height: 20),
+          for (final item in _statutory) ...[
+            _ReportCard(item: item),
+            const SizedBox(height: 10),
+          ],
+          const SizedBox(height: 10),
 
           // Payroll Summary
           const Text(
@@ -1042,36 +1130,29 @@ class _ReportsTab extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 1.05,
-            ),
-            itemCount: _summary.length,
-            itemBuilder: (_, i) => _ReportCard(item: _summary[i]),
-          ),
+          for (final item in _summary) ...[
+            _ReportCard(item: item),
+            const SizedBox(height: 10),
+          ],
         ],
       ),
     );
   }
 
   Widget _buildFilterRow() {
-    return Row(
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        _FilterChip(
+        const _FilterChip(
           icon: Icons.calendar_today_outlined,
           label: 'June 2026',
         ),
-        const SizedBox(width: 10),
-        _FilterChip(
+        const _FilterChip(
           icon: Icons.business_outlined,
           label: 'All Branches',
         ),
-        const Spacer(),
         OutlinedButton.icon(
           onPressed: () {},
           icon: const Icon(Icons.filter_list_outlined, size: 14),
@@ -1080,8 +1161,8 @@ class _ReportsTab extends StatelessWidget {
             minimumSize: const Size(0, 34),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             textStyle: const TextStyle(fontSize: 12),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
         ),
       ],
@@ -1165,22 +1246,19 @@ class _ReportCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 3),
-          Expanded(
-            child: Text(
-              item.description,
-              style: const TextStyle(
-                  fontSize: 10, color: AppColors.textSecondary, height: 1.3),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
+          Text(
+            item.description,
+            style: const TextStyle(
+                fontSize: 10, color: AppColors.textSecondary, height: 1.3),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 8),
           // Badge row
           Row(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
@@ -1196,8 +1274,7 @@ class _ReportCard extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 item.size,
-                style: const TextStyle(
-                    fontSize: 10, color: AppColors.textHint),
+                style: const TextStyle(fontSize: 10, color: AppColors.textHint),
               ),
             ],
           ),
@@ -1534,8 +1611,7 @@ class _AnalyticsTab extends StatelessWidget {
                                 Text(
                                   '(${d.emp} emp)',
                                   style: const TextStyle(
-                                      fontSize: 10,
-                                      color: AppColors.textHint),
+                                      fontSize: 10, color: AppColors.textHint),
                                 ),
                               ],
                             ),
@@ -1694,12 +1770,11 @@ class _LegendDotInline extends StatelessWidget {
         Container(
             width: 8,
             height: 8,
-            decoration:
-                BoxDecoration(color: color, shape: BoxShape.circle)),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 4),
         Text(label,
-            style: const TextStyle(
-                fontSize: 11, color: AppColors.textSecondary)),
+            style:
+                const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
       ],
     );
   }
@@ -1733,8 +1808,8 @@ class _DonutPainter extends CustomPainter {
       final sweep = d.pct * 2 * 3.14159;
       paint.color = d.color;
       final path = Path();
-      path.moveTo(cx + outerR * _cos(startAngle),
-          cy + outerR * _sin(startAngle));
+      path.moveTo(
+          cx + outerR * _cos(startAngle), cy + outerR * _sin(startAngle));
       path.arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: outerR),
           startAngle, sweep, false);
       path.lineTo(cx + innerR * _cos(startAngle + sweep),

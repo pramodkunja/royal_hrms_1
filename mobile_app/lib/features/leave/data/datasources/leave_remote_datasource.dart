@@ -37,9 +37,16 @@ class LeaveRemoteDataSource {
         _unwrap(res.data) as Map<String, dynamic>);
   }
 
-  Future<List<LeaveRequestModel>> fetchLeaveRequests({String? status}) async {
+  // scope: pass 'own' to force "my requests only" — without it, an approver
+  // (leave.approve permission) gets the approval queue instead of their own
+  // requests (see apps/hrms/views/leave.py LeaveRequestListCreateView.get).
+  Future<List<LeaveRequestModel>> fetchLeaveRequests({
+    String? status,
+    String? scope,
+  }) async {
     final params = <String, dynamic>{};
     if (status != null) params['status'] = status;
+    if (scope != null) params['scope'] = scope;
     final res =
         await _dio.get(ApiConstants.leaves, queryParameters: params);
     final data = _unwrap(res.data);

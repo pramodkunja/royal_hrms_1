@@ -41,11 +41,11 @@ class ForgotPasswordNotifier extends Notifier<ForgotPasswordState> {
     }
   }
 
-  Future<void> resetPassword(String newPassword) async {
+  Future<void> resetPassword(String newPassword, String confirmPassword) async {
     if (state.resetToken == null) return;
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      await ResetPasswordUseCase(_repository)(state.resetToken!, newPassword);
+      await ResetPasswordUseCase(_repository)(state.resetToken!, newPassword, confirmPassword);
       state = state.copyWith(isLoading: false, step: ForgotPasswordStep.success);
     } catch (e) {
       state = state.copyWith(isLoading: false, errorMessage: _friendlyMessage(e));

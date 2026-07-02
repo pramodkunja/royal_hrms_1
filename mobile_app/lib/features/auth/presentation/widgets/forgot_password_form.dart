@@ -78,7 +78,7 @@ class _ForgotPasswordFormState extends ConsumerState<ForgotPasswordForm> {
               onToggleConfirm: () => setState(() => _showConfirm = !_showConfirm),
               onSubmit: () {
                 if (_resetFormKey.currentState?.validate() ?? false) {
-                  notifier.resetPassword(_passwordCtrl.text);
+                  notifier.resetPassword(_passwordCtrl.text, _confirmCtrl.text);
                 }
               },
             ),

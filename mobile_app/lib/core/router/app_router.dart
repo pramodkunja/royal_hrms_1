@@ -31,6 +31,7 @@ import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../../features/onboarding/presentation/screens/awaiting_approval_screen.dart';
 import '../../features/leave/presentation/screens/leave_screen.dart';
 import '../../features/expenses/presentation/screens/expense_screen.dart';
+import '../../features/approvals/presentation/screens/approvals_screen.dart';
 import '../../features/attendance/presentation/screens/attendance_screen.dart';
 import '../../features/attendance/presentation/screens/my_attendance_screen.dart';
 import '../../features/payroll/presentation/screens/payroll_screen.dart';
@@ -305,10 +306,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           // HR Ops
           GoRoute(
             path: AppRoutes.approvals,
-            pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(
-                  title: 'Team Approvals', icon: Icons.checklist_outlined),
-            ),
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: ApprovalsScreen()),
           ),
           GoRoute(
             path: AppRoutes.separation,

@@ -18,8 +18,8 @@ class LeaveRepositoryImpl implements LeaveRepository {
   Future<LeaveStatsEntity> getLeaveStats() => _ds.fetchLeaveStats();
 
   @override
-  Future<List<LeaveRequestEntity>> getLeaveRequests({String? status}) =>
-      _ds.fetchLeaveRequests(status: status);
+  Future<List<LeaveRequestEntity>> getLeaveRequests({String? status, String? scope}) =>
+      _ds.fetchLeaveRequests(status: status, scope: scope);
 
   @override
   Future<LeaveRequestEntity> applyLeave({

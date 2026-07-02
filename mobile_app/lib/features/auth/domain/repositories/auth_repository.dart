@@ -14,7 +14,7 @@ abstract class AuthRepository {
   Future<String> verifyOtp(String email, String otp);
 
   /// Resets the password using the one-time reset token.
-  Future<void> resetPassword(String resetToken, String newPassword);
+  Future<void> resetPassword(String resetToken, String newPassword, String confirmPassword);
 
   /// Reads cached user data from secure storage; returns null if not logged in.
   Future<UserEntity?> getCachedUser();

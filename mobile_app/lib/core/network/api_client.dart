@@ -44,16 +44,26 @@ final dioProvider = Provider<Dio>((ref) {
   return dio;
 });
 
-/// Parses a Dio error into a typed [AppException].
+/// Parses a Dio error into a typed [AppException]. Always prefers the
+/// backend's own `message` field when the response body includes one —
+/// the hardcoded per-status defaults below are only a fallback for
+/// responses that didn't carry a message (e.g. a connection failure with
+/// no response at all).
 AppException parseDioException(DioException error) {
   final statusCode = error.response?.statusCode;
   final body = error.response?.data;
   final serverMessage = body is Map ? body['message'] as String? : null;
 
-  if (statusCode == 401) return const UnauthorizedException();
+  if (statusCode == 401) {
+    return UnauthorizedException(serverMessage ?? 'Session expired. Please log in again.');
+  }
   if (statusCode == 403) return AccountLockedException(serverMessage ?? 'Access denied.');
-  if (statusCode == 404) return const NotFoundException();
-  if (statusCode == 429) return const RateLimitException();
+  if (statusCode == 404) {
+    return NotFoundException(serverMessage ?? 'The requested resource was not found.');
+  }
+  if (statusCode == 429) {
+    return RateLimitException(serverMessage ?? 'Too many requests. Please try again later.');
+  }
   if (statusCode != null && statusCode >= 500) {
     return ServerException(serverMessage ?? 'Server error. Please try again.');
   }

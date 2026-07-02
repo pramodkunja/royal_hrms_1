@@ -2380,3 +2380,109 @@ mobile_app/lib/
 - [ ] Backend: real create/delete support for custom leave types, if the business actually needs more than the fixed 6
 - [ ] Backend: an accrual/credit-rule model — the Credit Rules list is local-only preview until this exists
 - [ ] Wire `LeaveBalanceAdjustView` (per-balance PATCH) to a mobile UI — currently unused, like `balance/credit/` was
+
+## Session 15 — Approvals Screen, Auth Background/Branding, Overflow Fixes, Auth Error Handling
+
+**Date:** 2026-07-02
+**Developer:** Pramod Kunja
+
+### Module Worked On
+- New "Approvals" feature (`/dashboard/approvals`, previously a `PlaceholderScreen` stub).
+- Auth screens (Login, Forgot Password/OTP/Reset) — background image, branding, layout, and real error-message handling.
+- Overflow/crash fixes across Payroll (Dashboard, Reports, Payroll Rules) and Settings → Leave Policy.
+
+### What Changed
+
+**1. Approvals screen — ported from web's `app/dashboard/approvals/page.tsx`**
+- Web has a standalone, aggregated Approvals page (distinct from the Leave module's own Approvals tab) with two sections — "My Requests" (own Leave/Expense requests + quick-create) and "Team Approvals" (pending items awaiting the current user's action) — composed client-side from the existing `/leave/requests/` and `/expenses/` endpoints; no backend aggregation endpoint exists for this.
+- Built `lib/features/approvals/` (providers + screen + widgets) reusing the existing `leaveRepositoryProvider` / `expenseDataSourceProvider` — no duplicated networking.
+- Backend fix: `ExpenseListCreateView.get` (`apps/hrms/views/expenses.py`) had no way to force "my expenses only" for a user with `expenses.approve` — added `?scope=own`, mirroring the pattern leave already had. Verified live: approving a real pending expense through the app's exact API call correctly dropped it out of the pending queue.
+- Fixed a pre-existing bug found in the process: `ExpenseModel` read a nonexistent `id` field (the backend's `ExpenseSerializer` never returns one) — switched to the real identifier, `expense_number`.
+- "Team Approvals" is hidden entirely for users with neither `leave.approve` nor `expenses.approve` (same reasoning as hiding the Leave module's own Approvals tab for employees — a queue that only ever shows your own request is a dead end).
+- Registered in `app_router.dart`, replacing the `PlaceholderScreen` for `AppRoutes.approvals`.
+
+**2. Auth screens — background image + branding**
+- New `lib/shared/widgets/auth_background.dart`: full-bleed `Image.asset('assets/images/login.jpg')` + a light primary-color gradient tint, with `cacheWidth` capped to the device's physical width (source is 4912×4912 / ~14MB — no reason to decode full-res for a backdrop) and a graceful fallback to a solid color if the asset is ever missing.
+- Declared `assets/images/` in `pubspec.yaml`; added `mobile_app/assets/images/login.jpg` and `Royal_logo.png`.
+- Login screen: wrapped in `AuthBackground`; logo badge now shows `Royal_logo.png` (was a 👑 emoji, kept as an `errorBuilder` fallback); header text turned white with a subtle drop-shadow for legibility regardless of what's behind it.
+- Forgot Password screen: same `AuthBackground`; removed the step title ("Forgot Password" / "Verify OTP" / "New Password") from the `AppBar` and moved it to a centered white heading above the card (matching the login screen's header treatment) instead of living in the app bar; app bar is now just a transparent back button.
+- Tuned the background tint down from ~0.8/0.7 opacity to ~0.5/0.22 — the original was strong enough that the photo was barely visible ("looked like a flat blue screen").
+
+**3. Auth error handling — show the backend's real message**
+- `core/network/api_client.dart` `parseDioException`: previously hardcoded a fixed message for 401/404/429 and discarded the backend's own `message` field entirely for those. Now always prefers the server's message for every status code, falling back to a generic client message only when there's genuinely no response (e.g. connection dropped).
+- `login_form.dart`: was further overriding `UnauthorizedException`/`RateLimitException` with its own hardcoded text on top of the above — now shows `error.message` directly. Verified against the live backend that "Invalid email or password.", "Invalid or expired reset token.", etc. now reach the screen unmodified.
+- `forgot_password_notifier.dart` needed no change — it already fell back to `error.toString()` (`AppException.toString() => message`), so it picked up the real backend message automatically once `parseDioException` was fixed.
+
+**4. Auth interceptor bug — wrong-password login could hang or show the wrong error**
+- `core/network/auth_interceptor.dart` `onError` excluded `/token/refresh/` and `/logout/` from its silent-refresh-and-retry logic, but not `/login/` (or `/forgot-password/`, `/verify-otp/`, `/reset-password/`). A 401 from `/login/` (wrong credentials) was being treated as "session expired": the interceptor tried to silently refresh a token that never existed (itself failing), fired a `logout()` side effect via `sessionExpiredProvider`, and only then re-threw — as a synthetic `DioException` with no `response` attached, so `parseDioException` couldn't read the real status/message. This raced against `AuthNotifier`'s own state write and was the cause of "wrong password shows no error and stays loading."
+- Fixed by excluding all pre-session endpoints (`login`, `forgotPassword`, `verifyOtp`, `resetPassword`, plus the already-excluded `tokenRefresh`/`logout`) from the refresh-retry path — a 401 from any of them can only mean "these credentials are wrong," never "the existing session expired," since there is no session yet.
+
+**5. Reset password — missing `confirm_password` field**
+- Backend's `ResetPasswordSerializer` requires `reset_token`, `new_password`, **and** `confirm_password`; the mobile app's `ResetPasswordRequestModel` only sent the first two even though the UI already collected and validated a confirm-password field locally. Threaded `confirmPassword` through `ResetPasswordRequestModel` → `AuthRepository`/`AuthRepositoryImpl` → `ResetPasswordUseCase` → `ForgotPasswordNotifier.resetPassword` → the form's submit call. Verified against the live backend that the "confirm_password required" error is gone.
+
+**6. Overflow / crash fixes** (all confirmed via `flutter analyze`, 0 errors)
+- **Leave Policy screen** (`leave_policy_screen.dart`): `_PolicyCard`'s tag `Wrap` had a `Flexible(child: Text(...))` for the policy note — `Flexible`/`Expanded` are only valid as direct children of a `Row`/`Column`/`Flex`, never a `Wrap`, which threw "Incorrect use of ParentDataWidget" for any policy with a non-empty note (i.e. almost all of them). Fixed by using a plain `Text` (a `Wrap` already width-constrains its children). Also moved "+ Add Leave Type" out of the section header into a `FloatingActionButton.extended`, matching the Credit Rules tab's existing FAB pattern (`GlobalKey<_PolicyTabState>` + a new public `openAdd()`).
+- **Payroll Dashboard tab**: two section headers (`Payroll Calendar`, `Recent Payroll Runs`) had an unwrapped `Text` title sitting between an icon and a `Spacer()`+badge/button — wrapped titles in `Expanded`+ellipsis. `_PayrollRunRow`'s STATUS column only got 20% of the row's width but had to fit a badge + icon — rebalanced column flex (`EMP` 2→1, `STATUS` 2→3) and wrapped the badge in `Flexible`. Calendar legend row converted from `Row` to `Wrap`.
+- **Payroll Reports tab**: Statutory Reports / Payroll Summary were a 2-column `GridView` — each card's action-button row (`Export PDF`/`Export Excel`) didn't have enough width for icon+text at half-width, causing the overflow. Changed to one full-width card per row (per explicit request) via a `for` loop instead of `GridView.builder`; this also required removing an `Expanded` around the description `Text` that only worked inside the old grid's bounded-height cell.
+- **Payroll Rules screen**: `_StatChip`'s inner `Row` (icon + count/label `Column`) had no `Expanded` on the `Column`, so it sized to its natural (unbounded) width instead of the ~70px actually available — fixed. Both `_EarningsTab`/`_DeductionsTab` section headers had a long hint sentence after a `Spacer()` with no `Flexible` — same fix as the Payroll Dashboard headers.
+- **OTP input** (`otp_input_widget.dart`): 6 boxes at a fixed `width: 46` (276px total) in a `Row` with `spaceBetween` overflowed a 271px-wide parent before any gap was even added. Changed to `Expanded` boxes with fixed 8px gaps, so the row always exactly fits whatever width it's given.
+
+### Files Added
+```
+mobile_app/
+  assets/images/login.jpg, Royal_logo.png
+  lib/shared/widgets/auth_background.dart
+  lib/features/approvals/
+    presentation/providers/approvals_providers.dart
+    presentation/screens/approvals_screen.dart
+    presentation/widgets/my_requests_tab.dart
+    presentation/widgets/team_approvals_tab.dart
+    presentation/widgets/new_leave_request_sheet.dart
+```
+
+### Files Modified
+```
+mobile_app/
+  pubspec.yaml                                                  assets/images/ declared
+  lib/core/constants/api_constants.dart                         expenseCategories, expenseStatusList, expenseDetail()
+  lib/core/network/api_client.dart                               parseDioException always prefers server message
+  lib/core/network/auth_interceptor.dart                         excluded pre-session endpoints from refresh-retry
+  lib/core/router/app_router.dart                                ApprovalsScreen wired in place of PlaceholderScreen
+  lib/features/auth/
+    data/models/forgot_password_models.dart                      ResetPasswordRequestModel.confirmPassword
+    data/repositories/auth_repository_impl.dart                  resetPassword(confirmPassword)
+    domain/repositories/auth_repository.dart                     resetPassword(confirmPassword)
+    domain/usecases/reset_password_usecase.dart                  resetPassword(confirmPassword)
+    presentation/controllers/forgot_password_notifier.dart       resetPassword(confirmPassword)
+    presentation/screens/login_screen.dart                       AuthBackground, Royal_logo.png, white header + shadow
+    presentation/screens/forgot_password_screen.dart              AuthBackground, heading moved out of AppBar
+    presentation/widgets/forgot_password_form.dart                passes confirmCtrl.text through
+    presentation/widgets/login_form.dart                          shows error.message instead of hardcoded text
+    presentation/widgets/otp_input_widget.dart                    Expanded boxes instead of fixed width
+  lib/features/expenses/
+    data/datasources/expense_remote_datasource.dart               status/scope filters, updateExpenseStatus, categories/status options
+    data/models/expense_model.dart                                expenseNumber/expenseRef instead of nonexistent id
+  lib/features/leave/
+    data/datasources/leave_remote_datasource.dart                 optional scope param
+    data/repositories/leave_repository_impl.dart                  optional scope param
+    domain/repositories/leave_repository.dart                     optional scope param
+    presentation/screens/leave_screen.dart                        Approvals tab hidden for employee role
+  lib/features/payroll/presentation/screens/payroll_screen.dart   overflow fixes (see above)
+  lib/features/settings/presentation/leave_policy/leave_policy_screen.dart   Wrap/Flexible crash fix, FAB
+  lib/features/settings/presentation/payroll_rules/payroll_rules_screen.dart  overflow fixes (see above)
+
+web_frontend_backend/Royal-HRMS/backend/apps/hrms/views/expenses.py   ExpenseListCreateView scope=own support
+```
+
+### Architecture Notes
+- `Flexible`/`Expanded` are `ParentDataWidget`s valid **only** as direct children of `Row`/`Column`/`Flex` — never `Wrap`. This bug pattern (and the "Expanded needs a bounded-height/width ancestor" variant) accounted for essentially every overflow/crash fixed this session; when converting a `GridView`/2-column layout to a single-column list, always re-check whether children relied on the grid cell's bounded size.
+- `parseDioException` (`core/network/api_client.dart`) is the single source of truth for turning a `DioException` into a typed `AppException` for the **auth** feature — always prefer the backend's `message` field there before adding any new hardcoded client-side copy. (Other features — Leave, Expenses, Settings, etc. — still use an older, separate `_friendly(e.toString())` string-matching pattern per file; not touched this session, flagged as a possible future cleanup.)
+- Any endpoint that can be called *before* a session exists (login, forgot-password, verify-otp, reset-password, token-refresh, logout) must be excluded from `AuthInterceptor`'s silent-refresh-retry logic — a 401 from one of these is never "your session expired."
+- `AuthBackground` (`lib/shared/widgets/`) is the shared backdrop for all auth screens now — add new auth-flow screens through it rather than duplicating the `Image.asset` + gradient.
+
+### Pending Tasks (updated)
+- [ ] Backend: real create/delete support for custom leave types, if the business actually needs more than the fixed 6
+- [ ] Backend: an accrual/credit-rule model — the Credit Rules list is local-only preview until this exists
+- [ ] Wire `LeaveBalanceAdjustView` (per-balance PATCH) to a mobile UI — currently unused, like `balance/credit/` was
+- [ ] Backend: leave approval routing config (`ApprovalWorkflowRule`) has a role-string mismatch (`reporting_manager`/`hr_manager` vs the resolver's expected `rm`/real role names) — every leave request's `l1_approver`/`l2_approver` resolve to `null`. Flagged, not fixed (out of mobile scope).
+- [ ] Sweep the older `_friendly(e.toString())` error-message pattern in Leave/Expenses/Settings/Announcements/Branches/Documents/Employees providers to the same "always show the backend message" standard applied to auth this session.

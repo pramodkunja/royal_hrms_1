@@ -5,7 +5,7 @@ abstract class LeaveRepository {
   Future<List<LeaveTypeEntity>> getLeaveTypes();
   Future<List<LeaveBalanceEntity>> getLeaveBalances();
   Future<LeaveStatsEntity> getLeaveStats();
-  Future<List<LeaveRequestEntity>> getLeaveRequests({String? status});
+  Future<List<LeaveRequestEntity>> getLeaveRequests({String? status, String? scope});
   Future<LeaveRequestEntity> applyLeave({
     required String leaveTypeCode,
     required String fromDate,

@@ -46,19 +46,19 @@ class _LoginFormState extends ConsumerState<LoginForm> {
     }
   }
 
+  // Always show the backend's own message when it sent one (parseDioException
+  // carries it through on every exception type) — only fall back to a
+  // generic client-side message for conditions the backend can't describe,
+  // like not being able to reach it at all.
   String _formatError(Object? error) {
     if (error == null) return 'An unknown error occurred.';
-    if (error is UnauthorizedException) {
-      return 'Invalid email or password. Please check your credentials.';
-    }
+    if (error is UnauthorizedException) return error.message;
     if (error is AccountLockedException) {
       return error.message.isNotEmpty
           ? error.message
           : 'Your account has been locked. Please contact HR support.';
     }
-    if (error is RateLimitException) {
-      return 'Too many sign-in attempts. Please wait a few minutes and try again.';
-    }
+    if (error is RateLimitException) return error.message;
     if (error is NetworkException) {
       final msg = error.message;
       if (msg.contains('XMLHttpRequest') ||

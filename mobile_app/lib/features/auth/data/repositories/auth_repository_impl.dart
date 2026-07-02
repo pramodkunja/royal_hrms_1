@@ -61,9 +61,13 @@ class AuthRepositoryImpl implements AuthRepository {
       _dataSource.verifyOtp(VerifyOtpRequestModel(email: email, otp: otp));
 
   @override
-  Future<void> resetPassword(String resetToken, String newPassword) =>
+  Future<void> resetPassword(String resetToken, String newPassword, String confirmPassword) =>
       _dataSource.resetPassword(
-        ResetPasswordRequestModel(resetToken: resetToken, newPassword: newPassword),
+        ResetPasswordRequestModel(
+          resetToken: resetToken,
+          newPassword: newPassword,
+          confirmPassword: confirmPassword,
+        ),
       );
 
   @override

@@ -26,6 +26,7 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   final _creditRulesKey = GlobalKey<CreditRulesTabState>();
+  final _policyKey = GlobalKey<_PolicyTabState>();
 
   @override
   void initState() {
@@ -71,14 +72,24 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16)),
             )
-          : null,
+          : FloatingActionButton.extended(
+              onPressed: () => _policyKey.currentState?.openAdd(),
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Leave Type',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+            ),
       body: TabBarView(
         controller: _tabController,
         children: [
           policiesAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => _ErrorView(message: e.toString()),
-            data: (policies) => _PolicyTab(policies: policies, ref: ref),
+            data: (policies) =>
+                _PolicyTab(key: _policyKey, policies: policies, ref: ref),
           ),
           CreditRulesTab(key: _creditRulesKey),
         ],
@@ -92,7 +103,7 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
 class _PolicyTab extends ConsumerStatefulWidget {
   final List<LeavePolicyModel> policies;
   final WidgetRef ref;
-  const _PolicyTab({required this.policies, required this.ref});
+  const _PolicyTab({super.key, required this.policies, required this.ref});
 
   @override
   ConsumerState<_PolicyTab> createState() => _PolicyTabState();
@@ -103,7 +114,8 @@ class _PolicyTabState extends ConsumerState<_PolicyTab> {
   // these can't be persisted yet (backend's leave_type enum is fixed).
   List<LeavePolicyModel> _previewTypes = [];
 
-  void _openAdd() {
+  // Called by the parent screen's FAB via a GlobalKey.
+  void openAdd() {
     _openSheet(
         null, (m) => setState(() => _previewTypes = [..._previewTypes, m]));
   }
@@ -176,30 +188,19 @@ class _PolicyTabState extends ConsumerState<_PolicyTab> {
       color: AppColors.primary,
       onRefresh: () async => ref.invalidate(leavePoliciesProvider),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
         children: [
           Text('Configure leave types, entitlements and balance crediting',
               style: AppTextStyles.bodySecondary),
           const SizedBox(height: 14),
           _StatsRow(policies: policies, previewTypes: _previewTypes),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Text('LEAVE TYPES',
-                  style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.6)),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: _openAdd,
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Add Leave Type'),
-                style: TextButton.styleFrom(foregroundColor: AppColors.primary),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
+          Text('LEAVE TYPES',
+              style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6)),
+          const SizedBox(height: 8),
           ...ordered.map((p) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: _PolicyCard(
@@ -439,13 +440,11 @@ class _PolicyCard extends StatelessWidget {
                     : AppColors.textHint,
               ),
               if (policy.policyNote.isNotEmpty)
-                Flexible(
-                  child: Text(policy.policyNote,
-                      style: AppTextStyles.caption.copyWith(
-                          fontSize: 11, color: AppColors.textSecondary),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis),
-                ),
+                Text(policy.policyNote,
+                    style: AppTextStyles.caption.copyWith(
+                        fontSize: 11, color: AppColors.textSecondary),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
             ],
           ),
         ],

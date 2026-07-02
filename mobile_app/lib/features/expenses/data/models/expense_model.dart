@@ -12,7 +12,11 @@ class ExpenseReceiptModel {
 }
 
 class ExpenseModel {
-  final String id;
+  // The backend's ExpenseSerializer never returns a UUID 'id' field — the
+  // stable identifier callers must use for detail/approve routes is the
+  // integer 'expense_number' (see apps/hrms/urls.py 'expenses/<int:expense_number>/').
+  final int    expenseNumber;
+  final String expenseRef;
   final String title;
   final String category;
   final double amount;
@@ -25,7 +29,8 @@ class ExpenseModel {
   final String createdAt;
 
   const ExpenseModel({
-    required this.id,
+    required this.expenseNumber,
+    required this.expenseRef,
     required this.title,
     required this.category,
     required this.amount,
@@ -46,7 +51,8 @@ class ExpenseModel {
 
     final rawReceipts = json['receipts'] as List<dynamic>? ?? [];
     return ExpenseModel(
-      id:           json['id']            as String? ?? '',
+      expenseNumber: (json['expense_number'] as num?)?.toInt() ?? 0,
+      expenseRef:   json['expense_ref']     as String? ?? '',
       title:        json['title']         as String? ?? '',
       category:     json['category']      as String? ?? 'other',
       amount:       amount,

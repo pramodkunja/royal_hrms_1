@@ -67,9 +67,22 @@ class AuthInterceptor extends Interceptor {
 
     final path = err.requestOptions.path;
 
-    // Never retry the refresh or logout endpoints — avoids infinite loops.
-    if (path.contains(ApiConstants.tokenRefresh) ||
-        path.contains(ApiConstants.logout)) {
+    // Never attempt a silent refresh for endpoints that run before a session
+    // exists. A 401 here always means "these credentials/this token are
+    // invalid" — never "your existing session expired" — so treating it as
+    // one triggers a pointless second round-trip to /token/refresh/ (which
+    // also 401s with no session to refresh), a spurious logout() side
+    // effect via sessionExpiredProvider, and a race between that logout's
+    // state write and the login call's own error state.
+    const unauthenticatedPaths = [
+      ApiConstants.login,
+      ApiConstants.tokenRefresh,
+      ApiConstants.logout,
+      ApiConstants.forgotPassword,
+      ApiConstants.verifyOtp,
+      ApiConstants.resetPassword,
+    ];
+    if (unauthenticatedPaths.any(path.contains)) {
       handler.next(err);
       return;
     }

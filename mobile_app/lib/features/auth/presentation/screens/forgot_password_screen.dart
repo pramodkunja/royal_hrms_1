@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
+import 'package:mobile_app/shared/widgets/auth_background.dart';
 import '../providers/auth_providers.dart';
 import '../states/forgot_password_state.dart';
 import '../widgets/forgot_password_form.dart';
@@ -25,44 +26,69 @@ class ForgotPasswordScreen extends ConsumerWidget {
         Future.microtask(() => ref.read(forgotPasswordProvider.notifier).reset());
       },
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: Colors.transparent,
+        extendBodyBehindAppBar: true,
         appBar: AppBar(
-          backgroundColor: AppColors.surface,
+          backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+            icon: const Icon(Icons.arrow_back_ios_new,
+                size: 20, color: Colors.white),
             // reset() is already handled by PopScope.onPopInvokedWithResult —
             // calling it here too would double-reset AND risk a second build-
             // phase write. Just pop; the PopScope callback takes care of cleanup.
             onPressed: () => context.pop(),
           ),
-          title: Text(_stepTitle(step), style: AppTextStyles.h4),
         ),
-        body: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
-                child: Container(
-                  padding: const EdgeInsets.all(28),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: AppColors.cardShadow,
-                  ),
+        body: AuthBackground(
+          child: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(
+                    24, kToolbarHeight + 24, 24, 32),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _StepIndicator(currentStep: step),
-                      const SizedBox(height: 28),
-                      ForgotPasswordForm(
-                        onBackToLogin: () {
-                          // This uses context.go(), which does NOT trigger
-                          // PopScope, so it is safe to reset() here directly.
-                          ref.read(forgotPasswordProvider.notifier).reset();
-                          context.go(AppRoutes.login);
-                        },
+                      // Step heading — centred, over the background image,
+                      // matching the login screen's header treatment instead
+                      // of living in the app bar.
+                      Text(
+                        _stepTitle(step),
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.h2.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          shadows: const [
+                            Shadow(color: Colors.black45, blurRadius: 8)
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Container(
+                        padding: const EdgeInsets.all(28),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: AppColors.cardShadow,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _StepIndicator(currentStep: step),
+                            const SizedBox(height: 28),
+                            ForgotPasswordForm(
+                              onBackToLogin: () {
+                                // This uses context.go(), which does NOT
+                                // trigger PopScope, so it is safe to reset()
+                                // here directly.
+                                ref.read(forgotPasswordProvider.notifier).reset();
+                                context.go(AppRoutes.login);
+                              },
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),

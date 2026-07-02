@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../branches/presentation/providers/branch_providers.dart';
 import '../widgets/leave_dashboard_tab.dart';
 import '../widgets/apply_leave_tab.dart';
@@ -18,26 +19,26 @@ class LeaveScreen extends ConsumerStatefulWidget {
 
 class _LeaveScreenState extends ConsumerState<LeaveScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
+  TabController? _tabController;
+  bool? _isEmployeeForController;
   final List<String> _selectedBranches = [];
 
-  static const _tabs = [
-    Tab(text: 'Dashboard'),
-    Tab(text: 'Apply Leave'),
-    Tab(text: 'Approvals'),
-    Tab(text: 'Calendar'),
-    Tab(text: 'Analytics'),
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+  // Approvals is hidden for plain employees — matches the web frontend's
+  // LeavePageClient (ALL_TABS.approvals.hideForEmployee), since a self-only
+  // request queue would show "Approve/Reject" buttons that just 403
+  // (backend blocks approving your own leave request).
+  void _ensureController(bool isEmployee) {
+    if (_tabController != null && _isEmployeeForController == isEmployee) {
+      return;
+    }
+    _tabController?.dispose();
+    _tabController = TabController(length: isEmployee ? 4 : 5, vsync: this);
+    _isEmployeeForController = isEmployee;
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _tabController?.dispose();
     super.dispose();
   }
 
@@ -77,6 +78,32 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
   @override
   Widget build(BuildContext context) {
     final hasFilter = _selectedBranches.isNotEmpty;
+    final role = ref.watch(authStateProvider).valueOrNull?.user?.role ?? 'employee';
+    final isEmployee = role == 'employee';
+    _ensureController(isEmployee);
+    final tabController = _tabController!;
+
+    final tabs = [
+      const Tab(text: 'Dashboard'),
+      const Tab(text: 'Apply Leave'),
+      if (!isEmployee) const Tab(text: 'Approvals'),
+      const Tab(text: 'Calendar'),
+      const Tab(text: 'Analytics'),
+    ];
+    final tabViews = [
+      LeaveDashboardTab(
+        onApply: () => tabController.animateTo(1),
+        onApprovals: isEmployee ? null : () => tabController.animateTo(2),
+        selectedBranches: _selectedBranches,
+      ),
+      ApplyLeaveTab(
+        onDashboard: () => tabController.animateTo(0),
+      ),
+      if (!isEmployee) const LeaveApprovalsTab(),
+      const TeamCalendarTab(),
+      const LeaveAnalyticsTab(),
+    ];
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -185,10 +212,10 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
                     ),
                   ),
                   TabBar(
-                    controller: _tabController,
+                    controller: tabController,
                     isScrollable: true,
                     tabAlignment: TabAlignment.start,
-                    tabs: _tabs,
+                    tabs: tabs,
                     labelColor: AppColors.primary,
                     unselectedLabelColor: AppColors.textSecondary,
                     indicatorColor: AppColors.primary,
@@ -206,20 +233,8 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
             // ── Tab content ───────────────────────────────────────────────────
             Expanded(
               child: TabBarView(
-                controller: _tabController,
-                children: [
-                  LeaveDashboardTab(
-                    onApply: () => _tabController.animateTo(1),
-                    onApprovals: () => _tabController.animateTo(2),
-                    selectedBranches: _selectedBranches,
-                  ),
-                  ApplyLeaveTab(
-                    onDashboard: () => _tabController.animateTo(0),
-                  ),
-                  const LeaveApprovalsTab(),
-                  const TeamCalendarTab(),
-                  const LeaveAnalyticsTab(),
-                ],
+                controller: tabController,
+                children: tabViews,
               ),
             ),
           ],
