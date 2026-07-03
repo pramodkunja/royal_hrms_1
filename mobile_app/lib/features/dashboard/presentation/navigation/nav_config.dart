@@ -43,6 +43,7 @@ const kAllNav = <NavEntry>[
   NavSection('Recruitment'),
   NavItem(id: 'interview-list',   icon: Icons.people_outline,                  label: 'Interview List',   path: '/dashboard/interview-list',   permission: 'recruitment.view'),
   NavItem(id: 'candidate-review', icon: Icons.how_to_reg_outlined,             label: 'Review & Onboarding', path: '/dashboard/candidate-review', permission: 'recruitment.view'),
+  NavItem(id: 'assessments',      icon: Icons.assignment_outlined,             label: 'Assessments',      path: '/dashboard/assessments',      permission: 'assessments.view'),
   NavItem(id: 'email-logs',       icon: Icons.mail_outline,                    label: 'Email Logs',       path: '/dashboard/email-logs',       permission: 'recruitment.view'),
 
   NavSection('Workforce'),
@@ -111,6 +112,7 @@ const kPageTitles = <String, String>{
   '/dashboard/announcements':   'Announcements',
   '/dashboard/interview-list':  'Interview List',
   '/dashboard/candidate-review':'Candidate Review & Onboarding',
+  '/dashboard/assessments':     'Assessment Management',
   '/dashboard/email-logs':      'Email Logs',
   '/dashboard/employees':       'Employees',
   '/dashboard/org-chart':       'Organisation Chart',

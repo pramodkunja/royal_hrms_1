@@ -86,6 +86,16 @@ class ApiConstants {
       '/recruitment/candidates/$id/send-portal-login/';
   static String candidateResendLogin(int id) =>
       '/recruitment/candidates/$id/resend-portal-login/';
+  static const String candidatesReview = '/recruitment/candidates/review/';
+
+  // Assessments (HR admin management) — matches backend /api/assessments/...
+  static const String assessments = '/assessments/';
+  static String assessmentDetail(String id) => '/assessments/$id/';
+  static String assessmentItems(String assessmentId) =>
+      '/assessments/$assessmentId/items/';
+  static String assessmentItemDetail(String itemId) =>
+      '/assessments/items/$itemId/';
+  static const String assessmentAssign = '/assessments/assign/';
 
   // Branch management
   static const String branchStates = '/branch/states/';
@@ -125,4 +135,24 @@ class ApiConstants {
   static const String expenseCategories  = '/expenses/categories/';
   static const String expenseStatusList  = '/expenses/status/';
   static String expenseDetail(dynamic expenseNumber) => '/expenses/$expenseNumber/';
+
+  // Attendance — My Attendance (employee self-service), matches backend /api/attendance/...
+  static const String attendancePunch     = '/attendance/punch/';
+  static const String attendanceToday     = '/attendance/today/';
+  static const String attendanceStats     = '/attendance/stats/';
+  static const String attendanceSummary   = '/attendance/summary/';
+  static const String attendanceCalendar  = '/attendance/calendar/';
+  static const String attendanceCorrection = '/attendance/correction/';
+
+  // Attendance — HR admin management
+  static const String attendanceDashboard      = '/attendance/dashboard/';
+  static const String attendanceRecords        = '/attendance/records/';
+  static String attendanceRecordDetail(String id) => '/attendance/records/$id/';
+  static const String attendanceOvertimeList   = '/attendance/overtime/';
+  static const String attendanceOvertimeCreate = '/attendance/overtime/create/';
+  static const String attendanceInvalidPunches = '/attendance/invalid-punches/';
+  static const String attendanceUnpunches      = '/attendance/un-punches/';
+  static const String attendanceHrCorrections  = '/attendance/corrections/';
+  static String attendanceHrCorrectionReview(String id) =>
+      '/attendance/corrections/$id/review/';
 }

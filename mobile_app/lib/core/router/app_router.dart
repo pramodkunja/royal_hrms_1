@@ -17,6 +17,7 @@ import '../../features/settings/presentation/employee_code/employee_code_screen.
 import '../../features/settings/presentation/roles/roles_screen.dart';
 import '../../features/settings/presentation/audit/audit_screen.dart';
 import '../../features/settings/presentation/leave_policy/leave_policy_screen.dart';
+import '../../features/settings/presentation/holiday_calendar/holiday_calendar_screen.dart';
 import '../../features/announcements/presentation/announcements_screen.dart';
 import '../../features/employees/presentation/employees_screen.dart';
 import '../../features/employees/presentation/screens/employee_profile_screen.dart';
@@ -27,6 +28,7 @@ import '../../features/org_chart/presentation/screens/org_chart_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/interview_list/presentation/screens/interview_list_screen.dart';
 import '../../features/candidate_review/presentation/screens/candidate_review_screen.dart';
+import '../../features/assessments/presentation/screens/assessments_screen.dart';
 import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../../features/onboarding/presentation/screens/awaiting_approval_screen.dart';
 import '../../features/leave/presentation/screens/leave_screen.dart';
@@ -53,6 +55,7 @@ class AppRoutes {
   static const String announcements = '/dashboard/announcements';
   static const String interviewList = '/dashboard/interview-list';
   static const String candidateReview = '/dashboard/candidate-review';
+  static const String assessments = '/dashboard/assessments';
   static const String emailLogs = '/dashboard/email-logs';
   static const String employees = '/dashboard/employees';
   static String employeeProfilePath(String employeeId) =>
@@ -88,6 +91,7 @@ class AppRoutes {
   static const String settingsAuditLog = '/settings/audit';
   static const String settingsLeavePolicy = '/settings/leave-policy';
   static const String settingsPayrollRules = '/settings/payroll-rules';
+  static const String settingsHolidayCalendar = '/settings/holiday-calendar';
 }
 
 // ─── Router provider ──────────────────────────────────────────────────────────
@@ -214,6 +218,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.settingsPayrollRules,
         builder: (_, __) => const PayrollRulesScreen(),
       ),
+      GoRoute(
+        path: AppRoutes.settingsHolidayCalendar,
+        builder: (_, __) => const HolidayCalendarScreen(),
+      ),
 
       // ── Dashboard shell ────────────────────────────────────────────────
       ShellRoute(
@@ -241,6 +249,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.candidateReview,
             pageBuilder: (_, __) =>
                 const NoTransitionPage(child: CandidateReviewScreen()),
+          ),
+          GoRoute(
+            path: AppRoutes.assessments,
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: AssessmentsScreen()),
           ),
           GoRoute(
             path: AppRoutes.emailLogs,

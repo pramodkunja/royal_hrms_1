@@ -93,6 +93,13 @@ const _kTiles = <_Tile>[
   ),
   _Tile(
     cat: _Tab.modules,
+    icon: Icons.calendar_month_outlined, iconColor: Color(0xFFB5651D), iconBg: Color(0xFFFEF3C7),
+    label: 'Holiday Calendar',
+    desc: 'Manage national, regional and company holidays',
+    route: AppRoutes.settingsHolidayCalendar,
+  ),
+  _Tile(
+    cat: _Tab.modules,
     icon: Icons.people_outline, iconColor: Color(0xFF37474F), iconBg: Color(0xFFECEFF1),
     label: 'Recruitment Config',
     desc: 'Interview stages and evaluation criteria',

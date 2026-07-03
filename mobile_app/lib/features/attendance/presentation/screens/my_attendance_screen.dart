@@ -1,72 +1,42 @@
 import 'dart:async';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/location/location_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-
-// ─── Data ────────────────────────────────────────────────────────────────────
-
-class _Punch {
-  final String type; // 'IN' or 'OUT'
-  final String time;
-  final String location;
-  final String method;
-  const _Punch(this.type, this.time, this.location, this.method);
-}
-
-class _StatData {
-  final String label;
-  final String value;
-  final String sub;
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBg;
-  final double progress;
-  final Color progressColor;
-  const _StatData({
-    required this.label,
-    required this.value,
-    required this.sub,
-    required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    required this.progress,
-    required this.progressColor,
-  });
-}
+import '../../domain/entities/attendance_entity.dart';
+import '../providers/attendance_providers.dart';
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
-class MyAttendanceScreen extends StatefulWidget {
+class MyAttendanceScreen extends ConsumerStatefulWidget {
   const MyAttendanceScreen({super.key});
 
   @override
-  State<MyAttendanceScreen> createState() => _MyAttendanceScreenState();
+  ConsumerState<MyAttendanceScreen> createState() => _MyAttendanceScreenState();
 }
 
-class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
+class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
   Timer? _timer;
   late DateTime _now;
-  bool _isClockedIn = true;
-  int _sessionSeconds = 26 * 60 + 24; // demo: 26m 24s
-  DateTime _calMonth = DateTime(2026, 7);
+  DateTime _calMonth = DateTime.now();
+  int _localSessionSeconds = 0;
+  bool _punching = false;
 
-  final List<_Punch> _punches = [
-    const _Punch('IN', '09:00', 'Chennai HQ', 'Biometric'),
-    const _Punch('OUT', '15:25', 'Chennai HQ', 'Biometric'),
-  ];
-
+  // Keys are the backend's display labels (AttendanceRecord.STATUS_DISPLAY_MAP
+  // values, e.g. "On Leave") — the calendar/history APIs return status as a
+  // human label, not the raw lowercase status key.
   static const _dayStatusColors = <String, Color>{
-    'present': Color(0xFF1B8A6B),
-    'late': Color(0xFFD97706),
-    'absent': Color(0xFFC0392B),
-    'on_leave': Color(0xFF0E7C86),
-    'half_day': Color(0xFF1E4E8C),
-    'weekly_off': Color(0xFF7C8AA3),
-    'holiday': Color(0xFFB5651D),
-  };
-
-  final Map<String, String> _dayStatuses = {
-    '2026-7-1': 'present',
+    'Present': Color(0xFF1B8A6B),
+    'Late': Color(0xFFD97706),
+    'Absent': Color(0xFFC0392B),
+    'On Leave': Color(0xFF0E7C86),
+    'Half Day': Color(0xFF1E4E8C),
+    'Weekly Off': Color(0xFF7C8AA3),
+    'Holiday': Color(0xFFB5651D),
+    'Incomplete': Color(0xFF9333EA),
   };
 
   static const _monthNames = [
@@ -84,12 +54,12 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
     super.initState();
     _now = DateTime.now();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) {
-        setState(() {
-          _now = DateTime.now();
-          if (_isClockedIn) _sessionSeconds++;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _now = DateTime.now();
+        final today = ref.read(todayAttendanceProvider).valueOrNull;
+        if (today?.isClockedIn ?? false) _localSessionSeconds++;
+      });
     });
   }
 
@@ -104,10 +74,10 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
   String get _clockStr =>
       '${_pad(_now.hour)}:${_pad(_now.minute)}:${_pad(_now.second)}';
 
-  String get _sessionStr {
-    final h = _sessionSeconds ~/ 3600;
-    final m = (_sessionSeconds % 3600) ~/ 60;
-    final s = _sessionSeconds % 60;
+  String _sessionStr(int seconds) {
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    final s = seconds % 60;
     return '${_pad(h)}:${_pad(m)}:${_pad(s)}';
   }
 
@@ -117,21 +87,45 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
     return '$wd, ${_now.day} $m ${_now.year}';
   }
 
-  void _toggleClock() {
+  MonthYearKey get _calKey => (year: _calMonth.year, month: _calMonth.month);
+
+  Future<void> _toggleClock(TodayAttendanceEntity today) async {
+    if (_punching) return;
+    setState(() => _punching = true);
+
+    final position = await ref.read(locationServiceProvider).getCurrentPosition();
+
+    if (!mounted) return;
+    final error = await ref.read(todayAttendanceProvider.notifier).punch(
+          isCurrentlyClockedIn: today.isClockedIn,
+          attendanceMode: 'office',
+          latitude: position?.latitude,
+          longitude: position?.longitude,
+          accuracy: position?.accuracy,
+          // dart:io's Platform throws on web ("Unsupported operation:
+          // _operatingSystem") — must guard with kIsWeb, same convention as
+          // core/network/api_client.dart.
+          deviceName: kIsWeb
+              ? 'Web'
+              : Platform.isAndroid
+                  ? 'Android'
+                  : Platform.isIOS
+                      ? 'iOS'
+                      : null,
+          operatingSystem: kIsWeb ? 'web' : Platform.operatingSystem,
+        );
+
+    if (!mounted) return;
     setState(() {
-      if (_isClockedIn) {
-        _isClockedIn = false;
-        _punches.add(_Punch(
-          'OUT', '${_pad(_now.hour)}:${_pad(_now.minute)}', 'Chennai HQ', 'Mobile',
-        ));
-      } else {
-        _isClockedIn = true;
-        _sessionSeconds = 0;
-        _punches.add(_Punch(
-          'IN', '${_pad(_now.hour)}:${_pad(_now.minute)}', 'Chennai HQ', 'Mobile',
-        ));
-      }
+      _punching = false;
+      _localSessionSeconds = 0;
     });
+
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error), backgroundColor: AppColors.error),
+      );
+    }
   }
 
   void _showCorrectionDialog() {
@@ -145,28 +139,50 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('My Attendance', style: AppTextStyles.h2),
-          const SizedBox(height: 2),
-          Text(
-            'Clock in/out and view your personal attendance calendar',
-            style: AppTextStyles.bodySmall
-                .copyWith(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 16),
-          _buildStatCards(),
-          const SizedBox(height: 14),
-          _buildClockPanel(),
-          const SizedBox(height: 14),
-          _buildMonthlySummary(),
-          const SizedBox(height: 14),
-          _buildCalendar(),
-          const SizedBox(height: 24),
-        ],
+    final todayAsync = ref.watch(todayAttendanceProvider);
+
+    ref.listen(todayAttendanceProvider, (previous, next) {
+      next.whenData((today) => _localSessionSeconds = today.sessionSeconds);
+    });
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(todayAttendanceProvider);
+        ref.invalidate(attendanceStatsProvider);
+        ref.invalidate(attendanceSummaryProvider);
+        ref.invalidate(attendanceCalendarProvider);
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('My Attendance', style: AppTextStyles.h2),
+            const SizedBox(height: 2),
+            Text(
+              'Clock in/out and view your personal attendance calendar',
+              style: AppTextStyles.bodySmall
+                  .copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            _buildStatCards(),
+            const SizedBox(height: 14),
+            todayAsync.when(
+              data: (today) => _buildClockPanel(today),
+              loading: () => const _ClockPanelSkeleton(),
+              error: (e, _) => _ErrorCard(
+                message: friendlyAttendanceError(e),
+                onRetry: () => ref.invalidate(todayAttendanceProvider),
+              ),
+            ),
+            const SizedBox(height: 14),
+            _buildMonthlySummary(),
+            const SizedBox(height: 14),
+            _buildCalendar(),
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }
@@ -174,47 +190,74 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
   // ── Stat Cards ─────────────────────────────────────────────────────────────
 
   Widget _buildStatCards() {
-    final cards = [
-      const _StatData(
-        label: 'Days Present', value: '22', sub: 'This month',
-        icon: Icons.person_outline,
-        iconColor: AppColors.success, iconBg: AppColors.successContainer,
-        progress: 0.88, progressColor: AppColors.success,
-      ),
-      const _StatData(
-        label: 'Late Arrivals', value: '3', sub: '1 LOP pending',
-        icon: Icons.access_alarm_outlined,
-        iconColor: AppColors.warning, iconBg: AppColors.warningContainer,
-        progress: 0.12, progressColor: AppColors.warning,
-      ),
-      const _StatData(
-        label: 'Avg Hours / Day', value: '8.4', sub: 'Required: 9.0 hrs',
-        icon: Icons.access_time_outlined,
-        iconColor: AppColors.info, iconBg: AppColors.infoContainer,
-        progress: 0.93, progressColor: AppColors.info,
-      ),
-      const _StatData(
-        label: 'Attendance %', value: '96%', sub: 'Above threshold',
-        icon: Icons.bar_chart_outlined,
-        iconColor: AppColors.success, iconBg: AppColors.successContainer,
-        progress: 0.96, progressColor: AppColors.success,
-      ),
-    ];
+    final statsAsync = ref.watch(attendanceStatsProvider(_calKey));
 
-    return SizedBox(
-      height: 115,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: cards.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (_, i) => _StatCard(data: cards[i]),
+    return statsAsync.when(
+      data: (stats) {
+        final workingDays = stats.workingDays > 0 ? stats.workingDays : 1;
+        final cards = [
+          _StatData(
+            label: 'Days Present', value: '${stats.daysPresent}', sub: 'This month',
+            icon: Icons.person_outline,
+            iconColor: AppColors.success, iconBg: AppColors.successContainer,
+            progress: (stats.daysPresent / workingDays).clamp(0.0, 1.0),
+            progressColor: AppColors.success,
+          ),
+          _StatData(
+            label: 'Late Arrivals', value: '${stats.lateArrivals}',
+            sub: '${stats.lopPending} LOP pending',
+            icon: Icons.access_alarm_outlined,
+            iconColor: AppColors.warning, iconBg: AppColors.warningContainer,
+            progress: (stats.lateArrivals / workingDays).clamp(0.0, 1.0),
+            progressColor: AppColors.warning,
+          ),
+          _StatData(
+            label: 'Avg Hours / Day', value: stats.avgHoursPerDay.toStringAsFixed(1),
+            sub: 'This month',
+            icon: Icons.access_time_outlined,
+            iconColor: AppColors.info, iconBg: AppColors.infoContainer,
+            progress: (stats.avgHoursPerDay / 10).clamp(0.0, 1.0),
+            progressColor: AppColors.info,
+          ),
+          _StatData(
+            label: 'Attendance %', value: '${stats.attendancePercentage.round()}%',
+            sub: 'This month',
+            icon: Icons.bar_chart_outlined,
+            iconColor: AppColors.success, iconBg: AppColors.successContainer,
+            progress: (stats.attendancePercentage / 100).clamp(0.0, 1.0),
+            progressColor: AppColors.success,
+          ),
+        ];
+
+        return SizedBox(
+          height: 115,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: cards.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (_, i) => _StatCard(data: cards[i]),
+          ),
+        );
+      },
+      loading: () => const SizedBox(
+        height: 115,
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      ),
+      error: (e, _) => SizedBox(
+        height: 60,
+        child: Center(
+          child: Text(friendlyAttendanceError(e),
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+        ),
       ),
     );
   }
 
   // ── Clock Panel ────────────────────────────────────────────────────────────
 
-  Widget _buildClockPanel() {
+  Widget _buildClockPanel(TodayAttendanceEntity today) {
+    final sessionSeconds = today.isClockedIn ? _localSessionSeconds : today.sessionSeconds;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -235,7 +278,6 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Live clock
           Center(
             child: Text(
               _clockStr,
@@ -251,7 +293,7 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
           const SizedBox(height: 4),
           Center(
             child: Text(
-              _dateStr,
+              today.dateDisplay.isNotEmpty ? today.dateDisplay : _dateStr,
               style: TextStyle(
                 fontSize: 13,
                 color: Colors.white.withOpacity(0.75),
@@ -263,7 +305,6 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
           Divider(color: Colors.white.withOpacity(0.15), height: 1),
           const SizedBox(height: 14),
 
-          // Session info row
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -271,7 +312,7 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _isClockedIn ? 'SESSION ACTIVE' : 'SESSION ENDED',
+                    today.isClockedIn ? 'SESSION ACTIVE' : 'SESSION ENDED',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
@@ -281,11 +322,11 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    _sessionStr,
+                    _sessionStr(sessionSeconds),
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
-                      color: _isClockedIn
+                      color: today.isClockedIn
                           ? const Color(0xFF4ADE80)
                           : Colors.white60,
                       fontFamily: 'monospace',
@@ -294,85 +335,102 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
                 ],
               ),
               const Spacer(),
-              _StatusBadge(clockedIn: _isClockedIn),
+              _StatusBadge(clockedIn: today.isClockedIn),
             ],
           ),
           const SizedBox(height: 14),
 
-          // Clock In / Out button
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _toggleClock,
+              onPressed: _punching ? null : () => _toggleClock(today),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _isClockedIn
+                backgroundColor: today.isClockedIn
                     ? const Color(0xFFB91C1C)
                     : const Color(0xFF15803D),
                 foregroundColor: Colors.white,
+                disabledBackgroundColor: (today.isClockedIn
+                        ? const Color(0xFFB91C1C)
+                        : const Color(0xFF15803D))
+                    .withOpacity(0.6),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
                 elevation: 0,
               ),
-              child: Text(
-                _isClockedIn ? 'Clock Out' : 'Clock In',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                  letterSpacing: 0.3,
-                ),
-              ),
+              child: _punching
+                  ? const SizedBox(
+                      width: 20, height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : Text(
+                      today.isClockedIn ? 'Clock Out' : 'Clock In',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
             ),
           ),
           const SizedBox(height: 14),
 
-          // Punch log
-          ..._punches.map((p) => Padding(
-                padding: const EdgeInsets.only(bottom: 7),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 32,
-                      child: Text(
-                        p.type,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: p.type == 'IN'
-                              ? const Color(0xFF4ADE80)
-                              : const Color(0xFFFC8181),
+          if (today.punches.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                'No punches recorded today.',
+                style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.6)),
+              ),
+            )
+          else
+            ...today.punches.map((p) => Padding(
+                  padding: const EdgeInsets.only(bottom: 7),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 32,
+                        child: Text(
+                          p.type,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: p.type == 'IN'
+                                ? const Color(0xFF4ADE80)
+                                : const Color(0xFFFC8181),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      p.time,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        '${p.location} · ${p.method}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withOpacity(0.65),
+                      const SizedBox(width: 6),
+                      Text(
+                        p.time,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
-                ),
-              )),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          // Backend's `location` already includes the source label
+                          // (e.g. "Chennai HQ · Mobile") — do not append attendanceMode again.
+                          p.location.isNotEmpty ? p.location : '—',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withOpacity(0.65),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
           const SizedBox(height: 10),
           Divider(color: Colors.white.withOpacity(0.15), height: 1),
           const SizedBox(height: 12),
 
-          // Correction request link
           GestureDetector(
             onTap: _showCorrectionDialog,
             child: Row(
@@ -401,6 +459,8 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
   // ── Monthly Summary ────────────────────────────────────────────────────────
 
   Widget _buildMonthlySummary() {
+    final summaryAsync = ref.watch(attendanceSummaryProvider(_calKey));
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -420,27 +480,29 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
             ],
           ),
           const SizedBox(height: 14),
-          GridView.count(
-            crossAxisCount: 3,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 1.6,
-            children: const [
-              _SummaryCell(
-                  label: 'Working Days', value: '25', color: AppColors.primary),
-              _SummaryCell(
-                  label: 'Days Present', value: '22', color: AppColors.success),
-              _SummaryCell(
-                  label: 'Days Absent', value: '1', color: AppColors.error),
-              _SummaryCell(
-                  label: 'Leave Days', value: '1', color: AppColors.warning),
-              _SummaryCell(
-                  label: 'Half Days', value: '1', color: AppColors.info),
-              _SummaryCell(
-                  label: 'OT Hours', value: '2h', color: AppColors.success),
-            ],
+          summaryAsync.when(
+            data: (summary) => GridView.count(
+              crossAxisCount: 3,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 1.6,
+              children: [
+                _SummaryCell(label: 'Working Days', value: '${summary.workingDays}', color: AppColors.primary),
+                _SummaryCell(label: 'Days Present', value: '${summary.daysPresent}', color: AppColors.success),
+                _SummaryCell(label: 'Days Absent', value: '${summary.daysAbsent}', color: AppColors.error),
+                _SummaryCell(label: 'Leave Days', value: '${summary.leaveDays}', color: AppColors.warning),
+                _SummaryCell(label: 'Half Days', value: '${summary.halfDays}', color: AppColors.info),
+                _SummaryCell(label: 'OT Hours', value: summary.otHours, color: AppColors.success),
+              ],
+            ),
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+            error: (e, _) => Text(friendlyAttendanceError(e),
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
           ),
         ],
       ),
@@ -450,11 +512,9 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
   // ── Calendar ───────────────────────────────────────────────────────────────
 
   Widget _buildCalendar() {
-    final daysInMonth =
-        DateUtils.getDaysInMonth(_calMonth.year, _calMonth.month);
-    // Dart weekday: Mon=1..Sun=7; convert to Sun=0..Sat=6
-    final firstWd =
-        DateTime(_calMonth.year, _calMonth.month, 1).weekday % 7;
+    final calendarAsync = ref.watch(attendanceCalendarProvider(_calKey));
+    final daysInMonth = DateUtils.getDaysInMonth(_calMonth.year, _calMonth.month);
+    final firstWd = DateTime(_calMonth.year, _calMonth.month, 1).weekday % 7;
     final today = DateTime.now();
 
     return Container(
@@ -465,7 +525,6 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
       ),
       child: Column(
         children: [
-          // Legend
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
             child: Wrap(
@@ -479,11 +538,11 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
                 _LegendDot('Half Day', Color(0xFF1E4E8C)),
                 _LegendDot('Weekly Off', Color(0xFF7C8AA3)),
                 _LegendDot('Holiday', Color(0xFFB5651D)),
+                _LegendDot('Incomplete', Color(0xFF9333EA)),
               ],
             ),
           ),
 
-          // Month nav
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Row(
@@ -491,8 +550,7 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
                 IconButton(
                   icon: const Icon(Icons.chevron_left, size: 22),
                   onPressed: () => setState(() {
-                    _calMonth =
-                        DateTime(_calMonth.year, _calMonth.month - 1, 1);
+                    _calMonth = DateTime(_calMonth.year, _calMonth.month - 1, 1);
                   }),
                   color: AppColors.textSecondary,
                   padding: EdgeInsets.zero,
@@ -509,8 +567,7 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
                 IconButton(
                   icon: const Icon(Icons.chevron_right, size: 22),
                   onPressed: () => setState(() {
-                    _calMonth =
-                        DateTime(_calMonth.year, _calMonth.month + 1, 1);
+                    _calMonth = DateTime(_calMonth.year, _calMonth.month + 1, 1);
                   }),
                   color: AppColors.textSecondary,
                   padding: EdgeInsets.zero,
@@ -520,7 +577,6 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
             ),
           ),
 
-          // Weekday headers
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
@@ -545,70 +601,105 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
           ),
           const SizedBox(height: 4),
 
-          // Day grid
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 14),
-            child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                childAspectRatio: 1.05,
-              ),
-              itemCount: firstWd + daysInMonth,
-              itemBuilder: (_, idx) {
-                if (idx < firstWd) return const SizedBox();
-                final day = idx - firstWd + 1;
-                final isToday = day == today.day &&
-                    _calMonth.month == today.month &&
-                    _calMonth.year == today.year;
-                final key =
-                    '${_calMonth.year}-${_calMonth.month}-$day';
-                final status = _dayStatuses[key];
-                final dotColor =
-                    status != null ? _dayStatusColors[status] : null;
+          calendarAsync.when(
+            data: (calendar) => Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 14),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7,
+                  childAspectRatio: 1.05,
+                ),
+                itemCount: firstWd + daysInMonth,
+                itemBuilder: (_, idx) {
+                  if (idx < firstWd) return const SizedBox();
+                  final day = idx - firstWd + 1;
+                  final isToday = day == today.day &&
+                      _calMonth.month == today.month &&
+                      _calMonth.year == today.year;
+                  final dayRecord = calendar.days[day];
+                  final dotColor = dayRecord != null
+                      ? _dayStatusColors[dayRecord.status]
+                      : null;
 
-                return Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isToday
-                            ? AppColors.primary
-                            : Colors.transparent,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '$day',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: isToday
-                              ? FontWeight.w700
-                              : FontWeight.w400,
-                          color: isToday
-                              ? Colors.white
-                              : AppColors.textPrimary,
+                  return GestureDetector(
+                    onTap: dayRecord == null
+                        ? null
+                        : () => _showDayDetail(day, dayRecord),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isToday ? AppColors.primary : Colors.transparent,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '$day',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isToday ? FontWeight.w700 : FontWeight.w400,
+                              color: isToday ? Colors.white : AppColors.textPrimary,
+                            ),
+                          ),
                         ),
-                      ),
+                        if (dotColor != null) ...[
+                          const SizedBox(height: 2),
+                          Container(
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(shape: BoxShape.circle, color: dotColor),
+                          ),
+                        ],
+                      ],
                     ),
-                    if (dotColor != null) ...[
-                      const SizedBox(height: 2),
-                      Container(
-                        width: 5,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: dotColor,
-                        ),
-                      ),
-                    ],
-                  ],
-                );
-              },
+                  );
+                },
+              ),
             ),
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text(friendlyAttendanceError(e),
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDayDetail(int day, CalendarDayEntity record) {
+    showDialog(
+      context: context,
+      // Must use the builder's own context, not the enclosing screen's —
+      // popping with the screen's context resolves to GoRouter's root
+      // Navigator and pops the current page/route instead of the dialog.
+      builder: (dialogContext) => AlertDialog(
+        title: Text('${_monthNames[_calMonth.month - 1]} $day, ${_calMonth.year}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _DetailRow('Status', record.status),
+            if (record.clockIn != null) _DetailRow('Clock In', record.clockIn!),
+            if (record.clockOut != null) _DetailRow('Clock Out', record.clockOut!),
+            if (record.hours != null) _DetailRow('Hours', record.hours!),
+            if (record.note != null && record.note!.isNotEmpty)
+              _DetailRow('Note', record.note!),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
           ),
         ],
       ),
@@ -617,6 +708,27 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
 }
 
 // ─── Reusable widgets ─────────────────────────────────────────────────────────
+
+class _StatData {
+  final String label;
+  final String value;
+  final String sub;
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBg;
+  final double progress;
+  final Color progressColor;
+  const _StatData({
+    required this.label,
+    required this.value,
+    required this.sub,
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.progress,
+    required this.progressColor,
+  });
+}
 
 class _StatCard extends StatelessWidget {
   final _StatData data;
@@ -641,8 +753,7 @@ class _StatCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   data.label,
-                  style: const TextStyle(
-                      fontSize: 11, color: AppColors.textSecondary),
+                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                 ),
               ),
               const SizedBox(width: 4),
@@ -661,7 +772,7 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             data.value,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
@@ -670,8 +781,7 @@ class _StatCard extends StatelessWidget {
           ),
           Text(
             data.sub,
-            style: const TextStyle(
-                fontSize: 10, color: AppColors.textHint, height: 1.2),
+            style: const TextStyle(fontSize: 10, color: AppColors.textHint, height: 1.2),
           ),
           const Spacer(),
           ClipRRect(
@@ -687,6 +797,76 @@ class _StatCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ClockPanelSkeleton extends StatelessWidget {
+  const _ClockPanelSkeleton();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        height: 260,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF17355F), Color(0xFF1E4E8C)],
+          ),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.center,
+        child: const CircularProgressIndicator(color: Colors.white70),
+      );
+}
+
+class _ErrorCard extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _ErrorCard({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          children: [
+            const Icon(Icons.error_outline, color: AppColors.error, size: 32),
+            const SizedBox(height: 10),
+            Text(message, textAlign: TextAlign.center,
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+            const SizedBox(height: 10),
+            OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
+        ),
+      );
+}
+
+class _DetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _DetailRow(this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 90,
+              child: Text(label,
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            ),
+            Expanded(
+              child: Text(value,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
+      );
 }
 
 class _StatusBadge extends StatelessWidget {
@@ -716,9 +896,7 @@ class _StatusBadge extends StatelessWidget {
             height: 6,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: clockedIn
-                  ? const Color(0xFF4ADE80)
-                  : Colors.white38,
+              color: clockedIn ? const Color(0xFF4ADE80) : Colors.white38,
             ),
           ),
           const SizedBox(width: 6),
@@ -727,9 +905,7 @@ class _StatusBadge extends StatelessWidget {
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: clockedIn
-                  ? const Color(0xFF4ADE80)
-                  : Colors.white60,
+              color: clockedIn ? const Color(0xFF4ADE80) : Colors.white60,
             ),
           ),
         ],
@@ -742,8 +918,7 @@ class _SummaryCell extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-  const _SummaryCell(
-      {required this.label, required this.value, required this.color});
+  const _SummaryCell({required this.label, required this.value, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -760,8 +935,7 @@ class _SummaryCell extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(
-                fontSize: 10, color: AppColors.textSecondary, height: 1.2),
+            style: const TextStyle(fontSize: 10, color: AppColors.textSecondary, height: 1.2),
           ),
           const SizedBox(height: 4),
           Text(
@@ -797,8 +971,7 @@ class _LegendDot extends StatelessWidget {
         const SizedBox(width: 4),
         Text(
           label,
-          style: const TextStyle(
-              fontSize: 11, color: AppColors.textSecondary),
+          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
         ),
       ],
     );
@@ -807,22 +980,107 @@ class _LegendDot extends StatelessWidget {
 
 // ─── Correction dialog ────────────────────────────────────────────────────────
 
-class _CorrectionDialog extends StatefulWidget {
+class _CorrectionDialog extends ConsumerStatefulWidget {
   const _CorrectionDialog();
 
   @override
-  State<_CorrectionDialog> createState() => _CorrectionDialogState();
+  ConsumerState<_CorrectionDialog> createState() => _CorrectionDialogState();
 }
 
-class _CorrectionDialogState extends State<_CorrectionDialog> {
-  String _punchType = 'Clock In (IN)';
-  String _reason = 'Device malfunction / biometric error';
+class _CorrectionDialogState extends ConsumerState<_CorrectionDialog> {
+  DateTime _date = DateTime.now();
+  String _punchType = 'BOTH';
+  TimeOfDay? _inTime;
+  TimeOfDay? _outTime;
+  String _reason = CorrectionReasonCodes.forgotToPunch;
   final _notesCtrl = TextEditingController();
+  bool _submitting = false;
+  String? _error;
+
+  static const _punchTypeLabels = {
+    'IN': 'Clock In (IN)',
+    'OUT': 'Clock Out (OUT)',
+    'BOTH': 'Both (Full Day)',
+  };
 
   @override
   void dispose() {
     _notesCtrl.dispose();
     super.dispose();
+  }
+
+  bool get _needsIn => _punchType == 'IN' || _punchType == 'BOTH';
+  bool get _needsOut => _punchType == 'OUT' || _punchType == 'BOTH';
+
+  String _fmtDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  String _fmtTime(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:00';
+
+  String _displayTime(TimeOfDay? t) => t == null ? 'Select time' : t.format(context);
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) setState(() => _date = picked);
+  }
+
+  Future<void> _pickTime(bool isIn) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: (isIn ? _inTime : _outTime) ?? TimeOfDay.now(),
+    );
+    if (picked != null) {
+      setState(() => isIn ? _inTime = picked : _outTime = picked);
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_needsIn && _inTime == null) {
+      setState(() => _error = 'Correct In Time is required for this punch type.');
+      return;
+    }
+    if (_needsOut && _outTime == null) {
+      setState(() => _error = 'Correct Out Time is required for this punch type.');
+      return;
+    }
+
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+
+    final error = await ref.read(attendanceCorrectionActionProvider).submit(
+          date: _fmtDate(_date),
+          punchType: _punchType,
+          correctInTime: _needsIn && _inTime != null ? _fmtTime(_inTime!) : null,
+          correctOutTime: _needsOut && _outTime != null ? _fmtTime(_outTime!) : null,
+          reason: _reason,
+          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        );
+
+    if (!mounted) return;
+
+    if (error != null) {
+      setState(() {
+        _submitting = false;
+        _error = error;
+      });
+      return;
+    }
+
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Correction request submitted. Your manager will review it.'),
+        backgroundColor: AppColors.success,
+      ),
+    );
   }
 
   @override
@@ -836,54 +1094,40 @@ class _CorrectionDialogState extends State<_CorrectionDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Title
             Row(
               children: [
-                const Icon(Icons.description_outlined,
-                    color: AppColors.primary, size: 20),
+                const Icon(Icons.description_outlined, color: AppColors.primary, size: 20),
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
                     'Attendance Correction Request',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                   ),
                 ),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
-                  child: const Icon(Icons.close,
-                      size: 20, color: AppColors.textSecondary),
+                  child: const Icon(Icons.close, size: 20, color: AppColors.textSecondary),
                 ),
               ],
             ),
             const SizedBox(height: 14),
 
-            // Warning banner
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppColors.warningContainer,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: AppColors.warning.withOpacity(0.3)),
+                border: Border.all(color: AppColors.warning.withOpacity(0.3)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.warning_amber_rounded,
-                      size: 16, color: AppColors.warning),
+                  const Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.warning),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
-                      'Submit a correction for a missed or incorrect punch. Your manager will review and approve within the regularization cutoff window (7 days after month end).',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.warning,
-                        height: 1.4,
-                      ),
+                      'Submit a correction for a missed or incorrect punch. Your manager will review and approve it.',
+                      style: TextStyle(fontSize: 12, color: AppColors.warning, height: 1.4),
                     ),
                   ),
                 ],
@@ -891,23 +1135,14 @@ class _CorrectionDialogState extends State<_CorrectionDialog> {
             ),
             const SizedBox(height: 16),
 
-            // Date + Punch Type
             Row(
               children: [
                 Expanded(
                   child: _Field(
                     label: 'Date',
-                    child: TextFormField(
-                      initialValue: '24/06/2025',
-                      decoration: const InputDecoration(
-                        suffixIcon: Icon(
-                            Icons.calendar_today_outlined, size: 16),
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 10),
-                        border: OutlineInputBorder(),
-                      ),
-                      style: const TextStyle(fontSize: 13),
+                    child: GestureDetector(
+                      onTap: _pickDate,
+                      child: _FakeInput(value: _fmtDate(_date), icon: Icons.calendar_today_outlined),
                     ),
                   ),
                 ),
@@ -919,23 +1154,15 @@ class _CorrectionDialogState extends State<_CorrectionDialog> {
                       initialValue: _punchType,
                       decoration: const InputDecoration(
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 10),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                         border: OutlineInputBorder(),
                       ),
-                      style: const TextStyle(
-                          fontSize: 13, color: AppColors.textPrimary),
+                      style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
                       isExpanded: true,
-                      items: const [
-                        DropdownMenuItem(
-                            value: 'Clock In (IN)',
-                            child: Text('Clock In (IN)')),
-                        DropdownMenuItem(
-                            value: 'Clock Out (OUT)',
-                            child: Text('Clock Out (OUT)')),
-                      ],
-                      onChanged: (v) =>
-                          setState(() => _punchType = v!),
+                      items: _punchTypeLabels.entries
+                          .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                          .toList(),
+                      onChanged: (v) => setState(() => _punchType = v!),
                     ),
                   ),
                 ),
@@ -943,89 +1170,61 @@ class _CorrectionDialogState extends State<_CorrectionDialog> {
             ),
             const SizedBox(height: 12),
 
-            // Correct In / Out times
             Row(
               children: [
-                Expanded(
-                  child: _Field(
-                    label: 'Correct In Time',
-                    child: TextFormField(
-                      initialValue: '09:05 AM',
-                      decoration: const InputDecoration(
-                        suffixIcon:
-                            Icon(Icons.access_time_outlined, size: 16),
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 10),
-                        border: OutlineInputBorder(),
+                if (_needsIn)
+                  Expanded(
+                    child: _Field(
+                      label: 'Correct In Time',
+                      child: GestureDetector(
+                        onTap: () => _pickTime(true),
+                        child: _FakeInput(value: _displayTime(_inTime), icon: Icons.access_time_outlined),
                       ),
-                      style: const TextStyle(fontSize: 13),
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _Field(
-                    label: 'Correct Out Time',
-                    child: TextFormField(
-                      initialValue: '06:10 PM',
-                      decoration: const InputDecoration(
-                        suffixIcon:
-                            Icon(Icons.access_time_outlined, size: 16),
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 10),
-                        border: OutlineInputBorder(),
+                if (_needsIn && _needsOut) const SizedBox(width: 10),
+                if (_needsOut)
+                  Expanded(
+                    child: _Field(
+                      label: 'Correct Out Time',
+                      child: GestureDetector(
+                        onTap: () => _pickTime(false),
+                        child: _FakeInput(value: _displayTime(_outTime), icon: Icons.access_time_outlined),
                       ),
-                      style: const TextStyle(fontSize: 13),
                     ),
                   ),
-                ),
               ],
             ),
             const SizedBox(height: 12),
 
-            // Reason
             _Field(
               label: 'Reason',
               child: DropdownButtonFormField<String>(
                 initialValue: _reason,
                 decoration: const InputDecoration(
                   isDense: true,
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                   border: OutlineInputBorder(),
                 ),
-                style: const TextStyle(
-                    fontSize: 13, color: AppColors.textPrimary),
+                style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
                 isExpanded: true,
-                items: const [
-                  DropdownMenuItem(
-                      value: 'Device malfunction / biometric error',
-                      child: Text('Device malfunction / biometric error')),
-                  DropdownMenuItem(
-                      value: 'Forgot to punch',
-                      child: Text('Forgot to punch')),
-                  DropdownMenuItem(
-                      value: 'System error', child: Text('System error')),
-                  DropdownMenuItem(
-                      value: 'Other', child: Text('Other')),
-                ],
+                items: CorrectionReasonCodes.labels.entries
+                    .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                    .toList(),
                 onChanged: (v) => setState(() => _reason = v!),
               ),
             ),
             const SizedBox(height: 12),
 
-            // Additional notes
             _Field(
               label: 'Additional Notes (optional)',
               child: TextFormField(
                 controller: _notesCtrl,
                 maxLines: 4,
+                maxLength: 1000,
                 decoration: const InputDecoration(
                   hintText: 'Describe the situation...',
-                  hintStyle: TextStyle(
-                      fontSize: 13, color: AppColors.textHint),
+                  hintStyle: TextStyle(fontSize: 13, color: AppColors.textHint),
                   isDense: true,
                   contentPadding: EdgeInsets.all(10),
                   border: OutlineInputBorder(),
@@ -1033,18 +1232,21 @@ class _CorrectionDialogState extends State<_CorrectionDialog> {
                 style: const TextStyle(fontSize: 13),
               ),
             ),
-            const SizedBox(height: 20),
 
-            // Buttons
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(_error!, style: const TextStyle(fontSize: 12, color: AppColors.error)),
+            ],
+            const SizedBox(height: 12),
+
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _submitting ? null : () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     child: const Text('Cancel'),
                   ),
@@ -1052,16 +1254,19 @@ class _CorrectionDialogState extends State<_CorrectionDialog> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.send_outlined, size: 15),
+                    onPressed: _submitting ? null : _submit,
+                    icon: _submitting
+                        ? const SizedBox(
+                            width: 14, height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.send_outlined, size: 15),
                     label: const Text('Submit Request'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       elevation: 0,
                     ),
                   ),
@@ -1087,15 +1292,30 @@ class _Field extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: AppColors.textSecondary,
-          ),
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 4),
         child,
       ],
     );
   }
+}
+
+class _FakeInput extends StatelessWidget {
+  final String value;
+  final IconData icon;
+  const _FakeInput({required this.value, required this.icon});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFD1D5DB)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(children: [
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary))),
+          Icon(icon, size: 15, color: const Color(0xFF6B7280)),
+        ]),
+      );
 }

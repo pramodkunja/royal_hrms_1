@@ -36,6 +36,9 @@ dependencies:
   image_picker: ^1.1.2
   file_picker: ^8.1.2
 
+  # Location (attendance clock-in geofencing)
+  geolocator: ^13.0.1
+
   # URL launching (preview / download)
   url_launcher: ^6.3.0
 
