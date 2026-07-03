@@ -1,8 +1,11 @@
 from django.urls import path
 
 from .views import (
+    ExpenseCategoryListView,
+    ExpenseDetailView,
     ExpenseListCreateView,
     ExpenseStatsView,
+    ExpenseStatusListView,
     LeaveApprovalView,
     LeaveBalanceAdjustView,
     LeaveBalanceView,
@@ -15,8 +18,11 @@ from .views import (
 
 urlpatterns = [
     # Expenses
-    path('expenses/',       ExpenseListCreateView.as_view(), name='expense-list-create'),
-    path('expenses/stats/', ExpenseStatsView.as_view(),      name='expense-stats'),
+    path('expenses/',                                ExpenseListCreateView.as_view(),   name='expense-list-create'),
+    path('expenses/categories/',                     ExpenseCategoryListView.as_view(), name='expense-categories'),
+    path('expenses/status/',                       ExpenseStatusListView.as_view(),   name='expense-statuses'),
+    path('expenses/stats/',                          ExpenseStatsView.as_view(),        name='expense-stats'),
+    path('expenses/<int:expense_number>/',            ExpenseDetailView.as_view(),     name='expense-detail'),
 
     # Leave — policy
     path('leave/policy/',                LeavePolicyView.as_view(),       name='leave-policy-list'),

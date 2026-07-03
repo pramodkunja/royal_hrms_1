@@ -114,6 +114,289 @@ frontend/
 
 ---
 
+## Session Log — 2026-07-01
+**Author: Teerdaveni**
+
+### Features Shipped
+
+**1. Attendance Settings API** (`/api/attendance/settings/`)
+- `GET` reads current settings (upsert pattern — creates defaults on first call)
+- `PUT` full save of all 6 sections (working hours, punch rules, overtime, weekly off, late mark, absence alert)
+- `PATCH` partial update — send only changed sections, others untouched
+- `first_error()` in `core/responses.py` rewritten to recursively handle nested serializer errors (previously showed generic "Validation error." for nested fields)
+- Files: `attendance/serializers_settings.py`, `attendance/services.py`, `attendance/views/settings_view.py`
+
+**2. My Attendance — Clock In / Clock Out** (`POST /api/attendance/punch/`)
+- Immutable `AttendancePunch` model — every punch event stored, never overwritten
+- Geofencing validated on every office punch using Haversine formula (pure Python, no library)
+- Runs `AttendanceProcessorService` synchronously after each punch to keep `AttendanceRecord` current
+- Returns full today-session in same response (no second GET needed from frontend)
+
+**3. My Attendance — Dashboard APIs**
+- `GET /api/attendance/today/` — ClockWidget: is_clocked_in, punch list, total_seconds, session_seconds
+- `GET /api/attendance/stats/` — Stat cards: days_present, late_arrivals, avg_hours, attendance %
+- `GET /api/attendance/summary/` — Monthly summary grid: working_days, days_present, absent, leave, half_day, OT hours
+- `GET /api/attendance/calendar/` — Per-day calendar data + history table rows
+
+**4. Attendance Correction Request** (`POST /api/attendance/correction/`)
+- Employee submits regularization for missed/wrong punch
+- Validates: date not in future, correct_in_time required for IN/BOTH, correct_out_time required for OUT/BOTH
+- Guard: blocks duplicate pending correction for same date (409)
+- Status flow: pending → approved/rejected (approval UI not yet built)
+
+**5. Enterprise Geofencing**
+- `Branch` model extended: `latitude`, `longitude`, `allowed_radius_meters` (default 150m), `geofencing_enabled`
+- `GET/PUT /api/branch/branches/<pk>/geofencing/` — dedicated geofence config API
+- `services_geofencing.py` — strategy pattern: `_MODE_VALIDATORS` maps attendance mode to validator function
+- Office mode: Haversine distance → allow if within radius, reject with distance message
+- WFH/field/client/remote modes: GPS stored for audit, no distance check
+- Branch resolver: matches `User.branch` (CharField) against `Branch.branch_name`, falls back to `branch_code`
+
+**6. Bug Fixes**
+- GPS `DecimalField` → `FloatField` in punch serializer — `navigator.geolocation` returns JS floats with 15+ decimal digits which exceeded `max_digits` on DecimalField
+- Branch model lat/lon upgraded to `max_digits=12, decimal_places=8` (was 10,7)
+- `browser` field `max_length` 100 → 500, `operating_system` 100 → 200 (raw `navigator.userAgent` exceeds 100 chars)
+- `TypeError: unsupported operand type Decimal vs float` in Haversine — fixed by casting `float()` before calculation
+- CSRF trusted origins added for Django admin in development
+
+### New Models
+
+| Model | Table | Purpose |
+|---|---|---|
+| `AttendancePunch` | `attendance_punches` | Immutable raw punch events with full GPS + device audit trail |
+| `AttendanceRecord` | `attendance_records` | Processed daily result per employee (present/late/absent/half_day) |
+| `AttendanceCorrection` | `attendance_corrections` | Regularization requests submitted by employees |
+
+### Migrations Applied
+
+```
+attendance/0008_attendance_transactions   — AttendancePunch, AttendanceRecord, AttendanceCorrection
+attendance/0009_punch_geofencing          — GPS + device audit fields on AttendancePunch
+attendance/0010_fix_gps_decimal_precision — lat/lon upgraded to DecimalField(12,8) on punch model
+attendance/0011_punch_browser_field_length — browser 500, operating_system 200
+branch/0004_branch_geofencing             — lat, lon, radius, geofencing_enabled on Branch
+branch/0005_fix_gps_decimal_precision     — geofencing_enabled help_text fix
+branch/0006_branch_gps_precision_12_8     — branch lat/lon upgraded to DecimalField(12,8)
+```
+
+### New Files
+
+```
+backend/apps/attendance/
+  models.py                        — AttendancePunch, AttendanceRecord, AttendanceCorrection added
+  serializers_settings.py          — AttendanceSettingsPatchSerializer added
+  serializers_my_attendance.py     — all My Attendance read/write serializers
+  services.py                      — partial_update() added to AttendanceSettingsService
+  services_attendance.py           — PunchService, AttendanceProcessorService, AttendanceDashboardService
+  services_geofencing.py           — GeofencingService, Haversine, branch resolver, mode validators
+  views/my_attendance.py           — 6 APIViews for punch, today, stats, summary, calendar, correction
+  views/settings_view.py           — PATCH method added
+  urls.py                          — 6 new URL patterns
+backend/apps/branch/
+  models.py                        — geofencing fields added to Branch
+  views.py                         — BranchGeofencingView added
+  urls.py                          — geofencing URL added
+backend/core/
+  responses.py                     — first_error() rewritten for nested errors
+backend/config/
+  settings.py                      — CSRF_TRUSTED_ORIGINS for localhost dev
+```
+
+### API Reference — My Attendance
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/api/attendance/punch/` | Clock In / Clock Out |
+| GET | `/api/attendance/today/` | ClockWidget session data |
+| GET | `/api/attendance/stats/?month=&year=` | Stat cards |
+| GET | `/api/attendance/summary/?month=&year=` | Monthly summary grid |
+| GET | `/api/attendance/calendar/?month=&year=` | Calendar + history table |
+| POST | `/api/attendance/correction/` | Regularization request |
+| GET | `/api/branch/branches/<pk>/geofencing/` | Read branch geofence config |
+| PUT | `/api/branch/branches/<pk>/geofencing/` | Update branch geofence config |
+
+### Pending (resolved in 2026-07-02 session — see below)
+
+- ~~Correction approval flow~~ — done
+- Attendance reports — CSV/PDF download for HR
+- Leave integration — auto-mark `on_leave` status when leave is approved
+- Frontend implementation — prompts given to Teerdaveni, not yet started
+
+---
+
+## Session Log — 2026-07-02
+**Author: Teerdaveni**
+
+### Bug Fixes Shipped
+
+**1. Celery connecting to Render Redis instead of local Redis**
+- Root cause: `$env:REDIS_URL` was set as a Windows User-level environment variable, overriding `.env` file values
+- Fix 1: Cleared the OS variable — `[System.Environment]::SetEnvironmentVariable('REDIS_URL', $null, 'User')`
+- Fix 2: `environ.Env.read_env(BASE_DIR / '.env', overwrite=True)` in `settings.py` — forces `.env` to win over any OS env vars
+- Fix 3: Added `CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True` to silence Celery 6.0 deprecation warning
+- File: `backend/config/settings.py`
+
+**2. Geofencing settings not saving (PATCH returned 200 but saved nothing)**
+- Root cause 1: `BranchSerializer.Meta.fields` was missing `latitude`, `longitude`, `allowed_radius_meters`, `geofencing_enabled`, `has_coordinates` — DRF silently dropped unknown fields
+- Root cause 2: Inline validation blocked enabling geofencing unless lat/lon were re-sent in the same request, even when the branch already had coordinates in DB
+- Fix: Added all 5 geofencing fields to `BranchSerializer`; added explicit `has_coordinates = serializers.BooleanField(read_only=True)` (model `@property` not auto-detected by DRF); moved validation to post-assignment check using `branch.has_coordinates`
+- File: `backend/apps/branch/serializers.py`, `backend/apps/branch/views.py`
+
+**3. Geofencing not enforcing for Mumbai employees**
+- Root cause: Mumbai branch had `geofencing_enabled=False` and no coordinates in DB — geofence code was correct
+- Fix: Data configuration — admin must set lat/lon and enable geofencing per branch via `PUT /api/branch/branches/<pk>/geofencing/`
+- Hyderabad HQ was the only branch with geofencing configured at time of diagnosis
+
+**4. Punch times showing UTC instead of IST**
+- Root cause: `timezone.now()` is UTC-aware; calling `.time()` directly gives UTC wall-clock time; shift_start/shift_end in `AttendanceWorkingHours` are plain IST times — late/early-exit comparisons were wrong
+- Root cause 2: `timezone.now().date()` returns UTC date, which can differ from IST date after midnight IST
+- Fix: Added `_ist_time(dt)` helper using `dt.astimezone(_IST).time()`; changed all `now.date()` → `timezone.localdate()` (IST-aware)
+- Fix 2: `AttendancePunch.punch_date` property and `punch_time_display` property were calling `.date()` and `.strftime()` directly on UTC datetime — both fixed to use `astimezone(_IST)` first
+- Files: `backend/apps/attendance/services_attendance.py`, `backend/apps/attendance/models.py`
+
+### Features Shipped
+
+**5. HR Attendance Management — Full API Suite**
+
+All 11 HR endpoints built and wired. Backend only. Frontend prompts provided.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/attendance/dashboard/` | Dashboard stats (present/absent/late/OT counts) |
+| GET | `/api/attendance/records/` | Paginated attendance list with filters |
+| GET | `/api/attendance/records/<pk>/` | Single record detail + punch timeline |
+| GET | `/api/attendance/overtime/` | OT entries list |
+| POST | `/api/attendance/overtime/create/` | Create manual OT entry |
+| GET | `/api/attendance/invalid-punches/` | Punches outside geofence or missing pair |
+| GET | `/api/attendance/un-punches/` | Employees who punched IN but never punched OUT |
+| POST | `/api/attendance/import/` | Bulk CSV import (max 5 MB) |
+| GET | `/api/attendance/export/` | CSV export with same filters as list |
+| POST | `/api/attendance/reprocess/` | Re-run processor for all employees on a date |
+| GET | `/api/attendance/corrections/` | List all employee correction requests |
+| PATCH | `/api/attendance/corrections/<pk>/review/` | Approve or reject a correction |
+
+**6. HR Corrections Approval Flow**
+- `approve_correction()`: creates `AttendancePunch` with `source='manual'` for the requested IN/OUT/BOTH times, then calls `AttendanceProcessorService.process_day()` — status flips from `incomplete` → `present` / `late`; employee drops off the Un-Punches list
+- `reject_correction()`: marks rejected, no punch changes
+- `_create_punch()` uses `get_or_create` to stay idempotent (safe to re-approve)
+- File: `backend/apps/attendance/services_hr_corrections.py` (new, ~120 lines)
+
+**7. Un-Punches ↔ Corrections Integration**
+- `get_unpunches()` now also queries `AttendanceCorrection` for each returned employee on that date
+- Each un-punch row now includes `correction_pending: bool` and `correction_id: uuid | null`
+- Frontend can use these to show "Pending" badge on the un-punch row and link directly to the correction
+- File: `backend/apps/attendance/services_hr_audit.py`
+
+**8. Role-Based Branch Scoping**
+- `system_admin` role + Django superusers: see all branches, all data
+- `hr_admin` and all other roles: scoped to `user.branch` — cannot query outside their branch regardless of `?branch=` query param
+- Two helpers added to `views/hr_attendance.py`:
+  - `_is_unrestricted(user)` — checks `user.is_superuser` or `user.role.name == 'system_admin'`
+  - `_branch_scope(user, requested)` — returns requested branch for unrestricted users, always returns `user.branch` for restricted users
+- Applied to all 8 data endpoints: Dashboard, List, OT List, Invalid Punches, Un-Punches, Reprocess, Corrections List, Export
+- File: `backend/apps/attendance/views/hr_attendance.py`
+
+### New Files
+
+```
+backend/apps/attendance/
+  services_hr.py               — get_dashboard_stats, get_attendance_list, get_attendance_detail, reprocess_date
+  services_hr_audit.py         — get_invalid_punches, get_unpunches (with correction_pending flag)
+  services_hr_ops.py           — list_overtime, create_overtime, import_attendance_csv, export_attendance_csv
+  services_hr_corrections.py   — list_corrections, approve_correction, reject_correction
+  serializers_hr.py            — all HR read/write serializers incl. CorrectionRowSerializer, UnpunchRowSerializer
+  views/hr_attendance.py       — 12 HR APIViews + _is_unrestricted + _branch_scope helpers
+```
+
+### Files Modified
+
+```
+backend/apps/attendance/
+  models.py                    — _ist_time fix for punch_date + punch_time_display properties
+  services_attendance.py       — _ist_time() helper, timezone.localdate(), IST-correct late/early-exit checks
+  views/__init__.py            — HRCorrectionListView, HRCorrectionReviewView exports added
+  urls.py                      — 12 new HR URL patterns added
+backend/apps/branch/
+  serializers.py               — geofencing fields + has_coordinates added to BranchSerializer
+  views.py                     — geofencing enable validation fixed
+backend/config/
+  settings.py                  — overwrite=True in read_env(), CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP
+```
+
+### Frontend Prompts Given (not yet implemented)
+
+- **Geofencing UI**: lat/lon/radius inputs + enable toggle in branch settings form; show `has_coordinates` badge
+- **Corrections UI**: Corrections tab in HR Attendance; approve/reject buttons; pending badge on un-punch rows
+- **Branch scoping UI**: HR admin sees only their branch (locked dropdown); system_admin sees all; `isUnrestrictedUser()` helper
+- **Punch log display**: Show only latest IN + latest OUT in ClockWidget punch log (filter client-side from full `punches[]` array)
+
+### Pending
+
+- Attendance reports — CSV/PDF download for HR
+- Leave integration — auto-mark `on_leave` when leave approved
+- Frontend implementation of all attendance pages (prompts given above)
+
+---
+
+## Session Log — 02-07-2026
+**Author: G.Durga Prasad**
+**Branch: Backend/Assignments**
+
+### Changes Made
+
+**1. Onboarding wizard URLs cleaned up**
+- Removed redundant HTTP methods from `OnboardingView`
+- `PATCH /onboarding/` (no-step) → now returns 405, use `PATCH /onboarding/step/<n>/`
+- `PUT /onboarding/step/<n>/` → now returns 405, use `PATCH` instead
+- `POST /onboarding/step/<n>/` → now returns 405, use `PATCH` instead
+- Deleted dead `_patch_full_profile()` private method
+- Wizard now has 7 clean URLs with no duplicate functionality
+
+**2. Assessment participation counts on `GET /api/assessments/`**
+- Added `assigned_count`, `pending_count`, `in_progress_count`, `completed_count` to `AssessmentSerializer`
+- Added `candidates` array inline — each assessment now returns full list of candidates who took it
+- Candidate entry includes: name, email, status, attempt_count, pass_score, score_awarded, pass_percentage
+
+**3. `attempt_count` field added to `CandidateAssignment`**
+- New `PositiveSmallIntegerField(default=1)` on `CandidateAssignment` model
+- Migration `assessments/0004_candidateassignment_attempt_count` created and applied
+- `RetryAssessmentView` now increments `attempt_count` on every retry
+
+**4. `AssessmentCandidateSerializer` added**
+- New serializer in `assessments/serializers.py`
+- Returns: `candidate_id`, `candidate_name`, `candidate_email`, `status`, `attempt_count`, `pass_score`, `score_awarded`, `pass_percentage`, `completed_at`, `created_at`
+
+### Files Changed
+
+```
+backend/apps/assessments/
+  models.py                    — attempt_count field added to CandidateAssignment
+  serializers.py               — AssessmentSerializer updated with counts + candidates; AssessmentCandidateSerializer added
+  views/portal.py              — RetryAssessmentView increments attempt_count
+  migrations/0004_*            — migration for attempt_count (applied)
+
+backend/apps/accounts/
+  views.py                     — OnboardingView: removed redundant HTTP methods, deleted _patch_full_profile()
+```
+
+### API Changes
+
+| Endpoint | Change |
+|---|---|
+| `GET /api/assessments/` | Now returns counts + full candidates array per assessment |
+| `PATCH /onboarding/` | Now returns 405 — use step-based PATCH |
+| `PUT /onboarding/step/<n>/` | Now returns 405 — use PATCH |
+| `POST /onboarding/step/<n>/` | Now returns 405 — use PATCH |
+| `POST /api/assessments/<id>/retry/` | Now increments attempt_count |
+
+### Migrations Applied
+
+```
+assessments/0004_candidateassignment_attempt_count  ✅ applied
+```
+
+---
+
 ## Key Architectural Decisions
 
 | Decision | Reason |
@@ -168,4 +451,206 @@ frontend/
     navConfig.ts            — branches.view guard for Branches nav item
   proxy.ts                  — branches.view guard for /dashboard/branches route
   next.config.ts            — skipTrailingSlashRedirect, trailing slash in rewrite
+```
+
+---
+
+## Session Log — 2026-06-30
+
+**Developer:** Rithwika
+**Branch:** frontend/Attendance
+
+### Features Shipped
+
+**1. Admin Attendance Page** (`app/dashboard/attendance/page.tsx`)
+- 4-tab layout: Attendance, OT Entry, Invalid Punches, Un-punches
+- Badge counts on alert tabs (Invalid Punches, Un-punches)
+- Stats grid: Present, Absent, Late Arrivals, On Leave
+
+**2. Attendance Tab Components**
+- `AttendanceTab.tsx` — date / branch / dept filters, summary chips, full attendance table with status badges, ImportModal trigger
+- `ImportModal.tsx` — CSV/XLS import modal with drag-and-drop upload zone
+- `OtEntryTab.tsx` — OT entry form (cols-3) + OT records table (Approved / Pending badges)
+- `InvalidPunchesTab.tsx` — 3 invalid punch records with error/warn badges and alert banner
+- `UnpunchesTab.tsx` — 4 unpunch records with Add Punch fix button
+
+**3. Attendance Rules → moved to Settings**
+- `AttendanceSettings.tsx` — refactored to `.card` pattern matching other settings pages; removed Comp-Off Earning Rule and Regularization Policy sections
+- Sections kept: Working Hours, Weekly Off Days, Punch Rules, Overtime Rules, Late Mark & LOP Rule, Absence Alert
+- `app/dashboard/settings/attendance-config/page.tsx` — new Settings sub-page that hosts AttendanceSettings
+- `settings/page.tsx` — Attendance Rules card added with route to `/dashboard/settings/attendance-config`
+
+**4. My Attendance Page** (`app/dashboard/my-attendance/page.tsx`)
+- Employee-facing attendance view (no tabs)
+- 4 stat cards: Days Present, Late Arrivals, Avg Hours/Day, Attendance %
+- Top row (horizontal): ClockWidget + Monthly Summary card (3×2 grid layout)
+- Full-width below: Attendance calendar (CalendarGrid + MonthDetail)
+
+**5. Clock Widget** (`my-attendance/_components/ClockWidget.tsx`)
+- Live clock with session timer using `useEffect` + `setInterval`
+- Clock In / Clock Out toggle updates punch list in real time
+- Request Attendance Correction button opens RegularizationModal
+
+**6. RegularizationModal** (`my-attendance/_components/RegularizationModal.tsx`)
+- Correction request form: date, punch type, correct in/out times, reason, notes
+
+**7. My Calendar — integrated into My Attendance**
+- `CalendarGrid.tsx` — 7-column color-coded calendar grid (DayStatus: Present, Late, Absent, On Leave, Half Day, Weekly Off, Holiday); today highlighted with primary circle
+- `MonthDetail.tsx` — detail table for all recorded days (clock in/out, hours, status badge, note)
+- `MyCalendarTab.tsx` — wraps CalendarGrid + MonthDetail with month navigation and color legend; used as the right-column of My Attendance
+- Separate "My Calendar" nav item removed — calendar lives inside My Attendance
+
+### Layout Decision
+My Attendance uses a stacked (vertical) layout instead of side-by-side:
+- Row 1: Stats grid (4 KPI cards)
+- Row 2: ClockWidget | Monthly Summary (horizontal, 340px + 1fr)
+- Row 3: Full-width attendance calendar
+
+This gives the calendar maximum width for readability while keeping the clock always visible.
+
+### Files Changed This Session
+
+```
+frontend/
+  app/dashboard/
+    attendance/
+      page.tsx                          — 4-tab admin attendance page
+      _components/
+        AttendanceTab.tsx               — main attendance tab
+        ImportModal.tsx                 — CSV/XLS import modal
+        OtEntryTab.tsx                  — OT entry form + records table
+        InvalidPunchesTab.tsx           — invalid punch records
+        UnpunchesTab.tsx                — unpunch records
+        AttendanceSettings.tsx          — refactored to .card pattern; moved to settings
+    settings/
+      page.tsx                          — Attendance Rules card added
+      attendance-config/page.tsx        — new sub-page hosting AttendanceSettings
+    my-attendance/
+      page.tsx                          — stacked layout (stats → clock+summary → calendar)
+      _components/
+        ClockWidget.tsx                 — live clock, punch toggle, correction button
+        RegularizationModal.tsx         — attendance correction request form
+        MyCalendarTab.tsx               — calendar tab (month nav + grid + detail)
+    my-calendar/
+      _components/
+        CalendarGrid.tsx                — 7-col color-coded calendar grid
+        MonthDetail.tsx                 — day-by-day attendance detail table
+  components/dashboard/
+    DashboardShell.tsx                  — added page titles for my-attendance, attendance-config
+  lib/
+    navConfig.ts                        — added my-attendance; my-calendar nav entry removed
+```
+
+---
+
+## Session Log — 2026-07-01
+
+**Developer:** Rithwika
+**Branch:** frontend/dynamic
+
+### Features Shipped
+
+**1. My Attendance Page — Full Backend API Integration**
+- Rewrote `app/dashboard/my-attendance/page.tsx` using `useAttendanceDashboard` hook
+- Layout: ClockWidget + 2×2 stat cards side by side (top row), 6-cell monthly summary grid, tabbed Calendar / History below
+- Month navigator: 1-indexed, wraparound (Dec → Jan), Next disabled on current month
+- `CorrectionModal` with `key={correctionDate}` — resets form state for each different date
+
+**2. New Hooks**
+
+| Hook | Purpose |
+|------|---------|
+| `useAttendanceDashboard` | Parallel `useFetch` for `/attendance/stats/`, `/attendance/summary/`, `/attendance/calendar/`; combined `refetch()` |
+| `useAttendanceCorrection` | POST `/attendance/correction/`; shows `response.message` toast; calls `onSuccess` callback |
+
+**3. useClockWidget — Full Rewrite**
+- Live timer: `session_seconds` + `total_seconds` both tick via `setInterval`; `isClockedIn` boolean as dependency (not session object) to prevent stale closures; functional updater `setSession(prev => ...)` inside interval
+- Geolocation: office mode requires GPS — `PERMISSION_DENIED` (code 1) aborts punch with specific toast; codes 2/3 and unsupported browser proceed without coords
+- Session state updated directly from POST response body (`res.data.data`) — no extra GET after punch
+- Browser field: `parseBrowser()` sends parsed name (Chrome / Edge / Firefox / Safari / Opera / Unknown)
+- Added `operating_system` field: `parseOS()` sends parsed OS (Windows 11/10 / macOS / Android / iOS / Linux / Unknown)
+
+**4. New Components**
+
+| Component | Purpose |
+|-----------|---------|
+| `_components/ClockWidget.tsx` | Rewritten — real data from `useClockWidget`; date + status badge; live session timer; mode selector (office/wfh/field/client_location/remote_office); punch button; punch log with geofence dots (green inside / red outside / grey N/A) |
+| `_components/CorrectionModal.tsx` | Controlled by `isOpen` + `date` (read-only) + `onClose` + `onSuccess`; conditional IN/OUT time fields per punch type; uses `useAttendanceCorrection` |
+| `_components/AttendanceCalendar.tsx` | Month grid using backend lowercase statuses directly; spec status colors (present=green, late=amber, absent=red, half_day=orange, weekly_off=grey, holiday=blue, on_leave=purple); Regularize button per day |
+| `_components/AttendanceHistoryTable.tsx` | Table with Date/Day/ClockIn/ClockOut/Hours/Status/Action columns; status badges; Regularize buttons passing `date` string |
+| `_components/CalendarAndHistory.tsx` | Tabbed wrapper (Calendar / History tabs); month nav header with prev/next + month label; legend chips; Next button disabled on current month |
+
+**5. ClockInButton (Dashboard) — Updated**
+- Switched to new `useClockWidget` return shape (`session` / `isLoading` / `isPunching`)
+- `RegularizationModal` → `CorrectionModal` with today's ISO date string
+
+**6. endpoints.ts — geofencing added**
+- `attendance.geofencing: (branchPk: number) => \`/branch/branches/${branchPk}/geofencing/\``
+
+**7. types/attendance.ts — Created**
+- Canonical backend types with lowercase statuses (`present`, `late`, `absent`, `half_day`, `weekly_off`, `holiday`, `on_leave`)
+- Nullable fields (`clockIn: string | null`, `is_inside_geofence: boolean | null`, etc.)
+- Exported types: `TodaySession`, `PunchEntry`, `AttendanceStats`, `MonthlySummary`, `DayRecord`, `CalendarResponse`, `HistoryRow`, `PunchType`, `CorrectionReason`, `AttendanceMode`
+
+### API Endpoints Wired
+
+| Endpoint | Method | Hook |
+|----------|--------|------|
+| `/attendance/today/` | GET | `useClockWidget` |
+| `/attendance/punch/` | POST | `useClockWidget` |
+| `/attendance/stats/` | GET | `useAttendanceDashboard` |
+| `/attendance/summary/` | GET | `useAttendanceDashboard` |
+| `/attendance/calendar/` | GET | `useAttendanceDashboard` |
+| `/attendance/correction/` | POST | `useAttendanceCorrection` |
+
+### Punch Request Body (current shape)
+
+```json
+{
+  "punch_type":       "IN | OUT",
+  "attendance_mode":  "office | wfh | field | client_location | remote_office",
+  "source":           "web",
+  "latitude":         12.3456,
+  "longitude":        78.9101,
+  "accuracy":         15.0,
+  "device_time":      "2026-07-01T09:00:00.000Z",
+  "browser":          "Chrome",
+  "operating_system": "Windows 11/10"
+}
+```
+
+GPS fields are plain JS floats from `GeolocationCoordinates` — no type conversion applied.
+
+### Key Technical Decisions
+
+| Decision | Reason |
+|----------|---------|
+| `isClockedIn` boolean as `useEffect` dependency for timer | Session object changes every second; boolean only changes on actual clock-in/out — prevents re-creating the interval every tick |
+| Session updated from POST body directly | Avoids an extra GET round-trip; POST response already returns the updated `TodaySession` |
+| `key={correctionDate}` on CorrectionModal | Forces remount (state reset) each time a different date is selected for regularization |
+| `parseBrowser()` / `parseOS()` helpers | Backend field `browser` accepts up to 500 chars — sending parsed name keeps it clean; `operating_system` is a new backend field |
+| Error toasts from `response.message` only | No hardcoded backend error strings; only the geolocation denial message is frontend-authored |
+
+### Files Changed This Session
+
+```
+frontend/
+  types/
+    attendance.ts                         — new canonical backend types
+  lib/api/
+    endpoints.ts                          — attendance.geofencing added
+  hooks/
+    useClockWidget.ts                     — full rewrite (live timer, geo, parsed browser/OS)
+    useAttendanceDashboard.ts             — new: parallel useFetch for stats+summary+calendar
+    useAttendanceCorrection.ts            — new: POST correction with response.message toasts
+  app/dashboard/my-attendance/
+    page.tsx                              — full rewrite (ClockWidget+stats, summary grid, tabs)
+    _components/
+      ClockWidget.tsx                     — full rewrite (real data, live timer, geofence dots)
+      CorrectionModal.tsx                 — new: controlled modal (isOpen, date, onClose, onSuccess)
+      AttendanceCalendar.tsx              — new: backend-status calendar grid
+      AttendanceHistoryTable.tsx          — new: history table with Regularize actions
+      CalendarAndHistory.tsx             — new: tabbed wrapper with month nav
+  components/
+    ClockInButton.tsx                     — updated to new hook shape + CorrectionModal
 ```

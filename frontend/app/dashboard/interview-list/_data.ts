@@ -3,6 +3,15 @@ import { API } from "@/lib/api/endpoints";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export interface CandidateDocument {
+  id: number;
+  document_type: string;
+  document_type_display: string;
+  file_url: string;
+  file_name: string;
+  file_size?: number;
+}
+
 export type CandidateStatus =
   | "pending"
   | "screening"
@@ -31,6 +40,8 @@ export interface Branch {
   status:      string;
 }
 
+export type AssessmentStatus = "pending" | "complete";
+
 export interface Candidate {
   id:                       number;
   name:                     string;
@@ -51,10 +62,12 @@ export interface Candidate {
   hr_approved:              boolean;
   portal_credentials_sent:  boolean;
   portal_user:              string | null;
+  assessment_status:        AssessmentStatus | null;
   added_by_name:            string;
   created_at:               string;
   updated_at:               string;
   logs?:                    CandidateLog[];
+  documents?:               CandidateDocument[];
 }
 
 export interface CandidateEmail {
@@ -107,8 +120,10 @@ export const RECRUITMENT_API = {
     clientApi.post<{ data: Candidate }>(API.recruitment.candidates, body),
   detail:      (id: number) =>
     clientApi.get<{ data: Candidate }>(API.recruitment.detail(id)),
+  getStatuses: () =>
+    clientApi.get<{ data: { value: CandidateStatus; label: string }[] }>(API.recruitment.status),
   setStatus:   (id: number, body: { status: CandidateStatus; remarks?: string; template_name?: string }) =>
-    clientApi.patch<{ data: Candidate }>(API.recruitment.status(id), body),
+    clientApi.patch<{ data: Candidate }>(API.recruitment.candidateStatus(id), body),
   hrDecision:  (id: number, body: {
     decision:       "approve" | "reject";
     remarks?:       string;

@@ -37,10 +37,13 @@ export const API = {
 
   employees: {
     list:              "/employees/",
+    hrList:            "/employees/hrs/",
+    managerList:       "/employees/managers/",
     me:                "/employees/me/",
     detail:            (id: string) => `/employees/${id}/`,
     profile:           (id: string) => `/employees/${id}/profile/`,
     reportingManager:  (id: string) => `/employees/${id}/reporting-manager/`,
+    hr:                (id: string) => `/employees/${id}/hr/`,
     approvalMatrix:    (id: string) => `/employees/${id}/approval-matrix/`,
     branches:          "/branch/branches/",
   },
@@ -67,24 +70,54 @@ export const API = {
     stats:           "/recruitment/candidates/stats/",
     review:          "/recruitment/candidates/review/",
     detail:          (id: number) => `/recruitment/candidates/${id}/`,
-    status:          (id: number) => `/recruitment/candidates/${id}/status/`,
+    status:          "/recruitment/candidates/status-choices/",
+    candidateStatus: (id: number) => `/recruitment/candidates/${id}/status/`,
     hrDecision:      (id: number) => `/recruitment/candidates/${id}/hr-decision/`,
     sendPortalLogin: (id: number) => `/recruitment/candidates/${id}/send-portal-login/`,
     emailLogs:       "/recruitment/emails/",
   },
 
   onboarding: {
-    profile:     "/onboarding/profile/",
-    profileStep: (step: number) => `/onboarding/profile/step/${step}/`,
-    documents:   "/onboarding/documents/",
-    submit:      "/onboarding/submit/",
-    approvals:   "/onboarding/approvals/",
-    approve:     (userId: string) => `/onboarding/approvals/${userId}/approve/`,
+    profile:        "/onboarding/",
+    profileStep:    (step: number) => `/onboarding/step/${step}/`,
+    documents:      "/onboarding/documents/",
+    documentDetail: (docId: string) => `/onboarding/documents/${docId}/`,
+    submit:         "/onboarding/",
+    approvals:      "/onboarding/approvals/",
+    pipeline:       "/onboarding/approvals/?view=pipeline",
+    approve:        (userId: string) => `/onboarding/approvals/${userId}/`,
+  },
+
+  approvals: {
+    leaveRequests:  "/leave/requests/",
+    approveLeave:   (id: string) => `/leave/requests/${id}/approve/`,
+    expenseList:    "/expenses/",
+    approveExpense: (id: string) => `/expenses/${id}/approve/`,
   },
 
   expenses: {
-    list:  "/expenses/",
-    stats: "/expenses/stats/",
+    list:         "/expenses/",
+    stats:        "/expenses/stats/",
+    categories:   "/expenses/categories/",
+    updateStatus: "/expenses/status/",
+    detail:       (id: string) => `/expenses/${id}/`,
+    approve:      (id: string) => `/expenses/${id}/approve/`,
+  },
+
+  assessments: {
+    // Candidate portal
+    my:               "/assessments/my/",
+    respond:          (assignmentId: string, itemId: string) => `/assessments/${assignmentId}/respond/${itemId}/`,
+    complete:         (assignmentId: string) => `/assessments/${assignmentId}/complete/`,
+    retake:           (assignmentId: string) => `/assessments/${assignmentId}/retry/`,
+    // HR management
+    list:             "/assessments/",
+    detail:           (id: string) => `/assessments/${id}/`,
+    items:            (assessmentId: string) => `/assessments/${assessmentId}/items/`,
+    itemDetail:       (itemId: string) => `/assessments/items/${itemId}/`,
+    assign:           "/assessments/assign/",
+    results:          (assessmentId: string) => `/assessments/${assessmentId}/results/`,
+    candidateResults: (candidateId: string) => `/assessments/candidates/${candidateId}/results/`,
   },
 
   leave: {
@@ -98,5 +131,29 @@ export const API = {
     approve:      (id: string) => `/leave/requests/${id}/approve/`,
     stats:        "/leave/stats/",
     calendar:     "/leave/calendar/",
+  },
+
+  attendance: {
+    settings:    "/attendance/settings/",
+    punch:       "/attendance/punch/",
+    today:       "/attendance/today/",
+    stats:       "/attendance/stats/",
+    summary:     "/attendance/summary/",
+    calendar:    "/attendance/calendar/",
+    correction:  "/attendance/correction/",
+    geofencing:  (branchPk: number) => `/branch/branches/${branchPk}/geofencing/`,
+
+    // HR Management
+    dashboard:      "/attendance/dashboard/",
+    records:        "/attendance/records/",
+    record:         (id: string) => `/attendance/records/${id}/`,
+    overtime:       "/attendance/overtime/",
+    overtimeCreate: "/attendance/overtime/create/",
+    invalidPunches: "/attendance/invalid-punches/",
+    unPunches:      "/attendance/un-punches/",
+    import:         "/attendance/import/",
+    export:         "/attendance/export/",
+    corrections:       "/attendance/corrections/",
+    correctionReview:  (id: string) => `/attendance/corrections/${id}/review/`,
   },
 } as const;

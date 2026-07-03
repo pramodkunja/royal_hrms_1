@@ -1,6 +1,7 @@
 import logging
 from datetime import date
 
+from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import status
@@ -8,6 +9,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from core.pagination import paginate, paginated_data
 from core.responses import error, first_error, success
 
 from ..models import (
@@ -18,6 +20,7 @@ from ..models import (
 )
 from ..serializers import (
     LeaveBalanceSerializer,
+    LeavePolicyCreateSerializer,
     LeavePolicySerializer,
     LeavePolicyUpdateSerializer,
     LeaveRequestCreateSerializer,
@@ -38,14 +41,12 @@ def _current_year() -> int:
 
 
 def _resolve_approver(role_str: str, employee) -> 'accounts.User | None':
-    """Map a role string from ApprovalWorkflowRule to an actual User."""
-    from apps.accounts.models import User
-    if role_str == 'rm':
-        return employee.reporting_manager
-    try:
-        return User.objects.filter(role__name=role_str, is_active=True).first()
-    except Exception:
-        return None
+    """Map a role string from ApprovalWorkflowRule to an actual User on the employee."""
+    if role_str in ('reporting_manager', 'rm', 'manager'):
+        return getattr(employee, 'reporting_manager', None)
+    if role_str in ('hr', 'hr_manager', 'hr_admin'):
+        return getattr(employee, 'hr', None)
+    return None
 
 
 def _resolve_approval_chain(employee):
@@ -68,6 +69,40 @@ def _resolve_approval_chain(employee):
     l1 = _resolve_approver(rule.l1_approver_role, employee) if rule.l1_approver_role else None
     l2 = _resolve_approver(rule.l2_approver_role, employee) if rule.l2_approver_role else None
     return l1, l2
+
+
+def _role_name(user) -> str:
+    return user.role.name if user.role else 'employee'
+
+
+def _approval_scope_filter(user) -> 'Q':
+    """
+    Scope filter for the approval queue — always excludes the approver's own requests.
+    system_admin → all; hr_admin → employees where hr=user (L2); manager → direct reports (L1); employee → own.
+    """
+    role = _role_name(user)
+    if role == 'system_admin':
+        return ~Q(employee=user)
+    if role == 'hr_admin':
+        return Q(employee__hr=user) & ~Q(employee=user)
+    if role == 'manager':
+        return Q(employee__reporting_manager=user) & ~Q(employee=user)
+    return Q(employee=user)
+
+
+def _calendar_scope_filter(user) -> 'Q':
+    """
+    Scope filter for the team calendar.
+    employee → all approved (to see who's out); manager → team + own; hr_admin → branch; system_admin → all.
+    """
+    role = _role_name(user)
+    if role == 'system_admin':
+        return Q()
+    if role == 'hr_admin':
+        return Q(employee__branch=user.branch) if user.branch else Q()
+    if role == 'manager':
+        return Q(employee__reporting_manager=user) | Q(employee=user)
+    return Q()  # employee: see all approved leaves to plan around absences
 
 
 def _calc_working_days(start: date, end: date, duration: str) -> float:
@@ -127,6 +162,32 @@ class LeavePolicyView(APIView):
         serializer.save()
         return success('Policy updated.', LeavePolicySerializer(policy).data)
 
+    def patch(self, request, leave_type: str):
+        return self.put(request, leave_type)
+
+    def post(self, request, leave_type: str = None):
+        if leave_type:
+            return self.put(request, leave_type)
+        if not (_has_perm(request.user, 'settings.edit') or _has_perm(request.user, 'leave.approve')):
+            return error('Permission denied.', http_status=status.HTTP_403_FORBIDDEN)
+        serializer = LeavePolicyCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error(first_error(serializer.errors))
+        data = serializer.validated_data
+        label = data['leave_type_label']
+        leave_type_key = label.lower().replace(' ', '_').replace('-', '_')
+        policy = LeavePolicy.objects.create(
+            leave_type=leave_type_key,
+            leave_type_label=label,
+            annual_days=data['annual_days'],
+            can_carry_forward=data['can_carry_forward'],
+            max_carry_forward_days=data['max_carry_forward_days'],
+            policy_note=data.get('policy_note', ''),
+            is_active=data['is_active'],
+        )
+        logger.info('Created leave type "%s" by %s', leave_type_key, request.user.email)
+        return success('Leave type created.', LeavePolicySerializer(policy).data, http_status=status.HTTP_201_CREATED)
+
 
 # ─── Leave Balance ─────────────────────────────────────────────────────────────
 
@@ -182,22 +243,62 @@ class LeaveBalanceView(APIView):
 class LeaveBalanceAdjustView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def _get_balance(self, balance_id: str):
+        try:
+            return LeaveBalance.objects.select_related('employee').get(id=balance_id), None
+        except LeaveBalance.DoesNotExist:
+            return None, error('Balance record not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+    def get(self, request, balance_id: str):
+        if not _has_perm(request.user, 'leave.approve'):
+            return error('Permission denied.', http_status=status.HTTP_403_FORBIDDEN)
+        balance, err = self._get_balance(balance_id)
+        if err:
+            return err
+        return success('Balance retrieved.', LeaveBalanceSerializer(balance).data)
+
     def patch(self, request, balance_id: str):
         if not _has_perm(request.user, 'leave.approve'):
             return error('Permission denied.', http_status=status.HTTP_403_FORBIDDEN)
-        try:
-            balance = LeaveBalance.objects.select_related('employee').get(id=balance_id)
-        except LeaveBalance.DoesNotExist:
-            return error('Balance record not found.', http_status=status.HTTP_404_NOT_FOUND)
+        balance, err = self._get_balance(balance_id)
+        if err:
+            return err
 
         total = request.data.get('total_days')
         used  = request.data.get('used_days')
+        if total is None and used is None:
+            return error('Provide at least one of total_days or used_days to adjust.')
         if total is not None:
+            try:
+                total = float(total)
+                if total < 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                return error('total_days must be a non-negative number.')
             balance.total_days = total
         if used is not None:
+            try:
+                used = float(used)
+                if used < 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                return error('used_days must be a non-negative number.')
             balance.used_days = used
         balance.save(update_fields=['total_days', 'used_days', 'updated_at'])
+        logger.info('Leave balance %s adjusted by %s', balance_id, request.user.email)
         return success('Balance adjusted.', LeaveBalanceSerializer(balance).data)
+
+    def put(self, request, balance_id: str):
+        return self.patch(request, balance_id)
+
+    def post(self, request, balance_id: str):
+        return self.patch(request, balance_id)
+
+    def delete(self, request, balance_id: str):
+        return error(
+            'Leave balance records cannot be deleted. Adjust total_days or used_days instead.',
+            http_status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
 
 
 # ─── Leave Requests ────────────────────────────────────────────────────────────
@@ -208,15 +309,16 @@ class LeaveRequestListCreateView(APIView):
 
     def get(self, request):
         has_approve = _has_perm(request.user, 'leave.approve')
+        scope       = request.query_params.get('scope', '')
 
-        if has_approve:
-            queryset = LeaveRequest.objects.select_related(
-                'employee', 'l1_approver', 'l2_approver'
-            ).all()
+        qs_base = LeaveRequest.objects.select_related('employee', 'l1_approver', 'l2_approver')
+
+        if scope == 'own' or not has_approve:
+            # Always return the requesting user's own requests only
+            queryset = qs_base.filter(employee=request.user)
         else:
-            queryset = LeaveRequest.objects.select_related(
-                'employee', 'l1_approver', 'l2_approver'
-            ).filter(employee=request.user)
+            # Approval queue — scoped by role, own requests excluded
+            queryset = qs_base.filter(_approval_scope_filter(request.user))
 
         leave_type = request.query_params.get('leave_type')
         if leave_type:
@@ -224,14 +326,16 @@ class LeaveRequestListCreateView(APIView):
 
         req_status = request.query_params.get('status')
         if req_status:
-            queryset = queryset.filter(status=req_status)
+            statuses = [s.strip() for s in req_status.split(',')]
+            queryset = queryset.filter(status__in=statuses)
 
         year = request.query_params.get('year')
         if year:
             queryset = queryset.filter(start_date__year=year)
 
-        serializer = LeaveRequestSerializer(queryset, many=True, context={'request': request})
-        return success('Leave requests retrieved.', serializer.data)
+        page_obj, paginator = paginate(queryset, request, default_page_size=20)
+        serializer = LeaveRequestSerializer(page_obj.object_list, many=True, context={'request': request})
+        return success('Leave requests retrieved.', paginated_data(paginator, page_obj, serializer.data))
 
     def post(self, request):
         serializer = LeaveRequestCreateSerializer(data=request.data)
@@ -250,20 +354,25 @@ class LeaveRequestListCreateView(APIView):
 
         year = start.year
 
-        # Balance check (skip for LWP)
-        if leave_type != LEAVE_LWP:
-            balance = LeaveBalance.objects.filter(
-                employee=request.user, leave_type=leave_type, year=year
-            ).first()
-            if not balance:
-                return error(f'No leave balance found for {leave_type} in {year}. Contact HR.')
-            available = float(balance.total_days - balance.used_days)
-            if total_days > available:
-                return error(f'Insufficient balance. You have {available} day(s) available.')
+        # Balance check + creation wrapped in a transaction with row-level lock
+        # to prevent double-booking when the same employee submits concurrent requests.
+        with transaction.atomic():
+            if leave_type != LEAVE_LWP:
+                balance = (
+                    LeaveBalance.objects
+                    .select_for_update()
+                    .filter(employee=request.user, leave_type=leave_type, year=year)
+                    .first()
+                )
+                if not balance:
+                    return error(f'No leave balance found for {leave_type} in {year}. Contact HR.')
+                available = float(balance.total_days - balance.used_days)
+                if total_days > available:
+                    return error(f'Insufficient balance. You have {available} day(s) available.')
 
-        l1, l2 = _resolve_approval_chain(request.user)
+            l1, l2 = _resolve_approval_chain(request.user)
 
-        leave_request = LeaveRequest.objects.create(
+            leave_request = LeaveRequest.objects.create(
             employee=request.user,
             leave_type=leave_type,
             duration=duration,
@@ -326,9 +435,44 @@ class LeaveRequestDetailView(APIView):
         logger.info('Leave request %s cancelled by %s', leave_request.id, request.user.email)
         return success('Leave request cancelled.', LeaveRequestSerializer(leave_request, context={'request': request}).data)
 
+    def put(self, request, request_id: str):
+        return self.patch(request, request_id)
+
+    def post(self, request, request_id: str):
+        return self.patch(request, request_id)
+
+    def delete(self, request, request_id: str):
+        if not _has_perm(request.user, 'leave.approve'):
+            return error('Only HR can delete leave requests.', http_status=status.HTTP_403_FORBIDDEN)
+        leave_request, err = self._get_request(request_id, request.user)
+        if err:
+            return err
+        if leave_request.status == REQ_APPROVED:
+            return error(
+                'Approved leave requests cannot be deleted.',
+                http_status=status.HTTP_409_CONFLICT,
+            )
+        leave_request.delete()
+        logger.info('Leave request %s deleted by %s', request_id, request.user.email)
+        return success('Leave request deleted.')
+
 
 class LeaveApprovalView(APIView):
     permission_classes = [IsAuthenticated]
+
+    def get(self, request, request_id: str):
+        if not _has_perm(request.user, 'leave.approve'):
+            return error('Permission denied.', http_status=status.HTTP_403_FORBIDDEN)
+        try:
+            leave_request = LeaveRequest.objects.select_related(
+                'employee', 'l1_approver', 'l2_approver'
+            ).get(id=request_id)
+        except LeaveRequest.DoesNotExist:
+            return error('Leave request not found.', http_status=status.HTTP_404_NOT_FOUND)
+        return success(
+            'Leave request retrieved.',
+            LeaveRequestSerializer(leave_request, context={'request': request}).data,
+        )
 
     def post(self, request, request_id: str):
         if not _has_perm(request.user, 'leave.approve'):
@@ -338,6 +482,9 @@ class LeaveApprovalView(APIView):
             leave_request = LeaveRequest.objects.select_related('employee').get(id=request_id)
         except LeaveRequest.DoesNotExist:
             return error('Leave request not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        if leave_request.employee_id == request.user.id:
+            return error('You cannot approve or reject your own leave request.', http_status=status.HTTP_403_FORBIDDEN)
 
         action  = request.data.get('action')
         remarks = request.data.get('remarks', '').strip()
@@ -396,12 +543,16 @@ class LeaveStatsView(APIView):
 
     def get(self, request):
         has_approve = _has_perm(request.user, 'leave.approve')
-        year = int(request.query_params.get('year', _current_year()))
+        year        = int(request.query_params.get('year', _current_year()))
+        scope       = request.query_params.get('scope', '')
+        own_scope   = scope == 'own' or not has_approve
 
-        if has_approve:
-            qs = LeaveRequest.objects.filter(start_date__year=year)
-        else:
+        if own_scope:
             qs = LeaveRequest.objects.filter(employee=request.user, start_date__year=year)
+        else:
+            qs = LeaveRequest.objects.filter(
+                _approval_scope_filter(request.user), start_date__year=year
+            )
 
         agg = qs.aggregate(
             total     = Count('id'),
@@ -411,17 +562,17 @@ class LeaveStatsView(APIView):
             cancelled = Count('id', filter=Q(status=REQ_CANCELLED)),
         )
 
-        # Balance summary for employee view
+        # Balance breakdown only for own-scope views (employee or ?scope=own)
         balance_data = []
-        if not has_approve:
+        if own_scope:
             balances = LeaveBalance.objects.filter(employee=request.user, year=year)
             balance_data = [
                 {
-                    'leave_type':  b.leave_type,
+                    'leave_type':         b.leave_type,
                     'leave_type_display': b.get_leave_type_display(),
-                    'total_days':  float(b.total_days),
-                    'used_days':   float(b.used_days),
-                    'available':   float(b.total_days - b.used_days),
+                    'total_days':         float(b.total_days),
+                    'used_days':          float(b.used_days),
+                    'available':          float(b.total_days - b.used_days),
                 }
                 for b in balances
             ]
@@ -444,15 +595,18 @@ class LeaveCalendarView(APIView):
         year  = int(request.query_params.get('year',  _current_year()))
         month = request.query_params.get('month')
 
+        scope_filter = _calendar_scope_filter(request.user)
         qs = LeaveRequest.objects.select_related('employee').filter(
+            scope_filter,
             status=REQ_APPROVED,
             start_date__year=year,
         )
         if month:
             qs = qs.filter(start_date__month=int(month))
 
+        # system_admin can still narrow by branch via the UI branch dropdown
         branch = request.query_params.get('branch')
-        if branch:
+        if branch and _role_name(request.user) == 'system_admin':
             qs = qs.filter(employee__branch__iexact=branch)
 
         events = [

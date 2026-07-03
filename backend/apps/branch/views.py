@@ -167,6 +167,23 @@ class BranchDetailView(APIView):
         except Branch.DoesNotExist:
             return None
 
+    def _cascade_hr(self, branch: Branch, old_hr_id) -> None:
+        """When branch HR changes, update hr field for all employees in that branch
+        who were pointing at the old HR (preserves manual overrides).
+        """
+        if branch.hr_id == old_hr_id:
+            return
+        from apps.accounts.models import User
+        base_qs = User.objects.filter(branch__iexact=branch.branch_name, is_active=True)
+        if branch.hr_id:
+            base_qs = base_qs.exclude(pk=branch.hr_id)
+
+        if branch.hr_id:
+            # Update employees whose hr still points at the old HR value
+            base_qs.filter(hr_id=old_hr_id).update(hr_id=branch.hr_id)
+        else:
+            base_qs.filter(hr_id=old_hr_id).update(hr=None)
+
     def get(self, request, pk):
         if not _has_perm(request.user, 'branches.view'):
             return error(_PERM_DENIED, http_status=status.HTTP_403_FORBIDDEN)
@@ -181,6 +198,7 @@ class BranchDetailView(APIView):
         branch = self._get_branch(pk)
         if not branch:
             return error('Branch not found.', http_status=status.HTTP_404_NOT_FOUND)
+        old_hr_id = branch.hr_id
         serializer = BranchSerializer(branch, data=request.data)
         if not serializer.is_valid():
             return error(first_error(serializer.errors), data=serializer.errors)
@@ -191,6 +209,7 @@ class BranchDetailView(APIView):
                 'A branch with this name or code already exists.',
                 http_status=status.HTTP_409_CONFLICT,
             )
+        self._cascade_hr(updated, old_hr_id)
         AuditLog.objects.create(
             user=request.user, action='branch_updated', module='branch',
             object_id=str(updated.pk),
@@ -206,6 +225,7 @@ class BranchDetailView(APIView):
         branch = self._get_branch(pk)
         if not branch:
             return error('Branch not found.', http_status=status.HTTP_404_NOT_FOUND)
+        old_hr_id = branch.hr_id
         serializer = BranchSerializer(branch, data=request.data, partial=True)
         if not serializer.is_valid():
             return error(first_error(serializer.errors), data=serializer.errors)
@@ -216,6 +236,7 @@ class BranchDetailView(APIView):
                 'A branch with this name or code already exists.',
                 http_status=status.HTTP_409_CONFLICT,
             )
+        self._cascade_hr(updated, old_hr_id)
         AuditLog.objects.create(
             user=request.user, action='branch_updated', module='branch',
             object_id=str(updated.pk),
@@ -224,6 +245,9 @@ class BranchDetailView(APIView):
         )
         logger.info('Branch "%s" patched by %s', updated.branch_code, request.user.email)
         return success('Branch updated successfully.', data=BranchSerializer(updated).data)
+
+    def post(self, request, pk):
+        return self.put(request, pk)
 
     def delete(self, request, pk):
         if not _has_perm(request.user, 'branches.delete'):
@@ -248,6 +272,108 @@ class BranchDetailView(APIView):
         )
         logger.info('Branch "%s" deleted by %s', code, request.user.email)
         return success(f'Branch "{code}" deleted successfully.')
+
+
+# ─── Branch Geofencing ───────────────────────────────────────────────────────
+
+class BranchGeofencingView(APIView):
+    """
+    GET  /api/branch/branches/<pk>/geofencing/  — read current geofence config
+    PUT  /api/branch/branches/<pk>/geofencing/  — set latitude, longitude, radius, enabled flag
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _get_branch(self, pk):
+        try:
+            return Branch.objects.get(pk=pk)
+        except Branch.DoesNotExist:
+            return None
+
+    def get(self, request, pk):
+        if not _has_perm(request.user, 'branches.view'):
+            return error(_PERM_DENIED, http_status=status.HTTP_403_FORBIDDEN)
+        branch = self._get_branch(pk)
+        if not branch:
+            return error('Branch not found.', http_status=status.HTTP_404_NOT_FOUND)
+        return success('Geofencing config retrieved successfully.', data={
+            'id':                   branch.pk,
+            'branch_name':          branch.branch_name,
+            'branch_code':          branch.branch_code,
+            'latitude':             str(branch.latitude) if branch.latitude is not None else None,
+            'longitude':            str(branch.longitude) if branch.longitude is not None else None,
+            'allowed_radius_meters': branch.allowed_radius_meters,
+            'geofencing_enabled':   branch.geofencing_enabled,
+            'has_coordinates':      branch.has_coordinates,
+        })
+
+    def put(self, request, pk):
+        if not _has_perm(request.user, 'branches.edit'):
+            return error(_PERM_DENIED, http_status=status.HTTP_403_FORBIDDEN)
+        branch = self._get_branch(pk)
+        if not branch:
+            return error('Branch not found.', http_status=status.HTTP_404_NOT_FOUND)
+
+        from rest_framework import serializers as drf_serializers
+
+        class GeofencingSerializer(drf_serializers.Serializer):
+            latitude              = drf_serializers.FloatField(required=False, allow_null=True)
+            longitude             = drf_serializers.FloatField(required=False, allow_null=True)
+            allowed_radius_meters = drf_serializers.IntegerField(min_value=10, max_value=5000, required=False)
+            geofencing_enabled    = drf_serializers.BooleanField(required=False)
+
+            def validate(self, attrs):
+                lat = attrs.get('latitude')
+                lon = attrs.get('longitude')
+                if (lat is None) != (lon is None):
+                    raise drf_serializers.ValidationError(
+                        'Both latitude and longitude must be provided together.'
+                    )
+                return attrs
+
+        serializer = GeofencingSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error(first_error(serializer.errors), data=serializer.errors,
+                         http_status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        data = serializer.validated_data
+        if 'latitude'              in data: branch.latitude              = data['latitude']
+        if 'longitude'             in data: branch.longitude             = data['longitude']
+        if 'allowed_radius_meters' in data: branch.allowed_radius_meters = data['allowed_radius_meters']
+        if 'geofencing_enabled'    in data: branch.geofencing_enabled    = data['geofencing_enabled']
+
+        # Validate after applying: can't enable without coordinates (sent now or already on branch)
+        if branch.geofencing_enabled and not branch.has_coordinates:
+            return error(
+                'Set latitude and longitude before enabling geofencing.',
+                http_status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        branch.save(update_fields=['latitude', 'longitude', 'allowed_radius_meters', 'geofencing_enabled', 'updated_at'])
+
+        AuditLog.objects.create(
+            user=request.user, action='branch_geofencing_updated', module='branch',
+            object_id=str(branch.pk),
+            changes={
+                'latitude':             str(branch.latitude),
+                'longitude':            str(branch.longitude),
+                'allowed_radius_meters': branch.allowed_radius_meters,
+                'geofencing_enabled':   branch.geofencing_enabled,
+            },
+            ip_address=get_client_ip(request),
+        )
+        logger.info('Branch "%s" geofencing updated by %s', branch.branch_code, request.user.email)
+
+        return success('Geofencing configuration updated successfully.', data={
+            'id':                    branch.pk,
+            'branch_name':           branch.branch_name,
+            'branch_code':           branch.branch_code,
+            'latitude':              str(branch.latitude) if branch.latitude is not None else None,
+            'longitude':             str(branch.longitude) if branch.longitude is not None else None,
+            'allowed_radius_meters': branch.allowed_radius_meters,
+            'geofencing_enabled':    branch.geofencing_enabled,
+            'has_coordinates':       branch.has_coordinates,
+        })
 
 
 # ─── Stats ────────────────────────────────────────────────────────────────────

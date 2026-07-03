@@ -8,6 +8,7 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
   "/dashboard/announcements":    "announcements.view",
   "/dashboard/interview-list":   "recruitment.view",
   "/dashboard/candidate-review":        "recruitment.view",
+  "/dashboard/assessments":            "assessments.view",
   "/dashboard/onboarding-approvals":   "onboarding.approve",
   "/dashboard/email-logs":             "recruitment.view",
   "/dashboard/employees":        "employees.view",
@@ -69,8 +70,32 @@ function getOnboardingStatus(request: NextRequest): string {
   }
 }
 
+function getAssessmentStatus(request: NextRequest): string {
+  const raw = request.cookies.get(USER_COOKIE)?.value;
+  if (!raw) return "complete";
+  try {
+    const user = JSON.parse(decodeURIComponent(raw)) as { assessment_status?: string };
+    return user.assessment_status ?? "complete";
+  } catch {
+    return "complete";
+  }
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // API routes — attach the access token as an Authorization header so the
+  // Django backend can authenticate all HTTP methods (GET, POST, PUT, PATCH, DELETE).
+  // The rewrite in next.config.ts handles forwarding to the backend.
+  if (pathname.startsWith("/api/")) {
+    const token = request.cookies.get(ACCESS_COOKIE)?.value;
+    if (token) {
+      const headers = new Headers(request.headers);
+      headers.set("Authorization", `Bearer ${token}`);
+      return NextResponse.next({ request: { headers } });
+    }
+    return NextResponse.next();
+  }
 
   const isAuthenticated = request.cookies.get(AUTH_COOKIE)?.value === "1";
   const isLoginPage     = pathname.startsWith("/login");
@@ -86,15 +111,25 @@ export function proxy(request: NextRequest) {
 
   if (isAuthenticated) {
     const onboardingStatus = getOnboardingStatus(request);
+    const assessmentStatus = getAssessmentStatus(request);
     const needsOnboarding  = onboardingStatus !== "complete";
+    const needsAssessments = !needsOnboarding && assessmentStatus === "pending";
+    const isAssessmentsPage = pathname.startsWith("/onboarding/assessments");
 
     // Onboarding-incomplete users must stay on /onboarding
     if (needsOnboarding && !isOnboarding) {
       return NextResponse.redirect(new URL("/onboarding", request.url));
     }
 
-    // Fully onboarded users must not access /onboarding
-    if (!needsOnboarding && isOnboarding) {
+    // Employees with pending assessments must go to /onboarding/assessments
+    if (needsAssessments && !isAssessmentsPage) {
+      return NextResponse.redirect(new URL("/onboarding/assessments", request.url));
+    }
+
+    // Fully onboarded users must not access /onboarding — but let
+    // /onboarding/assessments through; the page itself checks the API
+    // and handles the no-assessments case without a backend status field.
+    if (!needsOnboarding && isOnboarding && !needsAssessments && !isAssessmentsPage) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   }
@@ -118,5 +153,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon\\.ico|api|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico|woff2?|ttf|otf|mp4|pdf)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico|woff2?|ttf|otf|mp4|pdf)$).*)"],
 };

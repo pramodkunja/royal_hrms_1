@@ -1,121 +1,41 @@
-﻿# Team Context
+# Team Context — Assessment Feature
 
-**Name:** Safura Samreen
-**Last Updated:** 24 June 2026 (Session 2)
-
-I worked on the **Royal HRMS** frontend — a Next.js 16 (App Router) HR management system. Below is everything built in this session.
-
----
-
-## Tech Stack
-
-- **Framework:** Next.js 16.2.9 with App Router and Turbopack
-- **Styling:** Tailwind CSS v2.2.19 (JIT mode) + custom CSS design system (Sahara theme)
-- **Icons:** Tabler Icons webfont via CDN (`ti-*` classes)
-- **HTTP:** Axios via `clientApi` (`lib/clientApi.ts`) — attaches Bearer token from localStorage automatically
-- **Auth:** JWT stored in localStorage + user info in a cookie (`USER_COOKIE`)
-- **Backend base URL:** `http://localhost:8000/api`
+**Author:** Safura Samreen
+**Date:** 2 July 2026
+**Branch:** Frontend/Assessment
 
 ---
 
-## What I Built
+## Overview
 
-### 1. Dashboard Shell — Sidebar + Navbar (`components/dashboard/DashboardShell.tsx`)ZZZZZZZZZ
-
-- Sidebar with collapsible width (220 px → 56 px), logo, nav items with section labels, user card at the bottom
-- **Permission-based navigation** (industry standard) — sidebar items are driven entirely by `user.permissions[]` returned at login. No role-to-nav mapping, no extra API calls after login.
-- `lib/navConfig.ts` has a single master nav list; each item declares the permission string it needs (e.g. `"settings.view"`). `buildNav(permissions[])` filters it at render time.
-- Top navbar: page title (derived from current path), search bar, dark mode toggle, notifications bell with unread dot, logout button
-- Session passed as a prop from the server layout (`app/dashboard/layout.tsx`)
-
-### 2. Settings Page (`app/dashboard/settings/page.tsx`)
-
-- Settings landing page with category pills and card tiles
-- "Roles & Permissions" card navigates to `/dashboard/settings/permissions`
-
-### 3. Roles & Permissions Page (`app/dashboard/settings/permissions/`)
-
-Full CRUD page wired to real API endpoints.
-
-#### File structure (industry standard):
-```
-permissions/
-  _data.ts                          ← types, helpers, preset definitions
-  page.tsx                          ← orchestrator, all API calls live here
-  _components/
-    RoleFormFields.tsx              ← shared form body (used by both modals)
-    AddRoleModal.tsx                ← POST /api/roles/
-    EditRoleModal.tsx               ← PUT /api/roles/{id}/
-```
-
-#### Features:
-- **Roles table** — shows display name, slug (read-only code tag), permission count, user count, action buttons
-- **Add Role** — modal with role name + permission tree → `POST /api/roles/`
-- **Edit Role** — pre-populated modal, slug shown as locked field → `PUT /api/roles/{id}/` (name and is_active preserved, only display_name and permissions editable)
-- **Active/Inactive toggle** — icon button with CSS tooltip → `PATCH /api/roles/{id}/` with `{ is_active: bool }`, spinner shown during request
-- **Permission Matrix** — rows = API modules, columns = roles; cells show "Full (N)" badge / individual action badges / "—"
-- **Loading state** with spinner, error state with retry button
-
-#### Quick Permission Presets (in both Add and Edit modals):
-Four one-click preset chips that pre-fill the permission tree:
-
-| Preset | Selects |
-|--------|---------|
-| Full Admin | All 46 permissions |
-| View Only | Every `*.view` codename |
-| Manager | View/approve across employees, attendance, leave, expenses, documents, recruitment, reports |
-| Employee | Self-service view/create on leave, attendance, payroll, expenses, documents, announcements, referrals |
-
-Active preset is detected live — chip highlights when current selection exactly matches it, un-highlights the moment any checkbox is manually changed. A counter below shows `X of 46 permissions selected`.
-
-#### Module accordion tree:
-- Per-module collapsible rows with indeterminate checkbox state (partial selection)
-- Per-action checkboxes (view, create, edit, delete, export, approve)
-- Module-level count badge (`3/6`) turns primary-colour when anything is selected
-
-### 4. Role-Based Dashboard (`app/dashboard/page.tsx` + `_components/`)
-
-Server component reads the session role and renders the matching layout:
-
-| Role | Dashboard |
-|------|-----------|
-| `hr_admin` | Greeting banner, Quick Actions, HR Action Queue, Today's Birthdays, Work Anniversaries, Recruitment Funnel, CSS Donut dept chart, Live Activity timeline |
-| `system_admin` | Dark blue banner, Quick Actions, Module Health grid (operational/warn indicators), Dept headcount, Recent System Events, Active Sessions |
-| `manager` | Green banner, Quick Actions, Pending Approvals (approve/reject buttons), Team Attendance Today, Upcoming Leaves |
-| `employee` | Personal banner, Quick Actions, Attendance stats, Leave Balance progress bars, My Requests, Upcoming Events |
-
-All dashboard views use static/mock data matching the HTML reference design (`royal-hrms-1.html`).
-
-### 5. SMTP Settings (`app/dashboard/settings/smtp/`)
-
-Full CRUD page for managing outgoing mail server configurations, wired to the real REST API.
-
-#### File structure:
-```
-smtp/
-  _data.ts                    ← types, converters, validation, endpoint helpers
-  page.tsx                    ← dynamic card list, all API calls live here
-  _components/
-    SmtpModal.tsx             ← Add / Edit modal
-```
-
-#### Features:
-- **Dynamic card grid** (2 per row) — one card per saved SMTP config, active config highlighted with a primary border
-- **Add SMTP** — modal with Configuration Name (required, free-text label), host, port, TLS toggle, sender name, from email, username, password, BCC, priority, receiver email type
-- **Edit** — same modal pre-populated; password field shows "leave blank to keep current"
-- **Set Active** — `POST /api/settings/smtp/{id}/activate/` (no body), instantly marks card as active
-- **Delete** — `DELETE /api/settings/smtp/{id}/` with confirmation dialog
-- **Test Email** — modal asks for recipient + SMTP password (required by API), then `POST /api/settings/smtp/test/` with full config fields + `test_recipient`
-- Active banner at top of page shows currently active config name + from_email
-
-#### API shape (actual):
-The `GET /api/settings/smtp/` response returns `data` as a **flat array** — each entry has a `name` field that is a user-defined label (e.g. "Gmail SMTP"), **not** "local"/"server". `is_active: true` marks the currently active one.
+This document covers all frontend work done on the assessment feature. No backend changes were made — all changes are frontend-only.
 
 ---
 
-### 6. Email Templates (`app/dashboard/settings/email-templates/`)
+## 1. Login Page — Redirect Simplification
 
-Full CRUD page for transactional email templates, grouped by type, with a WYSIWYG editor.
+**File:** `app/login/page.tsx`
+
+Removed the extra `GET /assessments/my/` API call that was being made after login just to check assessment status. The backend already returns `assessment_status` inside the login response under `d.user.assessment_status`.
+
+**Redirect logic:**
+```typescript
+saveAuth(user);
+let dest = "/dashboard";
+if (user.onboarding_status !== "complete")     dest = "/onboarding";
+else if (user.assessment_status === "pending") dest = "/onboarding/assessments";
+window.location.href = dest;
+```
+
+`LoginApiResponse` interface updated to include `assessment_status: string` in the user object.
+
+---
+
+## 2. Auth Helpers
+
+**File:** `lib/auth.ts`
+
+Added `setAssessmentStatus(newStatus: string)` — updates `assessment_status` inside the `royal_hrms_user` cookie so the proxy stops redirecting after all assessments are complete.
 
 #### File structure:
 ```
@@ -765,1087 +685,450 @@ interview-list/
 Shared utility for building branded email HTML previews in the browser — mirrors `_company_email_wrapper` in the backend.
 
 ```typescript
-export interface CompanyInfo {
-  company_name: string; logo: string; logo_url: string;
-  website: string; official_phone: string;
-  address: string; city: string; state: string;
-}
-export function renderTemplateVars(text: string, vars: Record<string, string>): string
-export function buildEmailPreview(body: string, company: CompanyInfo | null): string
-// Header: logo only (falls back to company name text if no logo); Footer: website | city, state
-```
-
-Used by both `MarkCandidateModal` (interview list) and `HRDecisionModal` (candidate review).
-
-### 5. `HRDecisionModal.tsx` — Company Branding Added
-
-- Added `company: CompanyInfo | null` state
-- Fetches company info in parallel with templates via `Promise.all`
-- Replaced inline `renderPreview` with `buildEmailPreview(body, company)` from `lib/emailPreview.ts`
-- iframe height 340px, modal maxWidth 700px
-
-### 6. `lib/api/endpoints.ts` — emailTemplates moved
-
-`emailTemplates` endpoint moved from `API.recruitment` to `API.settings`:
-```typescript
-settings: {
-  audit:          "/settings/audit/",
-  company:        "/settings/company/",
-  emailTemplates: "/settings/email-templates/",   // ← moved here
-},
-// API.recruitment.emailTemplates removed
-```
-
-**Why:** Accounts app owns the `EmailTemplate` model and its CRUD endpoint. Recruitment app was maintaining a duplicate read endpoint. Single source of truth — all consumers now use `API.settings.emailTemplates`.
-
-### Key Files Changed / Created
-
-| File | Change |
-|------|--------|
-| `lib/api/endpoints.ts` | `emailTemplates` moved from `recruitment` to `settings` |
-| `lib/emailPreview.ts` | **NEW** — `buildEmailPreview`, `renderTemplateVars`, `CompanyInfo` |
-| `app/dashboard/interview-list/_data.ts` | Added `Branch`, `is_active` on `EmailTemplate`, branch list param, `emailTemplates` → `API.settings` |
-| `app/dashboard/interview-list/page.tsx` | Refactored 482 → 245 lines; branch filter dropdown; branch table column; dynamic subtitle/empty state |
-| `app/dashboard/interview-list/AddCandidateModal.tsx` | **NEW** (extracted) — branch required dropdown, validation, submit |
-| `app/dashboard/interview-list/MarkCandidateModal.tsx` | **NEW** (extracted) — template picker, live preview iframe, `buildEmailPreview` |
-| `app/dashboard/interview-list/LogsModal.tsx` | **NEW** (extracted) — no logic changes |
-| `app/dashboard/candidate-review/HRDecisionModal.tsx` | Company info fetch, `buildEmailPreview` from shared utility |
-
-### Notes for Next Developer
-
-- **Email preview and actual sent emails must stay in sync** — when editing the branding in `_company_email_wrapper` (`backend/apps/accounts/utils.py`), mirror the same change in `buildEmailPreview` (`frontend/lib/emailPreview.ts`).
-- **Template slugs matter** — `MarkCandidateModal` pre-selects `selection` / `rejection`. These slugs must exist in `EmailTemplate` DB records with `is_active=True`. If you add new default slugs, update the modal default.
-- **Branch filter uses `page_size=100`** — assumes no company will have more than 100 active branches. Increase if needed.
-- **`emailTemplates()` returns grouped data** — `Record<string, EmailTemplate[]>`. Always flatten before use: `([] as EmailTemplate[]).concat(...Object.values(grouped)).filter(t => t.is_active)`.
-- **API.recruitment.emailTemplates is gone** — any code referencing it will break; use `API.settings.emailTemplates` instead.
-
----
-
-## Session 5b — Rithwika (26 June 2026)
-
-**Branch:** `Frontend/responsiveness`
-
----
-
-### 1. Login Page — Full Redesign & CSS Migration (`app/login/page.tsx`)
-
-Rewrote the login page from scratch to match the reference design and fix a critical mobile bug.
-
-**Bug fixed — Sign In button invisible on iPhone SE (375×667)**
-- Root cause: `justify-content: center` on a flex container with `overflow: hidden` clips overflowing bottom content. On small viewports the Sign In button was below the fold and inaccessible.
-- Fix: switched mobile layout to `justify-content: flex-start` with `padding-top` on the inner wrapper, allowing natural scroll without clipping.
-
-**Design implemented (reference image):**
-- Crown icon (`👑`) in a soft navy box
-- "Welcome back" heading + subtitle
-- Email field, Password field with eye toggle
-- Password label row — label left, "Forgot password?" right
-- Full-width dark navy Sign In button
-- Footer text
-
-**Two-column desktop / single-column mobile layout:**
-- Desktop: CSS grid `1.2fr 1fr` — decorative image left, form right
-- Mobile (`≤ 768px`): image panel hidden, form takes full screen with natural scroll (`min-height: 100svh`)
-
-**Inline CSS eliminated:** Every `style={{}}` object replaced with a named CSS class in `globals.css`. Zero inline styles remain in `page.tsx`.
-
----
-
-### 2. ForgotPasswordForm — Full Rewrite (`components/auth/ForgotPasswordForm.tsx`)
-
-Replaced Tailwind arbitrary-value const strings with guaranteed CSS classes.
-
-**Problem:** `inputCls` and `submitCls` const strings contained arbitrary Tailwind values (`border-[1.5px]`, `py-[14px]`, `bg-[#1e4e8c]`, `rounded-[var(--radius-lg)]`). Tailwind v2 without JIT mode purges these because they are defined in `const` strings, not directly on JSX elements — so inputs and buttons were rendering unstyled.
-
-**Fix:** Replaced `inputCls` → `className="login-input"` and `submitCls` → `className="login-submit-btn"` using the guaranteed CSS classes already defined in `globals.css`.
-
-**Multi-step flow (unchanged functionally):**
-1. `email` step — enter registered email → sends OTP
-2. `otp` step — verify 6-digit code
-3. `reset` step — set + confirm new password
-4. `done` step — success state with Back to Sign In button
-
-All three form handlers updated from deprecated `React.FormEvent` → `React.SyntheticEvent<HTMLFormElement>`.
-
----
-
-### 3. CSS Classes Added to `app/globals.css`
-
-#### Login page layout classes (all new)
-
-| Class | Purpose |
-|-------|---------|
-| `.login-page-root` | Root container — desktop: `100vh` locked; mobile: natural scroll |
-| `.login-layout` | CSS grid — desktop: `1.2fr 1fr`; mobile: single column |
-| `.login-image-panel` | Left decorative image panel — hidden on mobile |
-| `.login-form-panel` | Right form panel — `justify-content: center` desktop; `flex-start` mobile |
-| `.login-form-inner` | Inner form wrapper — `max-width: 400px`, centered |
-| `.login-input` | Input field — `1.5px` border, CSS variable border color, focus state |
-| `.login-input-pwd` | Password input — adds `padding-right: 46px` for eye toggle |
-| `.login-submit-btn` | Sign In button — `#1e4e8c` background, hover/disabled states |
-| `.forgot-back-btn` | "Back to Sign In" bordered button |
-| `.forgot-back-arrow` | Arrow icon inside back button |
-
-#### Login element classes (moved from inline styles)
-
-| Class | Replaces |
-|-------|---------|
-| `.login-brand-wrap` | Crown icon flex wrapper |
-| `.login-brand-icon` | Crown icon box (56×56, rounded, navy tint bg) |
-| `.login-title` | `<h2>` — 24px, bold, centered |
-| `.login-subtitle` | Subtitle `<p>` — 13px, muted |
-| `.login-error-banner` | Error alert row |
-| `.login-field` | Email field wrapper (margin-bottom: 16px) |
-| `.login-field-pwd` | Password field wrapper (margin-bottom: 24px) |
-| `.login-label` | Input label — 14px, medium weight |
-| `.login-label-row` | Label + "Forgot password?" flex row |
-| `.login-forgot-btn` | "Forgot password?" text button |
-| `.login-pwd-wrap` | `position: relative` wrapper for password + toggle |
-| `.login-pwd-toggle` | Eye toggle — absolute positioned inside input |
-| `.login-image` | `object-fit: cover` on the Next.js Image |
-| `.login-footer-text` | Footer caption — 11px, centered |
-| `.login-spinner` | Animated spinner inside Sign In button |
-
-#### Announcement layout classes (all new)
-
-| Class | Purpose |
-|-------|---------|
-| `.ann-filter-bar` | Category filter tab bar — flex, wraps on mobile |
-| `.ann-cards-list` | Announcement cards flex column |
-| `.ann-card-body` | Card inner padding (16px 20px) |
-| `.ann-card-footer` | Reactions / views footer row |
-| `.ann-pagination` | Pagination row — space-between; wraps + centers on mobile |
-| `.ann-pagination-info` | "Page X of Y" text |
-| `.ann-page-btns` | Prev / numbered / Next button row |
-
-#### Responsive section additions (`@media max-width: 768px`)
-
-| Selector | What changes |
-|----------|-------------|
-| `.card-header` | `flex-wrap: wrap; gap: 10px` — filter bar drops below title |
-| `.card-header .filter-bar` | `width: 100%; flex-wrap: wrap` — full width on mobile |
-| `.card-header .filter-bar select` | `flex: 1; width: auto !important` — overrides inline `width: 140` |
-| `.card-header .filter-bar .search-bar` | `flex: 1; min-width: 0` |
-| `.ann-filter-bar .btn` | `flex: 1; min-width: 80px; justify-content: center` |
-| `.ann-pagination` | `justify-content: center` |
-| `.page-actions` | Added `flex-wrap: wrap` so Back + primary button never overflow |
-
----
-
-### 4. Announcements Page — Inline Styles → CSS Classes (`app/dashboard/announcements/page.tsx`)
-
-Replaced three `style={{}}` blocks with named CSS classes per CLAUDE.md hybrid model:
-
-| Before | After |
-|--------|-------|
-| `style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:20 }}` | `className="ann-filter-bar"` |
-| `style={{ display:"flex", flexDirection:"column", gap:16 }}` | `className="ann-cards-list"` |
-| `style={{ display:"flex", justifyContent:"space-between", … }}` | `className="ann-pagination"` + `"ann-pagination-info"` + `"ann-page-btns"` |
-
----
-
-### 5. Email Templates — Button Order Fix (`app/dashboard/settings/email-templates/page.tsx`)
-
-Fixed button order in the page header actions bar to match the project-wide convention:
-
-```
-Before: [ Add Template ]  [ Back ]
-After:  [ Back ]  [ Add Template ]
-```
-
----
-
-### Mobile Responsiveness Coverage (26 June 2026)
-
-Pages confirmed responsive after this session's CSS additions:
-
-| Page | Responsive via |
-|------|---------------|
-| Login | `.login-page-root` / `.login-layout` mobile overrides (768px + 400px) |
-| Dashboard | `.stats-grid`, `.module-grid`, `.dash-greeting` — existing rules |
-| Announcements | `.ann-filter-bar`, `.ann-cards-list`, `.ann-pagination` (new); `.stats-grid`, `.page-header` (existing) |
-| Interview List | `.table-wrap` overflow-x scroll, `.filter-bar`, `.card-header` stacking (new) |
-| Candidate Review | `.grid-2`, `.stats-grid`, `.accordion-*` — existing rules |
-| Email Logs | `.page-header`, `.empty-state` — existing rules |
-| Employees | Tailwind `flex-wrap` on filter bar + `overflow-x-auto` on table wrapper |
-| Branches | Delegates to `BranchManagement` component with responsive CSS |
-| Settings — Company | `.form-row.cols-2/3` → 1-col, existing rules |
-| Settings — Departments | Two-panel mobile nav from Session 3 (unchanged) |
-| Settings — SMTP | `grid-cols-1 lg:grid-cols-2` + `.smtp-form-grid` from Session 3 |
-| Settings — Email Templates | `et-cards-grid` responsive + button order fixed this session |
-| Settings — Audit | `.card-header` stacking (new), filter form wraps via `flex-wrap` |
-
----
-
-### Key Files Changed (26 June 2026)
-
-| File | Change |
-|------|--------|
-| `app/login/page.tsx` | Full redesign — zero inline styles, all CSS classes, mobile-safe layout |
-| `components/auth/ForgotPasswordForm.tsx` | Replaced Tailwind arbitrary-value consts with `.login-input` / `.login-submit-btn` CSS classes |
-| `app/globals.css` | 28 new CSS classes (login element + announcement layout); responsive section extended |
-| `app/dashboard/announcements/page.tsx` | 3 inline flex style blocks replaced with CSS classes |
-| `app/dashboard/settings/email-templates/page.tsx` | Button order: Back first, Add Template second |
-
----
-
-## Session 6 — Rithwika (29 June 2026)
-
-**Branch:** `frontend/expenses`
-
----
-
-### 1. Organisation Chart — New Static Page (`app/dashboard/org-chart/`)
-
-Full static org-tree page at `/dashboard/org-chart`.
-
-#### File structure
-```
-org-chart/
-  page.tsx                  ← server component — auth guard → renders OrgChartClient
-  _components/
-    OrgChartClient.tsx      ← tree UI with CSS connector lines
-```
-
-#### Features
-- Root node: Managing Director "Sunil Varghese"
-- Four department columns: HR · Engineering · Finance · IT, each with head card + team-members card
-- Horizontal connector lines built with absolute-positioned divs using `left: isFirst ? "50%" : 0` / `right: isLast ? "50%" : 0` — no JavaScript measurement required
-- `overflow-x: auto` wrapper + `minWidth: 640px` inner container for small screens
-- `.org-mobile-hint` alert banner hidden by default, shown via injected `<style>` on `@media (max-width: 639px)`
-- Auth guard: `getSession()` → redirects to `/login` if unauthenticated
-
-#### Key CSS technique — sibling connector bar
-```tsx
-<div style={{
-  position: "absolute", top: 0,
-  left:  isFirst ? "50%" : 0,
-  right: isLast  ? "50%" : 0,
-  height: 1, background: "var(--outline-v)",
-}} />
-```
-This produces a continuous horizontal line connecting sibling nodes without knowing parent width at render time.
-
----
-
-### 2. Expense Claims — New Static Page (`app/dashboard/expenses/`)
-
-Full static expense management page at `/dashboard/expenses`.
-
-#### File structure
-```
-expenses/
-  page.tsx                       ← server component — auth guard → renders ExpenseClaims
-  _components/
-    ExpenseClaims.tsx            ← main list + filters + approve/reject flow
-    ExpenseFormModal.tsx         ← "New Expense" submission form
-    ExpenseConfirmModal.tsx      ← approve / reject confirmation dialog
-```
-
-#### Static data (6 expenses totalling ₹67,400)
-| Employee | Branch | Category | Amount | Status |
-|----------|--------|----------|--------|--------|
-| Arjun Mehta | Mumbai | Travel | ₹18,500 | Approved |
-| Arjun Mehta | Mumbai | Meals | ₹6,240 | Approved |
-| Priya Sharma | Bangalore | Equipment | ₹14,999 | Pending |
-| Suresh Kumar | Delhi | Equipment | ₹1,850 | Pending |
-| Meena Iyer | Chennai | Travel | ₹22,300 | Approved |
-| Kavitha Rajan | Hyderabad | Meals | ₹3,511 | Rejected |
-
-#### `ExpenseClaims.tsx` features
-- **Stats row** — Total Claims · Pending (with ₹ sub-value) · Approved (with ₹ sub-value) · Total Amount (auto-formatted with K/L suffix)
-- **Branch dropdown** (`page-actions`, before "+ New Expense" button) — "All Branches" default + per-branch options; two-level filter: branch → category tab
-- **Category filter tabs** — All Claims · Travel · Meals · Equipment · Other; uses `.filter-scroll` class for horizontal scroll on mobile
-- **Approve/Reject buttons** — 36×36 green/red buttons on pending rows; clicking opens a confirmation modal that updates local state on confirm
-- New expenses submitted via form are appended to state (persists for the session)
-
-#### `ExpenseFormModal.tsx` fields
-- Expense Title (required), Amount ₹ (required), Category select (required), Date (required), Description textarea, Receipt upload zone (PDF/JPG/PNG ≤ 5 MB)
-- Blue info banner: "Your expense will be sent to your manager for approval…"
-- Backdrop blur via `.modal-overlay.open` (`backdrop-filter: blur(2px)`)
-
-#### `ExpenseConfirmModal.tsx`
-- Props: `type: "approve" | "reject"`, `expense`, `onConfirm`, `onCancel`
-- Shows expense title + amount in a summary card
-- `btn-success` for approve, `btn-danger` for reject
-
----
-
-### 3. All Branches Filter — Expense Claims
-
-The existing `ExpenseClaims.tsx` was updated to add branch-level filtering.
-
-- `BRANCHES = ["Mumbai", "Bangalore", "Delhi", "Chennai", "Hyderabad"]`
-- Each expense now carries a `branch` field
-- `activeBranch` state drives the first filter layer; category tab drives the second
-- Branch dropdown placed in `.page-actions` **before** the "+ New Expense" button, per the design spec ("that field must be in top before Search anything field")
-- On mobile, `.page-actions` `flex-wrap: wrap` stacks the dropdown and button vertically, each at full width (`flex: 1` via global CSS rule)
-
----
-
-### 4. Royal HRMS Logo — SVG Icon + Wired Application-Wide
-
-**Problem:** The sidebar showed a generic `ti-building-skyscraper` icon; the login page showed a `👑` crown emoji; the browser tab showed the default Next.js favicon.
-
-**Solution:** Created a bespoke SVG logo and wired it in three locations + the favicon.
-
-#### `public/logo.svg` (NEW)
-- Dark navy background (`#0c1a2e`) with rounded rect (`rx="18"`)
-- Blue circular ring (the "O" concept from the Royal HRMS brand, `stroke: #2d6bc9`)
-- Three human figures: centre person (head + body in `#5b86c9`) with gold tie polygon (`#c99a2e`); two flanking figures (`#1e4e8c`, 90% opacity)
-- Gold accent bar at the bottom (`#c99a2e`)
-- Renders cleanly at 30×30 (sidebar icon), 42×42 (login brand icon), 16×16 (favicon)
-
-#### Wiring changes
-| Location | Before | After |
-|----------|--------|-------|
-| `components/dashboard/DashboardShell.tsx` | `<div class="bg-primary"><i class="ti ti-building-skyscraper"/></div>` | `<img src="/logo.svg" width={30} height={30} style={{ borderRadius: 6 }}>` |
-| `app/login/page.tsx` | `<div class="login-brand-icon">👑</div>` | `<div class="login-brand-icon"><img src="/logo.svg" width={42} height={42} style={{ borderRadius: 10 }}></div>` |
-| `app/layout.tsx` | No favicon defined | `icons: { icon: "/logo.svg", apple: "/logo.svg" }` in metadata |
-
-> **Note:** `<img>` is used instead of Next.js `<Image>` for SVG — Next.js image optimisation does not benefit SVGs and requires additional configuration. Plain `<img>` with a `/public` path works without any config change.
-
----
-
-### 5. Mobile Responsiveness — Global CSS Additions (`app/globals.css`)
-
-Three improvements added to the responsive section.
-
-#### `.filter-scroll` (new class — always-on)
-For filter bars with 4+ icon+text buttons that would otherwise be squished by `flex: 1` on mobile.
-
-```css
-.filter-scroll {
-  overflow-x: auto;
-  flex-wrap: nowrap !important;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 3px;
-  scrollbar-width: none;
-}
-.filter-scroll::-webkit-scrollbar { display: none; }
-.filter-scroll .btn {
-  flex-shrink: 0 !important;
-  flex: none !important;
-  white-space: nowrap;
-}
-```
-
-Used on: `ExpenseClaims.tsx` category filter bar (5 icon+text buttons).
-
-#### `page-actions select` on mobile (`@media max-width: 768px`)
-```css
-.page-actions select { flex: 1; min-width: 0; width: auto; }
-```
-Makes branch dropdowns inside `.page-actions` expand to fill available width alongside buttons — consistent with the existing `.page-actions .btn { flex: 1 }` rule.
-
-#### Bottom-sheet modals at `@media max-width: 480px`
-```css
-.modal { width: 100vw; max-height: 96vh; border-bottom-left-radius: 0; border-bottom-right-radius: 0; align-self: flex-end; }
-.modal-overlay.open { align-items: flex-end; }
-```
-On very small phones modals slide up from the bottom (native sheet pattern) instead of floating centred — avoids the modal being clipped by the virtual keyboard.
-
----
-
-### Key Files Changed / Created (29 June 2026)
-
-| File | What |
-|------|------|
-| `public/logo.svg` | **NEW** — Royal HRMS SVG icon (navy, three-person HR emblem, gold tie + bar) |
-| `app/layout.tsx` | Added `icons: { icon, apple }` to metadata for SVG favicon |
-| `app/login/page.tsx` | Replaced `👑` crown with `<img src="/logo.svg">` inside `.login-brand-icon` |
-| `components/dashboard/DashboardShell.tsx` | Replaced `ti-building-skyscraper` icon div with `<img src="/logo.svg">` at 30×30 |
-| `app/dashboard/org-chart/page.tsx` | **NEW** — auth-guarded server component |
-| `app/dashboard/org-chart/_components/OrgChartClient.tsx` | **NEW** — static org tree with CSS connector lines, overflow-x scroll, mobile hint |
-| `app/dashboard/expenses/page.tsx` | **NEW** — auth-guarded server component |
-| `app/dashboard/expenses/_components/ExpenseClaims.tsx` | **NEW** — stats, branch dropdown, category filter-scroll, list with approve/reject, 6 static expenses |
-| `app/dashboard/expenses/_components/ExpenseFormModal.tsx` | **NEW** — new expense submission form with receipt upload + info banner |
-| `app/dashboard/expenses/_components/ExpenseConfirmModal.tsx` | **NEW** — approve/reject confirmation dialog |
-| `app/globals.css` | Added `.filter-scroll`; `page-actions select → flex:1` on mobile; bottom-sheet modals at ≤480px |
-
----
-
-### Notes for Next Developer
-
-- **Org chart is fully static** — wire up to a real org API when available. The `DEPARTMENTS` array in `OrgChartClient.tsx` is the single source of truth.
-- **Expenses are fully static** — `INITIAL_EXPENSES` in `ExpenseClaims.tsx` carries all mock data. When wiring to the backend, replace state with `useFetch(API.expenses.list)` and call the PATCH endpoint on approve/reject.
-- **Branch filter is client-side only** — branches come from the `branch` field on each expense object. When backend is wired, pass `branch` as a query param to the list endpoint instead of filtering in the client.
-- **`.filter-scroll` class** — add this alongside `.filter-bar` on any filter bar that has 4+ icon+text buttons. Do not apply to bars with plain-text buttons (those wrap fine with `flex: 1`).
-- **Logo file is `/public/logo.svg`** — if the team later replaces it with a PNG (`logo.png`), update the three `src="/logo.svg"` references in `DashboardShell.tsx`, `login/page.tsx`, and `layout.tsx` metadata accordingly.
-
----
-
-## Session 7 — Surya (29 June 2026)
-
-**Branch:** `demo` (direct — built on top of `66059f1`)
-**Commit:** `66059f1`
-
----
-
-### Candidate-to-Employee Onboarding Wizard — Full Stack
-
-End-to-end recruitment → onboarding → employee conversion flow. Every user (new or existing) must complete an onboarding wizard on first login. System admin accounts are auto-completed.
-
----
-
-### 1. Backend — Models (`backend/apps/accounts/models.py`)
-
-- **`User.onboarding_status`** — new field: `pending` (default) / `submitted` / `complete`. All existing users get `pending` on migration; system_admin and superusers get `complete`.
-- **`EmployeeProfile`** — OneToOne to User (`db_table='hrms_employee_profiles'`). Stores personal, education, experience, bank, emergency contact details. IFSC validated to 11 chars, account_number digits-only, year 1950–2099.
-- **`EmployeeDocument`** — FK to User (`db_table='hrms_employee_documents'`). Fields: `document_type` (pan_card/aadhaar_card/degree_certificate/experience_letter), `file`, `file_name`, `uploaded_at`. Validates: PDF/JPG/PNG only, max 5 MB, filename sanitised via `os.path.basename`.
-
-### 2. Backend — Recruitment Model (`backend/apps/recruitment/models.py`)
-
-- **Pipeline stages expanded:** `pending → screening → interview_scheduled → interview_done → selected → offer_sent → rejected → converted`
-- **`portal_user`** — ForeignKey to User (`null=True`), links the candidate to their created portal account.
-- **`portal_credentials_sent`** — BooleanField, set to True when portal login is issued.
-
-### 3. Backend — Migrations
-
-| Migration | What |
-|-----------|------|
-| `accounts/0021_onboarding_models.py` | Schema: `onboarding_status` on User; `EmployeeProfile`; `EmployeeDocument` |
-| `accounts/0022_seed_system_admin_onboarding.py` | Data: set `onboarding_status='complete'` for system_admin + superusers |
-| `accounts/0023_onboarding_permission_and_portal_template.py` | Data: creates `onboarding.approve` permission; assigns to `hr_admin` + `system_admin`; seeds `portal_invite` email template |
-| `recruitment/0003_candidate_portal_user.py` | Schema: adds `portal_user` FK + `portal_credentials_sent` + new pipeline statuses |
-
-### 4. Backend — New Views (`backend/apps/accounts/views.py`)
-
-| View | Method | Permission | What |
-|------|--------|------------|------|
-| `EmployeeProfileView` | GET/PATCH | IsAuthenticated | Get or partial-update own profile. Blocked if `onboarding_status='complete'` |
-| `EmployeeDocumentView` | GET/POST | IsAuthenticated | List own docs. POST replaces existing doc of same type |
-| `SubmitOnboardingView` | POST | IsAuthenticated | Sets `onboarding_status='submitted'` |
-| `OnboardingApprovalsListView` | GET | `onboarding.approve` | Paginated list of users with `onboarding_status='submitted'`. `hr_admin` excludes other hr_admins and system_admins |
-| `OnboardingApproveView` | POST | `onboarding.approve` | Approve (sets `complete`, auto-converts candidate → employee if no role/employee_id) or reject (resets to `pending`) |
-
-**Auto-conversion logic (on approve):**
-```python
-needs_conversion = not target.role and not target.employee_id
-if needs_conversion:
-    target.role        = Role.objects.get(name='employee')
-    target.employee_id = EmployeeCodeSettings.generate_employee_id()
-    target.date_of_joining = tz.now().date()
-```
-Also sets linked `Candidate.status='converted'` and `hr_approved=True`.
-
-### 5. Backend — `SendPortalLoginView` (`backend/apps/recruitment/views.py`)
-
-New view at `POST /recruitment/candidates/<pk>/send-portal-login/`.
-
-- Requires `recruitment.edit` permission
-- Candidate must be at `selected` or `interview_done` status
-- Creates `User` with 12-char temp password (`secrets.choice`), `must_change_password=True`, `onboarding_status='pending'`
-- Sets `candidate.portal_user`, `portal_credentials_sent=True`, `status='offer_sent'`
-- Sends `portal_invite` email template with: `candidate_name`, `position`, `company_name`, `login_email`, `temp_password`, `portal_url`
-
-### 6. Backend — New URL Routes
-
-```python
-# accounts/urls.py
-path('onboarding/profile/',                           EmployeeProfileView.as_view())
-path('onboarding/documents/',                         EmployeeDocumentView.as_view())
-path('onboarding/submit/',                            SubmitOnboardingView.as_view())
-path('onboarding/approvals/',                         OnboardingApprovalsListView.as_view())
-path('onboarding/approvals/<uuid:user_id>/approve/',  OnboardingApproveView.as_view())
-
-# recruitment/urls.py
-path('candidates/<int:pk>/send-portal-login/',        SendPortalLoginView.as_view())
-```
-
-### 7. Frontend — Onboarding Wizard (`frontend/app/onboarding/page.tsx`)
-
-Standalone 5-tab wizard at `/onboarding` (outside dashboard layout).
-
-| Tab | Fields |
-|-----|--------|
-| Personal | DOB, Gender, Marital Status, Father Name, Blood Group, Current + Permanent Address |
-| Education & Experience | Qualification, Specialization, Institution, Year, Total Experience, Prev Employer, Designation, Leaving Reason |
-| Bank Details | Account Holder, Account Type, Account Number, IFSC, Bank Name, Branch Name |
-| Emergency Contact | Name, Relationship, Phone, Email |
-| Documents | PAN Card, Aadhaar Card, Degree Certificate, Experience Letter — PDF/JPG/PNG ≤5 MB each |
-
-- **Save & Continue** — PATCHes `/onboarding/profile/` on every tab advance
-- **Save Draft** — saves without advancing
-- **Submit for Approval** — POSTs `/onboarding/submit/` then calls `setOnboardingStatus('submitted')` to update the cookie
-- **Submitted screen** — shows if `onboarding_status === 'submitted'`, blocks re-submission
-- CSS classes: `.onboarding-root`, `.onboarding-header`, `.onboarding-steps`, `.onboarding-step--active`, `.onboarding-step--done`, `.onboarding-card`, `.field-group-row`
-
-### 8. Frontend — Onboarding Approvals Queue (`frontend/app/dashboard/onboarding-approvals/page.tsx`)
-
-Visible only to `hr_admin` and `system_admin` (gated by `onboarding.approve` permission in both proxy and navConfig).
-
-- Uses `useFetch` hook for paginated list (`/onboarding/approvals/?page=N&page_size=20`)
-- Table: Name, Email, Role (badge), Branch, Docs uploaded count, Joined date, Review button
-- **Review drawer** — shows full profile (Personal, Education, Bank with account number masked to last 4 digits `••••XXXX`, Emergency Contact, Documents)
-- **Approve** → `POST /onboarding/approvals/<userId>/approve/` with `{ decision: "approve" }`
-- **Send Back for Corrections** → same endpoint with `{ decision: "reject" }`, remarks optional
-
-### 9. Frontend — `useFetch` Hook (`frontend/hooks/useFetch.ts`)
-
-**NEW** — required by CLAUDE.md but was missing from the codebase.
-
-```typescript
-export function useFetch<T>(url: string | null): { data: T | null; loading: boolean; error: string | null; refetch: () => void }
-```
-
-- Uses a `counter` ref to cancel stale responses (race condition safe)
-- Extracts from the standard API envelope (`r.data?.data ?? r.data`)
-- All pages that need polling should use this instead of `useState + useEffect + try/catch`
-
-### 10. Frontend — Interview List Updates (`frontend/app/dashboard/interview-list/`)
-
-**`_data.ts`:**
-- `CandidateStatus` expanded to 8 values: `pending | screening | interview_scheduled | interview_done | selected | offer_sent | rejected | converted`
-- `portal_user: string | null` added to `Candidate` interface
-- `sendPortalLogin(id)` added to `RECRUITMENT_API`
-
-**`page.tsx`:**
-- `STATUS_META` map — each status has a `label`, badge CSS class, and icon
-- Status filter dropdown shows all 8 pipeline stages
-- Actions column logic:
-  - Pre-selection stages (`pending/screening/interview_scheduled/interview_done`) → Select ✓ + Reject ✗ buttons
-  - `selected` + `portal_credentials_sent=false` → **Send Login** button (calls `sendPortalLogin`)
-  - `offer_sent` or `selected + credentials_sent` → "Login Sent" badge
-  - `converted` → "Employee" badge
-- Portal success/error banners dismiss with ✕
-
-### 11. Frontend — Auth + Proxy + Nav
-
-**`lib/auth.ts`:** Added `onboarding_status: string` to `UserInfo`; added `setOnboardingStatus(newStatus)` helper.
-
-**`lib/api/endpoints.ts`:** Added `recruitment.sendPortalLogin` and full `onboarding` section.
-
-**`proxy.ts`:** Onboarding gate — authenticated users with `onboarding_status !== 'complete'` are redirected to `/onboarding`; fully onboarded users redirected away from `/onboarding`. Fixed: unauthenticated users can no longer access `/onboarding` without login.
-
-**`lib/navConfig.ts`:** "Onboarding Queue" nav item added to HR Ops section, gated by `onboarding.approve`.
-
-**`app/login/page.tsx`:** After login, redirects to `/onboarding` if `onboarding_status !== 'complete'`, else `/dashboard`.
-
----
-
-### Full Flow
-
-```
-Candidate added → Mark Selected (email) → "Send Login" button → portal_invite email
-  → Candidate logs in → proxy redirects to /onboarding
-  → Fills 5-tab wizard → Submit for Approval
-  → Appears in HR's Onboarding Queue (/dashboard/onboarding-approvals)
-  → HR reviews + Approves
-  → Auto-converted: role='employee', employee_id generated, candidate.status='converted'
-  → onboarding_status='complete' → next login goes to /dashboard
-```
-
-Direct HR-created employees follow the same wizard flow. HR admin wizards must be approved by system_admin.
-
----
-
-### Key Files Changed / Created (Session 7)
-
-| File | What |
-|------|------|
-| `backend/apps/accounts/models.py` | `onboarding_status` on User; `EmployeeProfile`; `EmployeeDocument` |
-| `backend/apps/accounts/serializers.py` | `EmployeeProfileSerializer`, `EmployeeDocumentSerializer`, `OnboardingApprovalSerializer` |
-| `backend/apps/accounts/views.py` | 5 new onboarding views; login response includes `onboarding_status` |
-| `backend/apps/accounts/urls.py` | 5 onboarding routes |
-| `backend/apps/accounts/migrations/0021–0023` | Schema + seed migrations |
-| `backend/apps/recruitment/models.py` | 8-stage pipeline; `portal_user` FK; `portal_credentials_sent` |
-| `backend/apps/recruitment/views.py` | `SendPortalLoginView`; `CandidateStatusView` accepts all pipeline stages |
-| `backend/apps/recruitment/urls.py` | `send-portal-login` route |
-| `backend/apps/recruitment/migrations/0003` | Schema migration |
-| `frontend/app/onboarding/page.tsx` | **NEW** — 5-tab onboarding wizard |
-| `frontend/app/dashboard/onboarding-approvals/page.tsx` | **NEW** — approval queue with review drawer |
-| `frontend/hooks/useFetch.ts` | **NEW** — generic fetch hook with race-condition safety |
-| `frontend/app/dashboard/interview-list/_data.ts` | 8-stage `CandidateStatus`; `portal_user`; `sendPortalLogin` API |
-| `frontend/app/dashboard/interview-list/page.tsx` | `STATUS_META` badges; portal login button; full pipeline filter |
-| `frontend/lib/auth.ts` | `onboarding_status` in `UserInfo`; `setOnboardingStatus()` |
-| `frontend/lib/api/endpoints.ts` | `onboarding.*` endpoints; `recruitment.sendPortalLogin` |
-| `frontend/lib/navConfig.ts` | Onboarding Queue nav item |
-| `frontend/proxy.ts` | Onboarding gate; auth guard fix for `/onboarding` |
-| `frontend/app/login/page.tsx` | Post-login redirect honours `onboarding_status` |
-| `frontend/app/globals.css` | Onboarding wizard CSS classes |
-
----
-
-### Notes for Next Developer (Session 7)
-
-- **`onboarding_status` flows through a cookie** — the proxy reads from `royal_hrms_user` (unsigned). Bypassing the cookie only exposes an empty dashboard — all backend endpoints still check the real DB value.
-- **`portal_invite` template** — seeded in DB by migration 0023. Edit it in Settings → Email Templates if the wording needs to change. Variables: `candidate_name`, `position`, `company_name`, `login_email`, `temp_password`, `portal_url`.
-- **`onboarding.approve` permission** — seeded in migration 0023, assigned to `hr_admin` and `system_admin`. Do not remove it — the nav item and all 5 onboarding endpoints check for it.
-- **Approval chain** — `hr_admin` can only approve users with no role or with `role='employee'`. `system_admin` can approve anyone including `hr_admin`. This is enforced in `OnboardingApproveView`.
-- **Employee ID generation** — uses `EmployeeCodeSettings.generate_employee_id()`. Ensure `EmployeeCodeSettings` record exists in Settings → Employee Code before approving the first candidate.
-- **`useFetch` hook** — all new pages that need data fetching must use `useFetch` from `hooks/useFetch.ts`. Never write `useState + useEffect + try/catch` in page components.
-- **Server-side migrations needed on deploy** — run `python manage.py migrate` after pulling. Migrations 0021, 0022, 0023 (accounts) and 0003 (recruitment) must all apply cleanly.
-
----
-
-## Leave Management Module (29 June 2026)
-
-**Branch:** `LEAVE`
-
-✅ Completed Leave Management module.
-✅ Developed all Leave Management screens.
-✅ Implemented Leave Dashboard.
-✅ Completed Apply Leave workflow.
-✅ Developed Approvals, Leave Balance, and Holiday Calendar.
-✅ Added Analytics and Audit Log screens.
-✅ Implemented Leave Settings and Policy configuration.
-✅ Module is ready for QA/testing.
-## Session 6 — Safura Samreen (29 June 2026)
-
-**Branch:** `Frontend/Employee_Onboarding`
-
----
-
-### 1. Onboarding Page — Candidate Review Stage Removed (`app/dashboard/candidate-review/page.tsx`)
-
-The onboarding page previously had two stages: a "candidate review" stage and an "onboarding approvals" stage. The candidate-review stage and its API call (`RECRUITMENT_API.reviewList`) were fully removed.
-
-- Page now only fetches `GET /api/onboarding/approvals/`
-- Page title changed to "Onboarding Approvals"
-- `handleOnboardingAction` updated to accept optional `extras?: { department: string; designation: string }` and forward them to `POST /api/onboarding/approve/{userId}/`
-- No review-stage state, no review API call remains
-
----
-
-### 2. Onboarding Drawer — Inline Dept/Designation Assignment on Approval (`app/dashboard/candidate-review/_components/OnboardingDrawer.tsx`)
-
-**Feature:** When the HR admin clicks "Approve & Activate ✓", instead of immediately calling the API, the drawer reveals an inline "Assign Role" panel at the bottom of the existing content. The footer button changes to "Confirm & Activate". Clicking "Send Back for Corrections" still works independently at any point.
-
-**Implementation:**
-- Added state: `showAssign`, `depts`, `desigs`, `selDept`, `selDesig`, `loadDepts`, `assignErr`
-- `onAction` prop type extended: `(userId, decision, extras?) => void`
-- Departments fetched from `GET /api/departments/?page_size=100` when `showAssign` becomes true (handles both paginated `{ results: [...] }` and flat array responses)
-- Designations fetched from `GET /api/designations/?page_size=100`, filtered client-side by `department_name === selDept`
-- Both fields required before submit — shows inline error if either is missing
-- Footer: "Send Back for Corrections" (reject, always visible) / "Approve & Activate ✓" → "Confirm & Activate" (approve, two-step)
-
----
-
-### 3. Employee Profile — Department & Designation Editable (`app/dashboard/employees/_data.ts`)
-
-Added `department` and `designation` as the first two fields in the `personal` `PROFILE_SECTION` definition so they appear in the Personal tab of the employee profile and are editable there.
-
-```typescript
-{ key: "department",  label: "Department",  type: "text", required: true, placeholder: "e.g. Engineering" },
-{ key: "designation", label: "Designation", type: "text", required: true, placeholder: "e.g. Software Engineer" },
-```
-
-Both fields were already mapped in `apiToEmployee` via `details.department` and `details.designation` — no API change required.
-
----
-
-### 4. Employees List Page — Hydration Mismatch Fix (`app/dashboard/employees/page.tsx`)
-
-**Problem:** `getStoredUser()` reads `document.cookie`, which returns `null` during SSR. This caused `isAdmin` and `userBranch` to differ between server and client, triggering a React hydration mismatch error.
-
-**Fix:** Moved both values out of render-time into `useState` + `useEffect`:
-
-```typescript
-const [isAdmin,    setIsAdmin]    = useState(false);
-const [userBranch, setUserBranch] = useState("");
-useEffect(() => {
+export function setAssessmentStatus(newStatus: string) {
   const user = getStoredUser();
-  setIsAdmin(user?.role === "system_admin");
-  setUserBranch(user?.branch ?? "");
-}, []);
-```
-
----
-
-### 5. AddEmployeeModal — `depts.map is not a function` Fix (`app/dashboard/employees/_components/AddEmployeeModal.tsx`)
-
-**Problem:** Departments API returns a paginated envelope `{ count, results: [...] }`, not a flat array. Calling `.map` on the envelope object threw a runtime error.
-
-**Fix:** Updated the API call to access `.results`:
-
-```typescript
-clientApi.get<{ data: { results: ApiDept[] } }>(API.departments.list, { params: { page_size: 100 } })
-  .then(d => setDepts(d.data.data?.results ?? []))
-```
-
----
-
-### 6. HRDecisionModal — Email Template Dropdown Fix (`app/dashboard/candidate-review/HRDecisionModal.tsx`)
-
-Three fixes applied:
-
-**Response accessor** — Templates API returns `data.data.results` (not `data.data`). `results` is a grouped object `{ document: [...], notification: [...] }`.
-```typescript
-const grouped = tplRes.data?.data?.results ?? {};
-```
-
-**Grouped dropdown** — State changed from a flat `EmailTemplate[]` to `{ category: string; templates: EmailTemplate[] }[]`. Dropdown uses `<optgroup label="…">` per category.
-
-**Template variable keys** — `AUTO_KEYS` updated to uppercase to match the actual `{FULL_NAME}` syntax:
-```typescript
-const AUTO_KEYS = new Set(["FULL_NAME", "FNAME", "LNAME", "EMAIL", "POSITION", "COMPANY"]);
-```
-`previewVars()` now returns the correct uppercase-keyed dictionary so `renderTemplateVars` substitutes correctly.
-
----
-
-### 7. MarkCandidateModal — Same Three Fixes (`app/dashboard/interview-list/MarkCandidateModal.tsx`)
-
-Applied the same three fixes as HRDecisionModal:
-- `tplRes.data?.data?.results ?? {}` response accessor
-- Grouped state + `<optgroup>` dropdown
-- `AUTO_KEYS` set with uppercase variable names; `hasManualVars` check uses `.toUpperCase()` before comparing
-
----
-
-### 8. SMTP Settings — Paginated Response Fix (`app/dashboard/settings/smtp/page.tsx` + `_data.ts`)
-
-**Problem:** `GET /api/settings/smtp/` was returning a paginated envelope `{ count, page, results: [...] }` but the page was treating `data` as a flat array.
-
-**`_data.ts`:** Added `ApiSmtpResponse` interface with `count`, `page`, `page_size`, `total_pages`, `results: ApiSmtpEntry[]`. Added `smtp_type` and `smtp_type_display` to `ApiSmtpEntry`.
-
-**`page.tsx`:** Updated `loadData` to access `.results`:
-```typescript
-const envelope = res.data?.data as ApiSmtpResponse;
-setEntries(envelope?.results ?? []);
-```
-
----
-
-### 9. Email Templates Settings Page — Two Crash Fixes (`app/dashboard/settings/email-templates/page.tsx`)
-
-**Fix 1 — `toLowerCase` on undefined:** Some templates have `null` or `undefined` for `description`, `display_name`, or `template_type_display`. Added `?? ""` fallback on all three fields in the search filter:
-```typescript
-(t.display_name ?? "").toLowerCase().includes(q) ||
-(t.template_type_display ?? "").toLowerCase().includes(q) ||
-(t.description ?? "").toLowerCase().includes(q)
-```
-
-**Fix 2 — Templates not loading (wrong response accessor):** `loadData` was passing the full paginated envelope (`{ count, page, results: {...} }`) to `flattenTemplates`, which expected the grouped object `{ document: [...], notification: [...] }`. Fixed accessor:
-```typescript
-const envelope = res.data?.data;
-const grouped  = (envelope?.results ?? envelope) as ApiEmailTemplatesResponse;
-setTemplates(flattenTemplates(grouped));
-```
-
----
-
-### API Response Pattern (Key Rule for This Branch)
-
-All list endpoints return a paginated envelope:
-```json
-{ "count": N, "page": 1, "page_size": 20, "total_pages": M, "results": [...] }
-```
-Always access `.results` for the array. The email templates endpoint is special — its `results` is a **grouped object** `{ document: [...], notification: [...] }`, not a flat array.
-
----
-
-### Key Files Changed (29 June 2026)
-
-| File | Change |
-|------|--------|
-| `app/dashboard/candidate-review/page.tsx` | Removed review stage; only onboarding approvals; `handleOnboardingAction` accepts `extras` |
-| `app/dashboard/candidate-review/_components/OnboardingDrawer.tsx` | Inline dept/designation assignment panel; two-step approve flow; `onAction` prop extended |
-| `app/dashboard/employees/_data.ts` | Added `department` and `designation` fields to `personal` PROFILE_SECTION |
-| `app/dashboard/employees/page.tsx` | Fixed hydration mismatch — `isAdmin` and `userBranch` moved to `useState` + `useEffect` |
-| `app/dashboard/employees/_components/AddEmployeeModal.tsx` | Fixed paginated departments response — access `.results` not root |
-| `app/dashboard/candidate-review/HRDecisionModal.tsx` | Fixed template response accessor; grouped `<optgroup>` dropdown; uppercase AUTO_KEYS |
-| `app/dashboard/interview-list/MarkCandidateModal.tsx` | Same three fixes as HRDecisionModal |
-| `app/dashboard/settings/smtp/_data.ts` | Added `ApiSmtpResponse` (paginated); added `smtp_type` / `smtp_type_display` to `ApiSmtpEntry` |
-| `app/dashboard/settings/smtp/page.tsx` | Fixed `loadData` to access `.results` from paginated SMTP response |
-| `app/dashboard/settings/email-templates/page.tsx` | Fixed `toLowerCase` crash with `?? ""` fallbacks; fixed `loadData` to access `envelope.results` |
-
----
-
-### Notes for Next Developer (29 June 2026)
-
-- **Two-step approval flow** — "Approve & Activate" in `OnboardingDrawer` now reveals dept/desig selects inline. The `onAction` callback receives `extras: { department, designation }`. The parent page (`candidate-review/page.tsx`) forwards these as extra fields in the `POST /api/onboarding/approve/{userId}/` body.
-- **Any `getStoredUser()` call at render time will cause hydration mismatch** — always wrap in `useEffect`. This applies to any new page that reads user info from cookies.
-- **Departments and Designations APIs are paginated** — always pass `page_size=100` and access `.results`. Never treat the response root as an array.
-- **Email templates `results` is a grouped object, not an array** — use `flattenTemplates()` from `_data.ts` after accessing `.results`.
-- **Template variable names are UPPERCASE** — `{FULL_NAME}`, `{FNAME}`, `{LNAME}`, `{EMAIL}`, `{POSITION}`, `{COMPANY}`. Keep `AUTO_KEYS` in uppercase in any modal that uses `renderTemplateVars`.
-
----
-
-## Session 8 — Safura Samreen (30 June 2026)
-
-**Branch:** `demo`
-
----
-
-### 1. Employee Documents — Show Only API Documents
-
-- Removed the static placeholder document list (PAN Card, Aadhaar Card, etc.)
-- Added `ApiDocument` interface and `documents?: ApiDocument[]` to `ApiEmployee` in `[id]/page.tsx`
-- Added `fileUrl`, `fileName`, `fileSize` fields to `DocEntry` in `_data.ts`
-- Added `documents?: DocEntry[]` to `Employee` type in `_data.ts`
-- `buildDocEntries()` now maps only what the backend returns — no static base list merged in
-- Only uploaded documents appear; the count matches exactly what `GET /employees/{id}/` returns
-
----
-
-### 2. Document Preview Modal (same page, no new tab)
-
-- Clicking the eye icon on a document card opens a modal overlay on the same page
-- Images (PNG/JPG/etc.) rendered with `<img>`, PDFs with `<iframe>`
-- Modal closes on backdrop click or `Escape` key
-- Header shows document name, filename, and file size (`fmtBytes` helper)
-- Added `DocPreviewModal` component in `ProfileForm.tsx`
-- Added replace button (`ti-refresh`) on each uploaded document card (triggers hidden file input)
-- `isImage()` helper detects image vs PDF/other by filename extension
-
----
-
-### 3. Personal Section — Read-only + Editable Fields
-
-Updated `PROFILE_SECTIONS.personal` in `_data.ts`:
-- `Employee ID` (`code`), `First Name`, `Last Name` → `type: "readonly"` (disabled, styled blue/grey)
-- `Department`, `Designation`, `Role`, `Branch` → `type: "select"` with empty options (filled at runtime from API)
-- All other personal fields remain editable (DOB, gender, marital status, etc.)
-
----
-
-### 4. Dynamic Dropdowns from API
-
-Four dropdown lists fetched in parallel on page mount in `[id]/page.tsx`:
-
-| Field | Endpoint | Notes |
-|-------|----------|-------|
-| Department | `GET /departments/` | `.results[]` → `{ value: name, label: name }` |
-| Designation | `GET /designations/` | Flat array or paginated — handled with `Array.isArray` check; filtered client-side by selected department |
-| Role | `GET /roles/?page_size=100` | `.results[]`, `system_admin` excluded; uses `display_name` as value |
-| Branch | `GET /branch/branches/` | `.results[]` → `{ value: branch_name, label: branch_name }` |
-
-- Selecting a different department automatically resets and re-filters the Designation dropdown
-- Options injected via `fieldOptions: Record<string, FieldOption[]>` prop passed from `page.tsx` → `ProfileForm` → `FormField`
-- `FormField` merges `fieldOptions[field.key]` over the static `field.options` at render time
-
-**Bug fixed:** Designations endpoint returned paginated `{ results: [...] }` not a plain array — caused `allDesigs.filter is not a function`. Fixed with `Array.isArray` guard.
-
----
-
-### 5. Save → PUT to Backend
-
-- Save button calls `PUT /employees/{id}/` with: `department`, `designation`, `branch`, `role` (slug-mapped), `is_active`
-- Only the main employee endpoint is called — profile endpoint not triggered
-- `ROLE_SLUG` map converts display names (e.g. `"HR Admin"`) to backend slugs (e.g. `"hr_admin"`)
-- `is_active` derived from `employee.status !== "inactive"`
-- Save button shows spinner + "Saving…" while in flight, disabled to prevent double-submit
-- Green success banner on completion, red error banner on failure
-- `saving` and `saveError` states added to `EmployeeProfilePage`
-
----
-
-### Key Files Changed (30 June 2026)
-
-| File | Change |
-|------|--------|
-| `app/dashboard/employees/_data.ts` | `DocEntry` + `fileUrl/fileName/fileSize`; `Employee.documents`; Personal section fields updated to readonly/select |
-| `app/dashboard/employees/[id]/page.tsx` | `ApiDocument` interface; `buildDocEntries()`; dropdown option states + fetch effects; `fieldOptions` passed to `ProfileForm`; `onSave` → async PUT; `saving`/`saveError` states |
-| `app/dashboard/employees/[id]/_components/ProfileForm.tsx` | `liveDocuments` + `fieldOptions` + `saving` props; `DocPreviewModal` component; `DocsCards` replace button; dynamic field option merge |
-
----
-
-### Notes for Next Developer (30 June 2026)
-
-- **Designation filter is client-side** — all designations are fetched once and filtered by `department_name`. If departments/designations grow large, switch to a server-side query param (`?department=<name>`).
-- **`buildDocEntries()` maps API docs directly** — no static list. If the backend adds new document types they will appear automatically.
-- **`DocPreviewModal` handles images and PDFs** — detects by file extension. For other file types (DOCX, XLSX) it falls back to an iframe which may not render inline; extend `isImage()` or add a download fallback if needed.
-- **Role slugs** — `ROLE_SLUG` map in `page.tsx` must stay in sync with backend role names. If a new role is added in the backend, add its `display_name → slug` mapping there.
-- **`is_active` is required by the PUT endpoint** — always include it in the payload. Derived from `employee.status !== "inactive"`.
-
----
-
-## Session 9 — G. Durga Prasad (30 June 2026)
-
-**Branch:** `Employee_Onboarding`
-**Commits:** `be47e9e` · `6b6cea8`
-
----
-
-### 1. Employee Detail — Documents Included in Response
-
-`_get_employee()` now uses `prefetch_related('employee_documents')` and `_employee_dict()` builds a `documents` list in the response. Each document entry includes the Cloudinary URL. Frontend's `buildDocEntries()` in `[id]/page.tsx` maps these directly — no static base list.
-
-### 2. Employee Profile PUT Endpoint
-
-**Problem:** `PATCH /api/employees/<id>/` only handled `is_active` toggling. Sending `{ role, department, designation, branch }` returned `"Employee is already active."`.
-
-**Fix:** Added `PUT /api/employees/<id>/` to `EmployeeDetailView`.
-
-| Field | Behaviour |
-|---|---|
-| `role` | Looked up by `name` slug — 400 if slug missing |
-| `department` / `designation` / `branch` / `phone` / `full_name` | Plain strings, saved directly |
-| `date_of_joining` | `YYYY-MM-DD`, validated with `strptime` |
-
-- Only fields present in the request body are written (`update_fields` built dynamically)
-- `dict.fromkeys()` de-duplicates `update_fields` before `save()`
-- Re-fetches via `_get_employee()` after save so `role.display_name` is fresh
-- Writes `AuditLog` entry with `before/after` for every changed field
-- `PATCH` remains unchanged — `is_active` toggle only
-
-**Frontend note:** call `PUT /api/employees/<employee_id>/` for profile field edits; use `PATCH` only for activate/deactivate.
-
----
-
-## Session 10 — Surya (30 June 2026)
-
-**Branch:** `demo`
-
----
-
-### 1. Reporting Manager — Self-referential FK on User
-
-Added `reporting_manager` FK to the `User` model:
-
-```python
-reporting_manager = models.ForeignKey(
-    'self', on_delete=models.SET_NULL, null=True, blank=True,
-    related_name='direct_reports',
-)
-```
-
-**Backend changes:**
-- `models.py` — `reporting_manager` FK on `User`; new `ApprovalWorkflowRule` model (`db_table='hrms_approval_workflow_rules'`); new `EmployeeApprovalOverride` model (`db_table='hrms_employee_approval_overrides'`)
-- `migrations/0026_approval_matrix_reporting_manager.py` — covers all three schema additions
-- `views.py` — `_employee_dict` includes `reporting_manager_id` + `reporting_manager_name`; `_get_employee` and `EmployeeListCreateView.get` both use `select_related('reporting_manager')` (N+1 fix)
-- Three new views: `EmployeeReportingManagerView` (PATCH), `ApprovalWorkflowRuleView` (GET/PATCH), `EmployeeApprovalMatrixView` (GET/PATCH)
-- `urls.py` — 3 new routes added before the catch-all `<str:employee_id>/` pattern:
-  - `employees/<str:employee_id>/reporting-manager/`
-  - `employees/<str:employee_id>/approval-matrix/`
-  - `settings/approval-rules/`
-
-**Default workflow rules seeded on first GET** (`_ensure_default_rules`):
-
-| Workflow | L1 Approver Role | L2 Approver Role |
-|---|---|---|
-| Leave | Reporting Manager | HR Admin |
-| Expense | Reporting Manager | HR Admin |
-| Resignation | Reporting Manager | System Admin |
-| Loan | HR Admin | System Admin |
-
-**Frontend changes:**
-- `lib/api/endpoints.ts` — `employees.reportingManager(id)`, `employees.approvalMatrix(id)`, `settings.approvalRules`
-- `types/approvalMatrix.ts` — `ApprovalWorkflowType`, `ApproverRole`, `WorkflowMatrixRow`, `GlobalApprovalRule`
-- `app/dashboard/employees/[id]/_components/ReportingManagerCard.tsx` — shows current manager, search-as-you-type (2+ chars), PATCH on select, remove button; visible to `hr_admin` / `system_admin` only
-- `app/dashboard/employees/[id]/_components/ApprovalMatrixTab.tsx` — 4-row table (Leave / Expense / Resignation / Loan); per-row Override modal with separate L1/L2 employee search; PATCH on save
-- `app/dashboard/employees/[id]/page.tsx` — Profile tab now includes `<ReportingManagerCard>`; new Approval tab renders `<ApprovalMatrixTab>`
-- `app/dashboard/settings/approval-rules/page.tsx` — global default rules table; Edit modal with L1/L2 role dropdowns; PATCH on save
-- `app/dashboard/settings/page.tsx` — "Approval Rules" card added to settings grid
-
----
-
-### Key Files Changed (30 June 2026 — Session 10)
-
-| File | Change |
-|------|--------|
-| `backend/apps/accounts/models.py` | `reporting_manager` FK on `User`; `ApprovalWorkflowRule`; `EmployeeApprovalOverride` models |
-| `backend/apps/accounts/migrations/0026_…` | Schema migration for all three additions |
-| `backend/apps/accounts/serializers.py` | `ApprovalWorkflowRuleSerializer`, `ApprovalWorkflowRuleUpdateSerializer` |
-| `backend/apps/accounts/views.py` | `_employee_dict` + `select_related` fix; 3 new views + helper functions |
-| `backend/apps/accounts/urls.py` | 3 new URL patterns |
-| `frontend/lib/api/endpoints.ts` | `reportingManager`, `approvalMatrix`, `approvalRules` paths |
-| `frontend/types/approvalMatrix.ts` | **NEW** — approval matrix type definitions |
-| `frontend/app/dashboard/employees/[id]/_components/ReportingManagerCard.tsx` | **NEW** |
-| `frontend/app/dashboard/employees/[id]/_components/ApprovalMatrixTab.tsx` | **NEW** |
-| `frontend/app/dashboard/employees/[id]/page.tsx` | Profile tab: `ReportingManagerCard`; Approval tab: `ApprovalMatrixTab` |
-| `frontend/app/dashboard/settings/approval-rules/page.tsx` | **NEW** — global approval rules page |
-| `frontend/app/dashboard/settings/page.tsx` | Approval Rules card + route added |
-
----
-
-### Notes for Next Developer (Session 10)
-
-- **Approval matrix is hybrid** — global role-based defaults (`ApprovalWorkflowRule`) + specific-person overrides per employee (`EmployeeApprovalOverride`). At runtime: if an override exists, use that person; if not, fall back to the global role.
-- **L2 is optional** — leave `l2_approver_role` blank in the global rule for single-level approval. The override modal's L2 field can also be left blank.
-- **`EmployeeSearchInput` must stay at module level** in `ApprovalMatrixTab.tsx` — if defined inside another component it gets a new function reference on every re-render, causing unmount/remount on every keystroke and losing input focus.
-- **Search uses dynamic useFetch URL** — `useFetch` accepts only a URL string. Pass `?search=query&page_size=8` inline to trigger employee search.
-- **Reporting manager is set post-onboarding** — it lives in the Employee Profile tab, not the onboarding wizard. Only `hr_admin` / `system_admin` can assign or change it.
-
----
-
-### Session 11 — G. Durga Prasad (30 June 2026) — Onboarding: Draft Status, Step Filtering, Validators
-
-**Branch:** `durgaprasad`
-
-#### 1. Draft Onboarding Status
-
-Added `ONBOARDING_DRAFT = 'draft'` ("In Progress") to `User.ONBOARDING_CHOICES`. When a candidate saves Step 0 for the first time, their status transitions from `pending` → `draft` automatically. Pipeline endpoint and stats now include `draft` in the query so in-progress candidates are visible to HR.
-
-- `backend/apps/accounts/models.py` — new `ONBOARDING_DRAFT` constant + added to `ONBOARDING_CHOICES`
-- `backend/apps/accounts/migrations/0028_add_onboarding_draft_status.py` — `AlterField` on `onboarding_status`
-- `backend/apps/accounts/views.py` — `_save_profile_step` sets `onboarding_status=draft` after first step save; `OnboardingPipelineView` includes `draft` in filter; stats include `draft` count
-
-#### 2. Per-Step Field Scoping (`_STEP_ALL_FIELDS`)
-
-Added `_STEP_ALL_FIELDS` dict mapping each step number to the exact set of fields that belong to it. `_save_profile_step` now strips any field not in the step's set before saving — prevents cross-step overwrites when the frontend sends the full form on every "Save & Continue".
-
-```python
-_STEP_ALL_FIELDS = {
-    0: frozenset({'date_of_birth', 'gender', 'marital_status', 'father_name', 'blood_group', 'current_address', 'permanent_address'}),
-    1: frozenset({'highest_qualification', 'institution', 'year_of_passing', 'specialization', ...}),
-    2: frozenset({'account_number', 'ifsc_code', 'bank_name', 'bank_branch_name', 'account_holder_name', 'account_type'}),
-    3: frozenset({'emergency_name', 'emergency_relationship', 'emergency_phone', 'emergency_email'}),
-    4: frozenset(),
+  if (user) saveAuth({ ...user, assessment_status: newStatus });
 }
 ```
 
-#### 3. Required Fields Expanded
-
-`_STEP_REQUIRED_FIELDS` now includes `marital_status` and `father_name` (Step 0) and `bank_branch_name` (Step 2). `SubmitOnboardingView` checks these before allowing final submission.
-
-#### 4. Serializer Validators Added
-
-`EmployeeProfileSerializer` now validates: `gender`, `marital_status`, `blood_group` (against `GENDER_CHOICES`, `MARITAL_CHOICES`, `BLOOD_CHOICES`); `account_type` (against `ACCOUNT_CHOICES`); `emergency_email` (Django email validator).
-
-#### Key Files Changed
-
-| File | Change |
-|---|---|
-| `backend/apps/accounts/models.py` | `ONBOARDING_DRAFT` constant + choices |
-| `backend/apps/accounts/migrations/0028_add_onboarding_draft_status.py` | **NEW** — AlterField migration |
-| `backend/apps/accounts/serializers.py` | 4 new field validators |
-| `backend/apps/accounts/views.py` | `_STEP_ALL_FIELDS`, expanded required fields, draft status transition, pipeline draft filter |
-
 ---
 
-### Session 12 — Safura Samreen (30 June 2026) — Onboarding Wizard UI Overhaul
+## 3. API Endpoints
 
-**Branch:** `Frontend/Samreen`
+**File:** `lib/api/endpoints.ts`
 
-#### 1. STEPS Array with Icons (replaces flat TABS)
+Added under `assessments`:
+
+| Key | URL | Method |
+|-----|-----|--------|
+| `my` | `/assessments/my/` | GET |
+| `respond(assignmentId, itemId)` | `/assessments/<id>/respond/<itemId>/` | POST |
+| `complete(assignmentId)` | `/assessments/<id>/complete/` | POST |
+| `retake(assignmentId)` | `/assessments/<id>/retry/` | POST |
+| `results(assessmentId)` | `/assessments/<id>/results/` | GET |
+| `candidateResults(candidateId)` | `/assessments/candidates/<id>/results/` | GET |
+
+> **Important:** The backend retry endpoint uses `retry` not `retake` in the URL path.
+
+**Onboarding step fix:** Step 4 now posts to `/onboarding/` (the main profile endpoint) instead of `/onboarding/step/4/`. Steps 1–3 still use `profileStep(step)`.
 
 ```typescript
-const STEPS = [
-  { label: "Personal",               shortLabel: "Personal",  icon: "ti-user"          },
-  { label: "Education & Experience", shortLabel: "Education", icon: "ti-school"        },
-  { label: "Bank Details",           shortLabel: "Bank",      icon: "ti-building-bank" },
-  { label: "Emergency Contact",      shortLabel: "Emergency", icon: "ti-urgent"        },
-  { label: "Documents",              shortLabel: "Documents", icon: "ti-files"         },
-];
+tab === 4 ? API.onboarding.profile : API.onboarding.profileStep(tab)
 ```
 
-#### 2. `highestSaved` State
+---
 
-Tracks the highest step index the user has successfully saved. Used to enable/disable forward navigation (cannot jump ahead without saving). Starts at `-1` (nothing saved yet).
+## 4. Candidate Assessments Page — Full Redesign
 
-#### 3. Logout Button on Submitted Screen
+**File:** `app/onboarding/assessments/page.tsx`
 
-Fixed-position logout button (`bottom: 24, right: 24`) on the post-submission screen. Calls `clearAuth()` + `markIntentionalLogout()` then redirects to login.
+Fully rebuilt into a **two-column exam portal layout**. No modals — everything is inline.
 
-#### 4. Auto-save Removed
+### Layout
 
-The auto-save timer, `isDirty` ref, `useCallback`, and `beforeunload` handler were removed. Saving happens only on explicit "Save & Continue" clicks, which is sufficient since the backend now transitions to `draft` status on first save.
+```
+┌─── Sidebar (280px) ─────┬──────── Main Content ────────────────┐
+│  Assessment Portal      │  [Selected item renders here]        │
+│  ─────────────────────  │                                      │
+│  TEST 1          2/3    │  or                                  │
+│  ─────────────────────  │                                      │
+│  ✓ 1. Intro Video       │  "Select an item from the sidebar    │
+│  ● 2. Policy Quiz  ←    │   to begin your assessment."         │
+│  🔒 3. HR Quiz          │                                      │
+│                         │                                      │
+│  [Submit Assessment]    │                                      │
+└─────────────────────────┴──────────────────────────────────────┘
+```
 
-#### 5. Employee Profile: Additional Readonly Fields
+### Sidebar
+- Lists all assigned assessments as collapsible sections
+- Each item shows: step circle (✓ done / 🔒 locked / number active), title, type badge
+- Items lock until the previous one is completed (sequential)
+- Mini progress bar + score per assessment section
+- "Submit Assessment" button when all items answered
+- "Retake Assessment" button when assessment failed
+- Attempt history table (attempt #, score, date)
 
-`PROFILE_SECTIONS.personal` in `frontend/app/dashboard/employees/_data.ts` now shows three more readonly fields:
-- `dateOfJoining` — "Date of Joining"
-- `loginEmail` — "Login Email"
-- `mobileNumber` — "Phone"
+### Main Content States
 
-#### Key Files Changed
+| State | What renders |
+|-------|-------------|
+| Nothing selected | Landing — "Select an Item to Begin" prompt |
+| Video selected (unwatched) | 16:9 iframe + "Mark as Watched" button |
+| Video selected (watched) | iframe + "Already watched" banner + "Next Item →" |
+| Quiz selected (unanswered) | Question card + A/B/C/D option rows + "Submit Answer" |
+| Quiz selected (answered) | Result (correct/incorrect) + running score + "Next Item →" |
 
-| File | Change |
-|---|---|
-| `frontend/app/onboarding/page.tsx` | STEPS with icons; `highestSaved`; logout button; auto-save removed; updated submitted screen |
-| `frontend/app/dashboard/employees/_data.ts` | Added `dateOfJoining`, `loginEmail`, `mobileNumber` as readonly fields |
+### YouTube Embed Conversion
+HR saves share URLs; this function converts them to embeddable format for the iframe:
+```typescript
+function toEmbedUrl(url: string): string {
+  // youtu.be/ID?si=...  → youtube.com/embed/ID
+  // youtube.com/watch?v=ID → youtube.com/embed/ID
+  // vimeo.com/ID → player.vimeo.com/video/ID
+}
+```
+
+### Completion Flow
+1. All items done → "Submit Assessment" button in sidebar
+2. Click → `POST /assessments/<id>/complete/`
+3. `CompletionModal` overlay appears with SVG circular score ring
+4. **Pass:** "Go to Dashboard" → `router.push("/dashboard")`
+5. **Fail:** "Re-take Assessment" ONLY — no dashboard option until passed
+6. Retake → `POST /assessments/<id>/retry/` → clears state → refetch
+
+### Cookie Unlock
+```typescript
+useEffect(() => {
+  if (data?.all_complete) setAssessmentStatus("complete");
+}, [data?.all_complete]);
+```
+Updates the `royal_hrms_user` cookie so the proxy stops redirecting once all assignments are passed.
+
+### Key Types
+```typescript
+interface AssignmentItem {
+  id, item_type, title, order, video_url, duration_secs,
+  question, option_a, option_b, option_c, option_d,
+  correct_option, pass_score, created_at
+}
+
+interface Assignment {
+  id, assessment_title, status, score, max_score, passed,
+  total_items, completed_items, attempt_number,
+  items: AssignmentItem[],
+  responses: ItemResponse[],
+  attempts: AttemptRecord[]
+}
+
+interface RespondData {
+  item_id, item_type, is_correct, score_awarded, assignment_score
+}
+
+interface AttemptRecord {
+  attempt_number, score, max_score, passed, completed_at
+}
+```
 
 ---
+
+## 5. HR Assessments Dashboard
+
+**File:** `app/dashboard/assessments/page.tsx`
+
+### Actual API Response Shape (`GET /assessments/`)
+```json
+{
+  "data": {
+    "results": [
+      {
+        "id": "e2339b03-...",
+        "title": "TEST",
+        "is_active": true,
+        "is_default": true,
+        "item_count": 2,
+        "assigned_count": 2,
+        "pending_count": 0,
+        "in_progress_count": 0,
+        "completed_count": 2,
+        "candidates": [
+          {
+            "id": "...",
+            "candidate_id": 24,
+            "candidate_name": "Shashi",
+            "candidate_email": "...",
+            "status": "complete",
+            "attempt_count": 1,
+            "pass_score": 10,
+            "score_awarded": 10,
+            "pass_percentage": "100%",
+            "completed_at": "2026-07-02T17:10:06...",
+            "created_at": "2026-07-02T16:46:30..."
+          }
+        ],
+        "items": [...]
+      }
+    ]
+  }
+}
+```
+
+> Candidate data is **embedded in the list response** — no separate results API call is needed.
+
+### Page Layout
+
+**Header area — Overall stats (aggregated across all assessments):**
+4 stat cards: Total Assigned / Pending / In Progress / Completed
+
+**Each assessment card (collapsed):**
+- Title + Active/Default badges
+- Action buttons: Results (toggle) | Items | Assign | Edit | Delete
+- No extra padding when collapsed
+
+**Each assessment card (expanded via Results button):**
+- 5 stat tiles: Items / Assigned / Pending / In Progress / Completed
+- Candidate results table:
+
+  | Column | Source field |
+  |--------|-------------|
+  | Candidate | `candidate_name` + `candidate_email` |
+  | Status | `status` (badge) |
+  | Score | `score_awarded / pass_score` |
+  | Pass % | `pass_percentage` |
+  | Attempts | `attempt_count` |
+  | Assigned | `created_at` |
+  | Completed | `completed_at` |
+
+### Types Added to `Assessment`
+```typescript
+interface AssessmentCandidate {
+  id: string;
+  candidate_id: number;
+  candidate_name: string;
+  candidate_email: string;
+  status: "pending" | "in_progress" | "complete";
+  attempt_count: number;
+  pass_score: number;
+  score_awarded: number;
+  pass_percentage: string;
+  completed_at: string | null;
+  created_at: string;
+}
+
+// Assessment interface additions:
+assigned_count: number;
+pending_count: number;
+in_progress_count: number;
+completed_count: number;
+candidates: AssessmentCandidate[];
+```
+
+### Removed
+- `AssessmentResultsModal` component — no longer needed since data is embedded in list
+- Separate `GET /assessments/<id>/results/` call — redundant
+
+---
+
+## 6. Proxy Behaviour (unchanged — documented for reference)
+
+**File:** `proxy.ts`
+
+```
+if assessment_status === "pending" && path !== /onboarding/assessments
+  → redirect to /onboarding/assessments
+```
+
+Reads from the signed `royal_hrms_user` cookie (httpOnly). After all assessments pass, `setAssessmentStatus("complete")` updates the cookie client-side and the redirect stops on the next navigation.
+
+---
+
+## Rules Followed
+
+| File | Change |
+|------|--------|
+| `backend/apps/hrms/models.py` | Added `expense_number` PositiveIntegerField (unique, nullable, db_index) |
+| `backend/apps/hrms/migrations/0006_expense_number.py` | **NEW** — schema migration |
+| `backend/apps/hrms/migrations/0007_backfill_expense_number.py` | **NEW** — data migration (backfill) |
+| `backend/apps/hrms/serializers.py` | Added `expense_ref` SerializerMethodField; replaced `id` → `expense_number` in `Meta.fields` |
+| `backend/apps/hrms/views/expenses.py` | Full rewrite: added `ExpenseCategoryListView`, `ExpenseStatusListView`; full CRUD on `ExpenseDetailView`; `_handle_approval()` merged into PUT/PATCH; removed `ExpenseApprovalView`; `_get_expense` uses `expense_number`; `_fresh()` and `_validate_receipts()` helpers |
+| `backend/apps/hrms/views/__init__.py` | Updated exports — `ExpenseCategoryListView`, `ExpenseStatusListView` added; `ExpenseApprovalView` removed |
+| `backend/apps/hrms/urls.py` | Added `expenses/categories/`, `expenses/status/`; detail URL changed to `<int:expense_number>/`; removed `expenses/<str:expense_id>/approve/` |
+| `backend/apps/accounts/views.py` | Logger fixed to `__name__`; inline stdlib imports moved to top; `PermissionListView` paginated; `_ensure_default_rules()` rewritten to 1 SELECT + bulk_create; redundant inline imports removed |
+
+---
+
+### Notes for Next Developer (01 July 2026)
+
+- **All expense URLs use `expense_number` (integer), not UUID** — e.g. `/api/expenses/1/`. The UUID (`id`) is the database primary key and is still used internally by `_fresh()` for re-fetch after save, but it is not in the API response and not in the URL.
+- **Approval = PUT/PATCH with `status` field** — sending `{ "status": "approved" }` or `{ "status": "rejected" }` on any PUT/PATCH triggers `_handle_approval()`. Any other PUT/PATCH (without `status` key) is treated as an edit.
+- **PUT replaces all receipts; PATCH appends** — if you send files on a PUT, all old receipts are deleted first. If you send files on a PATCH, new receipts are added to existing ones.
+- **Single receipt delete** — `DELETE /api/expenses/<number>/?receipt_id=<uuid>`. The `receipt_id` is the UUID of the `ExpenseReceipt` record (still UUID — only the expense URL uses integer).
+- **`expense_number` is race-condition-safe** — `select_for_update()` + `transaction.atomic()` in `post()`. Never assign `expense_number` manually outside this block.
+- **`_ensure_default_rules()` now runs 0 DB writes on every GET** — only 1 SELECT. `bulk_create` fires only once when rules are genuinely missing. No performance concern on repeated calls.
+- **Backfill is idempotent** — migration 0007 only touches rows where `expense_number IS NULL`. Re-running it is safe.
+
+---
+
+## Session 15 — Rithwika (02 July 2026)
+
+**Branch:** `frontend/02-07`
+
+---
+
+### 1. HR Attendance Management — Full Frontend Build-out (`app/dashboard/attendance/`)
+
+Wired the entire HR Attendance page (previously a static mock screen) to the real backend across 9 endpoints.
+
+#### `lib/api/endpoints.ts` — new `attendance` keys
+```
+dashboard, records, record(id), overtime, overtimeCreate,
+invalidPunches, unPunches, import, export, corrections, correctionReview(id)
+```
+Paths omit the `/api` prefix — `API_BASE` (`lib/config.ts`) already supplies it as the axios `baseURL`.
+
+#### `types/attendance.ts` — new types
+`StatCards`, `SummaryChips`, `TabBadges`, `DashboardData`, `AttendanceRow`, `PaginatedResponse<T>` (generic, reused for all 4 paginated lists), `AttendanceDetailPunch`, `AttendanceDetail`, `OvertimeRow`, `OvertimeCreatePayload`, `InvalidPunch`, `UnpunchRow`, `ImportResult`/`ImportRowError`, `CorrectionRow`, `CorrectionStatus`, `CorrectionReviewAction`.
+
+> **Naming collision:** the backend's punch shape for the detail drawer is also called `PunchEntry` in the spec I was given, but that name already exists in this file for the live clock-in/out session (`type/location/attendance_mode/is_inside_geofence/calculated_distance` — a completely different shape). Renamed the new one to `AttendanceDetailPunch` with a comment explaining why.
+
+#### `app/dashboard/attendance/page.tsx`
+- Top 4 stat cards + tab badge counts wired to `GET /attendance/dashboard/`.
+- Tab bar: **Attendance · OT Entry · Invalid Punches · Un-punches** (kept to exactly these 4 — see §4 and §5 below for how Corrections fits in).
+
+#### `AttendanceTab.tsx`
+- Real branch/department dropdowns, paginated records table from `GET /attendance/records/`, summary chips from the dashboard endpoint (called a second time with the tab's own filters), Prev/Next pagination.
+- **View** button opens `AttendanceDetailDrawer` (see §2) — disabled when `record_id` is `null` (absent employees have no record).
+- **Export CSV** — blob download via `clientApi.get(url, { responseType: "blob" })`.
+- **Import** — real multipart upload wired in `ImportModal.tsx`; shows a result summary with a collapsible per-row error table before closing.
+
+#### `OtEntryTab.tsx`
+- Add OT Entry form posts to `POST /attendance/overtime/create/`; employee/approver dropdowns sourced from `/employees/` and `/employees/hrs/`.
+- OT Records table from `GET /attendance/overtime/`.
+
+---
+
+### 2. Attendance Detail Drawer — Comprehensive View (`AttendanceDetailDrawer.tsx`)
+
+The "View" button on the Attendance List originally opened a small centered modal with just clock in/out + a punch timeline. Rebuilt into a full side drawer covering everything HR needs to investigate a day's attendance without leaving the page:
+
+- Switched markup from `.modal-overlay`/`.modal` to the app's existing `.drawer-overlay`/`.drawer` pattern (already used in `candidate-review/OnboardingQueueTab.tsx`, just not reused elsewhere yet).
+- **Attendance Calculation** section — clock in/out, total hours, **and overtime** (was fetched but never rendered before).
+- **Punch History & Location** — geofence status icon (✓ / ✗ / dashed) + distance-from-geofence per punch, source, mode.
+- **Correction Requests** (new) — fetches `GET /attendance/corrections/?employee_id=&date=`, filtered client-side as a safety net in case the backend ignores the query params. Pending requests get inline Approve/Reject buttons (`PATCH /attendance/corrections/<id>/review/`) so HR can resolve a correction without switching tabs.
+- **Audit Log** — deliberately left as a labeled "not available yet" placeholder. There is no record-scoped audit endpoint anywhere in the API (the only audit endpoint, `/settings/audit/`, is a global log filtered by module/date/search text, not scopable to one attendance record). Faking that connection would show misleading data — flagged this instead of guessing.
+
+---
+
+### 3. Branch Geofencing (`BranchManagement.tsx`, `useClockWidget.ts`, `ClockWidget.tsx`)
+
+Two rounds of spec came in for this; the second superseded some of the first (documented below so nobody re-does the first version).
+
+#### Branch form (`app/dashboard/branches/_components/BranchManagement.tsx`)
+- Added `geofencing_enabled` (toggle switch — built a small self-contained one with inline styles since **no toggle-switch CSS exists anywhere in this codebase**, only checkboxes), `latitude`, `longitude`, `allowed_radius_meters` (min 10 / max 5000, default 150), all shown only when the toggle is on.
+- Validation matches exact copy requested: both lat/lon empty → *"Latitude and longitude are required to enable geofencing."*; only one filled → *"Both latitude and longitude must be provided together."*
+- Save call switched from `PUT` to **`PATCH`** on branch update, per explicit instruction.
+- Badge on each branch card ("Geofencing" row, reused the existing Employees/Status info strip): green **Active** / yellow **No Coordinates** / grey **Disabled**, using the backend's own `has_coordinates` read-only field rather than a client-side null check.
+- **No separate branch detail page exists in this app** — branches are cards with one edit modal, no `/dashboard/branches/[id]` route. The "detail row" requirement (radius + coordinates text) was added to the same card rather than inventing a new page.
+
+#### Punch flow — root-cause fix for the geofencing bypass bug
+The reported symptom: an employee physically in Mumbai could clock in as if they were at the Hyderabad branch and it would succeed. Root cause found in `hooks/useClockWidget.ts`: the geolocation error handler only handled `GeolocationPositionError.code === 1` (permission denied) — any *other* failure (timeout, position unavailable) fell through silently and the punch request went out with `latitude`/`longitude` = `null`. If the backend only enforces the geofence check when coordinates are present, that null-coordinate path is exactly how a mismatched-location clock-in slips through.
+
+Fixed:
+- Unsupported browser and permission-denied now both **block the request** with exact-wording toasts (final wording: *"Your browser does not support location access."* / *"Location access is required for office clock-in. Please allow location in your browser settings."*).
+- Any other geolocation error (timeout/unavailable) **also now blocks** instead of silently continuing with null coordinates — this is the actual fix, not explicitly requested in either spec revision but left unguarded would reopen the same hole.
+- Added `isLocating` state → "Getting location…" shown on the Clock In/Out button while GPS resolves.
+
+---
+
+### 4. Attendance Corrections Workflow
+
+Built as its own "Corrections" tab first, then merged into "Un-punches" per direct instruction — final tab bar stayed at exactly 4 tabs (Attendance · OT Entry · Invalid Punches · Un-punches).
+
+- **`CorrectionsTab.tsx`** (new) — branch/department/status filters (status defaults to `pending`), full table (Employee ID · Name · Department · Branch · Date · Punch Type · Requested In · Requested Out · Reason · Status · Actions). Pending rows get Approve/Reject (`PATCH /attendance/corrections/<id>/review/`); approved/rejected rows show `reviewed_by`/`reviewed_at` instead.
+- **`UnpunchesTab.tsx`** — the original missing-clock-out table (with its own per-row `correction_pending` badge + inline approve/reject) was later removed entirely per instruction; the tab now renders only `<CorrectionsTab />`. `AddPunchModal.tsx` was deleted since it had no other caller once that table was removed.
+- `UnpunchRow` type carries the new `correction_pending`/`correction_id` fields.
+
+---
+
+### 5. Invalid Punches — Put on Hold
+
+No resolution/fix endpoint exists for invalid punches (only the `GET` list). Rather than ship a "Fix" button that does nothing, `InvalidPunchesTab.tsx` now renders a "Coming Soon" empty-state (reusing the existing `.empty-state` class). The original table/fetch logic is commented out in place, not deleted, so it's a one-step revert once a resolve endpoint exists.
+
+---
+
+### 6. Branch-Scoped Access Control for `hr_admin`
+
+Backend now enforces branch scoping server-side (`hr_admin` always gets their own branch's data regardless of `?branch=`) — this made the UI need to stay honest about it (locked dropdown, not a silently-ignored "All Branches" option).
+
+> **Adapted the given helper to this app's real user shape.** The spec's `isUnrestrictedUser` checked `user.is_superuser === true || user.role?.name === 'system_admin'`, but this codebase's `UserInfo` (`lib/auth.ts`) has `role` as a **flat string**, not a nested object, and has **no `is_superuser` field at all** anywhere in the frontend. Implemented against the real shape: `user?.role === "system_admin"`. Copying the spec verbatim would have made the check permanently `false`.
+
+- **`lib/auth.ts`** — added `isUnrestrictedUser(user)` / `getEffectiveBranch(user)`.
+- **`hooks/useCurrentUser.ts`** (new) — wraps `getStoredUser()` in `useEffect`; this repo already has a documented hydration-mismatch gotcha for calling `getStoredUser()` at render time (see the Session 2 notes above), so this hook exists specifically to not reintroduce that bug in five new places.
+- **`components/BranchFilterSelect.tsx`** (new, shared) — full dropdown for `system_admin`; single disabled option + lock icon/tooltip ("Scoped to your branch") for `hr_admin`. Used in Attendance List, OT List, Corrections.
+- **`hooks/useDepartmentOptions.ts`** (new, shared) — `system_admin` gets the global `/departments/` list; `hr_admin` gets department names derived from `GET /employees/?branch=<branch>` instead, since departments aren't branch-scoped as master data.
+- **Page-level (`page.tsx`)** — dashboard fetch gated on the user object having resolved (never fires unscoped before we know who's asking); light-blue info chip "🏢 Viewing data for `<branch>` only" below the header for `hr_admin` only; page title appends `— <branch>`.
+- **Export filename** — `attendance_Mumbai-HQ_2026-07-02.csv` for `hr_admin` (branch name space→hyphen), unchanged `attendance_2026-07-02.csv` for `system_admin`.
+- **OT List had no filter UI at all before this** — added a branch filter to it since it was explicitly named as an affected page.
+
+---
+
+### 7. My Attendance — Punch Log Simplified (`ClockWidget.tsx`)
+
+The Punch Log was rendering every punch of the day (could be 8+ rows after a few correction/duplicate punches). Changed to show only the two most relevant rows:
+```tsx
+const latestIn  = [...punches].reverse().find(p => p.type === "IN")
+const latestOut = [...punches].reverse().find(p => p.type === "OUT")
+const displayPunches = [latestIn, latestOut].filter(Boolean)
+```
+Order is always IN then OUT (fixed by array position, not sorted by time).
+
+---
+
+### 8. Production Build Fix — `LeaveDashboard.tsx` TypeScript Error
+
+`npm run build` was failing type-check (unrelated to any of the attendance work above — pre-existing, just never surfaced until a full build was run):
+
+```
+./app/dashboard/leave/_components/LeaveDashboard.tsx:53:7
+Type error: 'requests' is possibly 'null'.
+  51 |   const visibleRequests = selectedBranches.length === 0
+  52 |     ? requests
+> 53 |     : requests.filter(r => selectedBranches.includes(r.employee_branch));
+```
+
+`requests` comes from `useFetch<LeaveRequest[]>(...)`, typed `LeaveRequest[] | null`. Every other read of `requests` in this file already guards with `requests ?? []` — this one ternary didn't. Minimal fix, matching the existing pattern in the same file:
+
+```tsx
+const visibleRequests = selectedBranches.length === 0
+  ? (requests ?? [])
+  : (requests ?? []).filter(r => selectedBranches.includes(r.employee_branch));
+```
+
+Confirmed with a full `tsc --noEmit` afterward — this was the only remaining type error in the whole project.
+
+---
+
+### Key Files Changed / Created (02 July 2026)
+
+| File | Change |
+|------|--------|
+| `lib/api/endpoints.ts` | Added `attendance.{dashboard,records,record,overtime,overtimeCreate,invalidPunches,unPunches,import,export,corrections,correctionReview}` |
+| `types/attendance.ts` | Added all HR-management types listed in §1; `AttendanceDetailPunch` (renamed to avoid collision); `CorrectionRow`/`CorrectionStatus`/`CorrectionReviewAction`; `correction_pending`/`correction_id` added to `UnpunchRow` |
+| `app/dashboard/attendance/page.tsx` | Real dashboard fetch, branch-scoping (banner, title suffix, gated fetch), tab badges |
+| `app/dashboard/attendance/_components/AttendanceTab.tsx` | Full rewrite — real records/summary/export/import, locked branch filter, scoped departments |
+| `app/dashboard/attendance/_components/AttendanceDetailDrawer.tsx` | **NEW** — side drawer (calculation, punch/location, corrections, audit placeholder) |
+| `app/dashboard/attendance/_components/OtEntryTab.tsx` | Real OT list + create; added branch filter (previously had none) |
+| `app/dashboard/attendance/_components/CorrectionsTab.tsx` | **NEW** — corrections table, branch/department/status filters, approve/reject |
+| `app/dashboard/attendance/_components/UnpunchesTab.tsx` | Old missing-clock-out table removed; now renders `<CorrectionsTab />` only |
+| `app/dashboard/attendance/_components/InvalidPunchesTab.tsx` | Table/fetch commented out; "Coming Soon" empty-state shown instead |
+| `app/dashboard/attendance/_components/ImportModal.tsx` | Real multipart upload + result summary with collapsible row errors |
+| `app/dashboard/attendance/_components/AddPunchModal.tsx` | **DELETED** — no longer referenced after the Un-punches table was removed |
+| `app/dashboard/branches/_components/BranchManagement.tsx` | Geofencing fields (toggle, lat/lon, radius), validation, `PATCH` on save, `has_coordinates`-based badge, radius/coordinates detail text on card |
+| `hooks/useClockWidget.ts` | Geolocation error handling fixed to block on *any* failure (root cause of the cross-branch clock-in bug), `isLocating` state added |
+| `app/dashboard/my-attendance/_components/ClockWidget.tsx` | "Getting location…" button state; Punch Log now shows only latest IN/latest OUT |
+| `lib/auth.ts` | Added `isUnrestrictedUser`, `getEffectiveBranch` |
+| `hooks/useCurrentUser.ts` | **NEW** — hydration-safe `getStoredUser()` wrapper |
+| `hooks/useDepartmentOptions.ts` | **NEW** — branch-scoped department options for `hr_admin` |
+| `components/BranchFilterSelect.tsx` | **NEW** — shared locked/unlocked branch dropdown |
+| `app/dashboard/leave/_components/LeaveDashboard.tsx` | Build fix — `visibleRequests` ternary now guards `requests` with `?? []` on both branches (was only guarded in the rest of the file) |
+
+---
+
+### Notes for Next Developer
+
+- **Invalid Punches is intentionally disabled** — see §5. Don't re-enable the commented-out table without a resolve/fix endpoint (`assign` / `convert_to_out` / `discard` — none of these exist yet).
+- **Audit Log in the detail drawer is a placeholder** — needs a record-scoped endpoint, e.g. `GET /attendance/records/<id>/audit/`, before it can be wired for real.
+- **`isUnrestrictedUser` checks `role === "system_admin"` as a flat string** — if the backend ever changes `UserInfo.role` to a nested object, this helper (and every other `user?.role === "..."` check across the app — `employees/page.tsx`, `announcements/page.tsx`, `ApprovalMatrixTab.tsx`) needs updating together, not just this one.
+- **`useDepartmentOptions` assumes `/employees/?branch=<name>` filtering works** — it's the same convention already used by `/employees/hrs/?branch=`, but hasn't been independently verified against `/employees/` specifically.
+- **Toggle switch in `BranchManagement.tsx` is a one-off inline component**, not a shared one — if a second toggle is needed anywhere else, promote it to `components/ToggleSwitch.tsx` instead of copy-pasting.
+- **OT List and Corrections branch filters are net-new UI** (those tabs had zero filters before today) — worth a design pass if the team wants them visually consistent with the Attendance List's filter bar layout.
+- **`npm run build` type-checks clean as of this session** — if it fails again, run `npx tsc --noEmit` first to isolate whether it's a new regression or another pre-existing `?? []` guard gap like §8.
+
+---
+
+- No backend changes in this entire branch
+- All API paths from `lib/api/endpoints.ts` — no inline strings
+- All data fetching via `useFetch` hook
+- `clientApi` used with `withCredentials: true`
+- No `localStorage` for tokens
+- No `any` types — all shapes explicitly typed

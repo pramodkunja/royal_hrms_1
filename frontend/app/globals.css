@@ -103,6 +103,27 @@ a {
    COMPONENTS (utility classes — safe alongside CSS Modules)
    ============================================================ */
 
+/* Sidebar Logo */
+.sidebar-logo-expanded {
+  width: 100%;
+  height: auto;
+  max-height: 56px;
+  object-fit: contain;
+  object-position: left center;
+  flex-shrink: 0;
+  display: block;
+}
+
+.sidebar-logo-collapsed {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  object-fit: cover;
+  object-position: center center;
+  border-radius: 8px;
+  display: block;
+}
+
 /* Cards */
 .card {
   background: #fff;
@@ -849,7 +870,7 @@ textarea.field-input {
 /* Toast */
 .toast-container {
   position: fixed;
-  bottom: 24px;
+  top: 24px;
   right: 24px;
   z-index: 9999;
   display: flex;
@@ -887,6 +908,11 @@ textarea.field-input {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
+}
+
+@keyframes clockPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.5); }
+  50%       { box-shadow: 0 0 0 5px rgba(74, 222, 128, 0); }
 }
 
 @keyframes slideIn {
@@ -2139,7 +2165,7 @@ body.dark-mode {
   }
 
   .toast-container {
-    bottom: 80px;
+    top: 16px;
     right: 12px;
     left: 12px;
   }
