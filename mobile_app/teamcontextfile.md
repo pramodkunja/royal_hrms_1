@@ -2486,3 +2486,185 @@ web_frontend_backend/Royal-HRMS/backend/apps/hrms/views/expenses.py   ExpenseLis
 - [ ] Wire `LeaveBalanceAdjustView` (per-balance PATCH) to a mobile UI — currently unused, like `balance/credit/` was
 - [ ] Backend: leave approval routing config (`ApprovalWorkflowRule`) has a role-string mismatch (`reporting_manager`/`hr_manager` vs the resolver's expected `rm`/real role names) — every leave request's `l1_approver`/`l2_approver` resolve to `null`. Flagged, not fixed (out of mobile scope).
 - [ ] Sweep the older `_friendly(e.toString())` error-message pattern in Leave/Expenses/Settings/Announcements/Branches/Documents/Employees providers to the same "always show the backend message" standard applied to auth this session.
+
+---
+
+## Session 16 — Assessments Screen (Full Backend Integration), Overflow Fixes, Navigator Crash Fix
+
+**Date:** 2026-07-03
+**Developer:** Pramod Kunja
+
+### Module Worked On
+- New "Assessments" feature (`/dashboard/assessments` on web) — HR admin assessment management, ported to `lib/features/assessments/`.
+- Overflow/layout fixes on the new Assessments screen.
+- Crash fix: delete-confirmation dialogs were popping the wrong Navigator inside a `ShellRoute`.
+
+### What Changed
+
+**1. Assessments — new feature, full backend integration**
+- Ported the web's `/dashboard/assessments` (HR admin management page) — not the separate `/onboarding/assessments` candidate-taking portal, which has no nav entry and is a different feature entirely.
+- Real backend integration against `/api/assessments/...`: list/create/edit/delete assessments; list/create/edit/delete video-or-quiz items per assessment; assign to a candidate (`POST /assessments/assign/`); candidate lookup for the assign dropdown via `/recruitment/candidates/review/`.
+- `AssessmentsRemoteDataSource` follows the same `_unwrap`/`_toList` envelope-handling pattern used in `SettingsRemoteDataSource` — the assessment list is paginated (`{count, results}`), the items endpoint returns a bare array.
+- Client-side validation copy matches the web app's `page.tsx`/`ItemsModal.tsx` exactly: "Title is required.", "Video URL is required.", "Question is required.", "At least options A and B are required." — checked in the same order, so the same first-failing-check always wins on both platforms.
+- Error handling: routed through `parseDioException()` (`core/network/api_client.dart`) instead of copying the older `_friendly(e.toString())` string-matching pattern used by Leave/Expenses/Settings/etc. (flagged as a cleanup candidate in Session 15's notes) — so backend messages like "Assessment already assigned to this candidate." (409) and "Cannot delete an assessment with active candidate assignments." (409) reach the user verbatim instead of a generic fallback.
+- Nav item added to `nav_config.dart` (Recruitment section, between "Review & Onboarding" and "Email Logs"), gated by `assessments.view` permission — matches the web sidebar's permission string exactly. Route registered in `app_router.dart` inside the dashboard `ShellRoute`.
+
+**2. Overflow fixes**
+- `_OverallStatsRow` (top-of-screen stat cards): fixed `SizedBox(height: 84)` plus a `Spacer()`-based `Column` was a few px short of its actual content height under Poppins' line-height metrics — a real (if minor) render overflow. Bumped to `104` and replaced `Spacer()` with explicit `SizedBox` gaps so it no longer depends on flex math matching font metrics exactly.
+- `AssessmentCard` title: was a bare `Text` inside a `Wrap` — a `Wrap` does not constrain a child's width, so a long, unbroken assessment title could overflow past the card edge instead of wrapping. Changed to `Expanded` + `maxLines: 2` + ellipsis, with the Active/Default badges wrapping separately on the right.
+- Per-assessment mini-stats grid (Items/Assigned/Pending/In Progress/Completed, shown when "Results" is expanded): was a `Wrap` of fixed 78px tiles that split into an uneven 3+2 layout on narrower phones — looked cramped/"shrunk." Changed to a `Row` of `Expanded` tiles so the 5 stats always divide the card's actual width evenly in a single row.
+- Results/Items/Assign actions: were auto-sized chips in a `Wrap`. Rebuilt as a real segmented tab bar (`ActionTabs`/`_TabButton`, one `Expanded` per tab) so they always fill the row width evenly and can't wrap unpredictably; Edit/Delete stayed as compact icon buttons alongside it.
+
+**3. Crash fix — delete confirmation popped the wrong Navigator**
+- Both delete-confirmation `AlertDialog`s (`assessments_screen.dart`'s "Delete Assessment?", `items_manager_dialog.dart`'s "Remove Item?") were written as `showDialog(builder: (_) => AlertDialog(...))`, discarding the builder's own context and calling `Navigator.pop(context, true/false)` with the **enclosing screen's** context instead.
+- `AssessmentsScreen` is registered inside the dashboard `ShellRoute`, which owns its own nested `Navigator` — separate from the root `Navigator` that `showDialog` pushes onto by default. Resolving `Navigator.of(context)` from the outer screen's context found the shell's nested `Navigator` (not the root one hosting the dialog), so tapping Delete popped the actual page route instead of the dialog. Since it was the only page on that nested stack, go_router threw `"You have popped the last page off of the stack, there are no pages left to show"` and crashed.
+- The same `builder: (_) => AlertDialog(... Navigator.pop(context) ...)` pattern exists in `departments_screen.dart`'s `_showDeleteDialog` too — it "works" there only because `DepartmentsScreen` is registered as a **standalone route outside the ShellRoute**, so the outer context's nearest Navigator happens to be the same root Navigator the dialog uses. Any screen inside the `ShellRoute` copying that exact pattern will hit the same crash — worth a sweep if more ShellRoute screens add inline `AlertDialog` confirmations. Fixed here by naming the builder's context (`dialogContext`) and popping with that instead.
+
+### Files Added
+```
+mobile_app/lib/features/assessments/
+  data/
+    models/assessment_model.dart
+    datasources/assessments_remote_datasource.dart
+  presentation/
+    providers/assessments_providers.dart
+    screens/assessments_screen.dart
+    widgets/
+      assessment_card.dart
+      assessment_card_tabs.dart
+      assessment_results_section.dart
+      assessment_form_dialog.dart
+      items_manager_dialog.dart
+      item_row.dart
+      item_form.dart
+      assign_dialog.dart
+```
+
+### Files Modified
+```
+mobile_app/lib/
+  core/constants/api_constants.dart               assessments + candidatesReview endpoints
+  core/router/app_router.dart                     AppRoutes.assessments + GoRoute registration
+  features/dashboard/presentation/navigation/nav_config.dart   Assessments NavItem + page title
+```
+
+### Architecture Notes
+- Any screen registered inside the dashboard `ShellRoute` must use the `showDialog` **builder's own context** for `Navigator.pop` in inline confirmation dialogs — never the enclosing screen's `context`. The ShellRoute's nested Navigator and the root Navigator hosting the dialog are different, and popping the wrong one can pop the actual page route instead of the dialog (crashes with go_router's "popped the last page" assertion). `departments_screen.dart` has the same risky pattern but is only safe because it happens to be a non-ShellRoute standalone route.
+- `parseDioException()` is now used by two features (Auth since Session 15, Assessments since this session) as the "always show the backend's real message" error path. The older per-file `_friendly(e.toString())` pattern is still used everywhere else (Leave, Expenses, Settings, Announcements, Branches, Documents, Employees) — still flagged from Session 15 as a sweep candidate.
+- The Assessments backend has no time limits, no file uploads, and fully server-side auto-grading (`pass_score` per quiz item, `max_score` frozen at assign time) — none of that logic needed porting for the admin management screen, only for the separate candidate-taking portal (`/onboarding/assessments`), which was intentionally left un-ported.
+
+### Pending Tasks (updated)
+- [ ] Manual on-device pass for the Assessments item-form and results-table layouts on a small physical screen (only verified via `flutter analyze`, not a running device, in this session)
+- [ ] `/onboarding/assessments` candidate-taking portal — not yet ported to mobile (separate feature: video/quiz item player, per-item respond/complete/retry flow, no nav entry)
+- [ ] Sweep the older `_friendly(e.toString())` error pattern in Leave/Expenses/Settings/Announcements/Branches/Documents/Employees to the `parseDioException()` standard (carried over from Session 15)
+- [ ] Audit other ShellRoute screens for the `showDialog(builder: (_) => AlertDialog(... Navigator.pop(context) ...))` context bug found this session
+
+---
+
+## Session 17 — Attendance Module (Full Backend Integration), Holiday Calendar Settings Screen (New)
+
+**Date:** 2026-07-03
+**Developer:** Pramod Kunja
+
+### Module Worked On
+- Attendance — `my_attendance_screen.dart` (employee self-service) and `attendance_screen.dart` (HR admin) wired to the real backend, all static/mock data removed.
+- New "Holiday Calendar" settings screen — full UI port from the web frontend.
+- Several runtime bugs found and fixed via live testing on Flutter Web, not just `flutter analyze`.
+
+---
+
+### Part 1: Attendance — Full Backend Integration
+
+**Important environment note first:** the repo contains a stray, git-**untracked** duplicate backend at `web_frontend_backend/Royal-HRMS/backend` that is missing newer code (no `serializers_hr.py`, `services_hr*.py`, or the HR-attendance migrations). The real backend is `backend/` at the repo root. Two research passes were burned researching the wrong copy before this was caught — **always confirm via `git status` which backend path is actually tracked before trusting its contents.**
+
+**My Attendance (employee self-service)** — new `lib/features/attendance/` data/domain/provider layer (following the same Clean Architecture shape as `leave`/`branches`), wired to the real, pre-existing endpoints:
+- `POST /attendance/punch/`, `GET /attendance/today/`, `GET /attendance/stats/`, `GET /attendance/summary/`, `GET /attendance/calendar/`, `POST /attendance/correction/`.
+- Clock-in captures real GPS via the new `geolocator` dependency (`lib/core/location/location_service.dart`) — added `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION` (Android) and `NSLocationWhenInUseUsageDescription` (iOS) permissions.
+- Correction request dialog validates against the backend's exact `CorrectionWriteSerializer` rules and reason codes (`biometric_error`, `forgot_to_punch`, `field_work`, `system_downtime`, `other`).
+
+**HR Attendance Management (admin `attendance_screen.dart`)** — confirmed via direct backend code reading (not just endpoint testing) that these DO have real backend support: org-wide attendance list (`/attendance/records/`), dashboard stats (`/attendance/dashboard/`), OT entries list+create (`/attendance/overtime/`, `/attendance/overtime/create/` — no approve/reject endpoint exists despite the model supporting a status field), un-punches queue (`/attendance/un-punches/`) with fix-via-correction-review (`/attendance/corrections/`, `PATCH /attendance/corrections/<id>/review/`). **Invalid Punches** (`/attendance/invalid-punches/`) has no persisted model or fix action at all — it's a read-only, computed-on-the-fly heuristic — so the mobile UI has no "Fix" button for it, by design, not an oversight.
+
+#### Bugs found and fixed (in order of discovery)
+
+1. **`ot_hours` in Monthly Summary always showed "0.0h"** — backend returns it as a pre-formatted display string (`"9h 07m"`), not a number; `double.tryParse` silently failed and defaulted to 0. Fixed the entity/model to treat it as `String`.
+2. **Calendar showed no status-color dots at all** — `AttendanceDashboardService.get_calendar()`/`get_history()` return `status` as the human display label (`"On Leave"`, `"Half Day"`), not a lowercase key. The color lookup map used lowercase keys and never matched. Fixed the map to use the exact display labels.
+3. **"View" button 404'd for any employee with no attendance record that day** (Absent, Weekly Off, etc.) — the backend route is `records/<uuid:pk>/`; Django's `<uuid:pk>` URL converter rejects non-UUID path segments at the routing layer, so the "fall back to employee_id" idea could never work. Fixed by only enabling "View" when a real `record_id` exists.
+4. **Punch log showed a duplicated location string** — backend's `location` field already bakes in the source (`"Chennai HQ · Mobile"`); code was appending `attendanceMode` again on top.
+5. **`Platform._operatingSystem` crash on clock-in (web only)** — called `Platform.isAndroid`/`Platform.operatingSystem` unconditionally; `dart:io`'s `Platform` throws on web. Guarded with `kIsWeb`, matching the existing documented convention in `api_client.dart` that should have been followed the first time.
+6. **Scrollbar/ScrollController crash across all 4 admin tabs (web only)** — each tab's `ListView` had no explicit `primary`, so it implicitly inherited the single `PrimaryScrollController` the enclosing `NestedScrollView` provides to its `TabBarView` body. Silent on native (no interactive `Scrollbar` rendered there), but web's `Scrollbar` requires exactly one attached `ScrollPosition` and throws when multiple tabs' `ListView`s share the controller. Fixed with `primary: false` on all four.
+7. **GoRouter "popped the last page off the stack" crash tapping a calendar day** — `_showDayDetail`'s `showDialog(builder: (_) => AlertDialog(...))` discarded the dialog's own context and the Close button's `Navigator.pop(context)` used the **screen's** context instead. `MyAttendanceScreen` sits inside a `ShellRoute` with its own nested Navigator, distinct from the root Navigator `showDialog` targets by default — popping with the wrong context popped the actual page. Same bug class as Session 16's Assessments fix; fixed the same way (`builder: (dialogContext) => ...`, pop with `dialogContext`).
+8. **Stale Django dev server processes serving 404s for real routes** — not a code bug. Found 4 separate `manage.py runserver` processes bound to port 8000 (one dating back to the prior Thursday); whichever one actually owned the socket was serving attendance URLs from before the HR-attendance routes existed. Killed all 4, started one fresh server — `/attendance/dashboard/`, `/attendance/records/`, and the previously-500ing `/api/employees/` all returned correct responses afterward. **Lesson: when a route that clearly exists in the code 404s, check for duplicate/stale `runserver` processes before assuming a code bug.**
+
+### Files Created (Attendance)
+```
+mobile_app/lib/
+  core/location/location_service.dart
+  features/attendance/
+    domain/entities/attendance_entity.dart
+    domain/repositories/attendance_repository.dart
+    data/models/attendance_models.dart
+    data/datasources/attendance_remote_datasource.dart
+    data/repositories/attendance_repository_impl.dart
+    presentation/providers/attendance_providers.dart
+```
+
+### Files Modified (Attendance)
+```
+mobile_app/
+  pubspec.yaml                                                   added geolocator
+  android/app/src/main/AndroidManifest.xml                       location permissions
+  ios/Runner/Info.plist                                          NSLocationWhenInUseUsageDescription
+  lib/core/constants/api_constants.dart                          all /attendance/... endpoints (My Attendance + HR)
+  lib/features/attendance/presentation/screens/my_attendance_screen.dart   full rewrite — real data, GPS punch, correction dialog
+  lib/features/attendance/presentation/screens/attendance_screen.dart      full rewrite — real data for Attendance/OT/Un-punches; Invalid Punches read-only
+```
+
+---
+
+### Part 2: Holiday Calendar — New Settings Screen
+
+Ported the web's `/dashboard/settings/holiday-calendar` page. Important: **the reference web screen has no backend of its own** — it's a `useState` array with a `setTimeout(400ms)` faking a save, confirmed by reading both the page component and the full backend (no `Holiday` model/serializer/view/urls anywhere, and the `holiday` status on `AttendanceRecord` is dead/unreachable enum code, never actually assigned by anything). Per explicit user decision, built a faithful UI port using local Riverpod state (seed data) rather than inventing a backend contract that doesn't exist — same reasoning as the Credit Rules tab (Session 15) being local-only.
+
+Every field, filter, view, and dialog from the reference page was ported: year navigator, branch filter, search, 5 stat cards (Total/National/Regional/Company/Optional), filter tabs with counts, List/Calendar view toggle, secondary Type/Month filters + Clear Filters, pagination, empty state, month-grid calendar with a "Holidays in {Month}" list, Add/Edit dialog (name, date, type, applicable branches, optional toggle, active toggle) with the reference's exact validation copy ("Holiday name is required.", "Date is required."), read-only View dialog, and delete confirmation with the exact "will be permanently removed" copy.
+
+**Mobile-specific layout adaptations** (explicitly requested — avoid overflow, proper design, not a pixel port of the desktop table):
+- Stat cards and filter tabs use horizontal-scrolling rows instead of the web's fixed grid/tab row.
+- Secondary filters use `Wrap` so they reflow instead of clipping.
+- Pagination uses Prev/Next + "Page X of Y" instead of the web's un-truncated row of page-number buttons.
+- Everything lives in one `SingleChildScrollView` (no nested `TabBarView`/`NestedScrollView`) — avoids the exact `PrimaryScrollController` conflict fixed in Part 1, item 6.
+
+**Bug found post-delivery:** the Add/Edit form dialog's outer `Column` (`mainAxisSize: MainAxisSize.min`) overflowed by 8px on shorter viewports — the scrollable body wasn't wrapped in `Flexible`, so it sized to the `SingleChildScrollView`'s full natural content height instead of being capped at the dialog's actual available space. Fixed by wrapping the body `Container` in `Flexible`.
+
+### Files Created (Holiday Calendar)
+```
+mobile_app/lib/features/settings/
+  data/models/holiday_model.dart
+  presentation/holiday_calendar/
+    holiday_calendar_providers.dart
+    holiday_styles.dart
+    holiday_calendar_screen.dart
+    widgets/holiday_form_dialog.dart
+    widgets/holiday_view_dialog.dart
+```
+
+### Files Modified (Holiday Calendar)
+```
+mobile_app/lib/
+  core/router/app_router.dart                                     AppRoutes.settingsHolidayCalendar + GoRoute
+  features/settings/presentation/settings_hub/settings_screen.dart  new tile under Modules
+```
+
+### Architecture Notes
+- **Two backends can exist side-by-side in this repo** (one git-tracked at `backend/`, one stray untracked copy under `web_frontend_backend/`) — always verify with `git status` before trusting research against either. This cost real rework this session.
+- **A route existing in `urls.py` on disk doesn't mean it's live** — Django's `runserver` autoreloader can fail silently, and duplicate/stale processes can bind the same port. A 404 on a route you can see in the code is a server-process problem to check first, not necessarily a code bug.
+- **DRF `Serializer` classes in a views file aren't proof they're actually applied to the response** — some of this codebase's HR endpoints (`services_hr.py`, `services_hr_ops.py`, `services_hr_audit.py`) return raw dicts directly to `success()`/`error()` without ever calling `.data` on the documented Read serializer classes. Always trace the actual service function's return dict for ground truth on field names/types, not just the serializer class sitting in the same directory.
+- **Any screen inside a `ShellRoute` must use the `showDialog` builder's own context for `Navigator.pop`** in inline dialogs (confirmation, detail views) — this is now the 3rd occurrence of the same bug class (Session 16's Assessments, this session's My Attendance day-detail dialog) — worth the audit already flagged in Session 16's pending tasks.
+- **`primary: false` on `ListView`s inside a `TabBarView` that itself lives inside a `NestedScrollView`** — otherwise every tab's list implicitly shares the single inherited `PrimaryScrollController`, which is silent on native (no `Scrollbar` rendered) but throws on web/desktop.
+- Local-only mock features (Holiday Calendar this session, Credit Rules from Session 15) should stay local rather than being wired to an invented API contract — build the real integration only once the backend team actually ships the model/endpoints.
+
+### Pending Tasks (updated)
+- [ ] Backend: Invalid Punches has no persisted model and no fix/resolve action — flagged, not built (explicit user decision to scope this session to what already has real backend support).
+- [ ] Backend: OT entries have no approve/reject endpoint despite `AttendanceOvertime.status` supporting it, and `ot_amount` is hardcoded to `Decimal('0')` server-side (no salary/rate lookup wired up) — both backend gaps, not mobile bugs.
+- [ ] Backend: if Holiday Calendar is ever meant to affect real attendance processing, `AttendanceRecord.STATUS_HOLIDAY` needs an actual writer in `AttendanceProcessorService` — currently unreachable dead code — plus a real `Holiday` model/API to replace this session's local mock state.
+- [ ] Audit other ShellRoute screens for the `showDialog(builder: (_) => AlertDialog(... Navigator.pop(context) ...))` context bug (carried over from Session 16 — now 3 confirmed occurrences of this exact pattern).
+- [ ] Manual on-device pass for both the Attendance screens and Holiday Calendar on a small physical screen (verified via `flutter analyze` + live web testing this session, not a native device).
