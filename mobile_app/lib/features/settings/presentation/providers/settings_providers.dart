@@ -1,6 +1,9 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
 import '../../data/datasources/settings_remote_datasource.dart';
+import '../../data/models/assessment_config_model.dart';
+import '../../data/models/attendance_settings_model.dart';
 import '../../data/models/audit_model.dart';
 import '../../data/models/company_model.dart';
 import '../../data/models/departments_model.dart';
@@ -336,6 +339,38 @@ class LeavePoliciesNotifier extends AutoDisposeAsyncNotifier<List<LeavePolicyMod
     }
   }
 
+  // Creates a new custom leave type via POST /api/leave/policy/ (see
+  // LeavePolicyCreateSerializer). Not yet wired into leave_policy_screen.dart
+  // — that UI work is tracked separately.
+  Future<String?> createPolicy(
+      LeavePolicyFormData form, {required String leaveTypeLabel}) async {
+    try {
+      final created =
+          await _ds.createLeavePolicy(form, leaveTypeLabel: leaveTypeLabel);
+      state = AsyncData([...(state.valueOrNull ?? []), created]);
+      return null;
+    } catch (e) {
+      return _friendly(e);
+    }
+  }
+
+  // Deletes a custom leave type via DELETE /api/leave/policy/<leaveType>/.
+  // The backend rejects deletion of the 6 built-in types. Not yet wired into
+  // leave_policy_screen.dart — that UI work is tracked separately.
+  Future<String?> deletePolicy(String leaveType) async {
+    try {
+      await _ds.deleteLeavePolicy(leaveType);
+      state = AsyncData(
+        (state.valueOrNull ?? [])
+            .where((p) => p.leaveType != leaveType)
+            .toList(),
+      );
+      return null;
+    } catch (e) {
+      return _friendly(e);
+    }
+  }
+
   // Real backend action — credits annual leave for every active employee for
   // [year] (or a single employee if [employeeId] is given). Requires
   // 'leave.approve'. Returns a human-readable success message, or throws with
@@ -430,16 +465,93 @@ class AuditLogNotifier extends AutoDisposeAsyncNotifier<AuditLogPage> {
   }
 }
 
+// ── Attendance Rules (singleton, 6 sections) ─────────────────────────────────
+
+final attendanceSettingsProvider = AsyncNotifierProvider.autoDispose<
+    AttendanceSettingsNotifier, AttendanceSettingsModel>(
+  AttendanceSettingsNotifier.new,
+);
+
+class AttendanceSettingsNotifier
+    extends AutoDisposeAsyncNotifier<AttendanceSettingsModel> {
+  SettingsRemoteDataSource get _ds => ref.read(settingsDataSourceProvider);
+
+  @override
+  Future<AttendanceSettingsModel> build() => _ds.fetchAttendanceSettings();
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => _ds.fetchAttendanceSettings());
+  }
+
+  /// Patches a single section (matches the per-card "Save" button on web).
+  /// [sectionJson] must be the already-built JSON body for that section.
+  Future<String?> saveSection(String sectionKey, Map<String, dynamic> sectionJson) async {
+    try {
+      final updated = await _ds.patchAttendanceSettingsSection(sectionKey, sectionJson);
+      state = AsyncData(updated);
+      return null;
+    } catch (e) {
+      return _friendly(e);
+    }
+  }
+
+  /// Saves everything currently held in local (edited) state via PUT.
+  Future<String?> saveAll(AttendanceSettingsModel edited) async {
+    try {
+      final updated = await _ds.putAttendanceSettings(edited);
+      state = AsyncData(updated);
+      return null;
+    } catch (e) {
+      return _friendly(e);
+    }
+  }
+}
+
+// ── Assessment Config (singleton) ────────────────────────────────────────────
+
+final assessmentConfigProvider = AsyncNotifierProvider.autoDispose<
+    AssessmentConfigNotifier, AssessmentConfigModel>(
+  AssessmentConfigNotifier.new,
+);
+
+class AssessmentConfigNotifier
+    extends AutoDisposeAsyncNotifier<AssessmentConfigModel> {
+  SettingsRemoteDataSource get _ds => ref.read(settingsDataSourceProvider);
+
+  @override
+  Future<AssessmentConfigModel> build() => _ds.fetchAssessmentConfig();
+
+  Future<String?> save(AssessmentConfigModel model) async {
+    try {
+      final updated = await _ds.updateAssessmentConfig(model);
+      state = AsyncData(updated);
+      return null;
+    } catch (e) {
+      return _friendly(e);
+    }
+  }
+}
+
 // ── Error helper ──────────────────────────────────────────────────────────────
 
+/// Public alias of [_friendly] for use outside this file (e.g. settings
+/// screens rendering a raw fetch-error state, not just mutation results).
+String friendlySettingsError(Object e) => _friendly(e);
+
+// Dio's own DioException.toString() never includes the response status code
+// or body — string-matching against it (the old approach here) could never
+// actually match, silently discarding real backend validation messages (e.g.
+// specific attendance-settings/leave-policy validation errors) in favor of a
+// generic fallback. Route through the shared, already-proven
+// parseDioException() instead, which reads the real
+// {status, message, data} envelope. Backs every settings-screen mutation in
+// this file, including attendance rules and leave-policy CRUD.
 String _friendly(Object e) {
+  if (e is DioException) return parseDioException(e).message;
   final msg = e.toString();
-  if (msg.contains('SocketException') || msg.contains('connection')) {
+  if (msg.contains('SocketException')) {
     return 'Cannot reach server. Check your connection.';
   }
-  if (msg.contains('401')) return 'Session expired. Please log in again.';
-  if (msg.contains('403')) return 'You do not have permission to do this.';
-  if (msg.contains('404')) return 'Resource not found.';
-  if (msg.contains('500')) return 'Server error. Please try again later.';
   return msg.replaceAll('Exception:', '').trim();
 }

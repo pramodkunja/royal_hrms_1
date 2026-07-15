@@ -5,7 +5,24 @@ abstract class LeaveRepository {
   Future<List<LeaveTypeEntity>> getLeaveTypes();
   Future<List<LeaveBalanceEntity>> getLeaveBalances();
   Future<LeaveStatsEntity> getLeaveStats();
-  Future<List<LeaveRequestEntity>> getLeaveRequests({String? status, String? scope});
+  Future<List<LeaveRequestEntity>> getLeaveRequests(
+      {String? status, String? scope});
+  Future<LeaveRequestPageEntity> getLeaveRequestsPaginated({
+    String? status,
+    String? scope,
+    String? branch,
+    int page = 1,
+  });
+  Future<LeaveRequestEntity> getLeaveRequestById(String id);
+  Future<LeaveRequestPageEntity> getEmployeeLeaveRequestsPaginated({
+    required String employeeId,
+    required int year,
+    int page = 1,
+  });
+  Future<LeaveStatsEntity> getEmployeeLeaveStats({
+    required String employeeId,
+    required int year,
+  });
   Future<LeaveRequestEntity> applyLeave({
     required String leaveTypeCode,
     required String fromDate,

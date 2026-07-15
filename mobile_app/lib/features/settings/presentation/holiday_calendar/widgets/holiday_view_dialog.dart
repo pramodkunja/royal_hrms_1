@@ -44,80 +44,84 @@ class HolidayViewDialog extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, color: AppColors.textSecondary, size: 20),
+                  icon: Icon(Icons.close, color: AppColors.textSecondary, size: 20),
                   onPressed: () => Navigator.pop(context),
                   visualDensity: VisualDensity.compact,
                 ),
               ],
             ),
           ),
-          const Divider(height: 1, color: AppColors.border),
-          Container(
-            color: AppColors.background,
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          Divider(height: 1, color: AppColors.border),
+          Flexible(
+            child: Container(
+              color: AppColors.background,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(child: _Field('Date', _fmtDate(holiday.date))),
-                    const SizedBox(width: 16),
-                    Expanded(child: _Field('Day', _kWeekdayNames[holiday.date.weekday - 1].substring(0, 3))),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: _Field('Type', HolidayType.label(holiday.type))),
-                    const SizedBox(width: 16),
-                    Expanded(child: _Field('Applies', holiday.isOptional ? 'Optional' : 'Mandatory')),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: _Field('Status', holiday.isActive ? 'Active' : 'Inactive')),
-                    const SizedBox(width: 16),
-                    Expanded(child: _Field('Branches', holiday.applicableBranches)),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          onEdit();
-                        },
-                        icon: const Icon(Icons.edit_outlined, size: 16),
-                        label: const Text('Edit'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primary,
-                          side: const BorderSide(color: AppColors.primary),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _Field('Date', _fmtDate(holiday.date))),
+                        const SizedBox(width: 16),
+                        Expanded(child: _Field('Day', _kWeekdayNames[holiday.date.weekday - 1].substring(0, 3))),
+                      ],
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    const SizedBox(height: 16),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _Field('Type', HolidayType.label(holiday.type))),
+                        const SizedBox(width: 16),
+                        Expanded(child: _Field('Applies', holiday.isOptional ? 'Optional' : 'Mandatory')),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _Field('Status', holiday.isActive ? 'Active' : 'Inactive')),
+                        const SizedBox(width: 16),
+                        Expanded(child: _Field('Branches', holiday.applicableBranches)),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              onEdit();
+                            },
+                            icon: const Icon(Icons.edit_outlined, size: 16),
+                            label: const Text('Edit'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              side: BorderSide(color: AppColors.primary),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ),
                         ),
-                        child: const Text('Close'),
-                      ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            child: const Text('Close'),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
         ],

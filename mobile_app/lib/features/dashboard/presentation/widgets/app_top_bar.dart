@@ -1,31 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
+import 'package:mobile_app/features/notifications/presentation/widgets/notification_bell_button.dart';
 
 /// Top AppBar used inside [DashboardShell].
-/// Kept as a plain [StatelessWidget] — all logic lives in [DashboardShell].
+/// Kept as a plain [StatelessWidget] — all logic lives in [DashboardShell],
+/// except notifications which [NotificationBellButton] owns end-to-end (it
+/// needs its own RenderBox to anchor the dropdown panel under itself).
 class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final VoidCallback onMenuTap;
-  final VoidCallback onNotificationsTap;
   final VoidCallback onLogoutTap;
+  final VoidCallback onThemeToggleTap;
+  final bool isDarkMode;
 
   const AppTopBar({
     super.key,
     required this.title,
     required this.onMenuTap,
-    required this.onNotificationsTap,
     required this.onLogoutTap,
+    required this.onThemeToggleTap,
+    required this.isDarkMode,
   });
 
   @override
-  Size get preferredSize => const Size.fromHeight(56);
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
   @override
   Widget build(BuildContext context) {
+    // Scaffold gives this widget a max height of preferredSize.height PLUS
+    // the status bar inset (same convention Flutter's own AppBar uses), so
+    // the container's actual height must match that here too — otherwise a
+    // fixed 56px box on a device with a taller status bar (notch, punch-hole
+    // camera, some Android skins) leaves too little room for the icon row
+    // once SafeArea's top padding is subtracted, clipping/overflowing it.
+    final topPadding = MediaQuery.of(context).padding.top;
     return Container(
-      height: 56,
-      decoration: const BoxDecoration(
+      height: kToolbarHeight + topPadding,
+      decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
@@ -52,31 +64,16 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
               ),
 
-              // Notifications
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.notifications_outlined),
-                    color: AppColors.textSecondary,
-                    onPressed: onNotificationsTap,
-                    tooltip: 'Notifications',
-                  ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: AppColors.error,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.surface, width: 1.5),
-                      ),
-                    ),
-                  ),
-                ],
+              // Dark mode toggle — moon/sun swap, matches web's DashboardShell.
+              IconButton(
+                icon: Icon(isDarkMode ? Icons.wb_sunny_rounded : Icons.dark_mode_outlined),
+                color: AppColors.textSecondary,
+                onPressed: onThemeToggleTap,
+                tooltip: isDarkMode ? 'Switch to light mode' : 'Switch to dark mode',
               ),
+
+              // Notifications — owns its own tap handling + dropdown anchor.
+              const NotificationBellButton(),
 
               // Logout
               IconButton(

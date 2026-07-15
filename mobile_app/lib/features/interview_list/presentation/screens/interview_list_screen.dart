@@ -55,7 +55,7 @@ class InterviewListScreen extends ConsumerWidget {
 
             // ── List ─────────────────────────────────────────────────
             listAsync.when(
-              loading: () => const SliverFillRemaining(
+              loading: () => SliverFillRemaining(
                 child: Center(
                     child: CircularProgressIndicator(
                         color: AppColors.primary)),
@@ -86,14 +86,9 @@ class InterviewListScreen extends ConsumerWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => showModalBottomSheet(
+        onPressed: () => showDialog(
           context: context,
-          isScrollControlled: true,
-          shape: const RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          builder: (_) => const AddCandidateSheet(),
+          builder: (_) => const AddCandidateDialog(),
         ),
         icon: const Icon(Icons.add),
         label: const Text('Add Candidate'),

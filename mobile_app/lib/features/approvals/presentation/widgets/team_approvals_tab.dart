@@ -75,7 +75,7 @@ class _TeamApprovalsTabState extends ConsumerState<TeamApprovalsTab> {
                 color: AppColors.error.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.cancel_outlined,
+              child: Icon(Icons.cancel_outlined,
                   size: 18, color: AppColors.error),
             ),
             const SizedBox(width: 10),
@@ -244,7 +244,7 @@ class _PendingLeaveList extends ConsumerWidget {
       onRefresh: () =>
           ref.read(pendingLeaveApprovalsProvider.notifier).refresh(),
       child: requestsAsync.when(
-        loading: () => const Center(
+        loading: () => Center(
             child: CircularProgressIndicator(color: AppColors.primary)),
         error: (e, _) =>
             _errorView('Could not load pending leave requests: $e'),
@@ -285,7 +285,7 @@ class _PendingExpenseList extends ConsumerWidget {
       onRefresh: () =>
           ref.read(pendingExpenseApprovalsProvider.notifier).refresh(),
       child: expensesAsync.when(
-        loading: () => const Center(
+        loading: () => Center(
             child: CircularProgressIndicator(color: AppColors.primary)),
         error: (e, _) =>
             _errorView('Could not load pending expense claims: $e'),
@@ -413,7 +413,7 @@ class _LeaveApprovalCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Icon(Icons.calendar_month_outlined,
+                    Icon(Icons.calendar_month_outlined,
                         size: 11, color: AppColors.textHint),
                     const SizedBox(width: 4),
                     Text('${_fmtIso(request.from)} – ${_fmtIso(request.to)}',
@@ -459,7 +459,7 @@ class _LeaveApprovalCard extends StatelessWidget {
                                 fontSize: 12, fontWeight: FontWeight.w600)),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.error,
-                          side: const BorderSide(color: AppColors.error),
+                          side: BorderSide(color: AppColors.error),
                           padding: const EdgeInsets.symmetric(vertical: 10),
                         ),
                       ),
@@ -587,7 +587,7 @@ class _ExpenseApprovalCard extends StatelessWidget {
                                 fontSize: 12, fontWeight: FontWeight.w600)),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.error,
-                          side: const BorderSide(color: AppColors.error),
+                          side: BorderSide(color: AppColors.error),
                           padding: const EdgeInsets.symmetric(vertical: 10),
                         ),
                       ),

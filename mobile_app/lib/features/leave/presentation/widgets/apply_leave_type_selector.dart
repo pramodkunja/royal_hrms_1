@@ -255,7 +255,7 @@ class _SectionLabel extends StatelessWidget {
                 fontSize: 11,
                 letterSpacing: 0.3)),
         if (required)
-          const Text(' *',
+          Text(' *',
               style: TextStyle(
                   color: AppColors.error,
                   fontSize: 11,
@@ -284,7 +284,7 @@ class FieldLabel extends StatelessWidget {
                 fontSize: 11,
                 letterSpacing: 0.3)),
         if (required)
-          const Text(' *',
+          Text(' *',
               style: TextStyle(
                   color: AppColors.error,
                   fontSize: 11,

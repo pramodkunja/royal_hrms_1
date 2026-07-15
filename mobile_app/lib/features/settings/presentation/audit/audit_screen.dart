@@ -94,7 +94,7 @@ class _SearchField extends StatelessWidget {
         decoration: InputDecoration(
           hintText: 'Search by user, module or action…',
           hintStyle: AppTextStyles.body.copyWith(color: AppColors.textHint),
-          prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textHint),
+          prefixIcon: Icon(Icons.search, size: 20, color: AppColors.textHint),
           suffixIcon: controller.text.isNotEmpty
               ? IconButton(
                   icon: const Icon(Icons.clear, size: 18),
@@ -109,11 +109,11 @@ class _SearchField extends StatelessWidget {
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.border),
+            borderSide: BorderSide(color: AppColors.border),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+            borderSide: BorderSide(color: AppColors.primary, width: 1.5),
           ),
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         ),
@@ -191,7 +191,7 @@ class _FilterRow extends ConsumerWidget {
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.border),
+      borderSide: BorderSide(color: AppColors.border),
     ),
     contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
     isDense: true,
@@ -246,7 +246,7 @@ class _ActiveFilterBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.filter_alt_outlined, size: 14, color: AppColors.primary),
+          Icon(Icons.filter_alt_outlined, size: 14, color: AppColors.primary),
           const SizedBox(width: 6),
           Text('Filters active', style: AppTextStyles.caption.copyWith(color: AppColors.primary)),
           const Spacer(),
@@ -320,7 +320,7 @@ class _LoadMoreBtn extends StatelessWidget {
         label: const Text('Load more'),
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.primary,
-          side: const BorderSide(color: AppColors.primary),
+          side: BorderSide(color: AppColors.primary),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       ),
@@ -420,7 +420,7 @@ class _AuditCard extends StatelessWidget {
                   // ── Footer: object + IP ──────────────────────────────────
                   if (hasFooter) ...[
                     const SizedBox(height: 8),
-                    const Divider(height: 1, color: AppColors.border),
+                    Divider(height: 1, color: AppColors.border),
                     const SizedBox(height: 6),
                     Row(
                       children: [
@@ -428,7 +428,7 @@ class _AuditCard extends StatelessWidget {
                           Expanded(
                             child: Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.link_outlined,
                                   size: 12,
                                   color: AppColors.textHint,
@@ -448,7 +448,7 @@ class _AuditCard extends StatelessWidget {
                           ),
                         if (entry.ipAddress != null) ...[
                           const SizedBox(width: 10),
-                          const Icon(
+                          Icon(
                             Icons.router_outlined,
                             size: 12,
                             color: AppColors.textHint,
@@ -604,7 +604,7 @@ class _EmptyView extends StatelessWidget {
               color: AppColors.primary.withValues(alpha: 0.07),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Icon(Icons.history_rounded, size: 36, color: AppColors.primary),
+            child: Icon(Icons.history_rounded, size: 36, color: AppColors.primary),
           ),
           const SizedBox(height: 16),
           Text('No audit records', style: AppTextStyles.h4),
@@ -628,7 +628,7 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
+            Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
             const SizedBox(height: 12),
             Text('Could not load audit log', style: AppTextStyles.h4),
             const SizedBox(height: 6),

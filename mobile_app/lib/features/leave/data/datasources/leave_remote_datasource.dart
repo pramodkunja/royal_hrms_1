@@ -33,13 +33,16 @@ class LeaveRemoteDataSource {
 
   Future<LeaveStatsModel> fetchLeaveStats() async {
     final res = await _dio.get(ApiConstants.leaveStats);
-    return LeaveStatsModel.fromJson(
-        _unwrap(res.data) as Map<String, dynamic>);
+    return LeaveStatsModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
-  // scope: pass 'own' to force "my requests only" — without it, an approver
-  // (leave.approve permission) gets the approval queue instead of their own
-  // requests (see apps/hrms/views/leave.py LeaveRequestListCreateView.get).
+  // scope: without it, the backend ALWAYS returns the requesting user's own
+  // requests, regardless of role. Pass 'team' to get the real approval queue
+  // instead — that only works when the viewer also has the leave.approve
+  // permission, and is scoped by role: manager -> direct reports' pending (L1),
+  // hr_admin -> same-branch l2_pending (L2), system_admin -> everyone but self
+  // (see apps/hrms/views/leave.py LeaveRequestListCreateView.get /
+  // _approval_scope_filter). There is no 'own' scope value — omit scope for that.
   Future<List<LeaveRequestModel>> fetchLeaveRequests({
     String? status,
     String? scope,
@@ -47,19 +50,37 @@ class LeaveRemoteDataSource {
     final params = <String, dynamic>{};
     if (status != null) params['status'] = status;
     if (scope != null) params['scope'] = scope;
-    final res =
-        await _dio.get(ApiConstants.leaves, queryParameters: params);
+    final res = await _dio.get(ApiConstants.leaves, queryParameters: params);
     final data = _unwrap(res.data);
     // Handle both plain list and paginated {count, results}
     final List<dynamic> list = switch (data) {
-      List d                   => d,
-      Map<String, dynamic> d   => (d['results'] as List<dynamic>? ?? []),
-      _                        => [],
+      List d => d,
+      Map<String, dynamic> d => (d['results'] as List<dynamic>? ?? []),
+      _ => [],
     };
     return list
         .whereType<Map<String, dynamic>>()
         .map(LeaveRequestModel.fromJson)
         .toList();
+  }
+
+  // Paginated variant that preserves the count/page/total_pages envelope —
+  // used by the approver Dashboard's "Pending Approvals" sub-tab (scope=team),
+  // which needs real Prev/Next pagination instead of a client-truncated list.
+  // branch is system_admin-only server-side (silently ignored for other
+  // roles) — see LeaveRequestListCreateView.get.
+  Future<LeaveRequestPageModel> fetchLeaveRequestsPage({
+    String? status,
+    String? scope,
+    String? branch,
+    int page = 1,
+  }) async {
+    final params = <String, dynamic>{'page': page};
+    if (status != null) params['status'] = status;
+    if (scope != null) params['scope'] = scope;
+    if (branch != null && branch.isNotEmpty) params['branch'] = branch;
+    final res = await _dio.get(ApiConstants.leaves, queryParameters: params);
+    return LeaveRequestPageModel.fromJson(_unwrap(res.data));
   }
 
   // leaveTypeCode: 'CL', 'EL', 'SL', etc.
@@ -81,9 +102,9 @@ class LeaveRemoteDataSource {
     final formData = FormData.fromMap({
       'leave_type': leaveTypeCode,
       'start_date': fromDate,
-      'end_date':   toDate,
-      'reason':     reason,
-      'duration':   duration,
+      'end_date': toDate,
+      'reason': reason,
+      'duration': duration,
       if (handoverTo != null && handoverTo.isNotEmpty)
         'handover_to': handoverTo,
       if (contactDuringLeave != null && contactDuringLeave.isNotEmpty)
@@ -93,6 +114,14 @@ class LeaveRemoteDataSource {
       if (document != null) 'document': document,
     });
     final res = await _dio.post(ApiConstants.leaves, data: formData);
+    return LeaveRequestModel.fromJson(
+        _unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  // Single-fetch used to refresh a request's detail view in the background
+  // (e.g. the leave request detail sheet) — GET .../leave/requests/<id>/.
+  Future<LeaveRequestModel> fetchLeaveRequestById(String id) async {
+    final res = await _dio.get(ApiConstants.leaveDetail(id));
     return LeaveRequestModel.fromJson(
         _unwrap(res.data) as Map<String, dynamic>);
   }
@@ -114,6 +143,36 @@ class LeaveRemoteDataSource {
       ApiConstants.leaveAction(id),
       data: {'action': 'reject', 'remarks': rejectReason},
     );
+  }
+
+  // Employee-scoped variants used by the admin Employee Profile "Leave" tab —
+  // employeeId here is the human-readable code (e.g. 'RSS00001'), not a
+  // numeric pk (see LeaveRequestListCreateView.get / LeaveRequestStatsView:
+  // ?employee_id=<code> is resolved server-side and gated on the viewer
+  // having employees.view or leave.approve; 403/404 otherwise).
+  Future<LeaveRequestPageModel> fetchEmployeeLeaveRequestsPage({
+    required String employeeId,
+    required int year,
+    int page = 1,
+  }) async {
+    final params = <String, dynamic>{
+      'employee_id': employeeId,
+      'year': year,
+      'page': page,
+    };
+    final res = await _dio.get(ApiConstants.leaves, queryParameters: params);
+    return LeaveRequestPageModel.fromJson(_unwrap(res.data));
+  }
+
+  Future<LeaveStatsModel> fetchEmployeeLeaveStats({
+    required String employeeId,
+    required int year,
+  }) async {
+    final res = await _dio.get(
+      ApiConstants.leaveStats,
+      queryParameters: {'employee_id': employeeId, 'year': year},
+    );
+    return LeaveStatsModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
   Future<List<LeaveCalendarEventModel>> fetchCalendar({

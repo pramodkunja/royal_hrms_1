@@ -2668,3 +2668,326 @@ mobile_app/lib/
 - [ ] Backend: if Holiday Calendar is ever meant to affect real attendance processing, `AttendanceRecord.STATUS_HOLIDAY` needs an actual writer in `AttendanceProcessorService` — currently unreachable dead code — plus a real `Holiday` model/API to replace this session's local mock state.
 - [ ] Audit other ShellRoute screens for the `showDialog(builder: (_) => AlertDialog(... Navigator.pop(context) ...))` context bug (carried over from Session 16 — now 3 confirmed occurrences of this exact pattern).
 - [ ] Manual on-device pass for both the Attendance screens and Holiday Calendar on a small physical screen (verified via `flutter analyze` + live web testing this session, not a native device).
+
+---
+
+## Session 18 — Dashboard, Referrals, Settings (3 new screens), My Attendance polish, HR Attendance & Time catch-up
+
+**Date:** 2026-07-08
+**Developer:** Pramod Kunja
+
+### Module Worked On
+- Dashboard (home screen) — new backend-connected sections
+- Referrals — full new feature (employee + HR admin views)
+- Settings — 3 new screens: Attendance Rules, Referral Rules, Assessment Config
+- Attendance — My Attendance (employee self-service) sync + Attendance Mode selector rebuild
+- Attendance — HR Admin "Attendance & Time" screen brought fully up to date with backend/web
+
+---
+
+### Part 1: Dashboard — New Backend-Connected Sections
+
+**File:** `lib/features/dashboard/presentation/screens/home_screen.dart`
+
+Added four new sections, all wired to real endpoints (no mock data): **Today's Attendance** (clock-in/out card, mirrors `attendancePunch`/`attendanceToday`), **Leave Balance**, **Recent Leave Requests**, and a **Birthdays** card gated behind a permission check (only rendered when the current user actually has the required permission, rather than always rendering and letting the API 403).
+
+Bug fixed: `hrmsBirthdays` endpoint was initially set to `/hrms/birthdays/`; live testing surfaced a raw `DioException` dump in the Birthdays card. Root cause — `apps.hrms.urls` is mounted at bare `/api/`, not `/api/hrms/`. Fixed to `/birthdays/`, and hardened the HRMS error helper so unmapped status codes never leak raw exception text to the UI again.
+
+Verified via Playwright against the real Django backend: screen renders without overflow/clipping, and all four new sections degrade to sensible loading/error/empty states when data is unavailable.
+
+---
+
+### Part 2: Referrals — Full New Feature
+
+**Files created:** `lib/features/referrals/` (entities, models, datasource, providers, widgets, screen) — full Clean Architecture layer matching the `branches`/`leave` shape.
+
+Providers: `myReferralsProvider`, `allReferralsProvider` (HR admin, requires `recruitment.view`), `referralRulesProvider`, `referralRulesAdminProvider`.
+
+Went through several rounds of UI/UX polish based on direct feedback while building:
+- FAB (not a header button) to open "Refer a Candidate"
+- `showDialog` popup (not a bottom sheet) for the refer-candidate form
+- Stat cards row made horizontally scrollable (`_StatsRow`, 136×128 cards) instead of a fixed row that clipped on narrow screens
+- Tabs given icon + text labels (`_TabLabel`) with `tabAlignment: TabAlignment.start`
+- Colored left-border section heading matching the rest of the app's card convention
+- Explicit instruction from the user: don't copy web's own bugs into mobile. Web has a live bug where the branch field is sent as `Number(NaN)` on the refer-candidate form; fixed properly on mobile by resolving the branch **name** to its numeric ID via `branchListProvider` — but that call itself requires `branches.view`, a permission most users (even `hr_admin`, confirmed via a Django shell query) don't have. Fixed by gating the resolution attempt (and the pre-fetch) behind an explicit `permissions.contains('branches.view')` check, falling back to omitting the optional field otherwise.
+- `IntrinsicHeight` + `CrossAxisAlignment.stretch` fix so the "Bonus Breakdown" boxes on the referral rule cards render at equal heights.
+
+**API constants added** (`api_constants.dart`): `referrals`, `referralsAll`, `referralRules`, `referralRuleDetail(id)`.
+
+---
+
+### Part 3: Settings — 3 New Screens + Professional Design Pass
+
+**Files created:**
+- `lib/features/settings/presentation/attendance_rules/attendance_rules_screen.dart` — 6 sections (Working Hours, Weekly Off, Punch Rules, Overtime, Late Mark, Absence Alert), each `_SectionCard` given a distinct accent color. Backed by the real singleton `GET/PUT/PATCH /attendance/settings/` endpoint (confirmed live and current — not one of several dead legacy per-policy endpoints that were also found on the backend during research but are not the one the current web UI actually uses).
+- `lib/features/settings/presentation/referral_rules/referral_rules_settings_screen.dart` — full CRUD for referral bonus rules.
+- `lib/features/settings/presentation/assessment_config/assessment_config_screen.dart` — backed by the real singleton `GET/PUT /assessments/settings/` endpoint.
+- `lib/features/settings/presentation/widgets/settings_page_header.dart` — new shared `SettingsPageHeader` (gradient banner, icon+title+subtitle, mirrors the Settings hub's own header) and `SettingsSectionHeading` (icon chip + bold label), applied to all three new screens for a consistent, "professional" look after explicit user feedback that the initial versions looked unfinished.
+
+Bug flagged by the user as a regression during the design pass: the Referral Rules screen was missing its "Configured Rules (N)" heading — fixed by adding a `SettingsSectionHeading` above the list, shown even in the empty state.
+
+**Settings hub updated** (`settings_hub/settings_screen.dart`): the pre-existing "Attendance Rules" tile (previously `route: null`, badged "Soon") now points at a real screen; two new tiles added for "Referral Rules" and "Assessment Config".
+
+**API constants added:** `attendanceSettings`, `settingsAssessmentConfig`.
+
+**Router:** `AppRoutes.settingsAttendanceRules`, `settingsReferralRules`, `settingsAssessmentConfig` + matching `GoRoute`s.
+
+---
+
+### Part 4: My Attendance — Sync to Current Web + Attendance Mode Selector Rebuild
+
+**File:** `lib/features/attendance/presentation/screens/my_attendance_screen.dart` (~1390 lines)
+
+Brought the employee self-service screen in line with current web/backend behavior:
+- Added an **Attendance Mode** selector (`office` / `wfh` / `field` / `client_location` / `remote_office` — matching `AttendancePunch.attendance_mode` choices exactly). Clock-in now only fetches GPS when mode is `office`.
+- `_CorrectionDialog` refactored to take a **locked date** from context (the calendar day being regularized) instead of letting the user freely pick a date — matches the backend's actual regularization model, where a correction is always for a specific already-known day.
+- Calendar rebuilt with a Calendar/History tab switcher; the "next month" nav arrow is disabled once you reach the current month; added a `_HistoryRow`-based list view (late arrivals highlighted in red when clock-in is after `09:15`) using calendar data (`AttendanceHistoryRowEntity`) that the backend was already sending but the UI never rendered.
+- Added a "Regularize" action directly from the day-detail dialog.
+
+**Two rounds of live-testing bug fixes on the Attendance Mode selector**, both caught by the user:
+1. **Invisible dropdown** — root cause was the global `InputDecorationTheme` (`app_theme.dart`) forcing `filled: true, fillColor: AppColors.surface` (white) onto any custom-styled dropdown/text field behind it, painting over the intended dark background with white text on white.
+2. **Wrong popup style** — first fix used a bottom sheet; user explicitly wanted "there only like a popup dialog," so it was rebuilt as an anchored `PopupMenuButton` (the app's existing convention for this kind of control — see `candidate_card.dart`'s `_StatusChangeButton`), verified live via screenshot.
+
+---
+
+### Part 5: HR Admin "Attendance & Time" — Full Catch-Up to Current Web/Backend
+
+**File:** `lib/features/attendance/presentation/screens/attendance_screen.dart` — the 4-tab HR-admin management screen (Attendance / OT Entry / Invalid Punches / Un-punches), distinct from Part 4's employee self-service screen.
+
+Comparing the mobile screen against the current backend (`apps/attendance/views/hr_attendance.py`, `views/hr_audit_actions.py`) and current web (`app/dashboard/attendance/`) surfaced real gaps — some outright wrong assumptions baked into the old mobile code, some backend capability that was simply never wired up.
+
+**Fixed a real bug, not a design choice:** a comment on the Invalid Punches tab claimed there was "no persisted model or fix action on backend, by design" (recorded as such in Session 17's notes). Direct backend reading proved this false — `InvalidPunch` + 3 action endpoints (`assign`/`discard`/`convert`) are fully implemented and live on web. Built the missing UI: per-row **Assign** (HR-user picker via the new `GET /employees/hrs/` endpoint), **Convert** (punch type + target time), and **Discard** (optional remarks) dialogs, each posting to `/attendance/invalid-punches/<id>/assign|discard|convert/` and refreshing the list + dashboard on success.
+
+**Kept mobile's existing Un-punches tab as-is and *added* the general Corrections inbox alongside it**, rather than copying web's version — web's own "Un-punches" tab turned out to be dead-in-spirit (it just renders the general `CorrectionsTab` under a different name; the real `/attendance/un-punches/`-backed types are unreferenced dead code on the web frontend). Mobile's existing un-punch queue is genuinely more useful (shows expected-out time, whether a correction is already pending) and was left untouched; a new status-filterable (`All`/`Pending`/`Approved`/`Rejected`) Corrections inbox section was added below it, reusing an already-fully-implemented-but-never-called repository method (`getHrCorrections`).
+
+**Other gaps closed:**
+- **Date filter** — new `hrAttendanceDateFilterProvider`, threaded through the dashboard, records, OT list, invalid punches, and un-punches providers (all datasource methods already accepted an optional `date` param — this was a provider/UI wiring gap only).
+- **Summary chips** — replaced a client-side status tally (computed from whatever page of rows happened to be loaded) with the backend's own `summary_chips`, which the model was already decoding but the UI never read. This also pre-empts a correctness bug the client tally would have hit the moment real pagination was added below.
+- **Real pagination** — Attendance and OT Entry lists changed from a blunt `page_size: 100` single fetch to proper `page`/`page_size: 20` with Prev/Next controls, matching the backend's actual `{count, page, page_size, total_pages, results}` envelope (confirmed both list endpoints already paginate server-side).
+- **CSV Export** — `GET /attendance/export/`, downloaded via `file_picker`'s `saveFile(bytes: ...)` (already a dependency, no new package needed).
+- **CSV Import** — `POST /attendance/import/` (multipart, `file` field, `MultipartFile.fromBytes` for web/mobile parity since Flutter Web can't read a picked file by path), with a two-step dialog: pick → upload → success/failed row-count summary with the first few per-row errors, matching web's required-columns copy exactly (`employee_id, date, punch_in, punch_out — CSV only, max 5 MB`).
+- **Record detail dialog** — extended with a **Correction Requests** section (client-side filtered by employee_id + date, matching web's own approach since the backend has no server-side filter for that combination) and an **Audit History** timeline (`GET /attendance/records/<id>/audit/`) — both previously entirely missing from the dialog.
+
+All new backend contract details (exact field names, request/response shapes, required CSV columns, success-toast copy) were confirmed by direct reading of `apps/attendance/services_invalid_punch.py`, `services_hr_ops.py`, `views/hr_audit_actions.py`, and `apps/accounts/views.py`'s `HRListView` — not guessed from the plan alone.
+
+#### New API constants (`api_constants.dart`)
+`attendanceInvalidPunchAssign(id)`, `attendanceInvalidPunchDiscard(id)`, `attendanceInvalidPunchConvert(id)`, `attendanceExport`, `attendanceImport`, `attendanceRecordAudit(id)`, `employeesHrList`.
+
+#### New entities/models (`attendance_entity.dart` / `attendance_models.dart`)
+`HrUserEntity`, `AttendanceAuditEntryEntity`, `ImportRowErrorEntity`, `ImportResultEntity`, generic `PaginatedListEntity<T>` (+ a `parsePaginated<T>()` helper for the `{count, page, page_size, total_pages, results}` envelope shape).
+
+#### Provider changes (`attendance_providers.dart`)
+- `invalidPunchesProvider` converted from a plain `FutureProvider` to an `AsyncNotifierProvider` (`InvalidPunchesNotifier`) with `assign()`/`discard()`/`convert()`, following the same `Future<String?>` convention as the existing `OvertimeListNotifier`/`UnpunchesNotifier`.
+- `attendanceRecordsProvider` / `overtimeListProvider` state type changed to `PaginatedListEntity<T>`; new `attendanceRecordsPageProvider` / `overtimePageProvider` page-state providers, reset to `1` whenever a branch/department/date filter changes.
+- New `hrAttendanceDateFilterProvider`, `hrCorrectionsStatusFilterProvider` + `hrCorrectionsProvider` (`HrCorrectionsNotifier`, with its own `reviewCorrection()`), `hrUsersProvider`, `attendanceRecordAuditProvider` (family by record id), `attendanceRecordCorrectionsProvider` (family by employee+date), `attendanceImportActionProvider`.
+
+### Files Modified (Session 18, all parts)
+```
+mobile_app/lib/
+  core/constants/api_constants.dart
+  core/router/app_router.dart
+  features/dashboard/presentation/screens/home_screen.dart
+  features/referrals/                                    (new feature, full tree)
+  features/settings/presentation/
+    attendance_rules/attendance_rules_screen.dart          (new)
+    referral_rules/referral_rules_settings_screen.dart     (new)
+    assessment_config/assessment_config_screen.dart        (new)
+    widgets/settings_page_header.dart                      (new)
+    settings_hub/settings_screen.dart
+    data/models/attendance_settings_model.dart             (new)
+    data/models/assessment_config_model.dart               (new)
+    data/datasources/settings_remote_datasource.dart
+    presentation/providers/settings_providers.dart
+  features/attendance/
+    domain/entities/attendance_entity.dart
+    domain/repositories/attendance_repository.dart
+    data/models/attendance_models.dart
+    data/datasources/attendance_remote_datasource.dart
+    data/repositories/attendance_repository_impl.dart
+    presentation/providers/attendance_providers.dart
+    presentation/screens/my_attendance_screen.dart
+    presentation/screens/attendance_screen.dart
+```
+
+### Verification
+- `flutter analyze` — zero errors project-wide throughout every part of this session (only pre-existing, unrelated info/warning-level lint items).
+- `flutter build web` — succeeds cleanly.
+- Live Playwright pass against the real Django backend (`hradmin@royal.com`) for Part 5: all 4 tabs render with no overflow; date filter / Export / Import controls appear correctly; the Un-punches tab shows both the existing queue and the new Corrections inbox; the record detail dialog pulled real audit history and correctly reported "no pending corrections" for a record with none. Assign/Convert/Discard dialogs were not exercised against live data since the seeded demo data had zero invalid punches to act on that day.
+
+### Architecture Notes
+- **Environment gotcha, recurring:** orphaned `flutter_tools_chrome_device.*` / stale `flutter run --web-port=...` processes from earlier turns (or from other concurrent sessions on the same machine) cause a fresh headless-Chrome Playwright session to load a permanently blank page (`document.body.innerHTML.length` stuck under 500 bytes) even though `flutter analyze`/`flutter build web` are clean and the dev server itself serves valid HTML. Diagnostic: check `document.body.innerHTML.length` after a generous wait; if still blank with zero console errors, it's almost always process contention, not a code bug — kill everything bound to the port and relaunch `flutter run -d chrome` fresh.
+- **Backend rate-limits login** — repeated live-verification logins in a short window return "Request was throttled. Expected available in N seconds." Wait out the cooldown rather than retrying immediately; consolidate verification into as few login passes as possible per session.
+- **Don't copy web's own bugs or dead code into mobile** — recurring theme this session (Referrals' `Number(NaN)` branch bug, web's degraded "Un-punches" tab). Always verify a component is actually reachable from a live route's real import graph before treating its behavior as current spec.
+- A DRF list view returning a paginated envelope doesn't mean every mobile call site was actually using `page`/`page_size` — `fetchRecords`/`fetchOvertimeList` were quietly capped at `page_size: 100` and ignoring the `count`/`total_pages` the backend was already sending back.
+
+### Pending Tasks (updated)
+- [ ] Manual on-device pass for all of this session's screens (Referrals, the 3 new Settings screens, My Attendance's rebuilt calendar/mode selector, HR Attendance & Time's new dialogs) on a small physical screen — verified via `flutter analyze` + live web testing only.
+- [ ] Sweep the older `_friendly(e.toString())` error pattern to `parseDioException()`/`friendlyAttendanceError()` style helpers across Leave/Expenses/Documents/Employees (carried over from Sessions 15–17 — still not done).
+- [ ] Live-exercise the Invalid Punch Assign/Convert/Discard dialogs against a day that actually has invalid punches (none existed in the seeded demo data used for this session's verification pass).
+- [ ] `/onboarding/assessments` candidate-taking portal — still not ported (carried over from Session 17).
+- [ ] Backend: `Holiday` model/API still doesn't exist for real — Holiday Calendar remains local-only mock state (carried over from Session 17).
+
+---
+
+## Session 19 — Dashboard Header (Dark Mode + Notifications), Approval Rules Settings Screen, Release Build Debugging, App-Wide Overflow Sweep
+
+**Date:** 2026-07-15
+**Developer:** Pramod Kunja
+
+### Module Worked On
+- Dashboard — top bar rebuilt to match web (dark mode toggle, real notifications bell), side-menu regression fix
+- Core — app-wide dark mode theming infrastructure (new)
+- Notifications — full new feature, backend-connected (new)
+- Settings — Approval Rules screen (new), Depts & Designations overflow fixes + professional redesign pass
+- Release build — first APK handed to the team; found and fixed a missing Android permission and a wrong hosted API URL
+- Bug fixes — top bar status-bar overflow, Candidate Review action button, Attendance summary-grid overflow + count-up animation
+
+---
+
+### Part 1: Dashboard Top Bar — Dark Mode Toggle + Real Notifications
+
+Web's dashboard header shows a moon/sun toggle and a notifications bell next to the logout icon; mobile's `AppTopBar` had neither. Ported both.
+
+**Dark mode — genuinely app-wide, not a header cosmetic.** `AppColors` (`core/theme/app_colors.dart`) was a class of `static const Color` fields referenced in ~2,650 places across ~132 files. Web's own dark mode is just a CSS variable swap (`body.dark-mode` in `globals.css`) — there's no equivalent free lunch in Flutter. Converted every field to a mutable `static Color` with light/dark hex pairs (dark values mapped 1:1 from web's `body.dark-mode` vars; fields web's dark mode doesn't define — container tints, hint text, strong border — were derived to preserve the same relationship they have to their sibling color in light mode) plus `AppColors.applyMode(bool dark)` to swap all of them at once. New `core/theme/theme_mode_provider.dart` (`themeModeProvider`, `ThemeModeNotifier`) persists the choice via the existing `SecureStorageService` (web doesn't persist its own toggle — deliberately added persistence here since resetting to light on every restart would be worse UX). `main.dart` loads the persisted value and calls `AppColors.applyMode()` *before* `runApp` so there's no light-mode flash on startup for users who last chose dark.
+
+Forcing the toggle to actually re-render the whole app was the hard part: most widgets read `AppColors.x` as a plain static value (no `Theme.of(context)` dependency-tracking), and almost every `go_router` route is built with `const XScreen()` — so a normal ancestor rebuild would get short-circuited by Flutter's identical-const-widget skip and never reach most of the tree. Fixed by keying `MaterialApp.router` itself on the theme flag (`app/app.dart`) — `ValueKey('app-theme-$isDark')` forces a full teardown/remount of the entire visible subtree on toggle, guaranteeing fresh reads of the now-swapped static colors regardless of any `const` optimization along the way. `GoRouter` itself lives in a separate provider outside this subtree, so the current route/location survives the remount even though in-page widget state (scroll position, unsaved form input) does not — an accepted, minor cost for a rarely-used settings action. `AppTheme.themeFor(bool)` replaces the old single `AppTheme.light` getter, built fresh from the already-switched `AppColors` fields each time (not cached, since caching a `light`/`dark` pair up front would read the same live static fields twice).
+
+Converting `AppColors` to non-const broke every `const` expression referencing it — 101 files, ~600 individual compile errors (`invalid_constant`, `non_constant_list_element`, etc.). Fixed via 5 parallel background agents (dashboard/payroll/attendance, leave/approvals, employees, settings, everything-else — the last one further split itself into its own sub-agents), each given the same mechanical fix patterns: drop the offending `const`; for `static const` field declarations holding an `AppColors` reference, change to `static final`; for the 2 cases where a widget's *default parameter value* referenced `AppColors.x` (Dart requires parameter defaults to be literally constant, so `const` can't just be dropped there), made the parameter nullable with a `null` default and resolved it via `??` inside `build()`. Final `dart analyze lib`: 0 errors, same 122 pre-existing info-level lints as the pre-session baseline.
+
+Header toggle icon swaps moon ⇄ sun exactly like web (moon = tap to go dark, sun = tap to go light) — matches the reference screenshot the user supplied of web's light-mode header.
+
+**Notifications — real backend, not a stub.** Backend already had a full `notifications` Django app (`Notification` model, `GET /notifications/`, `GET /notifications/unread-count/`, `PATCH /notifications/<id>/read/`, `PATCH /notifications/read-all/`) that mobile had never wired up (`onNotificationsTap` was a no-op comment). Built the full feature: `features/notifications/data/models/notification_model.dart`, `data/datasources/notifications_remote_datasource.dart`, `presentation/providers/notification_providers.dart` (`unreadNotificationCountProvider` polls every 60s while the shell is mounted, matching web's `POLL_INTERVAL_MS`; `notificationsProvider` fetches the list on-demand only when the panel opens, also matching web), `presentation/widgets/notification_bell_button.dart` + `notification_panel.dart`. Row tap marks read + navigates via a `_kModuleRoutes` map ported directly from web's `NotificationBell.tsx` `MODULE_ROUTES`.
+
+The notification panel's presentation went through several rounds of direct user correction before landing:
+1. First built as a bottom sheet (`DraggableScrollableSheet`) — user asked for "a dropdown popup showing under the notification icon" instead.
+2. Rebuilt as an overlay anchored under the bell via `RenderBox`/`Overlay` position math (`showGeneralDialog` + `Positioned`) — user then asked to center it on screen instead.
+3. Rebuilt again as a centered `Center(child: ...)` dialog — user reversed course, "that pop up should be under the notification icon only," so it went back to the anchored version.
+4. Live testing then showed the anchored panel hugging the *left* screen edge, barely under the bell at all: the fixed 340px width, right-aligned to the bell's own right edge (not the screen's), simply didn't fit on a normal phone once you account for the logout icon sitting after the bell in the row. Fixed by computing an explicit `left` position from the bell's actual anchor point and clamping it to a 12px minimum margin, with the panel's width capped to `min(340, screenWidth - 24)` — it now shrinks/shifts to always stay on-screen instead of overflowing left.
+
+`NotificationBellButton` owns its own tap handling (not threaded through `DashboardShell`/`AppTopBar` as a callback) since it needs its own `RenderBox` to compute the anchor position — this made `AppTopBar` simpler, not more complex (no more `onNotificationsTap`/`unreadCount` params to thread through).
+
+**Regression caught and fixed:** "My Referrals" (removed from the drawer nav earlier per explicit user request) had silently reappeared in `nav_config.dart`'s working tree — `git diff` showed it as *added* relative to the last commit, meaning it was never actually committed removed. Removed it again (both the `NavItem` and its `kPageTitles` entry).
+
+**Side menu dynamic-permissions check (no code change needed):** user asked to "manage side menu as per the permissions getting in the response and manage it dynamically." Investigated `AppSidebar`/`buildNav` — it already watches `authStateProvider` reactively (`ConsumerWidget` + `ref.watch`) and filters via `buildNav(permissions)` against the live login-response permission list on every rebuild. Verified `permissions` is parsed straight from the JSON auth response into `UserEntity` (not cached/stale). Confirmed against web's own `navConfig.ts`/`proxy.ts` that the mechanism (and even the permission-string list, including two — `branches.view`, `assessments.view` — that don't actually exist in the backend's 46 seeded permissions, a pre-existing web-side gap, not something to "fix" unilaterally on mobile since it'd break web/mobile parity) already matches exactly. No code change was needed for this half of the request.
+
+#### Files created
+```
+lib/core/theme/theme_mode_provider.dart
+lib/features/notifications/data/models/notification_model.dart
+lib/features/notifications/data/datasources/notifications_remote_datasource.dart
+lib/features/notifications/presentation/providers/notification_providers.dart
+lib/features/notifications/presentation/widgets/notification_bell_button.dart
+lib/features/notifications/presentation/widgets/notification_panel.dart
+```
+
+#### Files modified (major)
+```
+lib/core/theme/app_colors.dart              rewritten — mutable light/dark palette + applyMode()
+lib/core/theme/app_theme.dart                AppTheme.light → AppTheme.themeFor(bool)
+lib/main.dart                                preload persisted theme before runApp
+lib/app/app.dart                             theme-keyed MaterialApp.router remount
+lib/features/dashboard/presentation/widgets/app_top_bar.dart
+lib/features/dashboard/presentation/screens/dashboard_shell.dart
+lib/features/dashboard/presentation/navigation/nav_config.dart   (My Referrals re-removed)
+core/network/api_client.dart                 (see Part 5 — parseDioException detail fallback)
++ ~101 files app-wide with const-keyword-only fixes from the AppColors mutability change
+```
+
+---
+
+### Part 2: Settings — Approval Rules Screen (New)
+
+Web's Settings has a small, fixed 4-row "Approval Rules" table (Leave/Expense/Resignation/Loan → who approves at L1/L2), backed by a singleton-per-workflow-type Django model (`ApprovalWorkflowRule`, `workflow_type` DB-unique) — distinct from the *different*, per-employee "Approval Matrix" override feature already on the employee profile screen. Ported the Settings one: `GET/PATCH /settings/approval-rules/` (PATCH targets the same collection URL; the row to update is identified by `workflow_type` in the body, not a path segment — matches web exactly, including the fixed 4-row/no-add/no-delete UX).
+
+**Notable backend quirk carried over deliberately:** this endpoint gates both GET and PATCH on `CanManageRoles` (hard-coded role check: `hr_admin`/`system_admin`), *not* a `settings.view`/`settings.edit` permission codename like every sibling settings screen — matches an actual backend inconsistency, not a mobile bug. Edit button gated on `role == 'hr_admin' || role == 'system_admin'` (the exact idiom already used at `employee_profile_screen.dart:1236` for the same role pair, reused rather than reinvented).
+
+**Fixed a real, shared gap while in `parseDioException`:** a 403 from this endpoint (or any other DRF-native permission rejection) previously fell back to a generic `"Access denied."`, because the parser only ever checked the app's normal `{message: ...}` envelope, never DRF's raw `{"detail": "..."}` shape that a bare `permission_classes` rejection returns. `api_client.dart`'s `serverMessage` extraction now falls back to `body['detail']` when `message` is absent — additive, doesn't change behavior for any response that already had a `message` field, benefits every future DRF-raw-shape 403 app-wide, not just this screen.
+
+#### Files created
+```
+lib/features/settings/data/models/approval_rule_model.dart
+lib/features/settings/data/datasources/approval_rules_remote_datasource.dart
+lib/features/settings/presentation/providers/approval_rules_providers.dart
+lib/features/settings/presentation/approval_rules/approval_rules_screen.dart
+```
+
+#### Files modified
+```
+lib/core/constants/api_constants.dart        settingsApprovalRules
+lib/core/router/app_router.dart              AppRoutes.settingsApprovalRules + GoRoute
+lib/core/network/api_client.dart             parseDioException detail-fallback
+lib/features/settings/presentation/settings_hub/settings_screen.dart   new tile
+```
+
+---
+
+### Part 3: Depts & Designations — Overflow Fixes + Professional Redesign Pass
+
+User hit a live `RenderFlex` overflow opening the Add/Edit Department dialog. Root cause: `DeptFormSheet`/`DesigFormSheet` built their form body as a fixed-size `Column` with keyboard-inset bottom padding but **no scrollable wrapper** — when the dialog's available height shrank (keyboard open, or a smaller phone), the fields had nowhere to go. Per the user's follow-up ask ("fix this type of overflow issue all over the app"), swept every file using the same `ClipRRect → Column(mainAxisSize.min)` dialog-root pattern (`grep` for `ClipRRect` files lacking any `SingleChildScrollView`/`ListView`, then manually distinguished true dialog-root hits from decorative/unrelated `ClipRRect` uses like rounded avatars). Found and fixed 5 total: `DeptFormSheet`, `DesigFormSheet`, `AssignDialog` and `AssessmentFormDialog` (assessments), and `HolidayViewDialog` (view-only, lower risk but fixed defensively for consistency) — all now wrap their body in `Flexible + SingleChildScrollView`, matching the pattern already correctly used by every *other* dialog in the app (verified — all 10 other files using the same `MediaQuery.viewInsetsOf(...).bottom` keyboard-inset pattern were already properly scrollable).
+
+Also asked to make the Depts & Designations screen "professional as like other pages" — added the same gradient `SettingsPageHeader` banner used on every other Session-18-and-later settings screen (Referral Rules, Approval Rules) to its top; the existing stat cards, search bar, and expandable department/designation cards were already well-designed (gradient avatars, colored accent chips) so those were left as-is.
+
+#### Files modified
+```
+lib/features/settings/presentation/departments/departments_screen.dart          + SettingsPageHeader
+lib/features/settings/presentation/departments/widgets/dept_form_sheet.dart      + Flexible/SingleChildScrollView
+lib/features/settings/presentation/departments/widgets/desig_form_sheet.dart     + Flexible/SingleChildScrollView
+lib/features/assessments/presentation/widgets/assign_dialog.dart                + Flexible/SingleChildScrollView
+lib/features/assessments/presentation/widgets/assessment_form_dialog.dart       + Flexible/SingleChildScrollView
+lib/features/settings/presentation/holiday_calendar/widgets/holiday_view_dialog.dart  + Flexible/SingleChildScrollView
+```
+
+---
+
+### Part 4: Release Build — First APK to the Team, Two Real Deployment Bugs Found
+
+First `flutter build apk --release` handed to the team surfaced two genuine deployment bugs, neither a Flutter code bug in the usual sense:
+
+**Bug 1 — missing `INTERNET` permission.** `android/app/src/main/AndroidManifest.xml` had `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION` but no `<uses-permission android:name="android.permission.INTERNET"/>` at all. Without it, Android blocks *every* network call at the OS level regardless of backend — this alone would fail 100% of requests on any installed release APK. Added it.
+
+**Bug 2 — wrong hosted API URL.** `ApiConstants.baseUrl`'s release branch pointed at `https://api.royalhrms.com/api`. Confirmed via `dig`/`curl` from this environment that `api.royalhrms.com` has **no DNS record at all** (`NXDOMAIN`) — not a device/network issue, the subdomain was simply never created (the root `royalhrms.com` domain does resolve, to what looks like a registrar parking page). User then pasted the server's actual nginx config and `.env`, revealing the real deployed hostname is `royalhrms.nxsys.in` (nginx `location /api/` proxies to Django on `127.0.0.1:8008` there). The user's own manual edit in between (via `nano`) had also dropped the `/api` suffix — verified this would silently route requests to the Next.js frontend's catch-all instead of Django (HTML 404 instead of JSON), and corrected it. Verified live: `GET https://royalhrms.nxsys.in/api/login/` → `405 Method Not Allowed` (correct — login is POST-only, confirms the route is live and correctly reaching Django). `ApiConstants.baseUrl` now unconditionally returns `https://royalhrms.nxsys.in/api` (the `kDebugMode`-conditional localhost branch was removed by the user's own edit; left as the user set it).
+
+**Also flagged, not fixed (backend team's call):** the pasted `.env` had `DEBUG=True` and `ALLOWED_HOSTS=*` on what appears to be the production deployment — a real security concern (stack traces/settings exposure) but out of scope for a mobile-app session.
+
+#### Files modified
+```
+android/app/src/main/AndroidManifest.xml     + INTERNET permission
+lib/core/constants/api_constants.dart        baseUrl → https://royalhrms.nxsys.in/api
+```
+
+---
+
+### Part 5: Misc Bug Fixes
+
+**`AppTopBar` status-bar overflow.** Hardcoded `height: 56` didn't account for the device's actual status bar inset — `SafeArea` inside that fixed box just ate into the same 56px, cramming the icon row into whatever was left, clipping/overflowing on phones with a taller status bar/notch than whatever it was tested on. Fixed to read `MediaQuery.of(context).padding.top` and grow the container to `kToolbarHeight + topPadding`, matching the same convention Flutter's own built-in `AppBar` uses internally (and matching how Scaffold itself computes the app-bar slot's max height).
+
+**Candidate Review — "Send Back for Corrections" button.** Was an outlined red-bordered button; changed to a solid filled red (`AppColors.error` background, white text) for clearer visual weight as a destructive/negative action, and the label now wraps across 2 lines (`"Send Back for\nCorrections"`, center-aligned, smaller font) instead of risking overflow in the tight half-width space next to "Approve & Activate ✓".
+
+**Employee/My Attendance — Monthly Summary grid overflow + count-up animation.** `GridView.count(childAspectRatio: 1.6)` ties cell height to column width — 3 columns leaves little width per cell on narrower phones, and the locked aspect ratio shrinks height right along with it, so the label + number no longer fit (live `RenderFlex` overflow reported by the user, `_SummaryCell` constraints `w=69.3, h=39.1`). Fixed in both `employee_attendance_tab.dart` and the identical grid in `my_attendance_screen.dart` by switching to `GridView.builder` + `SliverGridDelegateWithFixedCrossAxisCount(mainAxisExtent: 64)` — a fixed, width-independent cell height. Also added a count-up animation to each cell's number (`TweenAnimationBuilder<double>`, 0 → target over 700ms, `Curves.easeOutCubic`) per explicit user request, gracefully falling back to a static `Text` for values that aren't a clean integer (OT Hours is a formatted string like `"12h 30m"`, not a number — can't be meaningfully animated as a count).
+
+#### Files modified
+```
+lib/features/dashboard/presentation/widgets/app_top_bar.dart
+lib/features/candidate_review/presentation/screens/candidate_review_screen.dart
+lib/features/employees/presentation/widgets/employee_attendance_tab.dart
+lib/features/attendance/presentation/screens/my_attendance_screen.dart
+```
+
+---
+
+### Verification
+- `dart analyze lib` after every part of this session: 0 errors throughout, holding steady at the same 122 pre-existing info-level lints (`prefer_const_constructors`, `deprecated_member_use`) as the pre-session baseline — never regressed.
+- `flutter build apk --release` succeeded after every change in this session; the final build was verified against the corrected live hosted backend (`https://royalhrms.nxsys.in/api/login/` → confirmed reachable and correctly routed).
+
+### Architecture Notes
+- **Dark mode in a codebase built on static `AppColors` reads (not `Theme.of(context)`) requires a full-subtree remount to guarantee correctness**, not just an ancestor `ref.watch` rebuild — `const`-declared route screens (the app's own convention, used almost everywhere for perf) silently block a plain rebuild cascade via Flutter's identical-widget skip. `ValueKey`-ing the app root is the reliable fix; the cost is losing in-page transient state on toggle, which is acceptable for a rarely-used settings action.
+- **`parseDioException` only reads `body['message']`, never `body['detail']`** — any endpoint whose 403/permission rejection comes from bare DRF `permission_classes` (not the app's own `error()` envelope helper) previously surfaced a generic, unhelpful message. Now fixed centrally; worth remembering for any *new* endpoint that relies on a raw DRF permission class rather than `core/responses.py`'s helpers.
+- **A release APK's `baseUrl` should be verified reachable (DNS + a real route round-trip) before handing a build to anyone** — "the backend is already hosted" and "the hostname actually resolves to it" are not the same claim; this session's build pointed at a domain with zero DNS records for at least one full round of team testing.
+- **Don't assume `flutter build apk` uses your dev backend** — it's a release build (`kDebugMode == false`) unless `--debug` is passed explicitly, and even a debug build's `localhost` branch means the *device itself*, not the dev machine, unless using the Android emulator's `10.0.2.2` alias or LAN-IP + port-forwarding for a physical device.
+
+### Pending Tasks (updated)
+- [ ] Confirm with whoever manages `royalhrms.nxsys.in`'s deployment that `DEBUG=True`/`ALLOWED_HOSTS=*` in production `.env` is intentional or needs tightening (flagged this session, not mobile's call to fix).
+- [ ] Manual on-device dark-mode pass across every screen — verified via `dart analyze` + targeted rebuilds only, not yet a full visual sweep of all ~132 touched files in actual dark mode on a device.
+- [ ] Sweep the older `_friendly(e.toString())` error pattern to `parseDioException()`-style helpers across Leave/Expenses/Documents/Employees (carried over from Sessions 15–18 — still not done).
+- [ ] `/onboarding/assessments` candidate-taking portal — still not ported (carried over from Session 17).
+- [ ] Backend: `Holiday` model/API still doesn't exist for real — Holiday Calendar remains local-only mock state (carried over from Session 17).

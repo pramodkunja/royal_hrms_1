@@ -78,7 +78,7 @@ class DeptListItem extends StatelessWidget {
             onDelete: onDelete,
           ),
           if (isExpanded) ...[
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: AppColors.border),
             _DesignationPanel(
               designations: designations,
               onAdd: onAddDesig,

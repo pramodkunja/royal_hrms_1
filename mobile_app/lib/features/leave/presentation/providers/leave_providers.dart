@@ -19,8 +19,8 @@ final leaveRepositoryProvider = Provider<LeaveRepository>((ref) {
 
 // ── Leave Types ───────────────────────────────────────────────────────────────
 
-final leaveTypesProvider = AsyncNotifierProvider.autoDispose<
-    LeaveTypesNotifier, List<LeaveTypeEntity>>(LeaveTypesNotifier.new);
+final leaveTypesProvider = AsyncNotifierProvider.autoDispose<LeaveTypesNotifier,
+    List<LeaveTypeEntity>>(LeaveTypesNotifier.new);
 
 class LeaveTypesNotifier
     extends AutoDisposeAsyncNotifier<List<LeaveTypeEntity>> {
@@ -38,8 +38,7 @@ class LeaveTypesNotifier
 // ── Leave Balances ────────────────────────────────────────────────────────────
 
 final leaveBalancesProvider = AsyncNotifierProvider.autoDispose<
-    LeaveBalancesNotifier,
-    List<LeaveBalanceEntity>>(LeaveBalancesNotifier.new);
+    LeaveBalancesNotifier, List<LeaveBalanceEntity>>(LeaveBalancesNotifier.new);
 
 class LeaveBalancesNotifier
     extends AutoDisposeAsyncNotifier<List<LeaveBalanceEntity>> {
@@ -56,8 +55,9 @@ class LeaveBalancesNotifier
 
 // ── Leave Stats ───────────────────────────────────────────────────────────────
 
-final leaveStatsProvider = AsyncNotifierProvider.autoDispose<
-    LeaveStatsNotifier, LeaveStatsEntity>(LeaveStatsNotifier.new);
+final leaveStatsProvider =
+    AsyncNotifierProvider.autoDispose<LeaveStatsNotifier, LeaveStatsEntity>(
+        LeaveStatsNotifier.new);
 
 class LeaveStatsNotifier extends AutoDisposeAsyncNotifier<LeaveStatsEntity> {
   @override
@@ -74,8 +74,7 @@ class LeaveStatsNotifier extends AutoDisposeAsyncNotifier<LeaveStatsEntity> {
 // ── Leave Requests ────────────────────────────────────────────────────────────
 
 final leaveRequestsProvider = AsyncNotifierProvider.autoDispose<
-    LeaveRequestsNotifier,
-    List<LeaveRequestEntity>>(LeaveRequestsNotifier.new);
+    LeaveRequestsNotifier, List<LeaveRequestEntity>>(LeaveRequestsNotifier.new);
 
 class LeaveRequestsNotifier
     extends AutoDisposeAsyncNotifier<List<LeaveRequestEntity>> {
@@ -97,17 +96,18 @@ class LeaveRequestsNotifier
     try {
       final documentFile = document?.path == null
           ? null
-          : await MultipartFile.fromFile(document!.path!, filename: document.name);
+          : await MultipartFile.fromFile(document!.path!,
+              filename: document.name);
       final created = await ref.read(leaveRepositoryProvider).applyLeave(
-            leaveTypeCode:      leaveTypeCode,
-            fromDate:           fromDate,
-            toDate:             toDate,
-            reason:             reason,
-            duration:           duration,
-            handoverTo:         handoverTo,
+            leaveTypeCode: leaveTypeCode,
+            fromDate: fromDate,
+            toDate: toDate,
+            reason: reason,
+            duration: duration,
+            handoverTo: handoverTo,
             contactDuringLeave: contactDuringLeave,
-            handoverNotes:      handoverNotes,
-            document:           documentFile,
+            handoverNotes: handoverNotes,
+            document: documentFile,
           );
       state = AsyncData([created, ...state.valueOrNull ?? []]);
       ref.invalidate(leaveStatsProvider);
@@ -122,6 +122,11 @@ class LeaveRequestsNotifier
     try {
       await ref.read(leaveRepositoryProvider).approveLeave(id);
       await refresh();
+      // Keep this consistent with LeaveTeamPendingNotifier's own
+      // approve/reject — both paths need the stats card and History
+      // sub-tab to reflect the change, not just their own list.
+      ref.invalidate(leaveStatsProvider);
+      ref.invalidate(leaveTeamHistoryProvider);
       return null;
     } catch (e) {
       return _friendly(e);
@@ -132,6 +137,8 @@ class LeaveRequestsNotifier
     try {
       await ref.read(leaveRepositoryProvider).rejectLeave(id, reason);
       await refresh();
+      ref.invalidate(leaveStatsProvider);
+      ref.invalidate(leaveTeamHistoryProvider);
       return null;
     } catch (e) {
       return _friendly(e);
@@ -155,6 +162,146 @@ class LeaveRequestsNotifier
   }
 }
 
+// ── Team Pending Requests (scope=team, accumulating "load more") ─────────────
+
+// Backs the approver Dashboard's "Pending Approvals" sub-tab and the
+// Approvals tab's "Pending" sub-tab — a real server-side approval queue
+// (scope=team), distinct from leaveRequestsProvider above (which is always
+// the viewer's OWN requests, no matter the role — see fetchLeaveRequests'
+// doc comment). Keyed by branch alone (page is tracked internally and grows
+// via loadMore() instead of being part of the key) — branch is '' when no
+// filter is applied (system_admin only — the backend silently ignores it for
+// other roles, so it's harmless to always send).
+final leaveTeamPendingProvider = AsyncNotifierProvider.autoDispose
+    .family<LeaveTeamPendingNotifier, LeaveLoadMoreState, String>(
+        LeaveTeamPendingNotifier.new);
+
+class LeaveTeamPendingNotifier
+    extends AutoDisposeFamilyAsyncNotifier<LeaveLoadMoreState, String> {
+  @override
+  Future<LeaveLoadMoreState> build(String branch) async {
+    final page = await ref.read(leaveRepositoryProvider).getLeaveRequestsPaginated(
+          scope: 'team',
+          page: 1,
+          branch: branch.isEmpty ? null : branch,
+        );
+    return LeaveLoadMoreState(
+      items: page.results,
+      page: page.page,
+      totalPages: page.totalPages,
+      count: page.count,
+    );
+  }
+
+  // Fetches the next page and appends it to what's already loaded — the
+  // list grows in place ("load more") instead of jumping to a new page.
+  Future<void> loadMore() async {
+    final current = state.valueOrNull;
+    if (current == null || current.loadingMore || !current.hasMore) return;
+    state = AsyncData(current.copyWith(loadingMore: true));
+    try {
+      final next = await ref.read(leaveRepositoryProvider).getLeaveRequestsPaginated(
+            scope: 'team',
+            page: current.page + 1,
+            branch: arg.isEmpty ? null : arg,
+          );
+      state = AsyncData(LeaveLoadMoreState(
+        items: [...current.items, ...next.results],
+        page: next.page,
+        totalPages: next.totalPages,
+        count: next.count,
+      ));
+    } catch (_) {
+      // A failed "load more" shouldn't wipe what's already on screen —
+      // just drop the loading flag so the button reappears for a retry.
+      state = AsyncData(current.copyWith(loadingMore: false));
+    }
+  }
+
+  Future<String?> approveRequest(String id) async {
+    try {
+      await ref.read(leaveRepositoryProvider).approveLeave(id);
+      ref.invalidateSelf();
+      ref.invalidate(leaveStatsProvider);
+      // A request leaving the pending queue lands in History (approved) —
+      // without this, switching to the History sub-tab right after
+      // approving/rejecting shows stale data until a manual refresh.
+      ref.invalidate(leaveTeamHistoryProvider);
+      return null;
+    } catch (e) {
+      return _friendly(e);
+    }
+  }
+
+  Future<String?> rejectRequest(String id, String reason) async {
+    try {
+      await ref.read(leaveRepositoryProvider).rejectLeave(id, reason);
+      ref.invalidateSelf();
+      ref.invalidate(leaveStatsProvider);
+      ref.invalidate(leaveTeamHistoryProvider);
+      return null;
+    } catch (e) {
+      return _friendly(e);
+    }
+  }
+}
+
+// ── Team History (scope=team, status=approved/rejected/cancelled, "load more") ─
+
+// Backs the Approvals tab's "History" sub-tab. NOTE — backend limitation:
+// _approval_scope_filter bakes a status restriction directly into the
+// manager/hr_admin scope Q (status=pending / status=l2_pending respectively),
+// which is ANDed with any additional ?status= filter. That means this can
+// only ever return rows for system_admin (whose scope filter has no baked-in
+// status, just ~Q(employee=user)) — manager/hr_admin will legitimately see
+// an empty history list here. That's a shared backend constraint (the web
+// frontend's equivalent History fetch hits the exact same limitation), not a
+// mobile-side bug — see apps/hrms/views/leave.py _approval_scope_filter.
+final leaveTeamHistoryProvider = AsyncNotifierProvider.autoDispose
+    .family<LeaveTeamHistoryNotifier, LeaveLoadMoreState, String>(
+        LeaveTeamHistoryNotifier.new);
+
+class LeaveTeamHistoryNotifier
+    extends AutoDisposeFamilyAsyncNotifier<LeaveLoadMoreState, String> {
+  @override
+  Future<LeaveLoadMoreState> build(String branch) async {
+    final page = await ref.read(leaveRepositoryProvider).getLeaveRequestsPaginated(
+          scope: 'team',
+          status: 'approved,rejected,cancelled',
+          page: 1,
+          branch: branch.isEmpty ? null : branch,
+        );
+    return LeaveLoadMoreState(
+      items: page.results,
+      page: page.page,
+      totalPages: page.totalPages,
+      count: page.count,
+    );
+  }
+
+  Future<void> loadMore() async {
+    final current = state.valueOrNull;
+    if (current == null || current.loadingMore || !current.hasMore) return;
+    state = AsyncData(current.copyWith(loadingMore: true));
+    try {
+      final next = await ref.read(leaveRepositoryProvider).getLeaveRequestsPaginated(
+            scope: 'team',
+            status: 'approved,rejected,cancelled',
+            page: current.page + 1,
+            branch: arg.isEmpty ? null : arg,
+          );
+      state = AsyncData(LeaveLoadMoreState(
+        items: [...current.items, ...next.results],
+        page: next.page,
+        totalPages: next.totalPages,
+        count: next.count,
+      ));
+    } catch (_) {
+      state = AsyncData(current.copyWith(loadingMore: false));
+    }
+  }
+}
+
 // ── Leave Calendar ────────────────────────────────────────────────────────────
 
 final leaveCalendarProvider = FutureProvider.autoDispose
@@ -165,21 +312,61 @@ final leaveCalendarProvider = FutureProvider.autoDispose
       .getLeaveCalendar(year: year, month: month);
 });
 
+// ── Employee Leave (admin Employee Profile "Leave" tab) ──────────────────────
+
+// Read-only lookups of a single employee's leave requests/stats, gated
+// server-side on the viewer having employees.view or leave.approve (see
+// LeaveRequestListCreateView.get / LeaveRequestStatsView — 403/404 otherwise).
+// employeeId is the human-readable code (e.g. 'RSS00001'), matching
+// EmployeeModel.employeeId elsewhere in this app.
+final employeeLeaveRequestsProvider = FutureProvider.autoDispose
+    .family<LeaveRequestPageEntity, (String employeeId, int year, int page)>(
+        (ref, key) {
+  final (employeeId, year, page) = key;
+  return ref.read(leaveRepositoryProvider).getEmployeeLeaveRequestsPaginated(
+        employeeId: employeeId,
+        year: year,
+        page: page,
+      );
+});
+
+final employeeLeaveStatsProvider = FutureProvider.autoDispose
+    .family<LeaveStatsEntity, (String employeeId, int year)>((ref, key) {
+  final (employeeId, year) = key;
+  return ref
+      .read(leaveRepositoryProvider)
+      .getEmployeeLeaveStats(employeeId: employeeId, year: year);
+});
+
+// ── Leave Request Detail (single re-fetch) ────────────────────────────────────
+
+// Backs the leave request detail sheet's background refresh: the sheet shows
+// the already-known row immediately, then this quietly supplies the latest
+// state from GET /leave/requests/<id>/ — mirrors web's useFetch(requestDetail).
+final leaveRequestDetailProvider =
+    FutureProvider.autoDispose.family<LeaveRequestEntity, String>((ref, id) {
+  return ref.read(leaveRepositoryProvider).getLeaveRequestById(id);
+});
+
 // ── Error helper ──────────────────────────────────────────────────────────────
 
+/// Public alias of [_friendly] for use outside this file (e.g. dashboard
+/// widgets that watch leave providers directly).
+String friendlyLeaveError(Object e) => _friendly(e);
+
+// Dio's own DioException.toString() never includes the response status code
+// or body (see dio_exception.dart) — a prior version of this helper tried to
+// string-match '400'/'403'/'409' etc. against that string and could never
+// actually match, silently discarding every real backend validation message
+// (e.g. "Insufficient balance...", "Future-dated leave applications are not
+// allowed...") in favor of a generic fallback. Route through the shared,
+// already-proven parseDioException() instead, which reads the real
+// {status, message, data} envelope.
 String _friendly(Object e) {
+  if (e is DioException) return parseDioException(e).message;
   final msg = e.toString();
-  if (msg.contains('SocketException') || msg.contains('connection')) {
+  if (msg.contains('SocketException')) {
     return 'Cannot reach server. Check your connection.';
   }
-  if (msg.contains('400')) {
-    final match = RegExp(r'"message"\s*:\s*"([^"]+)"').firstMatch(msg);
-    if (match != null) return match.group(1)!;
-    return 'Invalid request. Please check your inputs.';
-  }
-  if (msg.contains('401')) return 'Session expired. Please log in again.';
-  if (msg.contains('403')) return 'You do not have permission to do this.';
-  if (msg.contains('409')) return 'Dates overlap with an existing leave.';
-  if (msg.contains('500')) return 'Server error. Please try again later.';
   return msg.replaceAll('Exception:', '').trim();
 }

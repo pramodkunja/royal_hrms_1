@@ -52,7 +52,14 @@ final dioProvider = Provider<Dio>((ref) {
 AppException parseDioException(DioException error) {
   final statusCode = error.response?.statusCode;
   final body = error.response?.data;
-  final serverMessage = body is Map ? body['message'] as String? : null;
+  // DRF's own permission/exception handling (e.g. a bare `permission_classes`
+  // rejection, not one of our views' explicit `error()` calls) returns
+  // {"detail": "..."} instead of the app's usual {status, message, data}
+  // envelope — fall back to it so those responses still surface a real
+  // message instead of the generic per-status default below.
+  final serverMessage = body is Map
+      ? (body['message'] as String? ?? body['detail'] as String?)
+      : null;
 
   if (statusCode == 401) {
     return UnauthorizedException(serverMessage ?? 'Session expired. Please log in again.');

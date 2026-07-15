@@ -1,94 +1,249 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../widgets/profile_widgets.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../data/models/my_profile_model.dart';
+import '../providers/profile_providers.dart';
 import '../widgets/profile_sections.dart';
 
-class ProfileScreen extends StatefulWidget {
+// ignore_for_file: use_build_context_synchronously
+
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  // Personal info
-  final _firstNameCtrl = TextEditingController(text: 'System');
-  final _lastNameCtrl = TextEditingController(text: 'Admin');
-  final _emailCtrl = TextEditingController(text: 'sysadmin@royal.com');
-  final _phoneCtrl = TextEditingController(text: '+91 98765 43210');
-  final _roleCtrl = TextEditingController(text: 'system_admin');
-  final _userIdCtrl =
-      TextEditingController(text: 'e662e137-e63c-4b86-a8da');
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  // Editable fields
+  final _phoneCtrl = TextEditingController();
+  final _currentAddressCtrl = TextEditingController();
+  final _permanentAddressCtrl = TextEditingController();
+  final _emergencyNameCtrl = TextEditingController();
+  final _emergencyRelationshipCtrl = TextEditingController();
+  final _emergencyPhoneCtrl = TextEditingController();
+  final _emergencyEmailCtrl = TextEditingController();
 
   // Password
   final _curPassCtrl = TextEditingController();
   final _newPassCtrl = TextEditingController();
   final _cfmPassCtrl = TextEditingController();
 
-  // Address
-  final _streetCtrl = TextEditingController();
-  final _cityCtrl = TextEditingController();
-  final _pinCtrl = TextEditingController();
-  final _stateCtrl = TextEditingController();
-  final _countryCtrl = TextEditingController();
-
-  // Bank
-  final _bankNameCtrl = TextEditingController();
-  final _acctNoCtrl = TextEditingController();
-  final _ifscCtrl = TextEditingController();
-  final _panCtrl = TextEditingController();
+  bool _saving = false;
+  bool _changingPassword = false;
+  // Tracks which profile.id the controllers were last populated from, so we
+  // don't clobber in-progress edits on every provider rebuild.
+  String? _hydratedForId;
 
   @override
   void dispose() {
     for (final c in [
-      _firstNameCtrl, _lastNameCtrl, _emailCtrl, _phoneCtrl,
-      _roleCtrl, _userIdCtrl, _curPassCtrl, _newPassCtrl, _cfmPassCtrl,
-      _streetCtrl, _cityCtrl, _pinCtrl, _stateCtrl, _countryCtrl,
-      _bankNameCtrl, _acctNoCtrl, _ifscCtrl, _panCtrl,
+      _phoneCtrl, _currentAddressCtrl, _permanentAddressCtrl,
+      _emergencyNameCtrl, _emergencyRelationshipCtrl,
+      _emergencyPhoneCtrl, _emergencyEmailCtrl,
+      _curPassCtrl, _newPassCtrl, _cfmPassCtrl,
     ]) {
       c.dispose();
     }
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(child: _header()),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
-              child: Column(
-                children: [
-                  _personalInfo(),
-                  const SizedBox(height: 16),
-                  _changePassword(),
-                  const SizedBox(height: 16),
-                  ProfileAddressSection(
-                    streetCtrl: _streetCtrl,
-                    cityCtrl: _cityCtrl,
-                    pinCtrl: _pinCtrl,
-                    stateCtrl: _stateCtrl,
-                    countryCtrl: _countryCtrl,
-                  ),
-                  const SizedBox(height: 16),
-                  ProfileBankSection(
-                    bankNameCtrl: _bankNameCtrl,
-                    acctNoCtrl: _acctNoCtrl,
-                    ifscCtrl: _ifscCtrl,
-                    panCtrl: _panCtrl,
-                  ),
-                  const SizedBox(height: 16),
-                  const ProfileDocumentsSection(),
-                ],
-              ),
-            ),
+  void _hydrate(MyProfileModel profile) {
+    if (_hydratedForId == profile.id) return;
+    _hydratedForId = profile.id;
+    _phoneCtrl.text = profile.phone;
+    _currentAddressCtrl.text = profile.detail.currentAddress;
+    _permanentAddressCtrl.text = profile.detail.permanentAddress;
+    _emergencyNameCtrl.text = profile.detail.emergencyName;
+    _emergencyRelationshipCtrl.text = profile.detail.emergencyRelationship;
+    _emergencyPhoneCtrl.text = profile.detail.emergencyPhone;
+    _emergencyEmailCtrl.text = profile.detail.emergencyEmail;
+  }
+
+  void _showSnack(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      backgroundColor: isError ? AppColors.error : null,
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+
+  Future<void> _onSave() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    final data = MyProfileUpdateData(
+      phone: _phoneCtrl.text,
+      currentAddress: _currentAddressCtrl.text,
+      permanentAddress: _permanentAddressCtrl.text,
+      emergencyName: _emergencyNameCtrl.text,
+      emergencyRelationship: _emergencyRelationshipCtrl.text,
+      emergencyPhone: _emergencyPhoneCtrl.text,
+      emergencyEmail: _emergencyEmailCtrl.text,
+    );
+    final err = await ref.read(myProfileProvider.notifier).updateProfile(data);
+    if (!mounted) return;
+    setState(() => _saving = false);
+    _showSnack(err ?? 'Changes saved successfully', isError: err != null);
+  }
+
+  Future<void> _onChangePassword() async {
+    final oldPass = _curPassCtrl.text;
+    final newPass = _newPassCtrl.text;
+    final confirmPass = _cfmPassCtrl.text;
+
+    // Client-side validation order mirrors the web app: old required → new
+    // required → new must equal confirm → new must differ from old. Server
+    // enforces length/complexity — we don't duplicate that here.
+    if (oldPass.isEmpty) {
+      _showSnack('Current password is required.', isError: true);
+      return;
+    }
+    if (newPass.isEmpty) {
+      _showSnack('New password is required.', isError: true);
+      return;
+    }
+    if (newPass != confirmPass) {
+      _showSnack('New password and confirm password do not match.', isError: true);
+      return;
+    }
+    if (newPass == oldPass) {
+      _showSnack('New password must be different from the current password.',
+          isError: true);
+      return;
+    }
+
+    setState(() => _changingPassword = true);
+    final err = await changeMyPassword(
+      ref,
+      oldPassword: oldPass,
+      newPassword: newPass,
+      confirmPassword: confirmPass,
+    );
+    if (!mounted) return;
+    setState(() => _changingPassword = false);
+
+    if (err != null) {
+      _showSnack(err, isError: true);
+      return;
+    }
+
+    _curPassCtrl.clear();
+    _newPassCtrl.clear();
+    _cfmPassCtrl.clear();
+    await _forceLogoutAfterPasswordChange();
+  }
+
+  // The backend blacklists the refresh token and clears auth cookies on a
+  // successful password change — the session is already dead server-side,
+  // so we must log out locally and send the user back to login rather than
+  // leaving them on a screen backed by a session that no longer exists.
+  Future<void> _forceLogoutAfterPasswordChange() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Password Changed'),
+        content: const Text('Password changed. Please log in again.'),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('OK'),
           ),
         ],
+      ),
+    );
+    if (!mounted) return;
+    await ref.read(authStateProvider.notifier).logout();
+    if (mounted) context.go(AppRoutes.login);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profileAsync = ref.watch(myProfileProvider);
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: profileAsync.when(
+          data: (profile) {
+            _hydrate(profile);
+            return RefreshIndicator(
+              onRefresh: () => ref.read(myProfileProvider.notifier).refresh(),
+              child: CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(child: _header()),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
+                      child: Column(
+                        children: [
+                          ProfilePersonalSection(
+                            profile: profile,
+                            phoneCtrl: _phoneCtrl,
+                          ),
+                          const SizedBox(height: 16),
+                          ProfileAddressSection(
+                            currentAddressCtrl: _currentAddressCtrl,
+                            permanentAddressCtrl: _permanentAddressCtrl,
+                          ),
+                          const SizedBox(height: 16),
+                          ProfileEducationSection(profile: profile),
+                          const SizedBox(height: 16),
+                          ProfileBankSection(profile: profile),
+                          const SizedBox(height: 16),
+                          ProfileEmergencySection(
+                            nameCtrl: _emergencyNameCtrl,
+                            relationshipCtrl: _emergencyRelationshipCtrl,
+                            phoneCtrl: _emergencyPhoneCtrl,
+                            emailCtrl: _emergencyEmailCtrl,
+                          ),
+                          const SizedBox(height: 16),
+                          ProfileChangePasswordSection(
+                            currentCtrl: _curPassCtrl,
+                            newCtrl: _newPassCtrl,
+                            confirmCtrl: _cfmPassCtrl,
+                            loading: _changingPassword,
+                            onSubmit: _onChangePassword,
+                          ),
+                          const SizedBox(height: 16),
+                          const ProfileDocumentsSection(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => _errorState(friendlyProfileError(e)),
+        ),
+      ),
+    );
+  }
+
+  Widget _errorState(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 40, color: AppColors.error),
+            const SizedBox(height: 12),
+            Text(message, style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: () => ref.invalidate(myProfileProvider),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -112,11 +267,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           FilledButton.icon(
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Changes saved successfully')),
-            ),
-            icon: const Icon(Icons.save_outlined, size: 15),
-            label: const Text('Save Changes'),
+            onPressed: _saving ? null : _onSave,
+            icon: _saving
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(Colors.white),
+                    ),
+                  )
+                : const Icon(Icons.save_outlined, size: 15),
+            label: Text(_saving ? 'Saving…' : 'Save Changes'),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primary,
               padding:
@@ -129,130 +291,4 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
-
-  Widget _personalInfo() {
-    return ProfileSectionCard(
-      icon: Icons.manage_accounts_outlined,
-      title: 'Personal Information',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Avatar + name row
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 30,
-                backgroundColor: AppColors.primary,
-                child: Text(
-                  'SA',
-                  style: AppTextStyles.h3.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('System Admin',
-                        style: AppTextStyles.label.copyWith(
-                            fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 2),
-                    Text('system_admin',
-                        style: AppTextStyles.caption
-                            .copyWith(color: AppColors.textSecondary)),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () {},
-                      icon: const Icon(Icons.upload_outlined, size: 13),
-                      label: const Text('Change photo'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 5),
-                        textStyle: const TextStyle(fontSize: 11),
-                        side: const BorderSide(color: AppColors.border),
-                        foregroundColor: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ProfileFieldRow(
-            left: ProfileField(label: 'First Name', controller: _firstNameCtrl),
-            right: ProfileField(label: 'Last Name', controller: _lastNameCtrl),
-          ),
-          const SizedBox(height: 12),
-          ProfileFieldRow(
-            left: ProfileField(
-                label: 'Email',
-                controller: _emailCtrl,
-                keyboardType: TextInputType.emailAddress),
-            right: ProfileField(
-                label: 'Phone',
-                controller: _phoneCtrl,
-                keyboardType: TextInputType.phone),
-          ),
-          const SizedBox(height: 12),
-          ProfileFieldRow(
-            left: ProfileField(
-                label: 'Role', controller: _roleCtrl, readOnly: true),
-            right: ProfileField(
-                label: 'User ID', controller: _userIdCtrl, readOnly: true),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _changePassword() {
-    return ProfileSectionCard(
-      icon: Icons.lock_outline,
-      title: 'Change Password',
-      child: Column(
-        children: [
-          ProfileField(
-              label: 'Current Password',
-              controller: _curPassCtrl,
-              obscureText: true,
-              hint: '••••••••'),
-          const SizedBox(height: 12),
-          ProfileFieldRow(
-            left: ProfileField(
-                label: 'New Password',
-                controller: _newPassCtrl,
-                obscureText: true,
-                hint: '••••••••'),
-            right: ProfileField(
-                label: 'Confirm Password',
-                controller: _cfmPassCtrl,
-                obscureText: true,
-                hint: '••••••••'),
-          ),
-          const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.lock_outline, size: 13),
-              label: const Text('Update Password'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                side: const BorderSide(color: AppColors.primary),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                textStyle: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
 }

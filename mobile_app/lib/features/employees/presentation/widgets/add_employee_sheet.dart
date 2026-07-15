@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../settings/data/models/departments_model.dart';
+import '../../../settings/data/models/roles_model.dart';
 import '../../data/models/employee_model.dart';
 import '../providers/employee_providers.dart';
 
@@ -33,16 +34,19 @@ class AddEmployeeSheet extends ConsumerStatefulWidget {
 }
 
 class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
-  late final EmployeeFormData _form;
+  EmployeeFormData? _createForm;
+  EmployeeUpdateFormData? _editForm;
   final _errors = <String, String>{};
   bool _submitting = false;
 
   @override
   void initState() {
     super.initState();
-    _form = widget.editing != null
-        ? EmployeeFormData.fromModel(widget.editing!)
-        : EmployeeFormData();
+    if (widget.editing != null) {
+      _editForm = EmployeeUpdateFormData.fromModel(widget.editing!);
+    } else {
+      _createForm = EmployeeFormData();
+    }
   }
 
   bool get _isEditing => widget.editing != null;
@@ -63,127 +67,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const _SectionHeader(
-                    icon: Icons.person_outline,
-                    label: 'PERSONAL INFORMATION',
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _Field(
-                          label: 'First Name',
-                          required: true,
-                          initialValue: _form.firstName,
-                          error: _errors['first_name'],
-                          onChanged: (v) => _form.firstName = v,
-                          hint: 'e.g. Anjali',
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _Field(
-                          label: 'Last Name',
-                          required: true,
-                          initialValue: _form.lastName,
-                          error: _errors['last_name'],
-                          onChanged: (v) => _form.lastName = v,
-                          hint: 'e.g. Sharma',
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _Field(
-                          label: 'Work Email',
-                          required: true,
-                          initialValue: _form.email,
-                          error: _errors['email'],
-                          onChanged: (v) => _form.email = v,
-                          hint: 'name@company.com',
-                          keyboardType: TextInputType.emailAddress,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _Field(
-                          label: 'Phone',
-                          initialValue: _form.phone,
-                          onChanged: (v) => _form.phone = v,
-                          hint: '+91 98765 43210',
-                          keyboardType: TextInputType.phone,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 22),
-                  const _SectionHeader(
-                    icon: Icons.work_outline,
-                    label: 'EMPLOYMENT DETAILS',
-                  ),
-                  const SizedBox(height: 14),
-                  // Role + Department
-                  Row(
-                    children: [
-                      Expanded(child: _RoleDropdown(form: _form, error: _errors['role'], onChanged: _rebuild)),
-                      const SizedBox(width: 12),
-                      Expanded(child: _DeptDropdown(form: _form, error: _errors['department'], onChanged: _rebuild)),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  // Designation + Branch
-                  Row(
-                    children: [
-                      Expanded(child: _DesignationDropdown(form: _form, error: _errors['designation'], onChanged: _rebuild)),
-                      const SizedBox(width: 12),
-                      Expanded(child: _BranchDropdown(form: _form, error: _errors['branch'], onChanged: _rebuild)),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  // Employee Type + Date of Joining
-                  Row(
-                    children: [
-                      Expanded(child: _EmployeeTypeDropdown(form: _form, onChanged: _rebuild)),
-                      const SizedBox(width: 12),
-                      Expanded(child: _DateField(form: _form, error: _errors['date_of_joining'], onChanged: _rebuild)),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  // Info banner
-                  if (!_isEditing)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: AppColors.primary.withValues(alpha: 0.2),
-                        ),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.info_outline,
-                              size: 16, color: AppColors.primary),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'A temporary password will be emailed to the employee. '
-                              'They will be prompted to change it on first login.',
-                              style: AppTextStyles.caption.copyWith(
-                                color: AppColors.primary,
-                                height: 1.5,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
+                children: _isEditing ? _editFields() : _createFields(),
               ),
             ),
           ),
@@ -198,30 +82,362 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
     );
   }
 
+  // ── Create-mode fields ───────────────────────────────────────────────────
+
+  List<Widget> _createFields() {
+    final form = _createForm!;
+    return [
+      const _SectionHeader(
+        icon: Icons.person_outline,
+        label: 'PERSONAL INFORMATION',
+      ),
+      const SizedBox(height: 14),
+      Row(
+        children: [
+          Expanded(
+            child: _Field(
+              label: 'First Name',
+              required: true,
+              initialValue: form.firstName,
+              error: _errors['first_name'],
+              onChanged: (v) => form.firstName = v,
+              hint: 'e.g. Anjali',
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _Field(
+              label: 'Last Name',
+              required: true,
+              initialValue: form.lastName,
+              error: _errors['last_name'],
+              onChanged: (v) => form.lastName = v,
+              hint: 'e.g. Sharma',
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 14),
+      Row(
+        children: [
+          Expanded(
+            child: _Field(
+              label: 'Work Email',
+              required: true,
+              initialValue: form.email,
+              error: _errors['email'],
+              onChanged: (v) => form.email = v,
+              hint: 'name@company.com',
+              keyboardType: TextInputType.emailAddress,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _Field(
+              label: 'Phone',
+              initialValue: form.phone,
+              onChanged: (v) => form.phone = v,
+              hint: '+91 98765 43210',
+              keyboardType: TextInputType.phone,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 22),
+      const _SectionHeader(
+        icon: Icons.work_outline,
+        label: 'EMPLOYMENT DETAILS',
+      ),
+      const SizedBox(height: 14),
+      // Role + Department
+      Row(
+        children: [
+          Expanded(
+            child: _RoleIdDropdown(
+              selectedId: form.roleId,
+              error: _errors['role'],
+              onSelected: (id) => setState(() => form.roleId = id),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _DeptDropdown(
+              selectedName: form.department.isEmpty ? null : form.department,
+              error: _errors['department'],
+              onSelected: (dept) => setState(() {
+                form.department = dept?.name ?? '';
+                form.departmentId = dept?.id;
+                form.designation = '';
+              }),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 14),
+      // Designation + Branch
+      Row(
+        children: [
+          Expanded(
+            child: _DesignationDropdown(
+              departmentId: form.departmentId,
+              selectedDesignation: form.designation,
+              error: _errors['designation'],
+              onSelected: (v) => setState(() => form.designation = v ?? ''),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _BranchDropdown(
+              selectedBranch: form.branch.isEmpty ? null : form.branch,
+              error: _errors['branch'],
+              onSelected: (v) => setState(() => form.branch = v ?? ''),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 14),
+      // Employee Type + Date of Joining
+      Row(
+        children: [
+          Expanded(child: _EmployeeTypeDropdown(form: form, onChanged: _rebuild)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _DateField(
+              label: 'Date of Joining',
+              isoValue: form.dateOfJoining,
+              error: _errors['date_of_joining'],
+              onChanged: (iso) => setState(() => form.dateOfJoining = iso),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 18),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.2),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline,
+                size: 16, color: AppColors.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'A temporary password will be emailed to the employee. '
+                'They will be prompted to change it on first login.',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.primary,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  // ── Edit-mode fields ─────────────────────────────────────────────────────
+
+  List<Widget> _editFields() {
+    final form = _editForm!;
+    return [
+      const _SectionHeader(
+        icon: Icons.person_outline,
+        label: 'PERSONAL INFORMATION',
+      ),
+      const SizedBox(height: 14),
+      _Field(
+        label: 'Full Name',
+        required: true,
+        initialValue: form.fullName,
+        error: _errors['full_name'],
+        onChanged: (v) => form.fullName = v,
+        hint: 'e.g. Anjali Sharma',
+      ),
+      const SizedBox(height: 14),
+      Row(
+        children: [
+          Expanded(
+            child: _Field(
+              label: 'Phone',
+              initialValue: form.phone,
+              onChanged: (v) => form.phone = v,
+              hint: '+91 98765 43210',
+              keyboardType: TextInputType.phone,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _DateField(
+              label: 'Date of Birth',
+              required: false,
+              isoValue: form.dateOfBirth,
+              onChanged: (iso) => setState(() => form.dateOfBirth = iso),
+              firstDate: DateTime(1950),
+              lastDate: DateTime.now(),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 22),
+      const _SectionHeader(
+        icon: Icons.work_outline,
+        label: 'EMPLOYMENT DETAILS',
+      ),
+      const SizedBox(height: 14),
+      Row(
+        children: [
+          Expanded(
+            child: _RoleSlugDropdown(
+              selectedName: form.role,
+              error: _errors['role'],
+              onSelected: (name) => setState(() => form.role = name),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _DeptDropdown(
+              selectedName: form.department.isEmpty ? null : form.department,
+              error: _errors['department'],
+              onSelected: (dept) => setState(() {
+                form.department = dept?.name ?? '';
+                form.departmentId = dept?.id;
+                form.designation = '';
+              }),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 14),
+      Row(
+        children: [
+          Expanded(
+            child: _DesignationDropdown(
+              departmentId: form.departmentId,
+              selectedDesignation: form.designation,
+              error: _errors['designation'],
+              onSelected: (v) => setState(() => form.designation = v ?? ''),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _BranchDropdown(
+              selectedBranch: form.branch.isEmpty ? null : form.branch,
+              error: _errors['branch'],
+              onSelected: (v) => setState(() {
+                form.branch = v ?? '';
+                // HR/manager pickers are filtered by branch — a previous
+                // selection may no longer be valid for the new branch.
+                form.hrId = null;
+                form.hrName = null;
+                form.reportingManagerId = null;
+                form.reportingManagerName = null;
+              }),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 14),
+      _DateField(
+        label: 'Date of Joining',
+        isoValue: form.dateOfJoining,
+        error: _errors['date_of_joining'],
+        onChanged: (iso) => setState(() => form.dateOfJoining = iso),
+      ),
+      const SizedBox(height: 22),
+      const _SectionHeader(
+        icon: Icons.supervisor_account_outlined,
+        label: 'REPORTING & HR',
+      ),
+      const SizedBox(height: 14),
+      _HrDropdown(
+        branch: form.branch,
+        selectedId: form.hrId,
+        onSelected: (opt) => setState(() {
+          form.hrId = opt?.id;
+          form.hrName = opt?.fullName;
+        }),
+      ),
+      if (!form.isManagerRole) ...[
+        const SizedBox(height: 14),
+        _ManagerDropdown(
+          branch: form.branch,
+          selectedId: form.reportingManagerId,
+          onSelected: (opt) => setState(() {
+            form.reportingManagerId = opt?.id;
+            form.reportingManagerName = opt?.fullName;
+          }),
+        ),
+      ],
+    ];
+  }
+
   void _rebuild() => setState(() {});
 
   Future<void> _submit() async {
+    if (_isEditing) {
+      await _submitEdit();
+    } else {
+      await _submitCreate();
+    }
+  }
+
+  Future<void> _submitCreate() async {
+    final form = _createForm!;
     setState(() {
       _errors.clear();
-      _errors.addAll(_form.validate());
+      _errors.addAll(form.validate());
     });
     if (_errors.isNotEmpty) return;
 
     setState(() => _submitting = true);
-    final error = await ref.read(employeesProvider.notifier).create(_form);
+    final error = await ref.read(employeesProvider.notifier).create(form);
     if (!mounted) return;
     setState(() => _submitting = false);
 
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(error),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ));
+      _showError(error);
     } else {
       Navigator.pop(context, true);
     }
+  }
+
+  Future<void> _submitEdit() async {
+    final form = _editForm!;
+    setState(() {
+      _errors.clear();
+      _errors.addAll(form.validate());
+    });
+    if (_errors.isNotEmpty) return;
+
+    setState(() => _submitting = true);
+    final error = await ref
+        .read(employeesProvider.notifier)
+        .updateEmployee(widget.editing!.employeeId, form);
+    if (!mounted) return;
+    setState(() => _submitting = false);
+
+    if (error != null) {
+      _showError(error);
+    } else {
+      Navigator.pop(context, true);
+    }
+  }
+
+  void _showError(String error) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(error),
+      backgroundColor: AppColors.error,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
   }
 }
 
@@ -235,7 +451,7 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 12, 14),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
@@ -247,7 +463,7 @@ class _Header extends StatelessWidget {
               color: AppColors.primary.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.person_add_outlined,
+            child: Icon(Icons.person_add_outlined,
                 size: 20, color: AppColors.primary),
           ),
           const SizedBox(width: 12),
@@ -291,7 +507,7 @@ class _SectionHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 10),
-        const Expanded(child: Divider(color: AppColors.border)),
+        Expanded(child: Divider(color: AppColors.border)),
       ],
     );
   }
@@ -335,7 +551,7 @@ class _Field extends StatelessWidget {
         if (error != null) ...[
           const SizedBox(height: 3),
           Text(error!,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 10,
                   color: AppColors.error,
                   fontWeight: FontWeight.w500)),
@@ -345,17 +561,17 @@ class _Field extends StatelessWidget {
   }
 }
 
-// ── Role dropdown ──────────────────────────────────────────────────────────────
+// ── Role dropdown (create mode — keyed by role id) ─────────────────────────────
 
-class _RoleDropdown extends ConsumerWidget {
-  final EmployeeFormData form;
+class _RoleIdDropdown extends ConsumerWidget {
+  final dynamic selectedId;
   final String? error;
-  final VoidCallback onChanged;
+  final ValueChanged<dynamic> onSelected;
 
-  const _RoleDropdown({
-    required this.form,
+  const _RoleIdDropdown({
+    this.selectedId,
     this.error,
-    required this.onChanged,
+    required this.onSelected,
   });
 
   @override
@@ -369,7 +585,7 @@ class _RoleDropdown extends ConsumerWidget {
         const _Label(text: 'Role', required: true),
         const SizedBox(height: 5),
         DropdownButtonFormField<dynamic>(
-          initialValue: form.roleId,
+          initialValue: selectedId,
           style: AppTextStyles.body,
           isExpanded: true,
           decoration: _inputDec('— Select Role —', error: error),
@@ -378,31 +594,73 @@ class _RoleDropdown extends ConsumerWidget {
             value: r.id,
             child: Text(r.displayName, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
           )).toList(),
-          onChanged: (value) {
-            form.roleId = value;
-            onChanged();
-          },
+          onChanged: onSelected,
         ),
         if (error != null) ...[
           const SizedBox(height: 3),
-          Text(error!, style: const TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
+          Text(error!, style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
         ],
       ],
     );
   }
 }
 
-// ── Department dropdown ────────────────────────────────────────────────────────
+// ── Role dropdown (edit mode — keyed by Role.name slug, what PUT expects) ──────
+
+class _RoleSlugDropdown extends ConsumerWidget {
+  final String selectedName;
+  final String? error;
+  final ValueChanged<String> onSelected;
+
+  const _RoleSlugDropdown({
+    required this.selectedName,
+    this.error,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final rolesAsync = ref.watch(employeeFormRolesProvider);
+    final roles = rolesAsync.valueOrNull ?? [];
+    final selected = roles.where((r) => r.name == selectedName).firstOrNull;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _Label(text: 'Role', required: true),
+        const SizedBox(height: 5),
+        DropdownButtonFormField<RoleModel>(
+          initialValue: selected,
+          style: AppTextStyles.body,
+          isExpanded: true,
+          decoration: _inputDec('— Select Role —', error: error),
+          hint: Text('— Select Role —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
+          items: roles.map((r) => DropdownMenuItem(
+            value: r,
+            child: Text(r.displayName, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+          )).toList(),
+          onChanged: (r) => onSelected(r?.name ?? ''),
+        ),
+        if (error != null) ...[
+          const SizedBox(height: 3),
+          Text(error!, style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
+        ],
+      ],
+    );
+  }
+}
+
+// ── Department dropdown (shared by add + edit) ────────────────────────────────
 
 class _DeptDropdown extends ConsumerWidget {
-  final EmployeeFormData form;
+  final String? selectedName;
   final String? error;
-  final VoidCallback onChanged;
+  final ValueChanged<DepartmentModel?> onSelected;
 
   const _DeptDropdown({
-    required this.form,
+    this.selectedName,
     this.error,
-    required this.onChanged,
+    required this.onSelected,
   });
 
   @override
@@ -411,7 +669,7 @@ class _DeptDropdown extends ConsumerWidget {
     final depts = deptsAsync.valueOrNull ?? [];
 
     final selected = depts
-        .where((d) => d.name == form.department)
+        .where((d) => d.name == selectedName)
         .firstOrNull;
 
     return Column(
@@ -429,38 +687,35 @@ class _DeptDropdown extends ConsumerWidget {
             value: d,
             child: Text(d.name, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
           )).toList(),
-          onChanged: (dept) {
-            form.department   = dept?.name ?? '';
-            form.departmentId = dept?.id;
-            form.designation  = '';  // reset designation
-            onChanged();
-          },
+          onChanged: onSelected,
         ),
         if (error != null) ...[
           const SizedBox(height: 3),
-          Text(error!, style: const TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
+          Text(error!, style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
         ],
       ],
     );
   }
 }
 
-// ── Designation dropdown ──────────────────────────────────────────────────────
+// ── Designation dropdown (shared by add + edit) ────────────────────────────────
 
 class _DesignationDropdown extends ConsumerWidget {
-  final EmployeeFormData form;
+  final int? departmentId;
+  final String selectedDesignation;
   final String? error;
-  final VoidCallback onChanged;
+  final ValueChanged<String?> onSelected;
 
   const _DesignationDropdown({
-    required this.form,
+    required this.departmentId,
+    required this.selectedDesignation,
     this.error,
-    required this.onChanged,
+    required this.onSelected,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final deptId = form.departmentId;
+    final deptId = departmentId;
     final List<String> names;
 
     if (deptId != null) {
@@ -478,7 +733,7 @@ class _DesignationDropdown extends ConsumerWidget {
         const _Label(text: 'Designation', required: true),
         const SizedBox(height: 5),
         DropdownButtonFormField<String>(
-          initialValue: form.designation.isEmpty ? null : form.designation,
+          initialValue: selectedDesignation.isEmpty ? null : selectedDesignation,
           style: AppTextStyles.body.copyWith(
             color: isEnabled ? AppColors.textPrimary : AppColors.textHint,
           ),
@@ -498,33 +753,28 @@ class _DesignationDropdown extends ConsumerWidget {
                     child: Text(n, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
                   )).toList()
               : null,
-          onChanged: isEnabled
-              ? (value) {
-                  form.designation = value ?? '';
-                  onChanged();
-                }
-              : null,
+          onChanged: isEnabled ? onSelected : null,
         ),
         if (error != null) ...[
           const SizedBox(height: 3),
-          Text(error!, style: const TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
+          Text(error!, style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
         ],
       ],
     );
   }
 }
 
-// ── Branch dropdown ────────────────────────────────────────────────────────────
+// ── Branch dropdown (shared by add + edit) ─────────────────────────────────────
 
 class _BranchDropdown extends ConsumerWidget {
-  final EmployeeFormData form;
+  final String? selectedBranch;
   final String? error;
-  final VoidCallback onChanged;
+  final ValueChanged<String?> onSelected;
 
   const _BranchDropdown({
-    required this.form,
+    this.selectedBranch,
     this.error,
-    required this.onChanged,
+    required this.onSelected,
   });
 
   @override
@@ -538,7 +788,7 @@ class _BranchDropdown extends ConsumerWidget {
         const _Label(text: 'Branch', required: true),
         const SizedBox(height: 5),
         DropdownButtonFormField<String>(
-          initialValue: form.branch.isEmpty ? null : form.branch,
+          initialValue: selectedBranch,
           style: AppTextStyles.body,
           isExpanded: true,
           decoration: _inputDec('— Select Branch —', error: error),
@@ -547,21 +797,124 @@ class _BranchDropdown extends ConsumerWidget {
             value: b.name,
             child: Text(b.name, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
           )).toList(),
-          onChanged: (value) {
-            form.branch = value ?? '';
-            onChanged();
-          },
+          onChanged: onSelected,
         ),
         if (error != null) ...[
           const SizedBox(height: 3),
-          Text(error!, style: const TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
+          Text(error!, style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
         ],
       ],
     );
   }
 }
 
-// ── Employee type dropdown ────────────────────────────────────────────────────
+// ── HR contact dropdown (edit-only) ────────────────────────────────────────────
+
+class _HrDropdown extends ConsumerWidget {
+  final String branch;
+  final String? selectedId;
+  final ValueChanged<EmployeePickerOption?> onSelected;
+
+  const _HrDropdown({
+    required this.branch,
+    this.selectedId,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(employeeHrOptionsProvider(branch));
+    final options = async.valueOrNull ?? [];
+    final selected = options.where((o) => o.id == selectedId).firstOrNull;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _Label(text: 'HR Contact'),
+        const SizedBox(height: 5),
+        DropdownButtonFormField<EmployeePickerOption?>(
+          initialValue: selected,
+          style: AppTextStyles.body,
+          isExpanded: true,
+          decoration: _inputDec('— None —'),
+          hint: Text('— None —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
+          items: [
+            DropdownMenuItem<EmployeePickerOption?>(
+              value: null,
+              child: Text('— None —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
+            ),
+            ...options.map((o) => DropdownMenuItem<EmployeePickerOption?>(
+                  value: o,
+                  child: Text('${o.fullName} (${o.department})',
+                      style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+                )),
+          ],
+          onChanged: onSelected,
+        ),
+      ],
+    );
+  }
+}
+
+// ── Reporting manager dropdown (edit-only) ─────────────────────────────────────
+
+class _ManagerDropdown extends ConsumerWidget {
+  final String branch;
+  final String? selectedId;
+  final ValueChanged<EmployeePickerOption?> onSelected;
+
+  const _ManagerDropdown({
+    required this.branch,
+    this.selectedId,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isEnabled = branch.isNotEmpty;
+    final options = isEnabled
+        ? (ref.watch(employeeManagerOptionsProvider(branch)).valueOrNull ?? [])
+        : <EmployeePickerOption>[];
+    final selected = options.where((o) => o.id == selectedId).firstOrNull;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _Label(text: 'Reporting Manager'),
+        const SizedBox(height: 5),
+        DropdownButtonFormField<EmployeePickerOption?>(
+          initialValue: selected,
+          style: AppTextStyles.body,
+          isExpanded: true,
+          decoration: _inputDec(
+            isEnabled ? '— None —' : 'Select branch first',
+            enabled: isEnabled,
+          ),
+          hint: Text(
+            isEnabled ? '— None —' : 'Select branch first',
+            style: AppTextStyles.body.copyWith(color: AppColors.textHint),
+          ),
+          items: isEnabled
+              ? [
+                  DropdownMenuItem<EmployeePickerOption?>(
+                    value: null,
+                    child: Text('— None —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
+                  ),
+                  ...options.map((o) => DropdownMenuItem<EmployeePickerOption?>(
+                        value: o,
+                        child: Text('${o.fullName} (${o.department})',
+                            style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+                      )),
+                ]
+              : null,
+          onChanged: isEnabled ? onSelected : null,
+        ),
+      ],
+    );
+  }
+}
+
+// ── Employee type dropdown (create-only) ────────────────────────────────────────
 
 class _EmployeeTypeDropdown extends StatelessWidget {
   final EmployeeFormData form;
@@ -596,17 +949,25 @@ class _EmployeeTypeDropdown extends StatelessWidget {
   }
 }
 
-// ── Date of joining field ──────────────────────────────────────────────────────
+// ── Date field (shared — used for both Date of Joining and Date of Birth) ──────
 
 class _DateField extends StatefulWidget {
-  final EmployeeFormData form;
+  final String label;
+  final bool required;
+  final String isoValue;
   final String? error;
-  final VoidCallback onChanged;
+  final ValueChanged<String> onChanged;
+  final DateTime? firstDate;
+  final DateTime? lastDate;
 
   const _DateField({
-    required this.form,
+    required this.label,
+    this.required = true,
+    required this.isoValue,
     this.error,
     required this.onChanged,
+    this.firstDate,
+    this.lastDate,
   });
 
   @override
@@ -614,12 +975,20 @@ class _DateField extends StatefulWidget {
 }
 
 class _DateFieldState extends State<_DateField> {
-  late final TextEditingController _ctrl;
+  late TextEditingController _ctrl;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = TextEditingController(text: _display(widget.form.dateOfJoining));
+    _ctrl = TextEditingController(text: _display(widget.isoValue));
+  }
+
+  @override
+  void didUpdateWidget(covariant _DateField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isoValue != widget.isoValue) {
+      _ctrl.text = _display(widget.isoValue);
+    }
   }
 
   @override
@@ -643,14 +1012,14 @@ class _DateFieldState extends State<_DateField> {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: widget.form.dateOfJoining.isNotEmpty
-          ? DateTime.tryParse(widget.form.dateOfJoining) ?? now
+      initialDate: widget.isoValue.isNotEmpty
+          ? DateTime.tryParse(widget.isoValue) ?? now
           : now,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      firstDate: widget.firstDate ?? DateTime(2000),
+      lastDate: widget.lastDate ?? DateTime(2100),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+          colorScheme: ColorScheme.light(primary: AppColors.primary),
         ),
         child: child!,
       ),
@@ -658,9 +1027,8 @@ class _DateFieldState extends State<_DateField> {
     if (picked == null) return;
     final iso =
         '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-    widget.form.dateOfJoining = iso;
     _ctrl.text = _display(iso);
-    widget.onChanged();
+    widget.onChanged(iso);
   }
 
   @override
@@ -668,7 +1036,7 @@ class _DateFieldState extends State<_DateField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _Label(text: 'Date of Joining', required: true),
+        _Label(text: widget.label, required: widget.required),
         const SizedBox(height: 5),
         TextFormField(
           controller: _ctrl,
@@ -676,14 +1044,14 @@ class _DateFieldState extends State<_DateField> {
           style: AppTextStyles.body,
           onTap: _pick,
           decoration: _inputDec('dd/mm/yyyy', error: widget.error).copyWith(
-            suffixIcon: const Icon(Icons.calendar_today_outlined,
+            suffixIcon: Icon(Icons.calendar_today_outlined,
                 size: 16, color: AppColors.textHint),
           ),
         ),
         if (widget.error != null) ...[
           const SizedBox(height: 3),
           Text(widget.error!,
-              style: const TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
+              style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
         ],
       ],
     );
@@ -709,7 +1077,7 @@ class _Footer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
       child: Row(
@@ -719,7 +1087,7 @@ class _Footer extends StatelessWidget {
               onPressed: onCancel,
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.textSecondary,
-                side: const BorderSide(color: AppColors.border),
+                side: BorderSide(color: AppColors.border),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -775,7 +1143,7 @@ class _Label extends StatelessWidget {
         ),
         children: required
             ? [
-                const TextSpan(
+                TextSpan(
                   text: ' *',
                   style: TextStyle(color: AppColors.error),
                 )
@@ -806,11 +1174,11 @@ InputDecoration _inputDec(String hint, {String? error, bool enabled = true}) =>
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+        borderSide: BorderSide(color: AppColors.primary, width: 1.5),
       ),
       disabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: AppColors.border),
+        borderSide: BorderSide(color: AppColors.border),
       ),
       isDense: true,
     );

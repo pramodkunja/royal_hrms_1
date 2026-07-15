@@ -59,8 +59,8 @@ class AssessmentCard extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
-                    if (assessment.isActive) const _Badge(label: 'Active', color: AppColors.success, bg: AppColors.successContainer),
-                    if (assessment.isDefault) const _Badge(label: 'Default', color: AppColors.info, bg: AppColors.infoContainer),
+                    if (assessment.isActive) _Badge(label: 'Active', color: AppColors.success, bg: AppColors.successContainer),
+                    if (assessment.isDefault) _Badge(label: 'Default', color: AppColors.info, bg: AppColors.infoContainer),
                   ],
                 ),
               ],
@@ -75,6 +75,8 @@ class AssessmentCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ],
+          const SizedBox(height: 8),
+          _ConfigRow(assessment: assessment),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -94,7 +96,7 @@ class AssessmentCard extends StatelessWidget {
           ),
           if (isExpanded) ...[
             const SizedBox(height: 12),
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: AppColors.border),
             const SizedBox(height: 12),
             MiniStatsGrid(assessment: assessment),
             const SizedBox(height: 12),
@@ -116,6 +118,58 @@ class AssessmentCard extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+// ── Config row (Pass %, Max attempts, Time limit) ─────────────────────────────
+//
+// Uses the "effective" fields (effective_max_attempts / effective_time_limit_
+// mins) rather than the raw max_attempts/time_limit_mins, since those are
+// what the backend actually enforces once a null custom value falls back to
+// the system default — showing the raw field alone could read as "unlimited"
+// when a default limit is really in effect.
+
+class _ConfigRow extends StatelessWidget {
+  final AssessmentModel assessment;
+  const _ConfigRow({required this.assessment});
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = [
+      (icon: Icons.percent_rounded, label: '${assessment.passPercentage}% to pass'),
+      (
+        icon: Icons.replay_outlined,
+        label: '${assessment.effectiveMaxAttempts} attempt${assessment.effectiveMaxAttempts == 1 ? '' : 's'}',
+      ),
+      (
+        icon: Icons.timer_outlined,
+        label: assessment.effectiveTimeLimitMins == null
+            ? 'No time limit'
+            : '${assessment.effectiveTimeLimitMins} min',
+      ),
+    ];
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: chips
+          .map((c) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.backgroundMid,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(c.icon, size: 11, color: AppColors.textSecondary),
+                    const SizedBox(width: 4),
+                    Text(c.label,
+                        style: AppTextStyles.caption.copyWith(fontSize: 10, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ))
+          .toList(),
     );
   }
 }

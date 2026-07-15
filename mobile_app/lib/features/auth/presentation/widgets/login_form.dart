@@ -159,8 +159,8 @@ class _ErrorBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 1),
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
             child: Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 14),
           ),
           const SizedBox(width: 4),

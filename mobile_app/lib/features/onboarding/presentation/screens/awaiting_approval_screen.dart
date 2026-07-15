@@ -118,7 +118,7 @@ class _WaitingView extends StatelessWidget {
               label: const Text('Check Status'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.primary,
-                side: const BorderSide(color: AppColors.primary),
+                side: BorderSide(color: AppColors.primary),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
@@ -134,7 +134,7 @@ class _WaitingView extends StatelessWidget {
               label: const Text('Logout'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.textSecondary,
-                side: const BorderSide(color: AppColors.border),
+                side: BorderSide(color: AppColors.border),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),

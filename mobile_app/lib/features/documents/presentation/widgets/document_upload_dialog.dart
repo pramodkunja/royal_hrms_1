@@ -49,7 +49,7 @@ class _DocumentUploadDialogState
           // ── Header ────────────────────────────────────────────────────────
           Container(
             padding: const EdgeInsets.fromLTRB(20, 18, 12, 18),
-            decoration: const BoxDecoration(color: AppColors.primary),
+            decoration: BoxDecoration(color: AppColors.primary),
             child: Row(
               children: [
                 const Icon(Icons.upload_file_outlined,
@@ -236,11 +236,11 @@ class _DocumentUploadDialogState
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          borderSide: BorderSide(color: AppColors.primary, width: 1.5),
         ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 12),

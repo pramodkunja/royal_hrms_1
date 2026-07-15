@@ -81,13 +81,13 @@ class CandidateResultCard extends StatelessWidget {
       AssessmentAssignStatus.inProgress => AppColors.infoContainer,
       _ => AppColors.backgroundMid,
     };
-    final pct = candidate.passPercentage;
-    final pctColor = pct == 'N/A'
+    final pct = candidate.scorePercentage;
+    final isComplete = candidate.status == AssessmentAssignStatus.complete;
+    final pctColor = !isComplete
         ? AppColors.textHint
-        : ((int.tryParse(pct.replaceAll('%', '')) ?? 0) >= 100 ? AppColors.success : AppColors.error);
-    final scoreText = candidate.status == AssessmentAssignStatus.complete
-        ? '${candidate.scoreAwarded} / ${candidate.passScore}'
-        : '—';
+        : (candidate.passed ? AppColors.success : AppColors.error);
+    final scoreText =
+        isComplete ? '${candidate.achievedScore} / ${candidate.totalQuestions}' : '—';
 
     return Container(
       padding: const EdgeInsets.all(10),
@@ -106,11 +106,19 @@ class CandidateResultCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(candidate.candidateName,
-                        style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                    Text(candidate.candidateEmail,
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(candidate.assigneeName,
+                              style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        const SizedBox(width: 6),
+                        _AssigneeTypeBadge(type: candidate.assigneeType),
+                      ],
+                    ),
+                    Text(candidate.assigneeEmail,
                         style: AppTextStyles.caption,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis),
@@ -132,12 +140,47 @@ class CandidateResultCard extends StatelessWidget {
             runSpacing: 6,
             children: [
               _MetaField(label: 'Score', value: scoreText),
-              _MetaField(label: 'Pass %', value: pct, valueColor: pctColor),
+              _MetaField(label: 'Score %', value: pct, valueColor: pctColor),
+              _MetaField(label: 'Pass Threshold', value: '${candidate.passPercentage}%'),
               _MetaField(label: 'Attempts', value: '${candidate.attemptCount}'),
               _MetaField(label: 'Assigned', value: _fmtDate(candidate.createdAt)),
               _MetaField(label: 'Completed', value: _fmtDate(candidate.completedAt)),
+              if (candidate.deadline != null)
+                _MetaField(label: 'Deadline', value: _fmtDate(candidate.deadline)),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// Distinguishes an internal employee assignment from an external
+// recruitment-candidate one — both share the same `candidates[]` list on the
+// backend (CandidateAssignment.assignee_type), but look identical in the UI
+// without this badge.
+class _AssigneeTypeBadge extends StatelessWidget {
+  final String type;
+  const _AssigneeTypeBadge({required this.type});
+
+  @override
+  Widget build(BuildContext context) {
+    final isEmployee = type == AssessmentAssigneeType.employee;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundMid,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(isEmployee ? Icons.badge_outlined : Icons.person_outline,
+              size: 10, color: AppColors.textSecondary),
+          const SizedBox(width: 3),
+          Text(AssessmentAssigneeType.label(type),
+              style: AppTextStyles.caption
+                  .copyWith(fontSize: 9, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -174,7 +217,7 @@ class NoCandidates extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Column(
         children: [
-          const Icon(Icons.people_outline, size: 28, color: AppColors.textHint),
+          Icon(Icons.people_outline, size: 28, color: AppColors.textHint),
           const SizedBox(height: 6),
           Text('No candidates assigned yet.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint)),
         ],

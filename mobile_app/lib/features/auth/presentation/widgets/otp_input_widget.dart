@@ -101,12 +101,12 @@ class _OtpInputWidgetState extends State<OtpInputWidget> {
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                       borderSide:
-                          const BorderSide(color: AppColors.border, width: 1.5),
+                          BorderSide(color: AppColors.border, width: 1.5),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                       borderSide:
-                          const BorderSide(color: AppColors.primary, width: 2),
+                          BorderSide(color: AppColors.primary, width: 2),
                     ),
                   ),
                   onChanged: (v) => _onChanged(index, v),

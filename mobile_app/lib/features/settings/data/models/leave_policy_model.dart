@@ -9,11 +9,19 @@ double _toDouble(dynamic value) {
   return 0.0;
 }
 
+List<String> _toStringList(dynamic value) {
+  if (value is List) return value.map((e) => e.toString()).toList();
+  return const [];
+}
+
+// The full LeavePolicy rule-field set shared by LeavePolicySerializer,
+// LeavePolicyCreateSerializer and LeavePolicyUpdateSerializer — see
+// apps/hrms/serializers.py `_POLICY_RULE_FIELDS`.
 @immutable
 class LeavePolicyModel {
   final int id;
   final String
-      leaveType; // raw code: casual/earned/sick/lwp/maternity/paternity
+      leaveType; // raw code: casual/earned/sick/lwp/maternity/paternity/<custom>
   final String leaveTypeDisplay;
   final double annualDays;
   final bool canCarryForward;
@@ -22,9 +30,49 @@ class LeavePolicyModel {
   final bool isActive;
   final String updatedAt;
   // True for a locally-added custom type (see LeavePolicyScreen doc comment)
-  // — the backend's leave_type is a fixed 6-item enum with no create
-  // endpoint, so these never leave the device until real backend support exists.
+  // — kept for backward compatibility with any still-local preview flow.
   final bool isPreview;
+
+  // ── Leave Application Rules ──
+  final double minimumLeaveDuration; // minimum_leave_duration
+  final int maximumLeaveDuration; // maximum_leave_duration, 0 = unlimited
+  final int maximumConsecutiveDays; // maximum_consecutive_days, 0 = unlimited
+  final int minimumNoticePeriod; // minimum_notice_period (days)
+  final bool allowHalfDay; // allow_half_day
+  final bool allowBackdatedLeave; // allow_backdated_leave
+  final int maximumBackdatedDays; // maximum_backdated_days, 0 = unlimited
+  final bool allowFutureLeave; // allow_future_leave
+  final int maximumFutureDays; // maximum_future_days, 0 = unlimited
+
+  // ── Holiday & Week-off Rules ──
+  final bool sandwichLeaveEnabled; // sandwich_leave_enabled
+  final bool countHolidaysAsLeave; // count_holidays_as_leave
+  final bool countWeekoffsAsLeave; // count_weekoffs_as_leave
+
+  // ── Eligibility Rules ──
+  final List<String> applicableBranches; // applicable_branches
+  final List<String> applicableDepartments; // applicable_departments
+  final List<String> applicableDesignations; // applicable_designations
+  final List<String> applicableEmploymentTypes; // applicable_employment_types
+  final String applicableGender; // applicable_gender: all|male|female
+  final int minimumServicePeriod; // minimum_service_period (months)
+
+  // ── Documentation Rules ──
+  final bool attachmentRequired; // attachment_required
+  final bool medicalCertificateRequired; // medical_certificate_required
+  final int medicalCertificateAfterDays; // medical_certificate_after_days
+
+  // ── Leave Restrictions ──
+  final bool allowNegativeBalance; // allow_negative_balance
+  final bool convertToLop; // convert_to_lop
+  final bool allowLeaveCancellation; // allow_leave_cancellation
+  final int cancellationAllowedUntil; // cancellation_allowed_until (days before start)
+
+  // ── Additional Rules ──
+  final bool allowProbationLeave; // allow_probation_leave
+  final bool allowNoticePeriodLeave; // allow_notice_period_leave
+  final bool allowLeaveExtension; // allow_leave_extension
+  final bool allowLeaveCombination; // allow_leave_combination
 
   const LeavePolicyModel({
     required this.id,
@@ -37,10 +85,43 @@ class LeavePolicyModel {
     required this.isActive,
     required this.updatedAt,
     this.isPreview = false,
+    this.minimumLeaveDuration = 0.5,
+    this.maximumLeaveDuration = 0,
+    this.maximumConsecutiveDays = 0,
+    this.minimumNoticePeriod = 0,
+    this.allowHalfDay = true,
+    this.allowBackdatedLeave = false,
+    this.maximumBackdatedDays = 0,
+    this.allowFutureLeave = true,
+    this.maximumFutureDays = 0,
+    this.sandwichLeaveEnabled = false,
+    this.countHolidaysAsLeave = false,
+    this.countWeekoffsAsLeave = false,
+    this.applicableBranches = const [],
+    this.applicableDepartments = const [],
+    this.applicableDesignations = const [],
+    this.applicableEmploymentTypes = const [],
+    this.applicableGender = 'all',
+    this.minimumServicePeriod = 0,
+    this.attachmentRequired = false,
+    this.medicalCertificateRequired = false,
+    this.medicalCertificateAfterDays = 3,
+    this.allowNegativeBalance = false,
+    this.convertToLop = false,
+    this.allowLeaveCancellation = true,
+    this.cancellationAllowedUntil = 0,
+    this.allowProbationLeave = false,
+    this.allowNoticePeriodLeave = false,
+    this.allowLeaveExtension = false,
+    this.allowLeaveCombination = false,
   });
 
   // Matches backend's LeavePolicySerializer exactly — see
-  // apps/hrms/serializers.py LeavePolicySerializer.Meta.fields.
+  // apps/hrms/serializers.py LeavePolicySerializer.Meta.fields
+  // (id, leave_type, leave_type_display, annual_days, can_carry_forward,
+  // max_carry_forward_days, policy_note, is_active, + _POLICY_RULE_FIELDS,
+  // updated_at). Note: the raw 'leave_type_label' field is NOT returned by
+  // this serializer — only the computed 'leave_type_display' is.
   factory LeavePolicyModel.fromJson(Map<String, dynamic> json) {
     final code = json['leave_type'] as String? ?? '';
     return LeavePolicyModel(
@@ -54,13 +135,45 @@ class LeavePolicyModel {
       policyNote: json['policy_note'] as String? ?? '',
       isActive: json['is_active'] as bool? ?? true,
       updatedAt: json['updated_at'] as String? ?? '',
+      minimumLeaveDuration: json.containsKey('minimum_leave_duration')
+          ? _toDouble(json['minimum_leave_duration'])
+          : 0.5,
+      maximumLeaveDuration: (json['maximum_leave_duration'] as num? ?? 0).toInt(),
+      maximumConsecutiveDays: (json['maximum_consecutive_days'] as num? ?? 0).toInt(),
+      minimumNoticePeriod: (json['minimum_notice_period'] as num? ?? 0).toInt(),
+      allowHalfDay: json['allow_half_day'] as bool? ?? true,
+      allowBackdatedLeave: json['allow_backdated_leave'] as bool? ?? false,
+      maximumBackdatedDays: (json['maximum_backdated_days'] as num? ?? 0).toInt(),
+      allowFutureLeave: json['allow_future_leave'] as bool? ?? true,
+      maximumFutureDays: (json['maximum_future_days'] as num? ?? 0).toInt(),
+      sandwichLeaveEnabled: json['sandwich_leave_enabled'] as bool? ?? false,
+      countHolidaysAsLeave: json['count_holidays_as_leave'] as bool? ?? false,
+      countWeekoffsAsLeave: json['count_weekoffs_as_leave'] as bool? ?? false,
+      applicableBranches: _toStringList(json['applicable_branches']),
+      applicableDepartments: _toStringList(json['applicable_departments']),
+      applicableDesignations: _toStringList(json['applicable_designations']),
+      applicableEmploymentTypes: _toStringList(json['applicable_employment_types']),
+      applicableGender: json['applicable_gender'] as String? ?? 'all',
+      minimumServicePeriod: (json['minimum_service_period'] as num? ?? 0).toInt(),
+      attachmentRequired: json['attachment_required'] as bool? ?? false,
+      medicalCertificateRequired: json['medical_certificate_required'] as bool? ?? false,
+      medicalCertificateAfterDays: (json['medical_certificate_after_days'] as num? ?? 3).toInt(),
+      allowNegativeBalance: json['allow_negative_balance'] as bool? ?? false,
+      convertToLop: json['convert_to_lop'] as bool? ?? false,
+      allowLeaveCancellation: json['allow_leave_cancellation'] as bool? ?? true,
+      cancellationAllowedUntil: (json['cancellation_allowed_until'] as num? ?? 0).toInt(),
+      allowProbationLeave: json['allow_probation_leave'] as bool? ?? false,
+      allowNoticePeriodLeave: json['allow_notice_period_leave'] as bool? ?? false,
+      allowLeaveExtension: json['allow_leave_extension'] as bool? ?? false,
+      allowLeaveCombination: json['allow_leave_combination'] as bool? ?? false,
     );
   }
 }
 
-// Matches backend's LeavePolicyUpdateSerializer exactly — these are the only
-// 5 fields the PUT/PATCH endpoint accepts (leave_type itself is fixed and
-// cannot be created/renamed/deleted; there are always exactly 6 policies).
+// Matches backend's LeavePolicyUpdateSerializer exactly (PUT/PATCH
+// /api/leave/policy/<leave_type>/) — annual_days, can_carry_forward,
+// max_carry_forward_days, policy_note, is_active + the full
+// _POLICY_RULE_FIELDS set. leave_type itself is fixed and not sent here.
 class LeavePolicyFormData {
   double annualDays;
   bool canCarryForward;
@@ -68,13 +181,86 @@ class LeavePolicyFormData {
   String policyNote;
   bool isActive;
 
+  // ── Leave Application Rules ──
+  double minimumLeaveDuration;
+  int maximumLeaveDuration;
+  int maximumConsecutiveDays;
+  int minimumNoticePeriod;
+  bool allowHalfDay;
+  bool allowBackdatedLeave;
+  int maximumBackdatedDays;
+  bool allowFutureLeave;
+  int maximumFutureDays;
+
+  // ── Holiday & Week-off Rules ──
+  bool sandwichLeaveEnabled;
+  bool countHolidaysAsLeave;
+  bool countWeekoffsAsLeave;
+
+  // ── Eligibility Rules ──
+  List<String> applicableBranches;
+  List<String> applicableDepartments;
+  List<String> applicableDesignations;
+  List<String> applicableEmploymentTypes;
+  String applicableGender;
+  int minimumServicePeriod;
+
+  // ── Documentation Rules ──
+  bool attachmentRequired;
+  bool medicalCertificateRequired;
+  int medicalCertificateAfterDays;
+
+  // ── Leave Restrictions ──
+  bool allowNegativeBalance;
+  bool convertToLop;
+  bool allowLeaveCancellation;
+  int cancellationAllowedUntil;
+
+  // ── Additional Rules ──
+  bool allowProbationLeave;
+  bool allowNoticePeriodLeave;
+  bool allowLeaveExtension;
+  bool allowLeaveCombination;
+
   LeavePolicyFormData({
     this.annualDays = 0,
     this.canCarryForward = false,
     this.maxCarryForwardDays = 0,
     this.policyNote = '',
     this.isActive = true,
-  });
+    this.minimumLeaveDuration = 0.5,
+    this.maximumLeaveDuration = 0,
+    this.maximumConsecutiveDays = 0,
+    this.minimumNoticePeriod = 0,
+    this.allowHalfDay = true,
+    this.allowBackdatedLeave = false,
+    this.maximumBackdatedDays = 0,
+    this.allowFutureLeave = true,
+    this.maximumFutureDays = 0,
+    this.sandwichLeaveEnabled = false,
+    this.countHolidaysAsLeave = false,
+    this.countWeekoffsAsLeave = false,
+    List<String>? applicableBranches,
+    List<String>? applicableDepartments,
+    List<String>? applicableDesignations,
+    List<String>? applicableEmploymentTypes,
+    this.applicableGender = 'all',
+    this.minimumServicePeriod = 0,
+    this.attachmentRequired = false,
+    this.medicalCertificateRequired = false,
+    this.medicalCertificateAfterDays = 3,
+    this.allowNegativeBalance = false,
+    this.convertToLop = false,
+    this.allowLeaveCancellation = true,
+    this.cancellationAllowedUntil = 0,
+    this.allowProbationLeave = false,
+    this.allowNoticePeriodLeave = false,
+    this.allowLeaveExtension = false,
+    this.allowLeaveCombination = false,
+  })  : applicableBranches = applicableBranches ?? [],
+        applicableDepartments = applicableDepartments ?? [],
+        applicableDesignations = applicableDesignations ?? [],
+        applicableEmploymentTypes = applicableEmploymentTypes ?? [];
 
   factory LeavePolicyFormData.fromModel(LeavePolicyModel model) =>
       LeavePolicyFormData(
@@ -83,6 +269,35 @@ class LeavePolicyFormData {
         maxCarryForwardDays: model.maxCarryForwardDays,
         policyNote: model.policyNote,
         isActive: model.isActive,
+        minimumLeaveDuration: model.minimumLeaveDuration,
+        maximumLeaveDuration: model.maximumLeaveDuration,
+        maximumConsecutiveDays: model.maximumConsecutiveDays,
+        minimumNoticePeriod: model.minimumNoticePeriod,
+        allowHalfDay: model.allowHalfDay,
+        allowBackdatedLeave: model.allowBackdatedLeave,
+        maximumBackdatedDays: model.maximumBackdatedDays,
+        allowFutureLeave: model.allowFutureLeave,
+        maximumFutureDays: model.maximumFutureDays,
+        sandwichLeaveEnabled: model.sandwichLeaveEnabled,
+        countHolidaysAsLeave: model.countHolidaysAsLeave,
+        countWeekoffsAsLeave: model.countWeekoffsAsLeave,
+        applicableBranches: List.of(model.applicableBranches),
+        applicableDepartments: List.of(model.applicableDepartments),
+        applicableDesignations: List.of(model.applicableDesignations),
+        applicableEmploymentTypes: List.of(model.applicableEmploymentTypes),
+        applicableGender: model.applicableGender,
+        minimumServicePeriod: model.minimumServicePeriod,
+        attachmentRequired: model.attachmentRequired,
+        medicalCertificateRequired: model.medicalCertificateRequired,
+        medicalCertificateAfterDays: model.medicalCertificateAfterDays,
+        allowNegativeBalance: model.allowNegativeBalance,
+        convertToLop: model.convertToLop,
+        allowLeaveCancellation: model.allowLeaveCancellation,
+        cancellationAllowedUntil: model.cancellationAllowedUntil,
+        allowProbationLeave: model.allowProbationLeave,
+        allowNoticePeriodLeave: model.allowNoticePeriodLeave,
+        allowLeaveExtension: model.allowLeaveExtension,
+        allowLeaveCombination: model.allowLeaveCombination,
       );
 
   Map<String, dynamic> toJson() => {
@@ -91,11 +306,40 @@ class LeavePolicyFormData {
         'max_carry_forward_days': maxCarryForwardDays,
         'policy_note': policyNote,
         'is_active': isActive,
+        'minimum_leave_duration': minimumLeaveDuration,
+        'maximum_leave_duration': maximumLeaveDuration,
+        'maximum_consecutive_days': maximumConsecutiveDays,
+        'minimum_notice_period': minimumNoticePeriod,
+        'allow_half_day': allowHalfDay,
+        'allow_backdated_leave': allowBackdatedLeave,
+        'maximum_backdated_days': maximumBackdatedDays,
+        'allow_future_leave': allowFutureLeave,
+        'maximum_future_days': maximumFutureDays,
+        'sandwich_leave_enabled': sandwichLeaveEnabled,
+        'count_holidays_as_leave': countHolidaysAsLeave,
+        'count_weekoffs_as_leave': countWeekoffsAsLeave,
+        'applicable_branches': applicableBranches,
+        'applicable_departments': applicableDepartments,
+        'applicable_designations': applicableDesignations,
+        'applicable_employment_types': applicableEmploymentTypes,
+        'applicable_gender': applicableGender,
+        'minimum_service_period': minimumServicePeriod,
+        'attachment_required': attachmentRequired,
+        'medical_certificate_required': medicalCertificateRequired,
+        'medical_certificate_after_days': medicalCertificateAfterDays,
+        'allow_negative_balance': allowNegativeBalance,
+        'convert_to_lop': convertToLop,
+        'allow_leave_cancellation': allowLeaveCancellation,
+        'cancellation_allowed_until': cancellationAllowedUntil,
+        'allow_probation_leave': allowProbationLeave,
+        'allow_notice_period_leave': allowNoticePeriodLeave,
+        'allow_leave_extension': allowLeaveExtension,
+        'allow_leave_combination': allowLeaveCombination,
       };
 
   // Matches LeavePolicyUpdateSerializer.validate_annual_days /
-  // validate_max_carry_forward_days — both checked unconditionally, same as
-  // the backend's per-field validators.
+  // validate() unconditional field checks, plus the maximum >= minimum
+  // duration cross-check and the medical-certificate-after-days requirement.
   Map<String, String?> validate() {
     final errors = <String, String?>{};
     if (annualDays < 0) {
@@ -104,6 +348,15 @@ class LeavePolicyFormData {
     if (maxCarryForwardDays < 0) {
       errors['maxCarryForwardDays'] =
           'Max carry forward days cannot be negative.';
+    }
+    if (maximumLeaveDuration > 0 &&
+        maximumLeaveDuration < minimumLeaveDuration) {
+      errors['maximumLeaveDuration'] =
+          'Maximum duration must be ≥ minimum duration.';
+    }
+    if (medicalCertificateRequired && medicalCertificateAfterDays <= 0) {
+      errors['medicalCertificateAfterDays'] =
+          'Required when medical certificate is enabled.';
     }
     return errors;
   }

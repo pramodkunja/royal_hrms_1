@@ -50,10 +50,11 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
 
   Future<void> _openBranchSheet() async {
     final branches = ref
-        .read(branchListProvider)
-        .valueOrNull
-        ?.map((b) => b.branchName)
-        .toList() ?? [];
+            .read(branchListProvider)
+            .valueOrNull
+            ?.map((b) => b.branchName)
+            .toList() ??
+        [];
     final result = await showModalBottomSheet<List<String>>(
       context: context,
       isScrollControlled: true,
@@ -78,8 +79,14 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
   @override
   Widget build(BuildContext context) {
     final hasFilter = _selectedBranches.isNotEmpty;
-    final role = ref.watch(authStateProvider).valueOrNull?.user?.role ?? 'employee';
+    final role =
+        ref.watch(authStateProvider).valueOrNull?.user?.role ?? 'employee';
     final isEmployee = role == 'employee';
+    // Branch filter is system_admin only — matches web's LeavePageClient
+    // (BranchFilterSelect only renders for isSystemAdmin). manager/hr_admin
+    // are already branch-scoped server-side and never need it; employees
+    // only ever see their own requests.
+    final isSystemAdmin = role == 'system_admin';
     _ensureController(isEmployee);
     final tabController = _tabController!;
 
@@ -99,7 +106,8 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
       ApplyLeaveTab(
         onDashboard: () => tabController.animateTo(0),
       ),
-      if (!isEmployee) const LeaveApprovalsTab(),
+      if (!isEmployee)
+        LeaveApprovalsTab(selectedBranches: _selectedBranches),
       const TeamCalendarTab(),
       const LeaveAnalyticsTab(),
     ];
@@ -137,77 +145,80 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
                             ],
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        if (isSystemAdmin) const SizedBox(width: 8),
                         // Branch selector button
-                        GestureDetector(
-                          onTap: _openBranchSheet,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 160),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 7),
-                            decoration: BoxDecoration(
-                              color: hasFilter
-                                  ? AppColors.primary.withValues(alpha: 0.08)
-                                  : AppColors.backgroundLow,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
+                        if (isSystemAdmin)
+                          GestureDetector(
+                            onTap: _openBranchSheet,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 160),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 7),
+                              decoration: BoxDecoration(
                                 color: hasFilter
-                                    ? AppColors.primary.withValues(alpha: 0.4)
-                                    : AppColors.border,
+                                    ? AppColors.primary.withValues(alpha: 0.08)
+                                    : AppColors.backgroundLow,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: hasFilter
+                                      ? AppColors.primary.withValues(alpha: 0.4)
+                                      : AppColors.border,
+                                ),
                               ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.business_outlined,
-                                    size: 13,
-                                    color: hasFilter
-                                        ? AppColors.primary
-                                        : AppColors.textSecondary),
-                                const SizedBox(width: 5),
-                                ConstrainedBox(
-                                  constraints: const BoxConstraints(maxWidth: 80),
-                                  child: Text(
-                                    _branchLabel,
-                                    style: AppTextStyles.caption.copyWith(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.business_outlined,
+                                      size: 13,
                                       color: hasFilter
                                           ? AppColors.primary
-                                          : AppColors.textSecondary,
+                                          : AppColors.textSecondary),
+                                  const SizedBox(width: 5),
+                                  ConstrainedBox(
+                                    constraints:
+                                        const BoxConstraints(maxWidth: 80),
+                                    child: Text(
+                                      _branchLabel,
+                                      style: AppTextStyles.caption.copyWith(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: hasFilter
+                                            ? AppColors.primary
+                                            : AppColors.textSecondary,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                ),
-                                if (hasFilter) ...[
-                                  const SizedBox(width: 4),
-                                  Container(
-                                    width: 16, height: 16,
-                                    decoration: const BoxDecoration(
-                                      color: AppColors.primary,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        '${_selectedBranches.length}',
-                                        style: const TextStyle(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w800,
-                                            color: Colors.white),
+                                  if (hasFilter) ...[
+                                    const SizedBox(width: 4),
+                                    Container(
+                                      width: 16,
+                                      height: 16,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primary,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          '${_selectedBranches.length}',
+                                          style: const TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w800,
+                                              color: Colors.white),
+                                        ),
                                       ),
                                     ),
-                                  ),
+                                  ],
+                                  const SizedBox(width: 3),
+                                  Icon(Icons.expand_more,
+                                      size: 15,
+                                      color: hasFilter
+                                          ? AppColors.primary
+                                          : AppColors.textHint),
                                 ],
-                                const SizedBox(width: 3),
-                                Icon(Icons.expand_more,
-                                    size: 15,
-                                    color: hasFilter
-                                        ? AppColors.primary
-                                        : AppColors.textHint),
-                              ],
+                              ),
                             ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -283,7 +294,8 @@ class _BranchSheetState extends State<_BranchSheet> {
         // Handle
         const SizedBox(height: 10),
         Container(
-          width: 40, height: 4,
+          width: 40,
+          height: 4,
           decoration: BoxDecoration(
               color: AppColors.border, borderRadius: BorderRadius.circular(2)),
         ),
@@ -294,7 +306,7 @@ class _BranchSheetState extends State<_BranchSheet> {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
-              const Icon(Icons.business_outlined,
+              Icon(Icons.business_outlined,
                   size: 15, color: AppColors.primary),
               const SizedBox(width: 8),
               Text('FILTER BY BRANCH',
@@ -316,14 +328,15 @@ class _BranchSheetState extends State<_BranchSheet> {
           ),
         ),
         const SizedBox(height: 10),
-        const Divider(height: 1, color: AppColors.border),
+        Divider(height: 1, color: AppColors.border),
 
         // Branch list
         if (widget.branches.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
             child: Text('No branches loaded.',
-                style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+                style:
+                    AppTextStyles.caption.copyWith(color: AppColors.textHint)),
           ),
         for (final branch in widget.branches)
           InkWell(
@@ -338,7 +351,8 @@ class _BranchSheetState extends State<_BranchSheet> {
                 children: [
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 120),
-                    width: 20, height: 20,
+                    width: 20,
+                    height: 20,
                     decoration: BoxDecoration(
                       color: _selected.contains(branch)
                           ? AppColors.primary
@@ -368,13 +382,13 @@ class _BranchSheetState extends State<_BranchSheet> {
                                 : AppColors.textSecondary)),
                   ),
                   if (_selected.contains(branch))
-                    const Icon(Icons.check_circle,
+                    Icon(Icons.check_circle,
                         size: 16, color: AppColors.primary),
                 ],
               ),
             ),
           ),
-        const Divider(height: 1, color: AppColors.border),
+        Divider(height: 1, color: AppColors.border),
 
         // Apply button
         Padding(

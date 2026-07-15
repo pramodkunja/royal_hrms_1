@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
+import '../../domain/entities/attendance_entity.dart';
 import '../models/attendance_models.dart';
 
 class AttendanceRemoteDataSource {
@@ -54,26 +55,29 @@ class AttendanceRemoteDataSource {
     return TodayAttendanceModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
-  Future<AttendanceStatsModel> fetchStats({int? month, int? year}) async {
+  Future<AttendanceStatsModel> fetchStats({int? month, int? year, String? employeeId}) async {
     final res = await _dio.get(ApiConstants.attendanceStats, queryParameters: {
       if (month != null) 'month': month,
       if (year != null) 'year': year,
+      if (employeeId != null && employeeId.isNotEmpty) 'employee_id': employeeId,
     });
     return AttendanceStatsModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
-  Future<MonthlySummaryModel> fetchSummary({int? month, int? year}) async {
+  Future<MonthlySummaryModel> fetchSummary({int? month, int? year, String? employeeId}) async {
     final res = await _dio.get(ApiConstants.attendanceSummary, queryParameters: {
       if (month != null) 'month': month,
       if (year != null) 'year': year,
+      if (employeeId != null && employeeId.isNotEmpty) 'employee_id': employeeId,
     });
     return MonthlySummaryModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
-  Future<AttendanceCalendarModel> fetchCalendar({int? month, int? year}) async {
+  Future<AttendanceCalendarModel> fetchCalendar({int? month, int? year, String? employeeId}) async {
     final res = await _dio.get(ApiConstants.attendanceCalendar, queryParameters: {
       if (month != null) 'month': month,
       if (year != null) 'year': year,
+      if (employeeId != null && employeeId.isNotEmpty) 'employee_id': employeeId,
     });
     return AttendanceCalendarModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
@@ -112,7 +116,7 @@ class AttendanceRemoteDataSource {
     return AttendanceDashboardModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
-  Future<List<AttendanceRowModel>> fetchRecords({
+  Future<PaginatedListEntity<AttendanceRowModel>> fetchRecords({
     String? date,
     String? branch,
     String? department,
@@ -120,6 +124,8 @@ class AttendanceRemoteDataSource {
     String? search,
     String sortBy = 'name',
     String sortDir = 'asc',
+    int page = 1,
+    int pageSize = 20,
   }) async {
     final res = await _dio.get(ApiConstants.attendanceRecords, queryParameters: {
       if (date != null) 'date': date,
@@ -129,9 +135,10 @@ class AttendanceRemoteDataSource {
       if (search != null && search.isNotEmpty) 'search': search,
       'sort_by': sortBy,
       'sort_dir': sortDir,
-      'page_size': 100,
+      'page': page,
+      'page_size': pageSize,
     });
-    return _unwrapList(res.data).map(AttendanceRowModel.fromJson).toList();
+    return parsePaginated(_unwrap(res.data), AttendanceRowModel.fromJson);
   }
 
   Future<AttendanceDetailModel> fetchRecordDetail(
@@ -149,18 +156,21 @@ class AttendanceRemoteDataSource {
     return AttendanceDetailModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
-  Future<List<OvertimeRowModel>> fetchOvertimeList({
+  Future<PaginatedListEntity<OvertimeRowModel>> fetchOvertimeList({
     String? date,
     String? branch,
     String? department,
+    int page = 1,
+    int pageSize = 20,
   }) async {
     final res = await _dio.get(ApiConstants.attendanceOvertimeList, queryParameters: {
       if (date != null) 'date': date,
       if (branch != null && branch.isNotEmpty) 'branch': branch,
       if (department != null && department.isNotEmpty) 'department': department,
-      'page_size': 100,
+      'page': page,
+      'page_size': pageSize,
     });
-    return _unwrapList(res.data).map(OvertimeRowModel.fromJson).toList();
+    return parsePaginated(_unwrap(res.data), OvertimeRowModel.fromJson);
   }
 
   Future<String> createOvertime({
@@ -232,5 +242,73 @@ class AttendanceRemoteDataSource {
       ApiConstants.attendanceHrCorrectionReview(id),
       data: {'action': approve ? 'approve' : 'reject'},
     );
+  }
+
+  // ── Invalid Punch actions ────────────────────────────────────────────────────
+
+  Future<List<HrUserModel>> fetchHrUsers({String? branch}) async {
+    final res = await _dio.get(ApiConstants.employeesHrList, queryParameters: {
+      if (branch != null && branch.isNotEmpty) 'branch': branch,
+    });
+    return _unwrapList(res.data).map(HrUserModel.fromJson).toList();
+  }
+
+  Future<void> assignInvalidPunch(String id, {required String assignedTo}) async {
+    await _dio.post(
+      ApiConstants.attendanceInvalidPunchAssign(id),
+      data: {'assigned_to': assignedTo},
+    );
+  }
+
+  Future<void> discardInvalidPunch(String id, {String? remarks}) async {
+    await _dio.post(
+      ApiConstants.attendanceInvalidPunchDiscard(id),
+      data: {if (remarks != null && remarks.isNotEmpty) 'remarks': remarks},
+    );
+  }
+
+  Future<void> convertInvalidPunch(
+    String id, {
+    required String targetPunchType,
+    required String targetTime,
+  }) async {
+    await _dio.post(
+      ApiConstants.attendanceInvalidPunchConvert(id),
+      data: {'target_punch_type': targetPunchType, 'target_time': targetTime},
+    );
+  }
+
+  // ── Export / Import ──────────────────────────────────────────────────────────
+
+  Future<List<int>> exportCsv({String? date, String? branch, String? department}) async {
+    final res = await _dio.get(
+      ApiConstants.attendanceExport,
+      queryParameters: {
+        if (date != null) 'date': date,
+        if (branch != null && branch.isNotEmpty) 'branch': branch,
+        if (department != null && department.isNotEmpty) 'department': department,
+      },
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return res.data as List<int>;
+  }
+
+  Future<ImportResultModel> importCsv(List<int> bytes, String fileName) async {
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: fileName),
+    });
+    final res = await _dio.post(
+      ApiConstants.attendanceImport,
+      data: formData,
+      options: Options(contentType: 'multipart/form-data'),
+    );
+    return ImportResultModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  // ── Audit history ────────────────────────────────────────────────────────────
+
+  Future<List<AttendanceAuditEntryModel>> fetchRecordAudit(String recordId) async {
+    final res = await _dio.get(ApiConstants.attendanceRecordAudit(recordId));
+    return _unwrapList(res.data).map(AttendanceAuditEntryModel.fromJson).toList();
   }
 }

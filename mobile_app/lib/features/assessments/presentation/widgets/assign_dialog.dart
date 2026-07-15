@@ -98,7 +98,7 @@ class _AssignDialogState extends State<AssignDialog> {
         children: [
           Container(
             padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.primary,
               borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
@@ -126,90 +126,94 @@ class _AssignDialogState extends State<AssignDialog> {
               ],
             ),
           ),
-          Container(
-            color: AppColors.background,
-            padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.viewInsetsOf(context).bottom + 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_successMessage != null) ...[
-                  _Banner(message: _successMessage!, isError: false),
-                  const SizedBox(height: 12),
-                ],
-                if (_error != null) ...[
-                  _Banner(message: _error!, isError: true),
-                  const SizedBox(height: 12),
-                ],
-                Text('Candidate *',
-                    style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600, fontSize: 13)),
-                const SizedBox(height: 6),
-                if (_loadingCandidates)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                  )
-                else if (_loadError != null)
-                  Text(_loadError!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error))
-                else
-                  DropdownButtonFormField<int>(
-                    initialValue: _selectedCandidateId,
-                    isExpanded: true,
-                    hint: Text('— Select candidate —',
-                        style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: AppColors.border),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    ),
-                    items: _candidates
-                        .map((c) => DropdownMenuItem(
-                              value: c.id,
-                              child: Text('${c.name} · ${c.email}', overflow: TextOverflow.ellipsis),
-                            ))
-                        .toList(),
-                    onChanged: (v) => setState(() {
-                      _selectedCandidateId = v;
-                      _error = null;
-                    }),
-                  ),
-                const SizedBox(height: 20),
-                Row(
+          Flexible(
+            child: Container(
+              color: AppColors.background,
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.viewInsetsOf(context).bottom + 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12)),
-                        child: const Text('Close'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: (_assigning || _loadingCandidates) ? null : _submit,
-                        icon: _assigning
-                            ? const SizedBox(
-                                width: 16, height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.person_add_alt_1_outlined, size: 18),
-                        label: Text(_assigning ? 'Assigning…' : 'Assign'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    if (_successMessage != null) ...[
+                      _Banner(message: _successMessage!, isError: false),
+                      const SizedBox(height: 12),
+                    ],
+                    if (_error != null) ...[
+                      _Banner(message: _error!, isError: true),
+                      const SizedBox(height: 12),
+                    ],
+                    Text('Candidate *',
+                        style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    if (_loadingCandidates)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      )
+                    else if (_loadError != null)
+                      Text(_loadError!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error))
+                    else
+                      DropdownButtonFormField<int>(
+                        initialValue: _selectedCandidateId,
+                        isExpanded: true,
+                        hint: Text('— Select candidate —',
+                            style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: AppColors.border),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: AppColors.primary, width: 1.5),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                         ),
+                        items: _candidates
+                            .map((c) => DropdownMenuItem(
+                                  value: c.id,
+                                  child: Text('${c.name} · ${c.email}', overflow: TextOverflow.ellipsis),
+                                ))
+                            .toList(),
+                        onChanged: (v) => setState(() {
+                          _selectedCandidateId = v;
+                          _error = null;
+                        }),
                       ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12)),
+                            child: const Text('Close'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: (_assigning || _loadingCandidates) ? null : _submit,
+                            icon: _assigning
+                                ? const SizedBox(
+                                    width: 16, height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.person_add_alt_1_outlined, size: 18),
+                            label: Text(_assigning ? 'Assigning…' : 'Assign'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
         ],

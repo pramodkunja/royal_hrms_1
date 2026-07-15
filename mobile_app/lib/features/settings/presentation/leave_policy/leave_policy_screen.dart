@@ -8,13 +8,18 @@ import '../../data/models/leave_policy_model.dart';
 import '../leave_credit_rules/leave_credit_rules_screen.dart';
 import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
+import 'widgets/add_leave_type_dialog.dart';
 import 'widgets/leave_policy_form_sheet.dart';
 
-// Two tabs: "Policy" lists the 6 fixed leave types and lets HR/system admins
-// edit their real, backend-persisted fields (annual days, carry-forward,
-// policy note, active — see LeavePoliciesNotifier). "Credit Rules" hosts the
-// real "Credit Annual Leave" action plus a local-only accrual-rules preview
-// (see CreditRulesTab doc comment for why that part isn't backend-connected).
+// Two tabs: "Policy" lists all leave types — the 6 built-in ones plus any
+// custom types — and lets HR/system admins edit their real, backend-persisted
+// fields (see LeavePoliciesNotifier.updatePolicy) or create/delete custom
+// types via the real POST/DELETE /api/leave/policy/ endpoints (createPolicy/
+// deletePolicy). The 6 built-in leave type codes (casual/earned/sick/lwp/
+// maternity/paternity) cannot be deleted server-side, so the delete action is
+// hidden for them. "Credit Rules" hosts the real "Credit Annual Leave" action
+// plus a local-only accrual-rules preview (see CreditRulesTab doc comment for
+// why that part isn't backend-connected).
 class LeavePolicyScreen extends ConsumerStatefulWidget {
   const LeavePolicyScreen({super.key});
 
@@ -87,7 +92,7 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
         children: [
           policiesAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => _ErrorView(message: e.toString()),
+            error: (e, _) => _ErrorView(message: friendlySettingsError(e)),
             data: (policies) =>
                 _PolicyTab(key: _policyKey, policies: policies, ref: ref),
           ),
@@ -110,30 +115,39 @@ class _PolicyTab extends ConsumerStatefulWidget {
 }
 
 class _PolicyTabState extends ConsumerState<_PolicyTab> {
-  // Locally-added custom types — see LeavePolicyFormSheet doc comment for why
-  // these can't be persisted yet (backend's leave_type enum is fixed).
-  List<LeavePolicyModel> _previewTypes = [];
+  bool _deleting = false;
+
+  static bool _isBuiltIn(String code) =>
+      LeaveTypeColors.allCodes.contains(code.toLowerCase());
 
   // Called by the parent screen's FAB via a GlobalKey.
   void openAdd() {
-    _openSheet(
-        null, (m) => setState(() => _previewTypes = [..._previewTypes, m]));
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 80),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: AddLeaveTypeDialog(ref: widget.ref),
+      ),
+    );
   }
 
-  void _openEditPreview(LeavePolicyModel p) {
-    _openSheet(
-        p,
-        (m) => setState(() {
-              _previewTypes =
-                  _previewTypes.map((x) => x.id == p.id ? m : x).toList();
-            }));
+  void _openEdit(LeavePolicyModel p) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 80),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: LeavePolicyFormSheet(policy: p, ref: widget.ref),
+      ),
+    );
   }
 
-  void _openEditReal(LeavePolicyModel p) {
-    _openSheet(p, null);
-  }
-
-  Future<void> _deletePreview(LeavePolicyModel p) async {
+  Future<void> _deleteCustom(LeavePolicyModel p) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -152,37 +166,33 @@ class _PolicyTabState extends ConsumerState<_PolicyTab> {
         ],
       ),
     );
-    if (ok == true) {
-      setState(() =>
-          _previewTypes = _previewTypes.where((x) => x.id != p.id).toList());
-    }
-  }
+    if (ok != true) return;
 
-  Future<void> _openSheet(
-      LeavePolicyModel? policy, ValueChanged<LeavePolicyModel>? onPreviewSave) {
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 80),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        child: LeavePolicyFormSheet(
-            policy: policy, ref: widget.ref, onPreviewSave: onPreviewSave),
-      ),
-    );
+    setState(() => _deleting = true);
+    final result =
+        await ref.read(leavePoliciesProvider.notifier).deletePolicy(p.leaveType);
+    if (!mounted) return;
+    setState(() => _deleting = false);
+    if (result != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result),
+        backgroundColor: AppColors.error,
+      ));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final policies = widget.policies;
-    if (policies.isEmpty && _previewTypes.isEmpty) return const _EmptyView();
+    if (policies.isEmpty) return const _EmptyView();
 
     final byCode = {for (final p in policies) p.leaveType.toLowerCase(): p};
     final ordered = LeaveTypeColors.allCodes
         .map((c) => byCode[c])
         .whereType<LeavePolicyModel>()
         .toList();
+    final customTypes =
+        policies.where((p) => !_isBuiltIn(p.leaveType)).toList();
 
     return RefreshIndicator(
       color: AppColors.primary,
@@ -193,7 +203,7 @@ class _PolicyTabState extends ConsumerState<_PolicyTab> {
           Text('Configure leave types, entitlements and balance crediting',
               style: AppTextStyles.bodySecondary),
           const SizedBox(height: 14),
-          _StatsRow(policies: policies, previewTypes: _previewTypes),
+          _StatsRow(policies: policies),
           const SizedBox(height: 16),
           Text('LEAVE TYPES',
               style: AppTextStyles.caption.copyWith(
@@ -205,15 +215,15 @@ class _PolicyTabState extends ConsumerState<_PolicyTab> {
                 padding: const EdgeInsets.only(bottom: 10),
                 child: _PolicyCard(
                   policy: p,
-                  onEdit: () => _openEditReal(p),
+                  onEdit: () => _openEdit(p),
                 ),
               )),
-          ..._previewTypes.map((p) => Padding(
+          ...customTypes.map((p) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: _PolicyCard(
                   policy: p,
-                  onEdit: () => _openEditPreview(p),
-                  onDelete: () => _deletePreview(p),
+                  onEdit: () => _openEdit(p),
+                  onDelete: _deleting ? null : () => _deleteCustom(p),
                 ),
               )),
         ],
@@ -226,12 +236,11 @@ class _PolicyTabState extends ConsumerState<_PolicyTab> {
 
 class _StatsRow extends StatelessWidget {
   final List<LeavePolicyModel> policies;
-  final List<LeavePolicyModel> previewTypes;
-  const _StatsRow({required this.policies, this.previewTypes = const []});
+  const _StatsRow({required this.policies});
 
   @override
   Widget build(BuildContext context) {
-    final all = [...policies, ...previewTypes];
+    final all = policies;
     final active = all.where((p) => p.isActive).length;
     final carryFwd = all.where((p) => p.canCarryForward).length;
     return Row(
@@ -318,16 +327,15 @@ class _PolicyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Preview (locally-added) types don't have a real code, so they don't
-    // get a real identity color/icon/short-label — a neutral grey signals
-    // "not yet backed by the server" without claiming a fake color.
-    final color = policy.isPreview
-        ? AppColors.textSecondary
-        : Color(LeaveTypeColors.colorValueForCode(policy.leaveType));
-    final shortLabel = policy.isPreview
-        ? null
-        : LeaveTypeColors.shortLabelForCode(policy.leaveType);
-    final isLwp = !policy.isPreview && LeaveTypeColors.isLwp(policy.leaveType);
+    // Custom (non-built-in) types don't have a defined identity color, so a
+    // neutral grey signals "custom leave type" without claiming a fake color.
+    final isBuiltIn =
+        LeaveTypeColors.allCodes.contains(policy.leaveType.toLowerCase());
+    final color = isBuiltIn
+        ? Color(LeaveTypeColors.colorValueForCode(policy.leaveType))
+        : AppColors.textSecondary;
+    final shortLabel = LeaveTypeColors.shortLabelForCode(policy.leaveType);
+    final isLwp = isBuiltIn && LeaveTypeColors.isLwp(policy.leaveType);
 
     return Container(
       decoration: BoxDecoration(
@@ -371,20 +379,16 @@ class _PolicyCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 1),
                           decoration: BoxDecoration(
-                            color: policy.isPreview
-                                ? AppColors.warning.withValues(alpha: 0.12)
-                                : AppColors.backgroundLow,
+                            color: isBuiltIn
+                                ? AppColors.backgroundLow
+                                : AppColors.textSecondary.withValues(alpha: 0.10),
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: Text(
-                              policy.isPreview ? 'PREVIEW' : shortLabel!,
+                          child: Text(shortLabel,
                               style: AppTextStyles.caption.copyWith(
-                                  fontSize: policy.isPreview ? 8 : 10,
-                                  color: policy.isPreview
-                                      ? AppColors.warning
-                                      : AppColors.textSecondary,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: policy.isPreview ? 0.4 : 0)),
+                                  fontSize: 10,
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.w800)),
                         ),
                       ],
                     ),
@@ -401,7 +405,7 @@ class _PolicyCard extends StatelessWidget {
               const SizedBox(width: 6),
               IconButton(
                 onPressed: onEdit,
-                icon: const Icon(Icons.edit_outlined,
+                icon: Icon(Icons.edit_outlined,
                     size: 18, color: AppColors.textSecondary),
                 visualDensity: VisualDensity.compact,
                 style: IconButton.styleFrom(
@@ -414,7 +418,7 @@ class _PolicyCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 IconButton(
                   onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline,
+                  icon: Icon(Icons.delete_outline,
                       size: 18, color: AppColors.error),
                   visualDensity: VisualDensity.compact,
                   style: IconButton.styleFrom(
@@ -514,7 +518,7 @@ class _EmptyView extends StatelessWidget {
                 color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(Icons.beach_access_outlined,
+              child: Icon(Icons.beach_access_outlined,
                   size: 36, color: AppColors.primary),
             ),
             const SizedBox(height: 16),
@@ -542,7 +546,7 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_outlined,
+            Icon(Icons.cloud_off_outlined,
                 size: 48, color: AppColors.textHint),
             const SizedBox(height: 12),
             Text('Could not load', style: AppTextStyles.h4),

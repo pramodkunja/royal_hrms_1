@@ -113,7 +113,7 @@ class BranchCard extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.star_rounded,
+                    Icon(Icons.star_rounded,
                         size: 11, color: AppColors.secondary),
                     const SizedBox(width: 4),
                     Text(
@@ -178,7 +178,7 @@ class BranchCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.people_outline,
+                      Icon(Icons.people_outline,
                           size: 12, color: AppColors.textSecondary),
                       const SizedBox(width: 4),
                       Text(
@@ -198,7 +198,7 @@ class BranchCard extends StatelessWidget {
           ),
 
           const SizedBox(height: 10),
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: AppColors.border),
 
           // ── Actions ──────────────────────────────────────────────────────
           IntrinsicHeight(
@@ -207,7 +207,7 @@ class BranchCard extends StatelessWidget {
                 Expanded(
                   child: TextButton.icon(
                     onPressed: onEdit,
-                    icon: const Icon(Icons.edit_outlined,
+                    icon: Icon(Icons.edit_outlined,
                         size: 13, color: AppColors.primary),
                     label: Text(
                       'Edit',
@@ -224,11 +224,11 @@ class BranchCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                const VerticalDivider(width: 1, color: AppColors.border),
+                VerticalDivider(width: 1, color: AppColors.border),
                 Expanded(
                   child: TextButton.icon(
                     onPressed: onDelete,
-                    icon: const Icon(Icons.delete_outline,
+                    icon: Icon(Icons.delete_outline,
                         size: 13, color: AppColors.error),
                     label: Text(
                       'Delete',

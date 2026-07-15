@@ -21,7 +21,7 @@ class BranchEmptyView extends StatelessWidget {
                 color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(Icons.business_outlined,
+              child: Icon(Icons.business_outlined,
                   size: 36, color: AppColors.primary),
             ),
             const SizedBox(height: 16),
@@ -66,7 +66,7 @@ class BranchErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_outlined,
+            Icon(Icons.cloud_off_outlined,
                 size: 48, color: AppColors.textHint),
             const SizedBox(height: 12),
             Text('Could not load branches', style: AppTextStyles.h4),

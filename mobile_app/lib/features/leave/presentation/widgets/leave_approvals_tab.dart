@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
+import 'leave_request_detail_sheet.dart';
 
 // ── Date formatter ────────────────────────────────────────────────────────────
 
@@ -11,8 +12,21 @@ String _fmtIso(String iso) {
   if (iso.isEmpty) return '—';
   try {
     final d = DateTime.parse(iso);
-    const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const m = [
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
     return '${d.day} ${m[d.month]}';
   } catch (_) {
     return iso;
@@ -22,7 +36,12 @@ String _fmtIso(String iso) {
 // ── Widget ────────────────────────────────────────────────────────────────────
 
 class LeaveApprovalsTab extends ConsumerStatefulWidget {
-  const LeaveApprovalsTab({super.key});
+  // Only ever non-empty for system_admin (see leave_screen.dart) — mirrors
+  // LeaveDashboardTab.selectedBranches so both tabs stay in sync when the
+  // branch filter changes.
+  final List<String> selectedBranches;
+
+  const LeaveApprovalsTab({super.key, this.selectedBranches = const []});
 
   @override
   ConsumerState<LeaveApprovalsTab> createState() => _LeaveApprovalsTabState();
@@ -32,22 +51,19 @@ class _LeaveApprovalsTabState extends ConsumerState<LeaveApprovalsTab> {
   bool _showPending = true;
   bool _actionLoading = false;
 
+  // Switching branches keys a fresh provider instance for each family
+  // (see leave_providers.dart) — no separate page state to reset here.
+  String get _branchFilter =>
+      widget.selectedBranches.isEmpty ? '' : widget.selectedBranches.first;
+
   Future<void> _approve(String id) async {
     setState(() => _actionLoading = true);
     final err = await ref
-        .read(leaveRequestsProvider.notifier)
+        .read(leaveTeamPendingProvider(_branchFilter).notifier)
         .approveRequest(id);
     if (!mounted) return;
     setState(() => _actionLoading = false);
-    if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(err),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
+    if (err != null) _showSnackError(err);
   }
 
   Future<void> _showRejectDialog(String id) async {
@@ -59,12 +75,14 @@ class _LeaveApprovalsTabState extends ConsumerState<LeaveApprovalsTab> {
         title: Row(
           children: [
             Container(
-              width: 34, height: 34,
+              width: 34,
+              height: 34,
               decoration: BoxDecoration(
                 color: AppColors.error.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.cancel_outlined, size: 18, color: AppColors.error),
+              child: Icon(Icons.cancel_outlined,
+                  size: 18, color: AppColors.error),
             ),
             const SizedBox(width: 10),
             Text('Reject Request', style: AppTextStyles.label),
@@ -85,7 +103,8 @@ class _LeaveApprovalsTabState extends ConsumerState<LeaveApprovalsTab> {
               maxLength: 300,
               autofocus: true,
               decoration: const InputDecoration(
-                  hintText: 'Explain why this leave request is being rejected…'),
+                  hintText:
+                      'Explain why this leave request is being rejected…'),
             ),
           ],
         ),
@@ -104,35 +123,41 @@ class _LeaveApprovalsTabState extends ConsumerState<LeaveApprovalsTab> {
     if (reason == null || reason.isEmpty || !mounted) return;
     setState(() => _actionLoading = true);
     final err = await ref
-        .read(leaveRequestsProvider.notifier)
+        .read(leaveTeamPendingProvider(_branchFilter).notifier)
         .rejectRequest(id, reason);
     if (!mounted) return;
     setState(() => _actionLoading = false);
-    if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(err),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
+    if (err != null) _showSnackError(err);
+  }
+
+  void _showSnackError(String err) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(err),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final requestsAsync = ref.watch(leaveRequestsProvider);
-    final allRequests = requestsAsync.valueOrNull ?? [];
-    final pending = allRequests.where((r) => r.isPending).toList();
-    final history =
-        allRequests.where((r) => !r.isPending).toList();
-    final rows = _showPending ? pending : history;
-    final pendingCount = pending.length;
+    final pendingAsync = ref.watch(leaveTeamPendingProvider(_branchFilter));
+    final historyAsync = ref.watch(leaveTeamHistoryProvider(_branchFilter));
+    final activeAsync = _showPending ? pendingAsync : historyAsync;
+    final activePage = activeAsync.valueOrNull;
+    final rows = activePage?.items ?? const <LeaveRequestEntity>[];
+    final pendingCount = pendingAsync.valueOrNull?.count ?? 0;
+    final hasBranchFilter = _branchFilter.isNotEmpty;
+    final hasMore = activePage?.hasMore ?? false;
+    final loadingMore = activePage?.loadingMore ?? false;
 
     return RefreshIndicator(
       color: AppColors.primary,
       onRefresh: () async {
-        ref.invalidate(leaveRequestsProvider);
+        ref.invalidate(leaveTeamPendingProvider);
+        ref.invalidate(leaveTeamHistoryProvider);
       },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -164,12 +189,13 @@ class _LeaveApprovalsTabState extends ConsumerState<LeaveApprovalsTab> {
             child: Row(
               children: [
                 Container(
-                  width: 26, height: 26,
+                  width: 26,
+                  height: 26,
                   decoration: BoxDecoration(
                     color: AppColors.success.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.playlist_add_check_outlined,
+                  child: Icon(Icons.playlist_add_check_outlined,
                       size: 14, color: AppColors.success),
                 ),
                 const SizedBox(width: 8),
@@ -180,8 +206,8 @@ class _LeaveApprovalsTabState extends ConsumerState<LeaveApprovalsTab> {
                 if (_showPending && pendingCount > 0) ...[
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: AppColors.warning.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
@@ -201,15 +227,14 @@ class _LeaveApprovalsTabState extends ConsumerState<LeaveApprovalsTab> {
 
           // ── Content ───────────────────────────────────────────────────────
           Expanded(
-            child: requestsAsync.isLoading
-                ? const Center(
-                    child:
-                        CircularProgressIndicator(color: AppColors.primary))
-                : requestsAsync.hasError
+            child: activeAsync.isLoading
+                ? Center(
+                    child: CircularProgressIndicator(color: AppColors.primary))
+                : activeAsync.hasError
                     ? Padding(
                         padding: const EdgeInsets.all(24),
                         child: Text(
-                            'Could not load requests: ${requestsAsync.error}',
+                            'Could not load requests: ${friendlyLeaveError(activeAsync.error!)}',
                             style: AppTextStyles.caption
                                 .copyWith(color: AppColors.error)),
                       )
@@ -218,31 +243,75 @@ class _LeaveApprovalsTabState extends ConsumerState<LeaveApprovalsTab> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.check_circle_outline,
+                                Icon(Icons.check_circle_outline,
                                     size: 48, color: AppColors.success),
                                 const SizedBox(height: 10),
                                 Text(
                                   _showPending
-                                      ? 'All caught up — no pending requests.'
-                                      : 'No history to show.',
+                                      ? (hasBranchFilter
+                                          ? 'No requests for the selected branch.'
+                                          : 'No pending leave requests.')
+                                      : 'No leave history yet.',
                                   style: AppTextStyles.bodySecondary,
+                                  textAlign: TextAlign.center,
                                 ),
                               ],
                             ),
                           )
                         : ListView.separated(
-                            padding:
-                                const EdgeInsets.fromLTRB(16, 0, 16, 96),
-                            itemCount: rows.length,
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+                            itemCount: rows.length + (hasMore ? 1 : 0),
                             separatorBuilder: (_, __) =>
                                 const SizedBox(height: 10),
-                            itemBuilder: (_, i) => _ApprovalCard(
-                              request: rows[i],
-                              showActions: _showPending,
-                              actionLoading: _actionLoading,
-                              onApprove: () => _approve(rows[i].id),
-                              onReject: () => _showRejectDialog(rows[i].id),
-                            ),
+                            itemBuilder: (ctx, i) {
+                              if (i == rows.length) {
+                                // "Load more" sits after the last loaded row —
+                                // appends the next page instead of paging.
+                                return loadingMore
+                                    ? Center(
+                                        child: SizedBox(
+                                          height: 22,
+                                          width: 22,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: AppColors.primary),
+                                        ),
+                                      )
+                                    : _LoadMoreButton(
+                                        onTap: () => _showPending
+                                            ? ref
+                                                .read(leaveTeamPendingProvider(
+                                                        _branchFilter)
+                                                    .notifier)
+                                                .loadMore()
+                                            : ref
+                                                .read(leaveTeamHistoryProvider(
+                                                        _branchFilter)
+                                                    .notifier)
+                                                .loadMore(),
+                                      );
+                              }
+                              return GestureDetector(
+                                onTap: () => showLeaveRequestDetailSheet(
+                                  ctx,
+                                  initial: rows[i],
+                                  canApprove: rows[i].canApprove,
+                                ),
+                                child: _ApprovalCard(
+                                  request: rows[i],
+                                  // History rows never show actions; within
+                                  // Pending, per-row `canApprove` excludes
+                                  // rows the viewer can't actually act on
+                                  // (e.g. a manager's own l2_pending request).
+                                  showActions:
+                                      _showPending && rows[i].canApprove,
+                                  actionLoading: _actionLoading,
+                                  onApprove: () => _approve(rows[i].id),
+                                  onReject: () =>
+                                      _showRejectDialog(rows[i].id),
+                                ),
+                              );
+                            },
                           ),
           ),
         ],
@@ -272,8 +341,7 @@ class _SubTabPill extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           color: selected ? AppColors.primary : AppColors.surface,
           borderRadius: BorderRadius.circular(20),
@@ -288,13 +356,12 @@ class _SubTabPill extends StatelessWidget {
                 style: AppTextStyles.caption.copyWith(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: selected
-                        ? Colors.white
-                        : AppColors.textSecondary)),
+                    color: selected ? Colors.white : AppColors.textSecondary)),
             if (count != null && count! > 0) ...[
               const SizedBox(width: 6),
               Container(
-                width: 18, height: 18,
+                width: 18,
+                height: 18,
                 decoration: BoxDecoration(
                   color: selected
                       ? Colors.white.withValues(alpha: 0.25)
@@ -306,9 +373,7 @@ class _SubTabPill extends StatelessWidget {
                       style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w800,
-                          color: selected
-                              ? Colors.white
-                              : AppColors.warning)),
+                          color: selected ? Colors.white : AppColors.warning)),
                 ),
               ),
             ],
@@ -317,6 +382,29 @@ class _SubTabPill extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── Load more button (mirrors audit_screen.dart's _LoadMoreBtn and
+// leave_dashboard_tab.dart's _LoadMoreButton for visual consistency —
+// duplicated since those are file-private) ────────────────────────────────────
+
+class _LoadMoreButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _LoadMoreButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: OutlinedButton.icon(
+          onPressed: onTap,
+          icon: const Icon(Icons.expand_more, size: 18),
+          label: const Text('Load more'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.primary,
+            side: BorderSide(color: AppColors.primary),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+      );
 }
 
 // ── Approval Card ─────────────────────────────────────────────────────────────
@@ -337,11 +425,11 @@ class _ApprovalCard extends StatelessWidget {
   });
 
   static Color _statusColor(String s) => switch (s) {
-    'approved'  => AppColors.success,
-    'rejected'  => AppColors.error,
-    'cancelled' => AppColors.textSecondary,
-    _           => AppColors.warning,
-  };
+        'approved' => AppColors.success,
+        'rejected' => AppColors.error,
+        'cancelled' => AppColors.textSecondary,
+        _ => AppColors.warning,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -393,8 +481,7 @@ class _ApprovalCard extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: sc.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color: sc.withValues(alpha: 0.3)),
+                          border: Border.all(color: sc.withValues(alpha: 0.3)),
                         ),
                         child: Text(request.status,
                             style: AppTextStyles.caption.copyWith(
@@ -411,8 +498,7 @@ class _ApprovalCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color:
-                            AppColors.primary.withValues(alpha: 0.08),
+                        color: AppColors.primary.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
@@ -426,8 +512,7 @@ class _ApprovalCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(request.leaveType,
-                          style:
-                              AppTextStyles.caption.copyWith(fontSize: 11),
+                          style: AppTextStyles.caption.copyWith(fontSize: 11),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
                     ),
@@ -436,7 +521,7 @@ class _ApprovalCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Icon(Icons.calendar_month_outlined,
+                    Icon(Icons.calendar_month_outlined,
                         size: 11, color: AppColors.textHint),
                     const SizedBox(width: 4),
                     Flexible(
@@ -466,12 +551,11 @@ class _ApprovalCard extends StatelessWidget {
                     ),
                     const Spacer(),
                     if (request.appliedOn.isNotEmpty) ...[
-                      const Icon(Icons.access_time_outlined,
+                      Icon(Icons.access_time_outlined,
                           size: 10, color: AppColors.textHint),
                       const SizedBox(width: 3),
                       Text('Applied ${_fmtIso(request.appliedOn)}',
-                          style:
-                              AppTextStyles.caption.copyWith(fontSize: 10)),
+                          style: AppTextStyles.caption.copyWith(fontSize: 10)),
                     ],
                   ],
                 ),
@@ -485,12 +569,10 @@ class _ApprovalCard extends StatelessWidget {
                           icon: const Icon(Icons.check, size: 14),
                           label: const Text('Approve',
                               style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600)),
+                                  fontSize: 12, fontWeight: FontWeight.w600)),
                           style: FilledButton.styleFrom(
                             backgroundColor: AppColors.success,
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 10),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
                           ),
                         ),
                       ),
@@ -501,21 +583,18 @@ class _ApprovalCard extends StatelessWidget {
                           icon: const Icon(Icons.close, size: 14),
                           label: const Text('Reject',
                               style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600)),
+                                  fontSize: 12, fontWeight: FontWeight.w600)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.error,
-                            side: const BorderSide(color: AppColors.error),
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 10),
+                            side: BorderSide(color: AppColors.error),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
                           ),
                         ),
                       ),
                     ],
                   ),
                 ],
-                if (request.isRejected &&
-                    request.rejectReason != null) ...[
+                if (request.isRejected && request.rejectReason != null) ...[
                   const SizedBox(height: 6),
                   Container(
                     width: double.infinity,
@@ -527,7 +606,7 @@ class _ApprovalCard extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.message_outlined,
+                        Icon(Icons.message_outlined,
                             size: 10, color: AppColors.error),
                         const SizedBox(width: 4),
                         Expanded(

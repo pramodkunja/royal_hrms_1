@@ -430,6 +430,116 @@ class UnpunchRowModel extends UnpunchRowEntity {
   }
 }
 
+class HrUserModel extends HrUserEntity {
+  const HrUserModel({
+    required super.id,
+    required super.employeeId,
+    required super.fullName,
+    required super.department,
+    required super.branch,
+  });
+
+  factory HrUserModel.fromJson(Map<String, dynamic> json) {
+    return HrUserModel(
+      id: json['id']?.toString() ?? '',
+      employeeId: json['employee_id'] as String? ?? '',
+      fullName: json['full_name'] as String? ?? '',
+      department: json['department'] as String? ?? '',
+      branch: json['branch'] as String? ?? '',
+    );
+  }
+}
+
+class AttendanceAuditEntryModel extends AttendanceAuditEntryEntity {
+  const AttendanceAuditEntryModel({
+    required super.event,
+    required super.performedBy,
+    required super.performedAt,
+    super.oldValue,
+    super.newValue,
+    required super.action,
+    super.remarks,
+  });
+
+  factory AttendanceAuditEntryModel.fromJson(Map<String, dynamic> json) {
+    return AttendanceAuditEntryModel(
+      event: json['event'] as String? ?? '',
+      performedBy: json['performed_by'] as String? ?? '—',
+      performedAt: json['performed_at'] as String? ?? '',
+      oldValue: json['old_value'] as String?,
+      newValue: json['new_value'] as String?,
+      action: json['action'] as String? ?? '',
+      remarks: json['remarks'] as String?,
+    );
+  }
+}
+
+class ImportResultModel extends ImportResultEntity {
+  const ImportResultModel({
+    required super.importId,
+    required super.totalRows,
+    required super.success,
+    required super.failed,
+    required super.status,
+    required super.errors,
+  });
+
+  factory ImportResultModel.fromJson(Map<String, dynamic> json) {
+    final rawErrors = json['errors'] as List<dynamic>? ?? [];
+    return ImportResultModel(
+      importId: json['import_id']?.toString() ?? '',
+      totalRows: _toInt(json['total_rows']),
+      success: _toInt(json['success']),
+      failed: _toInt(json['failed']),
+      status: json['status'] as String? ?? '',
+      errors: rawErrors.whereType<Map<String, dynamic>>().map((e) {
+        return ImportRowErrorEntity(
+          row: _toInt(e['row']),
+          message: _flattenRowError(e['errors']),
+        );
+      }).toList(),
+    );
+  }
+
+  // The backend's per-row `errors` value (services_hr_ops.py) is either a
+  // plain string (a raised exception's str()) or a DRF serializer errors
+  // dict ({field: [messages, ...]}) — calling .toString() directly on the
+  // dict case produced Dart's raw map notation ("{field: [msg]}") instead of
+  // readable text. Flatten it the same way the web app does
+  // ("field: msg1 msg2 · field2: msg3").
+  static String _flattenRowError(dynamic errors) {
+    if (errors is String) return errors;
+    if (errors is Map) {
+      final parts = <String>[];
+      errors.forEach((field, msgs) {
+        final text = msgs is List ? msgs.join(' ') : msgs.toString();
+        parts.add('$field: $text');
+      });
+      return parts.join(' · ');
+    }
+    return errors.toString();
+  }
+}
+
+/// Parses the backend's `{count, page, page_size, total_pages, results}`
+/// envelope into a [PaginatedListEntity], given a per-item parser.
+PaginatedListEntity<T> parsePaginated<T>(
+  dynamic data,
+  T Function(Map<String, dynamic>) fromJson,
+) {
+  if (data is! Map<String, dynamic>) {
+    return PaginatedListEntity<T>(results: const [], count: 0, page: 1, pageSize: 20, totalPages: 1);
+  }
+  final rawResults = data['results'] as List<dynamic>? ?? [];
+  return PaginatedListEntity<T>(
+    results: rawResults.whereType<Map<String, dynamic>>().map(fromJson).toList(),
+    count: _toInt(data['count']),
+    page: _toInt(data['page']) == 0 ? 1 : _toInt(data['page']),
+    pageSize: _toInt(data['page_size']) == 0 ? 20 : _toInt(data['page_size']),
+    totalPages: _toInt(data['total_pages']) == 0 ? 1 : _toInt(data['total_pages']),
+  );
+}
+
 class HrCorrectionRowModel extends HrCorrectionRowEntity {
   const HrCorrectionRowModel({
     required super.id,

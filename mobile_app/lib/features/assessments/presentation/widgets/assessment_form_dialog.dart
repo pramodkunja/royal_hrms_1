@@ -53,67 +53,71 @@ class _AssessmentFormDialogState extends State<AssessmentFormDialog> {
             subtitle: 'Build pre-onboarding assessments for candidates',
             onClose: () => Navigator.pop(context),
           ),
-          Container(
-            color: AppColors.background,
-            padding: EdgeInsets.fromLTRB(
-                20, 20, 20, MediaQuery.viewInsetsOf(context).bottom + 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_error != null) ...[
-                  _ErrorBanner(message: _error!),
-                  const SizedBox(height: 12),
-                ],
-                TextFormField(
-                  controller: _titleCtrl,
-                  style: AppTextStyles.body,
-                  autofocus: true,
-                  maxLength: 200,
-                  onChanged: (_) => setState(() => _error = null),
-                  decoration: _dec('Title *', hint: 'e.g. Onboarding Assessment'),
+          Flexible(
+            child: Container(
+              color: AppColors.background,
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                    20, 20, 20, MediaQuery.viewInsetsOf(context).bottom + 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_error != null) ...[
+                      _ErrorBanner(message: _error!),
+                      const SizedBox(height: 12),
+                    ],
+                    TextFormField(
+                      controller: _titleCtrl,
+                      style: AppTextStyles.body,
+                      autofocus: true,
+                      maxLength: 200,
+                      onChanged: (_) => setState(() => _error = null),
+                      decoration: _dec('Title *', hint: 'e.g. Onboarding Assessment'),
+                    ),
+                    const SizedBox(height: 4),
+                    TextFormField(
+                      controller: _descCtrl,
+                      style: AppTextStyles.body,
+                      maxLines: 3,
+                      decoration: _dec('Description (optional)'),
+                    ),
+                    const SizedBox(height: 12),
+                    _ToggleRow(
+                      icon: Icons.check_circle_outline,
+                      title: 'Active',
+                      subtitle: 'Visible and assignable to candidates',
+                      value: _isActive,
+                      onChanged: (v) => setState(() => _isActive = v),
+                    ),
+                    const SizedBox(height: 10),
+                    _ToggleRow(
+                      icon: Icons.auto_awesome_outlined,
+                      title: 'Default (auto-assign)',
+                      subtitle: 'Automatically assign to new candidates',
+                      value: _isDefault,
+                      onChanged: (v) => setState(() => _isDefault = v),
+                    ),
+                    const SizedBox(height: 20),
+                    FilledButton(
+                      onPressed: _saving ? null : _submit,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 48),
+                        backgroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: _saving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            )
+                          : Text(_isAdd ? 'Save' : 'Save Changes',
+                              style: AppTextStyles.label.copyWith(color: Colors.white)),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                TextFormField(
-                  controller: _descCtrl,
-                  style: AppTextStyles.body,
-                  maxLines: 3,
-                  decoration: _dec('Description (optional)'),
-                ),
-                const SizedBox(height: 12),
-                _ToggleRow(
-                  icon: Icons.check_circle_outline,
-                  title: 'Active',
-                  subtitle: 'Visible and assignable to candidates',
-                  value: _isActive,
-                  onChanged: (v) => setState(() => _isActive = v),
-                ),
-                const SizedBox(height: 10),
-                _ToggleRow(
-                  icon: Icons.auto_awesome_outlined,
-                  title: 'Default (auto-assign)',
-                  subtitle: 'Automatically assign to new candidates',
-                  value: _isDefault,
-                  onChanged: (v) => setState(() => _isDefault = v),
-                ),
-                const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: _saving ? null : _submit,
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 48),
-                    backgroundColor: AppColors.primary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: _saving
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                        )
-                      : Text(_isAdd ? 'Save' : 'Save Changes',
-                          style: AppTextStyles.label.copyWith(color: Colors.white)),
-                ),
-              ],
+              ),
             ),
           ),
         ],
@@ -129,11 +133,11 @@ class _AssessmentFormDialogState extends State<AssessmentFormDialog> {
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.border),
+      borderSide: BorderSide(color: AppColors.border),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+      borderSide: BorderSide(color: AppColors.primary, width: 1.5),
     ),
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
   );
@@ -239,7 +243,7 @@ class _DlgHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.primary,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -299,8 +303,8 @@ class _ErrorBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 1),
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
             child: Icon(Icons.warning_amber_rounded, size: 14, color: AppColors.error),
           ),
           const SizedBox(width: 6),

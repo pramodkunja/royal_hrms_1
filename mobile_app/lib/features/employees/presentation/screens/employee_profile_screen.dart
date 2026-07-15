@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../data/datasources/employees_remote_datasource.dart';
 import '../../data/models/employee_model.dart';
 import '../providers/employee_providers.dart';
 import '../widgets/add_employee_sheet.dart';
+import '../widgets/approval_override_sheet.dart';
+import '../widgets/employee_attendance_tab.dart';
+import '../widgets/employee_leave_tab.dart';
+import '../widgets/wishes_tab.dart';
 
 // ignore_for_file: use_build_context_synchronously
 
@@ -67,7 +74,7 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 5, vsync: this);
+    _tabCtrl = TabController(length: 8, vsync: this);
     _tabCtrl.addListener(_onTabChange);
   }
 
@@ -130,14 +137,14 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
         ),
         title: Row(
           children: [
-            const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
+            Icon(Icons.search, size: 20, color: AppColors.textSecondary),
             const Spacer(),
             Text('Employee Profile',
                 style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
             const Spacer(),
             Stack(
               children: [
-                const Icon(Icons.notifications_outlined,
+                Icon(Icons.notifications_outlined,
                     size: 22, color: AppColors.textSecondary),
                 Positioned(
                   top: 0,
@@ -202,6 +209,9 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
                   Tab(text: 'Payroll'),
                   Tab(text: 'Leave'),
                   Tab(text: 'Attendance'),
+                  Tab(text: 'Approval Matrix'),
+                  Tab(text: 'Benefit'),
+                  Tab(text: 'Send Wishes'),
                 ],
               ),
             ),
@@ -213,8 +223,14 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
             _ProfileTab(employee: emp),
             const _ComingSoon(label: 'Salary'),
             const _ComingSoon(label: 'Payroll'),
-            const _ComingSoon(label: 'Leave'),
-            const _ComingSoon(label: 'Attendance'),
+            EmployeeLeaveTab(employee: emp),
+            EmployeeAttendanceTab(employee: emp),
+            _ApprovalMatrixTab(employee: emp),
+            const _ComingSoon(
+              label: 'Benefit',
+              icon: Icons.card_giftcard_outlined,
+            ),
+            WishesTab(employee: emp),
           ],
         ),
       ),
@@ -271,7 +287,7 @@ class _ProfileCard extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [AppColors.primary, Color(0xFF2A6ACC)],
                 begin: Alignment.topLeft,
@@ -316,7 +332,7 @@ class _ProfileCard extends StatelessWidget {
                               color: Colors.white.withValues(alpha: 0.6),
                               width: 1.5),
                         ),
-                        child: const Icon(Icons.camera_alt_outlined,
+                        child: Icon(Icons.camera_alt_outlined,
                             size: 13, color: AppColors.primary),
                       ),
                     ),
@@ -410,7 +426,7 @@ class _ProfileCard extends StatelessWidget {
                     icon: Icons.calendar_today_outlined,
                   ),
                 ),
-                const VerticalDivider(
+                VerticalDivider(
                     width: 1, thickness: 1, color: AppColors.border),
                 Expanded(
                   child: _InfoCell(
@@ -419,7 +435,7 @@ class _ProfileCard extends StatelessWidget {
                     icon: Icons.location_on_outlined,
                   ),
                 ),
-                const VerticalDivider(
+                VerticalDivider(
                     width: 1, thickness: 1, color: AppColors.border),
                 Expanded(
                   child: _InfoCell(
@@ -433,7 +449,7 @@ class _ProfileCard extends StatelessWidget {
           ),
 
           // ── 2-column info row: DOB + Phone ────────────────────────────
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: AppColors.border),
           IntrinsicHeight(
             child: Row(
               children: [
@@ -444,7 +460,7 @@ class _ProfileCard extends StatelessWidget {
                     icon: Icons.cake_outlined,
                   ),
                 ),
-                const VerticalDivider(
+                VerticalDivider(
                     width: 1, thickness: 1, color: AppColors.border),
                 Expanded(
                   child: _InfoCell(
@@ -457,7 +473,7 @@ class _ProfileCard extends StatelessWidget {
             ),
           ),
 
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: AppColors.border),
 
           // ── Active toggle ─────────────────────────────────────────────
           Padding(
@@ -586,6 +602,13 @@ class _ProfileTabState extends State<_ProfileTab> {
   Widget build(BuildContext context) {
     final emp = widget.employee;
     return ListView(
+      // Every TabBarView child here would otherwise inherit the same
+      // PrimaryScrollController from the enclosing NestedScrollView — fine
+      // on mobile, but on web/desktop the Scrollbar requires exactly one
+      // attached ScrollPosition and throws once more than one tab's
+      // scrollable shares the controller (all 8 tabs stay mounted via
+      // TabBarView's AutomaticKeepAlive once visited).
+      primary: false,
       padding: EdgeInsets.zero,
       children: [
         // ── Section pills ──────────────────────────────────────────────
@@ -655,7 +678,7 @@ class _ProfileTabState extends State<_ProfileTab> {
                   padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.04),
-                    border: const Border(
+                    border: Border(
                       left: BorderSide(color: AppColors.primary, width: 4),
                       bottom: BorderSide(color: AppColors.border),
                     ),
@@ -685,10 +708,10 @@ class _ProfileTabState extends State<_ProfileTab> {
                         ),
                       ),
                       const Spacer(),
-                      const Icon(Icons.upload_outlined,
+                      Icon(Icons.upload_outlined,
                           size: 18, color: AppColors.textHint),
                       const SizedBox(width: 12),
-                      const Icon(Icons.download_outlined,
+                      Icon(Icons.download_outlined,
                           size: 18, color: AppColors.textHint),
                     ],
                   ),
@@ -701,7 +724,7 @@ class _ProfileTabState extends State<_ProfileTab> {
                     _EducationContent(emp: emp),
                     _BankContent(emp: emp),
                     _EmergencyContent(emp: emp),
-                    const _DocumentsContent(),
+                    _DocumentsContent(emp: emp),
                   ][_sub],
                 ),
               ],
@@ -739,6 +762,16 @@ class _PersonalContent extends StatelessWidget {
         _FieldRow(
           label1: 'Blood Group', value1: _s(emp.bloodGroup),
           label2: 'Phone',       value2: _s(emp.phone),
+        ),
+        _FieldRow(
+          label1: 'Reporting Manager',
+          value1: emp.reportingManagerName == null || emp.reportingManagerName!.isEmpty
+              ? 'Not assigned'
+              : emp.reportingManagerName!,
+          label2: 'HR Contact',
+          value2: emp.hrName == null || emp.hrName!.isEmpty
+              ? 'Not assigned'
+              : emp.hrName!,
         ),
         _DisplayField(label: 'Work Email', value: _s(emp.email)),
         _DisplayField(
@@ -857,35 +890,66 @@ class _EmergencyContent extends StatelessWidget {
 }
 
 // ── Documents section ─────────────────────────────────────────────────────────
+// Real documents only — only pan_card, aadhaar_card, degree_certificate,
+// experience_letter, other exist server-side, so there is no fixed slot list
+// to show as "Not uploaded" placeholders; just render whatever came back.
 
 class _DocumentsContent extends StatelessWidget {
-  const _DocumentsContent();
-
-  static const _docTypes = [
-    'PAN Card',
-    'Aadhaar Card',
-    'Degree Certificate',
-    'Experience Letter',
-    'Passport Photo',
-    'Cancelled Cheque',
-  ];
+  final EmployeeModel emp;
+  const _DocumentsContent({required this.emp});
 
   @override
   Widget build(BuildContext context) {
+    if (emp.documents.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        child: Center(
+          child: Column(
+            children: [
+              Icon(Icons.folder_off_outlined,
+                  size: 28, color: AppColors.textHint),
+              const SizedBox(height: 10),
+              Text('No documents uploaded yet.',
+                  style: AppTextStyles.bodySecondary),
+            ],
+          ),
+        ),
+      );
+    }
     return Column(
-      children: _docTypes
-          .map((doc) => _DocCard(label: doc))
-          .toList(),
+      children: emp.documents.map((doc) => _DocCard(doc: doc)).toList(),
     );
   }
 }
 
+String _fmtFileSize(int bytes) {
+  if (bytes <= 0) return '';
+  const kb = 1024;
+  const mb = kb * 1024;
+  if (bytes >= mb) return '${(bytes / mb).toStringAsFixed(1)} MB';
+  if (bytes >= kb) return '${(bytes / kb).toStringAsFixed(0)} KB';
+  return '$bytes B';
+}
+
 class _DocCard extends StatelessWidget {
-  final String label;
-  const _DocCard({required this.label});
+  final EmployeeDocumentEntity doc;
+  const _DocCard({required this.doc});
+
+  Future<void> _open() async {
+    final uri = Uri.tryParse(doc.fileUrl);
+    if (uri == null) return;
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final meta = [
+      if (doc.uploadedAt.isNotEmpty) _fmtDate(doc.uploadedAt),
+      if (doc.fileSize > 0) _fmtFileSize(doc.fileSize),
+    ].join(' · ');
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -903,7 +967,7 @@ class _DocCard extends StatelessWidget {
               color: AppColors.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.insert_drive_file_outlined,
+            child: Icon(Icons.insert_drive_file_outlined,
                 size: 18, color: AppColors.primary),
           ),
           const SizedBox(width: 12),
@@ -911,16 +975,27 @@ class _DocCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: AppTextStyles.label
-                        .copyWith(fontWeight: FontWeight.w600)),
+                Text(
+                  doc.documentTypeDisplay.isEmpty
+                      ? doc.fileName
+                      : doc.documentTypeDisplay,
+                  style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600),
+                ),
                 const SizedBox(height: 2),
-                Text('Not uploaded', style: AppTextStyles.caption),
+                Text(meta.isEmpty ? doc.fileName : meta,
+                    style: AppTextStyles.caption,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
-          const Icon(Icons.upload_outlined,
-              size: 18, color: AppColors.textHint),
+          IconButton(
+            icon: Icon(Icons.visibility_outlined,
+                size: 18, color: AppColors.primary),
+            tooltip: 'View',
+            onPressed: doc.fileUrl.isEmpty ? null : _open,
+            visualDensity: VisualDensity.compact,
+          ),
         ],
       ),
     );
@@ -1044,7 +1119,7 @@ class _BottomBar extends StatelessWidget {
     final bottom = MediaQuery.of(context).padding.bottom;
     return Container(
       padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottom),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
@@ -1055,7 +1130,7 @@ class _BottomBar extends StatelessWidget {
               onPressed: onCancel,
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                side: const BorderSide(color: AppColors.border),
+                side: BorderSide(color: AppColors.border),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
               ),
@@ -1099,31 +1174,291 @@ class _BottomBar extends StatelessWidget {
 
 class _ComingSoon extends StatelessWidget {
   final String label;
-  const _ComingSoon({required this.label});
+  final IconData icon;
+  const _ComingSoon({required this.label, this.icon = Icons.construction_outlined});
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    // LayoutBuilder + a min-height constraint (rather than a bare Center)
+    // so this still centers normally when there's room, but scrolls instead
+    // of overflowing when the tab view is squeezed short (e.g. a small
+    // browser window, or a device in landscape with little vertical space).
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        // See _ProfileTab's identical primary: false comment above — same
+        // shared-PrimaryScrollController hazard applies to every tab here.
+        primary: false,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Icon(icon, size: 30, color: AppColors.primary),
+                ),
+                const SizedBox(height: 14),
+                Text('$label coming soon', style: AppTextStyles.h4),
+                const SizedBox(height: 6),
+                Text('This section is under development.',
+                    style: AppTextStyles.bodySecondary,
+                    textAlign: TextAlign.center),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Approval Matrix tab ────────────────────────────────────────────────────────
+
+class _ApprovalMatrixTab extends ConsumerWidget {
+  final EmployeeModel employee;
+  const _ApprovalMatrixTab({required this.employee});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final matrixAsync =
+        ref.watch(employeeApprovalMatrixProvider(employee.employeeId));
+    // Web only shows the Override action to hr_admin/system_admin — everyone
+    // who can reach this screen at all can already VIEW the matrix (it's
+    // gated server-side by the same `employees.view` permission as the
+    // profile itself).
+    final role = ref.watch(authStateProvider).valueOrNull?.user?.role ?? '';
+    final canEdit = role == 'hr_admin' || role == 'system_admin';
+
+    return matrixAsync.when(
+      data: (rows) {
+        if (rows.isEmpty) {
+          return Center(
+            child: Text('No approval workflows configured.',
+                style: AppTextStyles.bodySecondary),
+          );
+        }
+        return ListView.builder(
+          primary: false,
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+          itemCount: rows.length,
+          itemBuilder: (context, i) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _ApprovalMatrixCard(
+              employee: employee,
+              row: rows[i],
+              canEdit: canEdit,
+            ),
+          ),
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Failed to load approval matrix.',
+            style: AppTextStyles.bodySecondary,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ApprovalMatrixCard extends StatelessWidget {
+  final EmployeeModel employee;
+  final EmployeeApprovalMatrixRow row;
+  final bool canEdit;
+
+  const _ApprovalMatrixCard({
+    required this.employee,
+    required this.row,
+    required this.canEdit,
+  });
+
+  Future<void> _edit(BuildContext context) async {
+    final ok = await ApprovalOverrideSheet.show(
+      context,
+      employee: employee,
+      row: row,
+    );
+    if (ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${row.workflowLabel} approval overrides updated.'),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 64,
-            height: 64,
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.07),
-              borderRadius: BorderRadius.circular(18),
+              color: AppColors.primary.withValues(alpha: 0.04),
+              border: Border(
+                left: BorderSide(color: AppColors.primary, width: 4),
+                bottom: BorderSide(color: AppColors.border),
+              ),
             ),
-            child: const Icon(Icons.construction_outlined,
-                size: 30, color: AppColors.primary),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    row.workflowLabel,
+                    style: AppTextStyles.label.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                if (canEdit)
+                  IconButton(
+                    icon: Icon(Icons.edit_outlined,
+                        size: 17, color: AppColors.textSecondary),
+                    tooltip: 'Override',
+                    onPressed: () => _edit(context),
+                    visualDensity: VisualDensity.compact,
+                  ),
+              ],
+            ),
           ),
-          const SizedBox(height: 14),
-          Text('$label coming soon', style: AppTextStyles.h4),
-          const SizedBox(height: 6),
-          Text('This section is under development.',
-              style: AppTextStyles.bodySecondary,
-              textAlign: TextAlign.center),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ApproverLine(
+                  label: row.l1ApproverLabel.isEmpty
+                      ? 'L1 Approver'
+                      : row.l1ApproverLabel,
+                  name: row.l1ApproverName,
+                  isOverride: row.l1IsOverride,
+                ),
+                const SizedBox(height: 12),
+                if (row.isSingleLevel)
+                  Row(
+                    children: [
+                      Text(
+                        'L2 Approver',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _Pill(label: 'Single level', color: AppColors.textHint),
+                    ],
+                  )
+                else
+                  _ApproverLine(
+                    label: (row.l2ApproverLabel ?? '').isEmpty
+                        ? 'L2 Approver'
+                        : row.l2ApproverLabel!,
+                    name: row.l2ApproverName,
+                    isOverride: row.l2IsOverride,
+                  ),
+              ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _ApproverLine extends StatelessWidget {
+  final String label;
+  final String? name;
+  final bool isOverride;
+
+  const _ApproverLine({
+    required this.label,
+    this.name,
+    required this.isOverride,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isEmpty = name == null || name!.isEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.caption.copyWith(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+            fontSize: 11,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                isEmpty ? 'Not assigned' : name!,
+                style: AppTextStyles.body.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: isEmpty ? AppColors.textHint : AppColors.textPrimary,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            _Pill(
+              label: isOverride ? 'Override' : 'Global default',
+              color: isOverride ? AppColors.warning : AppColors.info,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _Pill({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
       ),
     );
   }

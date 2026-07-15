@@ -5,6 +5,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../data/models/departments_model.dart';
 import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
+import '../widgets/settings_page_header.dart';
 import 'widgets/dept_form_sheet.dart';
 import 'widgets/dept_list_item.dart';
 import 'widgets/desig_form_sheet.dart';
@@ -149,6 +150,14 @@ class _Body extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: SettingsPageHeader(
+            icon: Icons.account_tree_outlined,
+            title: 'Depts & Designations',
+            subtitle: 'Organise your company structure and manage job titles',
+          ),
+        ),
         _StatsRow(depts: depts, desigCount: allDesigs.length),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
@@ -335,10 +344,10 @@ class _SearchBar extends StatelessWidget {
       decoration: InputDecoration(
         hintText: 'Search departments…',
         hintStyle: AppTextStyles.body.copyWith(color: AppColors.textHint),
-        prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textHint),
+        prefixIcon: Icon(Icons.search, size: 20, color: AppColors.textHint),
         suffixIcon: controller.text.isNotEmpty
             ? IconButton(
-                icon: const Icon(Icons.close, size: 18, color: AppColors.textHint),
+                icon: Icon(Icons.close, size: 18, color: AppColors.textHint),
                 onPressed: () {
                   controller.clear();
                   onChanged('');
@@ -350,15 +359,15 @@ class _SearchBar extends StatelessWidget {
         contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(color: AppColors.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          borderSide: BorderSide(color: AppColors.primary, width: 1.5),
         ),
       ),
     );
@@ -386,7 +395,7 @@ class _EmptyView extends StatelessWidget {
                 color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(Icons.account_tree_outlined, size: 36, color: AppColors.primary),
+              child: Icon(Icons.account_tree_outlined, size: 36, color: AppColors.primary),
             ),
             const SizedBox(height: 16),
             Text('No departments yet', style: AppTextStyles.h4),
@@ -426,7 +435,7 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
+            Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
             const SizedBox(height: 12),
             Text('Could not load', style: AppTextStyles.h4),
             const SizedBox(height: 6),

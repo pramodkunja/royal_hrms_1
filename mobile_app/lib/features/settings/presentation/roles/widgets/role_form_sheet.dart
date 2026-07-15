@@ -173,7 +173,7 @@ class _RoleFormSheetState extends State<RoleFormSheet> {
     padding: const EdgeInsets.only(bottom: 4),
     child: Row(
       children: [
-        const Icon(Icons.link, size: 14, color: AppColors.textHint),
+        Icon(Icons.link, size: 14, color: AppColors.textHint),
         const SizedBox(width: 6),
         Text('Slug: ', style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
         Expanded(
@@ -186,7 +186,7 @@ class _RoleFormSheetState extends State<RoleFormSheet> {
           ),
         ),
         if (!_isAdd)
-          const Icon(Icons.lock_outline, size: 13, color: AppColors.textHint),
+          Icon(Icons.lock_outline, size: 13, color: AppColors.textHint),
       ],
     ),
   );
@@ -273,15 +273,15 @@ class _RoleFormSheetState extends State<RoleFormSheet> {
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.border),
+      borderSide: BorderSide(color: AppColors.border),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+      borderSide: BorderSide(color: AppColors.primary, width: 1.5),
     ),
     errorBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.error),
+      borderSide: BorderSide(color: AppColors.error),
     ),
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
   );
@@ -327,7 +327,7 @@ class _DlgHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.primary,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),

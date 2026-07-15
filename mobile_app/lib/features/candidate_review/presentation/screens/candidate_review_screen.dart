@@ -69,7 +69,7 @@ class _ErrorView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
+          Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
           const SizedBox(height: 12),
           Text('Failed to load approvals', style: AppTextStyles.h4),
           const SizedBox(height: 6),
@@ -347,7 +347,7 @@ class _EmptyState extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.how_to_reg_outlined, size: 56, color: AppColors.textHint),
+        Icon(Icons.how_to_reg_outlined, size: 56, color: AppColors.textHint),
         const SizedBox(height: 12),
         Text('No onboarding submissions', style: AppTextStyles.h4.copyWith(color: AppColors.textSecondary)),
         const SizedBox(height: 4),
@@ -599,16 +599,24 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                   Row(
                     children: [
                       Expanded(
-                        child: OutlinedButton(
+                        child: ElevatedButton(
                           onPressed: _acting ? null : _handleReject,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.error,
-                            side: const BorderSide(color: AppColors.error),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.error,
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: AppColors.error.withValues(alpha: 0.5),
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
-                          child: Text(_acting ? '…' : 'Send Back for Corrections',
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                          child: _acting
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Text(
+                                  'Send Back for\nCorrections',
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, height: 1.15),
+                                ),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -795,7 +803,7 @@ class _DocRow extends StatelessWidget {
     decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6)))),
     child: Row(
       children: [
-        const Icon(Icons.insert_drive_file_outlined, size: 16, color: AppColors.primary),
+        Icon(Icons.insert_drive_file_outlined, size: 16, color: AppColors.primary),
         const SizedBox(width: 8),
         Expanded(
           child: Column(
@@ -850,7 +858,7 @@ class _ErrorBanner extends StatelessWidget {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(padding: EdgeInsets.only(top: 1), child: Icon(Icons.warning_amber_rounded, size: 14, color: AppColors.error)),
+        Padding(padding: const EdgeInsets.only(top: 1), child: Icon(Icons.warning_amber_rounded, size: 14, color: AppColors.error)),
         const SizedBox(width: 6),
         Expanded(child: Text(message, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error))),
       ],

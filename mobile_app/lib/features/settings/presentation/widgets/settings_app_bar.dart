@@ -45,7 +45,7 @@ class SettingsAppBar extends StatelessWidget implements PreferredSizeWidget {
         const SizedBox(width: 4),
       ],
       bottom: bottom,
-      shape: const Border(bottom: BorderSide(color: AppColors.border)),
+      shape: Border(bottom: BorderSide(color: AppColors.border)),
     );
   }
 }

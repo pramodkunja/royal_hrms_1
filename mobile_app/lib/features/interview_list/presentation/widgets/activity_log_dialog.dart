@@ -48,8 +48,8 @@ class ActivityLogDialog extends ConsumerWidget {
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 440),
             child: detailAsync.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.all(40),
+              loading: () => Padding(
+                padding: const EdgeInsets.all(40),
                 child: Center(
                     child: CircularProgressIndicator(
                         color: AppColors.primary)),
@@ -97,7 +97,7 @@ class _LogList extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       itemCount: candidate.logs.length,
       separatorBuilder: (_, __) =>
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: AppColors.border),
       itemBuilder: (_, i) => _LogItem(log: candidate.logs[i]),
     );
   }

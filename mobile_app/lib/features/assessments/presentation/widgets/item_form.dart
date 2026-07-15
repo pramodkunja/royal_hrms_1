@@ -202,11 +202,11 @@ class ItemForm extends StatelessWidget {
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.border),
+      borderSide: BorderSide(color: AppColors.border),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+      borderSide: BorderSide(color: AppColors.primary, width: 1.5),
     ),
     contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
   );
@@ -226,7 +226,7 @@ class _InlineError extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber_rounded, size: 14, color: AppColors.error),
+          Icon(Icons.warning_amber_rounded, size: 14, color: AppColors.error),
           const SizedBox(width: 6),
           Expanded(child: Text(message, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error))),
         ],

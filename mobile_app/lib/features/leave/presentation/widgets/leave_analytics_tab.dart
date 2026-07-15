@@ -13,16 +13,18 @@ class LeaveAnalyticsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final statsAsync = ref.watch(leaveStatsProvider);
-    final stats      = statsAsync.valueOrNull;
+    final stats = statsAsync.valueOrNull;
     final currentYear = stats?.year ?? DateTime.now().year;
 
-    final totalLabel    = statsAsync.isLoading ? '…' : '${stats?.total     ?? 0}';
-    final pendingLabel  = statsAsync.isLoading ? '…' : '${stats?.pending   ?? 0}';
-    final approvedLabel = statsAsync.isLoading ? '…' : '${stats?.approved  ?? 0}';
-    final rejectedLabel = statsAsync.isLoading ? '…' : '${stats?.rejected  ?? 0}';
+    final totalLabel = statsAsync.isLoading ? '…' : '${stats?.total ?? 0}';
+    final pendingLabel = statsAsync.isLoading ? '…' : '${stats?.pending ?? 0}';
+    final approvedLabel =
+        statsAsync.isLoading ? '…' : '${stats?.approved ?? 0}';
+    final rejectedLabel =
+        statsAsync.isLoading ? '…' : '${stats?.rejected ?? 0}';
 
-    final totalAll   = stats?.total ?? 0;
-    final balances    = stats?.balances ?? [];
+    final totalAll = stats?.total ?? 0;
+    final balances = stats?.balances ?? [];
 
     return RefreshIndicator(
       color: AppColors.primary,
@@ -37,25 +39,50 @@ class LeaveAnalyticsTab extends ConsumerWidget {
             // ── KPI cards 2×2 ──────────────────────────────────────────────────
             Row(
               children: [
-                Expanded(child: _KpiCard(icon: Icons.beach_access_outlined, color: AppColors.primary, label: 'Total Requests', value: totalLabel, sub: 'This year ($currentYear)')),
+                Expanded(
+                    child: _KpiCard(
+                        icon: Icons.beach_access_outlined,
+                        color: AppColors.primary,
+                        label: 'Total Requests',
+                        value: totalLabel,
+                        sub: 'This year ($currentYear)')),
                 const SizedBox(width: 10),
-                Expanded(child: _KpiCard(icon: Icons.check_circle_outline,  color: AppColors.success, label: 'Approved',       value: approvedLabel, sub: 'This year ($currentYear)')),
+                Expanded(
+                    child: _KpiCard(
+                        icon: Icons.check_circle_outline,
+                        color: AppColors.success,
+                        label: 'Approved',
+                        value: approvedLabel,
+                        sub: 'This year ($currentYear)')),
               ],
             ),
             const SizedBox(height: 10),
             Row(
               children: [
-                Expanded(child: _KpiCard(icon: Icons.access_time_outlined,  color: AppColors.warning, label: 'Pending Approval', value: pendingLabel, sub: 'This year ($currentYear)')),
+                Expanded(
+                    child: _KpiCard(
+                        icon: Icons.access_time_outlined,
+                        color: AppColors.warning,
+                        label: 'Pending Approval',
+                        value: pendingLabel,
+                        sub: 'This year ($currentYear)')),
                 const SizedBox(width: 10),
-                Expanded(child: _KpiCard(icon: Icons.event_busy_outlined,   color: AppColors.error,   label: 'Rejected',         value: rejectedLabel, sub: 'This year ($currentYear)')),
+                Expanded(
+                    child: _KpiCard(
+                        icon: Icons.event_busy_outlined,
+                        color: AppColors.error,
+                        label: 'Rejected',
+                        value: rejectedLabel,
+                        sub: 'This year ($currentYear)')),
               ],
             ),
             const SizedBox(height: 16),
 
             if (statsAsync.isLoading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Center(
+                    child: CircularProgressIndicator(color: AppColors.primary)),
               )
             else ...[
               // ── Leave Balance Breakdown ───────────────────────────────────────
@@ -77,11 +104,13 @@ class LeaveAnalyticsTab extends ConsumerWidget {
                                 Expanded(
                                   child: Text(b.leaveTypeDisplay,
                                       style: AppTextStyles.caption.copyWith(
-                                          fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textPrimary)),
                                 ),
                                 Text(
                                   '${_fmt(b.usedDays)} used / ${_fmt(b.totalDays)} total',
-                                  style: AppTextStyles.caption.copyWith(fontSize: 10),
+                                  style: AppTextStyles.caption
+                                      .copyWith(fontSize: 10),
                                 ),
                               ],
                             ),
@@ -92,13 +121,16 @@ class LeaveAnalyticsTab extends ConsumerWidget {
                                 value: b.pct,
                                 minHeight: 8,
                                 backgroundColor: AppColors.backgroundLow,
-                                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                    AppColors.primary),
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text('${_fmt(b.available)} remaining',
                                 style: AppTextStyles.caption.copyWith(
-                                    fontSize: 10, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                                    fontSize: 10,
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w600)),
                           ],
                         ),
                       );
@@ -108,7 +140,8 @@ class LeaveAnalyticsTab extends ConsumerWidget {
               else
                 _EmptyCard(
                   icon: Icons.bar_chart_outlined,
-                  message: 'No leave balance data for $currentYear. Contact HR to credit your annual leave.',
+                  message:
+                      'No leave balance data for $currentYear. Contact HR to credit your annual leave.',
                 ),
               const SizedBox(height: 14),
 
@@ -120,10 +153,26 @@ class LeaveAnalyticsTab extends ConsumerWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _StatusRow(label: 'Approved',  value: stats?.approved  ?? 0, total: totalAll, color: AppColors.success),
-                      _StatusRow(label: 'Pending',   value: stats?.pending   ?? 0, total: totalAll, color: AppColors.warning),
-                      _StatusRow(label: 'Rejected',  value: stats?.rejected  ?? 0, total: totalAll, color: AppColors.error),
-                      _StatusRow(label: 'Cancelled', value: stats?.cancelled ?? 0, total: totalAll, color: AppColors.textSecondary),
+                      _StatusRow(
+                          label: 'Approved',
+                          value: stats?.approved ?? 0,
+                          total: totalAll,
+                          color: AppColors.success),
+                      _StatusRow(
+                          label: 'Pending',
+                          value: stats?.pending ?? 0,
+                          total: totalAll,
+                          color: AppColors.warning),
+                      _StatusRow(
+                          label: 'Rejected',
+                          value: stats?.rejected ?? 0,
+                          total: totalAll,
+                          color: AppColors.error),
+                      _StatusRow(
+                          label: 'Cancelled',
+                          value: stats?.cancelled ?? 0,
+                          total: totalAll,
+                          color: AppColors.textSecondary),
                     ],
                   ),
                 ),
@@ -134,7 +183,8 @@ class LeaveAnalyticsTab extends ConsumerWidget {
     );
   }
 
-  static String _fmt(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
+  static String _fmt(double v) =>
+      v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
 }
 
 // ── Sub-widgets ───────────────────────────────────────────────────────────────
@@ -145,7 +195,12 @@ class _KpiCard extends StatelessWidget {
   final String label;
   final String value;
   final String sub;
-  const _KpiCard({required this.icon, required this.color, required this.label, required this.value, required this.sub});
+  const _KpiCard(
+      {required this.icon,
+      required this.color,
+      required this.label,
+      required this.value,
+      required this.sub});
 
   @override
   Widget build(BuildContext context) {
@@ -160,7 +215,8 @@ class _KpiCard extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 40, height: 40,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(11),
@@ -175,14 +231,18 @@ class _KpiCard extends StatelessWidget {
               children: [
                 Text(value,
                     style: AppTextStyles.h3.copyWith(
-                        fontSize: 22, fontWeight: FontWeight.w800,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
                         color: AppColors.textPrimary)),
                 Text(label,
                     style: AppTextStyles.caption.copyWith(fontSize: 10),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
                 Text(sub,
-                    style: AppTextStyles.caption.copyWith(fontSize: 9, color: AppColors.textHint),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                    style: AppTextStyles.caption
+                        .copyWith(fontSize: 9, color: AppColors.textHint),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -196,7 +256,8 @@ class _SectionCard extends StatelessWidget {
   final String title;
   final IconData icon;
   final Widget child;
-  const _SectionCard({required this.title, required this.icon, required this.child});
+  const _SectionCard(
+      {required this.title, required this.icon, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -220,7 +281,7 @@ class _SectionCard extends StatelessWidget {
               ],
             ),
           ),
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: AppColors.border),
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
             child: child,
@@ -253,8 +314,7 @@ class _EmptyCard extends StatelessWidget {
           Icon(icon, size: 32, color: AppColors.textHint),
           const SizedBox(height: 8),
           Text(message,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodySecondary),
+              textAlign: TextAlign.center, style: AppTextStyles.bodySecondary),
         ],
       ),
     );
@@ -266,7 +326,11 @@ class _StatusRow extends StatelessWidget {
   final int value;
   final int total;
   final Color color;
-  const _StatusRow({required this.label, required this.value, required this.total, required this.color});
+  const _StatusRow(
+      {required this.label,
+      required this.value,
+      required this.total,
+      required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -281,10 +345,12 @@ class _StatusRow extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(label,
-                    style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600)),
+                    style: AppTextStyles.caption
+                        .copyWith(fontWeight: FontWeight.w600)),
               ),
               Text('$value ($pct%)',
-                  style: AppTextStyles.caption.copyWith(fontSize: 11, color: AppColors.textHint)),
+                  style: AppTextStyles.caption
+                      .copyWith(fontSize: 11, color: AppColors.textHint)),
             ],
           ),
           const SizedBox(height: 4),

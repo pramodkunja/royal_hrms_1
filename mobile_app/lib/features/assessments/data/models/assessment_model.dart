@@ -27,30 +27,53 @@ DateTime? _parseDate(dynamic v) {
   return DateTime.tryParse(v as String);
 }
 
+// Who an assessment is assigned to — matches backend
+// CandidateAssignment.assignee_type exactly. `assignee_id` is a UUID string
+// for employees but a plain integer for recruitment candidates, so it's kept
+// as a String here (via toString()) to safely hold either shape.
+class AssessmentAssigneeType {
+  AssessmentAssigneeType._();
+  static const String employee = 'employee';
+  static const String candidate = 'candidate';
+
+  static String label(String type) =>
+      type == employee ? 'Employee' : 'Candidate';
+}
+
 @immutable
 class AssessmentCandidateModel {
   final String id;
-  final int candidateId;
-  final String candidateName;
-  final String candidateEmail;
+  final String assigneeType; // employee | candidate
+  final String assigneeId;
+  final String assigneeName;
+  final String assigneeEmail;
   final String status; // pending | in_progress | complete
   final int attemptCount;
-  final int passScore; // max_score
-  final int scoreAwarded; // score
-  final String passPercentage; // pre-formatted e.g. "80%" or "N/A"
+  final int totalQuestions;
+  final int achievedScore;
+  final String scorePercentage; // pre-formatted e.g. "80%", "0%", or "N/A"
+  final int passPercentage; // the assessment's pass threshold, e.g. 70
+  final bool passed;
+  final List<dynamic> sectionsBreakdown;
+  final DateTime? deadline;
   final DateTime? completedAt;
   final DateTime? createdAt; // "assigned on"
 
   const AssessmentCandidateModel({
     required this.id,
-    required this.candidateId,
-    required this.candidateName,
-    required this.candidateEmail,
+    required this.assigneeType,
+    required this.assigneeId,
+    required this.assigneeName,
+    required this.assigneeEmail,
     required this.status,
     required this.attemptCount,
-    required this.passScore,
-    required this.scoreAwarded,
+    required this.totalQuestions,
+    required this.achievedScore,
+    required this.scorePercentage,
     required this.passPercentage,
+    required this.passed,
+    this.sectionsBreakdown = const [],
+    this.deadline,
     this.completedAt,
     this.createdAt,
   });
@@ -58,14 +81,20 @@ class AssessmentCandidateModel {
   factory AssessmentCandidateModel.fromJson(Map<String, dynamic> json) {
     return AssessmentCandidateModel(
       id: json['id']?.toString() ?? '',
-      candidateId: json['candidate_id'] as int? ?? 0,
-      candidateName: json['candidate_name'] as String? ?? '',
-      candidateEmail: json['candidate_email'] as String? ?? '',
+      assigneeType:
+          json['assignee_type'] as String? ?? AssessmentAssigneeType.candidate,
+      assigneeId: json['assignee_id']?.toString() ?? '',
+      assigneeName: json['assignee_name'] as String? ?? '',
+      assigneeEmail: json['assignee_email'] as String? ?? '',
       status: json['status'] as String? ?? AssessmentAssignStatus.pending,
       attemptCount: json['attempt_count'] as int? ?? 1,
-      passScore: json['pass_score'] as int? ?? 0,
-      scoreAwarded: json['score_awarded'] as int? ?? 0,
-      passPercentage: json['pass_percentage']?.toString() ?? 'N/A',
+      totalQuestions: json['total_questions'] as int? ?? 0,
+      achievedScore: json['achieved_score'] as int? ?? 0,
+      scorePercentage: json['score_percentage']?.toString() ?? 'N/A',
+      passPercentage: json['pass_percentage'] as int? ?? 0,
+      passed: json['passed'] as bool? ?? false,
+      sectionsBreakdown: json['sections_breakdown'] as List<dynamic>? ?? const [],
+      deadline: _parseDate(json['deadline']),
       completedAt: _parseDate(json['completed_at']),
       createdAt: _parseDate(json['created_at']),
     );
@@ -79,6 +108,11 @@ class AssessmentModel {
   final String description;
   final bool isActive;
   final bool isDefault;
+  final int passPercentage;
+  final int? maxAttempts;
+  final int? timeLimitMins;
+  final int effectiveMaxAttempts;
+  final int? effectiveTimeLimitMins;
   final int itemCount;
   final int assignedCount;
   final int pendingCount;
@@ -93,6 +127,11 @@ class AssessmentModel {
     required this.description,
     required this.isActive,
     required this.isDefault,
+    required this.passPercentage,
+    this.maxAttempts,
+    this.timeLimitMins,
+    required this.effectiveMaxAttempts,
+    this.effectiveTimeLimitMins,
     required this.itemCount,
     required this.assignedCount,
     required this.pendingCount,
@@ -110,6 +149,11 @@ class AssessmentModel {
       description: json['description'] as String? ?? '',
       isActive: json['is_active'] as bool? ?? true,
       isDefault: json['is_default'] as bool? ?? false,
+      passPercentage: json['pass_percentage'] as int? ?? 0,
+      maxAttempts: json['max_attempts'] as int?,
+      timeLimitMins: json['time_limit_mins'] as int?,
+      effectiveMaxAttempts: json['effective_max_attempts'] as int? ?? 1,
+      effectiveTimeLimitMins: json['effective_time_limit_mins'] as int?,
       itemCount: json['item_count'] as int? ?? 0,
       assignedCount: json['assigned_count'] as int? ?? 0,
       pendingCount: json['pending_count'] as int? ?? 0,

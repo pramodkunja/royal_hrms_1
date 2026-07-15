@@ -8,22 +8,24 @@ import '../providers/interview_providers.dart';
 
 part 'add_candidate_form.dart';
 
-class AddCandidateSheet extends ConsumerStatefulWidget {
-  const AddCandidateSheet({super.key});
+class AddCandidateDialog extends ConsumerStatefulWidget {
+  const AddCandidateDialog({super.key});
 
   @override
-  ConsumerState<AddCandidateSheet> createState() =>
-      _AddCandidateSheetState();
+  ConsumerState<AddCandidateDialog> createState() =>
+      _AddCandidateDialogState();
 }
 
-class _AddCandidateSheetState
-    extends ConsumerState<AddCandidateSheet> {
+class _AddCandidateDialogState
+    extends ConsumerState<AddCandidateDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _posCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
+
+  final _scrollCtrl = ScrollController();
 
   int? _selectedBranch;
   String _mode = 'in_person';
@@ -69,6 +71,7 @@ class _AddCandidateSheetState
     ]) {
       c.dispose();
     }
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
@@ -120,30 +123,24 @@ class _AddCandidateSheetState
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: DraggableScrollableSheet(
-        initialChildSize: 0.9,
-        minChildSize: 0.6,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (_, ctrl) => Column(
+    final mq = MediaQuery.of(context);
+    // Popup dialog box (centered), not a bottom sheet — the form's own
+    // ListView scrolls internally, and maxHeight is recomputed against the
+    // keyboard inset so opening a text field doesn't overflow the dialog.
+    final maxHeight =
+        (mq.size.height - mq.viewInsets.bottom - 80).clamp(320.0, mq.size.height * 0.85);
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: 480, maxHeight: maxHeight),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Handle
-            const SizedBox(height: 12),
-            Center(
-              child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: AppColors.border,
-                      borderRadius: BorderRadius.circular(2))),
-            ),
-            const SizedBox(height: 12),
             // Title
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.fromLTRB(20, 18, 12, 0),
               child: Row(
                 children: [
                   Expanded(
@@ -161,7 +158,7 @@ class _AddCandidateSheetState
             ),
             const Divider(height: 16),
             // Form
-            Expanded(
+            Flexible(
               child: _AddCandidateFormContent(
                 formKey: _formKey,
                 nameCtrl: _nameCtrl,
@@ -182,7 +179,7 @@ class _AddCandidateSheetState
                     setState(() => _mode = v ?? 'in_person'),
                 onDateChanged: (v) =>
                     setState(() => _interviewDate = v),
-                scrollCtrl: ctrl,
+                scrollCtrl: _scrollCtrl,
               ),
             ),
           ],

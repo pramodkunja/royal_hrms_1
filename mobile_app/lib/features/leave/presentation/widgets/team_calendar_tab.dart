@@ -5,13 +5,33 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
 
-const _kMonths = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const _kDays   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const _kMonths = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December'
+];
+const _kDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // Stable display order for the legend, matching the web frontend's leave type list.
 // Values are the backend's raw `leave_type` codes (lowercase full words), not
 // the 'CL'/'EL'/'SL' abbreviations — those are only display short-labels.
-const _kTypeOrder = ['casual', 'earned', 'sick', 'lwp', 'maternity', 'paternity'];
+const _kTypeOrder = [
+  'casual',
+  'earned',
+  'sick',
+  'lwp',
+  'maternity',
+  'paternity'
+];
 
 DateTime? _parseIso(String iso) {
   try {
@@ -43,10 +63,15 @@ class _TeamCalendarTabState extends ConsumerState<TeamCalendarTab> {
 
   List<int?> _buildCells() {
     final firstWeekday = DateTime(_month.year, _month.month, 1).weekday;
-    final offset       = firstWeekday == 7 ? 0 : firstWeekday; // Sun=0
-    final daysInMonth  = DateTime(_month.year, _month.month + 1, 0).day;
-    final cells = <int?>[...List<int?>.filled(offset, null), ...List.generate(daysInMonth, (i) => i + 1)];
-    while (cells.length % 7 != 0) { cells.add(null); }
+    final offset = firstWeekday == 7 ? 0 : firstWeekday; // Sun=0
+    final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
+    final cells = <int?>[
+      ...List<int?>.filled(offset, null),
+      ...List.generate(daysInMonth, (i) => i + 1)
+    ];
+    while (cells.length % 7 != 0) {
+      cells.add(null);
+    }
     return cells;
   }
 
@@ -55,7 +80,7 @@ class _TeamCalendarTabState extends ConsumerState<TeamCalendarTab> {
     final d = DateTime(_month.year, _month.month, day);
     return events.where((e) {
       final start = _parseIso(e.startDate);
-      final end   = _parseIso(e.endDate);
+      final end = _parseIso(e.endDate);
       if (start == null || end == null) return false;
       final s = DateTime(start.year, start.month, start.day);
       final en = DateTime(end.year, end.month, end.day);
@@ -74,14 +99,13 @@ class _TeamCalendarTabState extends ConsumerState<TeamCalendarTab> {
     final asyncEvents =
         ref.watch(leaveCalendarProvider((_month.year, _month.month)));
     final cells = _buildCells();
-    final now   = DateTime.now();
-    final isCurrentMonth =
-        now.year == _month.year && now.month == _month.month;
+    final now = DateTime.now();
+    final isCurrentMonth = now.year == _month.year && now.month == _month.month;
 
     return asyncEvents.when(
-      loading: () => const Center(
+      loading: () => Center(
         child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 80),
+          padding: const EdgeInsets.symmetric(vertical: 80),
           child: CircularProgressIndicator(color: AppColors.primary),
         ),
       ),
@@ -91,7 +115,7 @@ class _TeamCalendarTabState extends ConsumerState<TeamCalendarTab> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, size: 32, color: AppColors.error),
+              Icon(Icons.error_outline, size: 32, color: AppColors.error),
               const SizedBox(height: 8),
               Text('Failed to load team calendar.',
                   style: AppTextStyles.bodySecondary),
@@ -159,7 +183,7 @@ class _TeamCalendarTabState extends ConsumerState<TeamCalendarTab> {
 
                     // Day headers
                     Container(
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         color: AppColors.backgroundLow,
                         border: Border(
                           top: BorderSide(color: AppColors.border),
@@ -170,7 +194,8 @@ class _TeamCalendarTabState extends ConsumerState<TeamCalendarTab> {
                         children: _kDays
                             .map((d) => Expanded(
                                   child: Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    padding:
+                                        const EdgeInsets.symmetric(vertical: 8),
                                     child: Text(d,
                                         textAlign: TextAlign.center,
                                         style: AppTextStyles.caption.copyWith(
@@ -188,7 +213,8 @@ class _TeamCalendarTabState extends ConsumerState<TeamCalendarTab> {
                       Container(
                         decoration: BoxDecoration(
                           border: row < cells.length ~/ 7 - 1
-                              ? const Border(bottom: BorderSide(color: AppColors.border))
+                              ? Border(
+                                  bottom: BorderSide(color: AppColors.border))
                               : null,
                         ),
                         child: Row(
@@ -196,13 +222,16 @@ class _TeamCalendarTabState extends ConsumerState<TeamCalendarTab> {
                           children: List.generate(7, (col) {
                             final idx = row * 7 + col;
                             final day = cells[idx];
-                            final ev  = day != null ? _dayEvents(events, day) : <LeaveCalendarEventEntity>[];
+                            final ev = day != null
+                                ? _dayEvents(events, day)
+                                : <LeaveCalendarEventEntity>[];
                             final isToday = isCurrentMonth && day == now.day;
                             final isWeekend = col == 0 || col == 6;
 
                             return Expanded(
                               child: Container(
-                                constraints: const BoxConstraints(minHeight: 62),
+                                constraints:
+                                    const BoxConstraints(minHeight: 62),
                                 decoration: BoxDecoration(
                                   color: day == null
                                       ? AppColors.backgroundLow
@@ -210,7 +239,9 @@ class _TeamCalendarTabState extends ConsumerState<TeamCalendarTab> {
                                           ? AppColors.background
                                           : AppColors.surface,
                                   border: col < 6
-                                      ? const Border(right: BorderSide(color: AppColors.border))
+                                      ? Border(
+                                          right: BorderSide(
+                                              color: AppColors.border))
                                       : null,
                                 ),
                                 padding: const EdgeInsets.all(4),
@@ -218,45 +249,70 @@ class _TeamCalendarTabState extends ConsumerState<TeamCalendarTab> {
                                     ? null
                                     : Column(
                                         mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Center(
                                             child: Container(
-                                              width: 22, height: 22,
+                                              width: 22,
+                                              height: 22,
                                               decoration: isToday
-                                                  ? const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle)
+                                                  ? BoxDecoration(
+                                                      color: AppColors.primary,
+                                                      shape: BoxShape.circle)
                                                   : null,
                                               child: Center(
                                                 child: Text('$day',
-                                                    style: AppTextStyles.caption.copyWith(
-                                                        fontSize: 11,
-                                                        fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,
-                                                        color: isToday
-                                                            ? Colors.white
-                                                            : isWeekend
-                                                                ? AppColors.textHint
-                                                                : AppColors.textPrimary)),
+                                                    style: AppTextStyles.caption
+                                                        .copyWith(
+                                                            fontSize: 11,
+                                                            fontWeight: isToday
+                                                                ? FontWeight
+                                                                    .w800
+                                                                : FontWeight
+                                                                    .w500,
+                                                            color: isToday
+                                                                ? Colors.white
+                                                                : isWeekend
+                                                                    ? AppColors
+                                                                        .textHint
+                                                                    : AppColors
+                                                                        .textPrimary)),
                                               ),
                                             ),
                                           ),
                                           const SizedBox(height: 2),
                                           ...ev.take(2).map((e) => Container(
-                                                margin: const EdgeInsets.only(bottom: 2),
-                                                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                                                margin: const EdgeInsets.only(
+                                                    bottom: 2),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 3,
+                                                        vertical: 1),
                                                 decoration: BoxDecoration(
                                                   color: Color(LeaveTypeColors
-                                                      .colorValueForCode(e.leaveTypeCode)),
-                                                  borderRadius: BorderRadius.circular(3),
+                                                      .colorValueForCode(
+                                                          e.leaveTypeCode)),
+                                                  borderRadius:
+                                                      BorderRadius.circular(3),
                                                 ),
                                                 child: Text(
-                                                  e.employeeName.split(' ').first,
-                                                  style: const TextStyle(fontSize: 7, color: Colors.white, fontWeight: FontWeight.w600),
-                                                  overflow: TextOverflow.ellipsis,
+                                                  e.employeeName
+                                                      .split(' ')
+                                                      .first,
+                                                  style: const TextStyle(
+                                                      fontSize: 7,
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.w600),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
                                               )),
                                           if (ev.length > 2)
                                             Text('+${ev.length - 2}',
-                                                style: AppTextStyles.caption.copyWith(fontSize: 8)),
+                                                style: AppTextStyles.caption
+                                                    .copyWith(fontSize: 8)),
                                         ],
                                       ),
                               ),
@@ -284,13 +340,14 @@ class _TeamCalendarTabState extends ConsumerState<TeamCalendarTab> {
                       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                       child: Row(
                         children: [
-                          const Icon(Icons.event_note_outlined, size: 15, color: AppColors.primary),
+                          Icon(Icons.event_note_outlined,
+                              size: 15, color: AppColors.primary),
                           const SizedBox(width: 6),
                           Text('Leaves this month', style: AppTextStyles.label),
                         ],
                       ),
                     ),
-                    const Divider(height: 1, color: AppColors.border),
+                    Divider(height: 1, color: AppColors.border),
                     if (events.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 24),
@@ -305,16 +362,19 @@ class _TeamCalendarTabState extends ConsumerState<TeamCalendarTab> {
                       for (final e in events)
                         Container(
                           padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                          decoration: const BoxDecoration(
-                            border: Border(bottom: BorderSide(color: AppColors.border)),
+                          decoration: BoxDecoration(
+                            border: Border(
+                                bottom: BorderSide(color: AppColors.border)),
                           ),
                           child: Row(
                             children: [
                               Container(
-                                width: 10, height: 10,
+                                width: 10,
+                                height: 10,
                                 decoration: BoxDecoration(
-                                  color: Color(LeaveTypeColors
-                                      .colorValueForCode(e.leaveTypeCode)),
+                                  color: Color(
+                                      LeaveTypeColors.colorValueForCode(
+                                          e.leaveTypeCode)),
                                   shape: BoxShape.circle,
                                 ),
                               ),
@@ -326,20 +386,25 @@ class _TeamCalendarTabState extends ConsumerState<TeamCalendarTab> {
                                   children: [
                                     Text(e.employeeName,
                                         style: AppTextStyles.caption.copyWith(
-                                            fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                                    Text(e.leaveTypeName, style: AppTextStyles.caption.copyWith(fontSize: 10)),
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.textPrimary)),
+                                    Text(e.leaveTypeName,
+                                        style: AppTextStyles.caption
+                                            .copyWith(fontSize: 10)),
                                   ],
                                 ),
                               ),
                               Text(
                                 '${_fmtShort(e.startDate)}  –  ${_fmtShort(e.endDate)}',
-                                style: AppTextStyles.caption.copyWith(fontSize: 10),
+                                style: AppTextStyles.caption
+                                    .copyWith(fontSize: 10),
                               ),
                               const SizedBox(width: 10),
                               Text(
                                 '${e.totalDays == e.totalDays.roundToDouble() ? e.totalDays.toInt() : e.totalDays}d',
                                 style: AppTextStyles.caption.copyWith(
-                                    color: AppColors.primary, fontWeight: FontWeight.w700),
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w700),
                               ),
                             ],
                           ),
@@ -368,8 +433,10 @@ class _LegendDot extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 10, height: 10,
-          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+              color: color, borderRadius: BorderRadius.circular(2)),
         ),
         const SizedBox(width: 5),
         Text(label, style: AppTextStyles.caption.copyWith(fontSize: 11)),
@@ -388,7 +455,8 @@ class _NavBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 30, height: 30,
+        width: 30,
+        height: 30,
         decoration: BoxDecoration(
           border: Border.all(color: AppColors.border),
           borderRadius: BorderRadius.circular(8),

@@ -31,7 +31,7 @@ class _DocumentDetailDialogState
           // ── Header ─────────────────────────────────────────────────────────
           Container(
             padding: const EdgeInsets.fromLTRB(20, 18, 12, 18),
-            decoration: const BoxDecoration(color: AppColors.primary),
+            decoration: BoxDecoration(color: AppColors.primary),
             child: Row(
               children: [
                 const Icon(Icons.folder_open_outlined,
@@ -120,17 +120,17 @@ class _DocumentDetailDialogState
                             icon: Icons.category_outlined,
                             label: 'Category',
                             value: doc.categoryDisplay),
-                        const Divider(height: 1, color: AppColors.border),
+                        Divider(height: 1, color: AppColors.border),
                         _MetaRow(
                             icon: Icons.person_outline,
                             label: 'Uploaded by',
                             value: doc.uploadedByName),
-                        const Divider(height: 1, color: AppColors.border),
+                        Divider(height: 1, color: AppColors.border),
                         _MetaRow(
                             icon: Icons.calendar_today_outlined,
                             label: 'Upload date',
                             value: formatDocDate(doc.uploadedAt)),
-                        const Divider(height: 1, color: AppColors.border),
+                        Divider(height: 1, color: AppColors.border),
                         const _MetaRow(
                             icon: Icons.groups_outlined,
                             label: 'Access',

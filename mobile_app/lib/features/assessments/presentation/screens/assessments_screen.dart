@@ -33,7 +33,7 @@ class _AssessmentsScreenState extends ConsumerState<AssessmentsScreen> {
           slivers: [
             const SliverToBoxAdapter(child: _Header()),
             assessmentsAsync.when(
-              loading: () => const SliverFillRemaining(
+              loading: () => SliverFillRemaining(
                 child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
               ),
               error: (e, _) => SliverFillRemaining(
@@ -191,6 +191,10 @@ class _OverallStatsRow extends StatelessWidget {
     final completed = assessments.fold<int>(0, (sum, a) => sum + a.completedCount);
 
     final stats = [
+      // The total assessment count from the backend wasn't surfaced
+      // anywhere in this row before — only the per-candidate aggregates
+      // were shown.
+      (label: 'Total Assessments', value: assessments.length, icon: Icons.fact_check_outlined, color: const Color(0xFF1E4E8C)),
       (label: 'Total Assigned', value: assigned, icon: Icons.people_outline, color: AppColors.primary),
       (label: 'Pending', value: pending, icon: Icons.access_time, color: AppColors.warning),
       (label: 'In Progress', value: inProgress, icon: Icons.edit_outlined, color: AppColors.info),
@@ -261,7 +265,7 @@ class _EmptyView extends StatelessWidget {
                 color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(Icons.assignment_outlined, size: 36, color: AppColors.primary),
+              child: Icon(Icons.assignment_outlined, size: 36, color: AppColors.primary),
             ),
             const SizedBox(height: 16),
             Text('No assessments yet', style: AppTextStyles.h4),
@@ -302,7 +306,7 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
+            Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
             const SizedBox(height: 12),
             Text('Could not load assessments', style: AppTextStyles.h4),
             const SizedBox(height: 6),

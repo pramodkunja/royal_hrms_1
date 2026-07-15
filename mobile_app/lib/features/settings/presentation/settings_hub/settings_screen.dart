@@ -90,6 +90,7 @@ const _kTiles = <_Tile>[
     icon: Icons.access_time_outlined, iconColor: Color(0xFF006064), iconBg: Color(0xFFE0F4F4),
     label: 'Attendance Rules',
     desc: 'Shift timings, late marks and overtime',
+    route: AppRoutes.settingsAttendanceRules,
   ),
   _Tile(
     cat: _Tab.modules,
@@ -97,6 +98,27 @@ const _kTiles = <_Tile>[
     label: 'Holiday Calendar',
     desc: 'Manage national, regional and company holidays',
     route: AppRoutes.settingsHolidayCalendar,
+  ),
+  _Tile(
+    cat: _Tab.modules,
+    icon: Icons.card_giftcard_outlined, iconColor: Color(0xFF7C3AED), iconBg: Color(0xFFF1EBFC),
+    label: 'Referral Rules',
+    desc: 'Manage the rules and bonus details shown on the Referral page',
+    route: AppRoutes.settingsReferralRules,
+  ),
+  _Tile(
+    cat: _Tab.modules,
+    icon: Icons.fact_check_outlined, iconColor: Color(0xFF00695C), iconBg: Color(0xFFE0F2F1),
+    label: 'Assessment Config',
+    desc: 'Pass percentage, attempt limits and time settings',
+    route: AppRoutes.settingsAssessmentConfig,
+  ),
+  _Tile(
+    cat: _Tab.modules,
+    icon: Icons.rule_folder_outlined, iconColor: Color(0xFF1B3A6B), iconBg: Color(0xFFEBF0FA),
+    label: 'Approval Rules',
+    desc: 'Who approves leave, expenses, resignation and loans',
+    route: AppRoutes.settingsApprovalRules,
   ),
   _Tile(
     cat: _Tab.modules,

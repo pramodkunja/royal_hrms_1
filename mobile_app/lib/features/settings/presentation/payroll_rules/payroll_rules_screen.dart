@@ -151,7 +151,7 @@ class _PayrollRulesScreenState extends State<PayrollRulesScreen>
             statutory: _statutoryCount,
             active: _totalActive,
           ),
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: AppColors.border),
 
           // Tab views
           Expanded(
@@ -412,7 +412,7 @@ class _EarningsTab extends StatelessWidget {
                   color: const Color(0xFFEBF0FA),
                   borderRadius: BorderRadius.circular(7),
                 ),
-                child: const Icon(Icons.currency_exchange_outlined,
+                child: Icon(Icons.currency_exchange_outlined,
                     size: 14, color: AppColors.primary),
               ),
               const SizedBox(width: 10),
@@ -566,7 +566,7 @@ class _EarnRowTile extends StatelessWidget {
                 ),
                 IconButton(
                   onPressed: () {},
-                  icon: const Icon(Icons.edit_outlined,
+                  icon: Icon(Icons.edit_outlined,
                       size: 16, color: AppColors.textSecondary),
                   constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   padding: EdgeInsets.zero,
@@ -769,7 +769,7 @@ class _DeductRowTile extends StatelessWidget {
                 ),
                 IconButton(
                   onPressed: () {},
-                  icon: const Icon(Icons.edit_outlined,
+                  icon: Icon(Icons.edit_outlined,
                       size: 16, color: AppColors.textSecondary),
                   constraints:
                       const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -1083,7 +1083,7 @@ class _RunDropdown extends StatelessWidget {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide:
-                  const BorderSide(color: AppColors.primary, width: 1.5),
+                  BorderSide(color: AppColors.primary, width: 1.5),
             ),
             isDense: true,
           ),
@@ -1091,7 +1091,7 @@ class _RunDropdown extends StatelessWidget {
               fontSize: 13,
               color: Color(0xFF111827),
               fontWeight: FontWeight.w500),
-          icon: const Icon(Icons.keyboard_arrow_down,
+          icon: Icon(Icons.keyboard_arrow_down,
               size: 18, color: AppColors.textSecondary),
           items: items
               .map((e) => DropdownMenuItem(value: e, child: Text(e)))
@@ -1152,7 +1152,7 @@ class _RunTextField extends StatelessWidget {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide:
-                  const BorderSide(color: AppColors.primary, width: 1.5),
+                  BorderSide(color: AppColors.primary, width: 1.5),
             ),
             isDense: true,
           ),

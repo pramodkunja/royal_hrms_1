@@ -180,7 +180,7 @@ class ExpenseListItem extends StatelessWidget {
                             icon:  Icons.business_outlined,
                             label: expense.branchName),
                       if (hasReceipt)
-                        const _MetaChip(
+                        _MetaChip(
                             icon:  Icons.attach_file_outlined,
                             label: 'Receipt',
                             color: AppColors.primary),

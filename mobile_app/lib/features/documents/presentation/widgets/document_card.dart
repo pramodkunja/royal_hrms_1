@@ -94,14 +94,14 @@ class DocumentCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  const Icon(Icons.data_usage_outlined,
+                  Icon(Icons.data_usage_outlined,
                       size: 11, color: AppColors.textHint),
                   const SizedBox(width: 3),
                   Text(document.fileSizeDisplay,
                       style:
                           AppTextStyles.caption.copyWith(fontSize: 10)),
                   const SizedBox(width: 8),
-                  const Icon(Icons.calendar_today_outlined,
+                  Icon(Icons.calendar_today_outlined,
                       size: 11, color: AppColors.textHint),
                   const SizedBox(width: 3),
                   Expanded(
@@ -122,7 +122,7 @@ class DocumentCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  const Icon(Icons.person_outline,
+                  Icon(Icons.person_outline,
                       size: 11, color: AppColors.textHint),
                   const SizedBox(width: 3),
                   Expanded(

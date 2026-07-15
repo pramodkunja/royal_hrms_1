@@ -245,7 +245,7 @@ class _CreditAnnualLeaveCard extends StatelessWidget {
                   color: AppColors.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.currency_exchange_rounded,
+                child: Icon(Icons.currency_exchange_rounded,
                     size: 18, color: AppColors.primary),
               ),
               const SizedBox(width: 10),
@@ -284,12 +284,12 @@ class _CreditAnnualLeaveCard extends StatelessWidget {
                   OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.border),
+                borderSide: BorderSide(color: AppColors.border),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide:
-                    const BorderSide(color: AppColors.primary, width: 1.5),
+                    BorderSide(color: AppColors.primary, width: 1.5),
               ),
               filled: true,
               fillColor: AppColors.surface,
@@ -381,7 +381,7 @@ class _RuleCard extends StatelessWidget {
               const SizedBox(width: 6),
               IconButton(
                 onPressed: onEdit,
-                icon: const Icon(Icons.edit_outlined,
+                icon: Icon(Icons.edit_outlined,
                     size: 18, color: AppColors.textSecondary),
                 visualDensity: VisualDensity.compact,
                 style: IconButton.styleFrom(
@@ -393,7 +393,7 @@ class _RuleCard extends StatelessWidget {
               const SizedBox(width: 6),
               IconButton(
                 onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline,
+                icon: Icon(Icons.delete_outline,
                     size: 18, color: AppColors.error),
                 visualDensity: VisualDensity.compact,
                 style: IconButton.styleFrom(
@@ -498,7 +498,7 @@ class _EmptyView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.paid_outlined,
+            Icon(Icons.paid_outlined,
                 size: 40, color: AppColors.textHint),
             const SizedBox(height: 10),
             Text('No credit rules yet.', style: AppTextStyles.bodySecondary),

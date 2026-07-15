@@ -137,7 +137,7 @@ class _TemplateEditorSheetState extends State<TemplateEditorSheet> {
             helperStyle: AppTextStyles.caption.copyWith(color: AppColors.textHint, fontSize: 11),
             suffixIcon: _slugEdited
                 ? IconButton(
-                    icon: const Icon(Icons.refresh, size: 18, color: AppColors.textHint),
+                    icon: Icon(Icons.refresh, size: 18, color: AppColors.textHint),
                     tooltip: 'Re-generate from display name',
                     onPressed: () {
                       final slug = EmailTemplateFormData.toSlug(_displayNameCtrl.text);
@@ -146,7 +146,7 @@ class _TemplateEditorSheetState extends State<TemplateEditorSheet> {
                       setState(() => _slugEdited = false);
                     },
                   )
-                : const Icon(Icons.lock_outline, size: 16, color: AppColors.textHint),
+                : Icon(Icons.lock_outline, size: 16, color: AppColors.textHint),
           ),
           onChanged: (v) {
             _form.name = v;
@@ -197,7 +197,7 @@ class _TemplateEditorSheetState extends State<TemplateEditorSheet> {
             child: Text(label, style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
           ),
           const SizedBox(width: 8),
-          const Icon(Icons.lock_outline, size: 14, color: AppColors.textHint),
+          Icon(Icons.lock_outline, size: 14, color: AppColors.textHint),
         ],
       ),
     );
@@ -315,15 +315,15 @@ class _TemplateEditorSheetState extends State<TemplateEditorSheet> {
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.border),
+      borderSide: BorderSide(color: AppColors.border),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+      borderSide: BorderSide(color: AppColors.primary, width: 1.5),
     ),
     errorBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.error),
+      borderSide: BorderSide(color: AppColors.error),
     ),
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
   );
@@ -367,7 +367,7 @@ class _DlgHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.primary,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -441,18 +441,18 @@ class _FormField extends StatelessWidget {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppColors.border),
+            borderSide: BorderSide(color: AppColors.border),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+            borderSide: BorderSide(color: AppColors.primary, width: 1.5),
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppColors.error),
+            borderSide: BorderSide(color: AppColors.error),
           ),
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          suffixIcon: readOnly ? const Icon(Icons.lock_outline, size: 16, color: AppColors.textHint) : null,
+          suffixIcon: readOnly ? Icon(Icons.lock_outline, size: 16, color: AppColors.textHint) : null,
         ),
       ),
     );

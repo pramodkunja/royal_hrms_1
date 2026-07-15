@@ -95,7 +95,7 @@ class _RunPayrollScreenState extends State<RunPayrollScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close, color: AppColors.textPrimary),
+          icon: Icon(Icons.close, color: AppColors.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Column(
@@ -355,7 +355,7 @@ Widget _labeledDropdown(String label, String value) {
             Expanded(
                 child: Text(value,
                     style: AppTextStyles.body.copyWith(fontSize: 13))),
-            const Icon(Icons.keyboard_arrow_down,
+            Icon(Icons.keyboard_arrow_down,
                 size: 18, color: AppColors.textSecondary),
           ],
         ),
@@ -534,7 +534,7 @@ class _Step2EarnDeduct extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
                 child: Row(
                   children: [
-                    const Icon(Icons.trending_up,
+                    Icon(Icons.trending_up,
                         color: AppColors.success, size: 18),
                     const SizedBox(width: 8),
                     Text('Earnings Review', style: AppTextStyles.h4),
@@ -963,7 +963,7 @@ class _Step4Calculation extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.check_circle_outline,
+                Icon(Icons.check_circle_outline,
                     color: AppColors.success, size: 18),
                 const SizedBox(width: 8),
                 Expanded(

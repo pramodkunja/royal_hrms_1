@@ -136,7 +136,7 @@ class _ActiveBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.check_circle_outline, size: 18, color: AppColors.success),
+          Icon(Icons.check_circle_outline, size: 18, color: AppColors.success),
           const SizedBox(width: 8),
           Expanded(
             child: RichText(
@@ -148,7 +148,7 @@ class _ActiveBanner extends StatelessWidget {
                     text: entry.smtpTypeDisplay.isNotEmpty
                         ? '${entry.name} (${entry.smtpTypeDisplay})'
                         : entry.name,
-                    style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                   ),
                   const TextSpan(text: ' for sending emails.'),
                 ],
@@ -304,11 +304,11 @@ class _TestDialogState extends State<_TestDialog> {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          borderSide: BorderSide(color: AppColors.primary, width: 1.5),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       ),
@@ -350,7 +350,7 @@ class _EmptyView extends StatelessWidget {
                 color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(Icons.dns_outlined, size: 36, color: AppColors.primary),
+              child: Icon(Icons.dns_outlined, size: 36, color: AppColors.primary),
             ),
             const SizedBox(height: 16),
             Text('No SMTP configurations', style: AppTextStyles.h4),
@@ -390,7 +390,7 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
+            Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
             const SizedBox(height: 12),
             Text('Could not load SMTP configs', style: AppTextStyles.h4),
             const SizedBox(height: 6),

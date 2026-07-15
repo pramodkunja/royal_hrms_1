@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../settings/data/models/departments_model.dart';
@@ -52,16 +53,32 @@ class EmployeesNotifier extends AutoDisposeAsyncNotifier<List<EmployeeModel>> {
       final current = state.valueOrNull ?? [];
       state = AsyncData(current.map((e) {
         if (e.id != employeeId) return e;
-        final newStatus = isActive ? 'active' : 'inactive';
-        return EmployeeModel(
-          id: e.id, employeeId: e.employeeId,
-          firstName: e.firstName, lastName: e.lastName, fullName: e.fullName,
-          email: e.email, phone: e.phone,
-          department: e.department, designation: e.designation, branch: e.branch,
-          roleDisplay: e.roleDisplay, isActive: isActive,
-          status: newStatus, dateOfJoining: e.dateOfJoining,
+        return e.copyWith(
+          isActive: isActive,
+          status: isActive ? 'active' : 'inactive',
         );
       }).toList());
+      return null;
+    } catch (e) {
+      return _friendlyError(e);
+    }
+  }
+
+  // ── Update (edit) ────────────────────────────────────────────────────────
+
+  Future<String?> updateEmployee(
+    String employeeId,
+    EmployeeUpdateFormData form,
+  ) async {
+    try {
+      final updated = await _ds.updateEmployee(employeeId, form);
+      final current = state.valueOrNull ?? [];
+      state = AsyncData(current
+          .map((e) => e.id == employeeId ? updated : e)
+          .toList());
+      // The profile screen reads `employeeDetailProvider(employeeId)`
+      // independently of this list — invalidate it so it refetches.
+      ref.invalidate(employeeDetailProvider(employeeId));
       return null;
     } catch (e) {
       return _friendlyError(e);
@@ -139,6 +156,45 @@ final employeeDetailProvider = FutureProvider.autoDispose
   return ref.read(employeesDataSourceProvider).fetchEmployee(employeeId);
 });
 
+// ── Approval matrix (per-employee) ─────────────────────────────────────────────
+
+final employeeApprovalMatrixProvider = AsyncNotifierProvider.autoDispose
+    .family<EmployeeApprovalMatrixNotifier, List<EmployeeApprovalMatrixRow>, String>(
+  EmployeeApprovalMatrixNotifier.new,
+);
+
+class EmployeeApprovalMatrixNotifier extends AutoDisposeFamilyAsyncNotifier<
+    List<EmployeeApprovalMatrixRow>, String> {
+  EmployeesRemoteDataSource get _ds => ref.read(employeesDataSourceProvider);
+
+  @override
+  Future<List<EmployeeApprovalMatrixRow>> build(String employeeId) =>
+      _ds.fetchApprovalMatrix(employeeId);
+
+  // Backend PATCH response is just the single updated row, not the full
+  // list — refetch the whole matrix afterwards so overrides for other
+  // workflow rows (and the row we just changed) stay in sync.
+  Future<String?> updateOverride(
+    String workflowType, {
+    String? l1OverrideId,
+    String? l2OverrideId,
+  }) async {
+    try {
+      await _ds.updateApprovalOverride(
+        arg,
+        workflowType,
+        l1OverrideId: l1OverrideId,
+        l2OverrideId: l2OverrideId,
+      );
+      state = const AsyncLoading();
+      state = await AsyncValue.guard(() => _ds.fetchApprovalMatrix(arg));
+      return null;
+    } catch (e) {
+      return _friendlyError(e);
+    }
+  }
+}
+
 // ── Form support providers ─────────────────────────────────────────────────────
 
 // Roles — reuse from settings to avoid duplicate API calls
@@ -164,6 +220,56 @@ final employeeDesignationsByDeptProvider =
     FutureProvider.autoDispose.family<List<String>, int>((ref, deptId) {
   return ref.read(employeesDataSourceProvider).fetchDesignationNames(deptId);
 });
+
+// HR contact options, filtered by branch (Edit Employee sheet, edit-only)
+final employeeHrOptionsProvider =
+    FutureProvider.autoDispose.family<List<EmployeePickerOption>, String>((ref, branch) {
+  return ref.read(employeesDataSourceProvider).fetchHrs(branch);
+});
+
+// Reporting manager options, filtered by branch (Edit Employee sheet,
+// edit-only). Backend requires a non-empty branch — only call this with one.
+final employeeManagerOptionsProvider =
+    FutureProvider.autoDispose.family<List<EmployeePickerOption>, String>((ref, branch) {
+  return ref.read(employeesDataSourceProvider).fetchManagers(branch);
+});
+
+// ── Send wish email (Wishes tab) ────────────────────────────────────────────
+//
+// A one-off action, not tied to any list/notifier state — modeled as a
+// top-level function taking `WidgetRef` directly, matching the convention
+// already used by assessments' `assignCandidateToAssessment`. Deliberately
+// does NOT use `_friendlyError` below: that helper string-matches status
+// codes and flattens real backend text (e.g. "Candidate not found." for
+// employees with no linked recruitment Candidate record) into generic
+// messages like "Resource not found." `parseDioException` preserves the
+// backend's own `message` field verbatim so that real limitation is visible
+// to the user instead of being hidden behind a generic error.
+Future<String?> sendEmployeeWishEmail(
+  WidgetRef ref, {
+  required String employeeId,
+  required String templateName,
+  required Map<String, String> extraContext,
+}) async {
+  try {
+    await ref.read(employeesDataSourceProvider).sendCandidateEmail(
+          employeeId,
+          templateName: templateName,
+          extraContext: extraContext,
+        );
+    return null;
+  } catch (e) {
+    if (e is DioException) {
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
+        return 'Cannot reach server. Check your connection.';
+      }
+      return parseDioException(e).message;
+    }
+    return e.toString().replaceAll('Exception:', '').trim();
+  }
+}
 
 // ── Error helper ───────────────────────────────────────────────────────────────
 

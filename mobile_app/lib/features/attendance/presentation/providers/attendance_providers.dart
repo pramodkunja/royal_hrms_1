@@ -16,6 +16,10 @@ final attendanceRepositoryProvider = Provider<AttendanceRepository>((ref) {
   return AttendanceRepositoryImpl(ref.watch(attendanceDataSourceProvider));
 });
 
+String? _fmtDate(DateTime? d) => d == null
+    ? null
+    : '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
 // ── My Attendance — Today / Clock In-Out ───────────────────────────────────────
 
 final todayAttendanceProvider = AsyncNotifierProvider.autoDispose<
@@ -85,6 +89,39 @@ final attendanceCalendarProvider = FutureProvider.autoDispose
   return ref.watch(attendanceRepositoryProvider).getCalendar(month: key.month, year: key.year);
 });
 
+// ── Employee Attendance (admin view of another employee's data) ────────────────
+// Same endpoints as "My Attendance" above, scoped server-side via `employee_id`
+// query param (employees.view / attendance.view permission-gated).
+
+typedef EmployeeMonthYearKey = ({String employeeId, int year, int month});
+
+final employeeAttendanceStatsProvider = FutureProvider.autoDispose
+    .family<AttendanceStatsEntity, EmployeeMonthYearKey>((ref, key) {
+  return ref.watch(attendanceRepositoryProvider).getStats(
+        month: key.month,
+        year: key.year,
+        employeeId: key.employeeId,
+      );
+});
+
+final employeeAttendanceSummaryProvider = FutureProvider.autoDispose
+    .family<MonthlySummaryEntity, EmployeeMonthYearKey>((ref, key) {
+  return ref.watch(attendanceRepositoryProvider).getSummary(
+        month: key.month,
+        year: key.year,
+        employeeId: key.employeeId,
+      );
+});
+
+final employeeAttendanceCalendarProvider = FutureProvider.autoDispose
+    .family<AttendanceCalendarEntity, EmployeeMonthYearKey>((ref, key) {
+  return ref.watch(attendanceRepositoryProvider).getCalendar(
+        month: key.month,
+        year: key.year,
+        employeeId: key.employeeId,
+      );
+});
+
 // ── My Attendance — Correction request ─────────────────────────────────────────
 
 final attendanceCorrectionActionProvider =
@@ -126,6 +163,7 @@ class AttendanceCorrectionAction {
 
 final hrAttendanceBranchFilterProvider = StateProvider.autoDispose<String>((ref) => '');
 final hrAttendanceDepartmentFilterProvider = StateProvider.autoDispose<String>((ref) => '');
+final hrAttendanceDateFilterProvider = StateProvider.autoDispose<DateTime?>((ref) => null);
 
 // ── HR Attendance — Dashboard (stats bar) ───────────────────────────────────────
 
@@ -133,28 +171,38 @@ final attendanceDashboardProvider =
     FutureProvider.autoDispose<AttendanceDashboardEntity>((ref) {
   final branch = ref.watch(hrAttendanceBranchFilterProvider);
   final department = ref.watch(hrAttendanceDepartmentFilterProvider);
+  final date = ref.watch(hrAttendanceDateFilterProvider);
   return ref
       .watch(attendanceRepositoryProvider)
-      .getDashboard(branch: branch, department: department);
+      .getDashboard(branch: branch, department: department, date: _fmtDate(date));
 });
 
 // ── HR Attendance — Records list (Attendance tab) ──────────────────────────────
 
 final attendanceRecordsSearchProvider = StateProvider.autoDispose<String>((ref) => '');
+final attendanceRecordsPageProvider = StateProvider.autoDispose<int>((ref) => 1);
 
 final attendanceRecordsProvider = AsyncNotifierProvider.autoDispose<
-    AttendanceRecordsNotifier, List<AttendanceRowEntity>>(AttendanceRecordsNotifier.new);
+    AttendanceRecordsNotifier, PaginatedListEntity<AttendanceRowEntity>>(AttendanceRecordsNotifier.new);
 
 class AttendanceRecordsNotifier
-    extends AutoDisposeAsyncNotifier<List<AttendanceRowEntity>> {
+    extends AutoDisposeAsyncNotifier<PaginatedListEntity<AttendanceRowEntity>> {
   AttendanceRepository get _repo => ref.read(attendanceRepositoryProvider);
 
   @override
-  Future<List<AttendanceRowEntity>> build() {
+  Future<PaginatedListEntity<AttendanceRowEntity>> build() {
     final branch = ref.watch(hrAttendanceBranchFilterProvider);
     final department = ref.watch(hrAttendanceDepartmentFilterProvider);
+    final date = ref.watch(hrAttendanceDateFilterProvider);
     final search = ref.watch(attendanceRecordsSearchProvider);
-    return _repo.getRecords(branch: branch, department: department, search: search);
+    final page = ref.watch(attendanceRecordsPageProvider);
+    return _repo.getRecords(
+      branch: branch,
+      department: department,
+      date: _fmtDate(date),
+      search: search,
+      page: page,
+    );
   }
 
   Future<void> refresh() async {
@@ -174,17 +222,26 @@ final attendanceRecordDetailProvider = FutureProvider.autoDispose
 
 // ── HR Attendance — Overtime (OT Entry tab) ─────────────────────────────────────
 
-final overtimeListProvider = AsyncNotifierProvider.autoDispose<OvertimeListNotifier,
-    List<OvertimeRowEntity>>(OvertimeListNotifier.new);
+final overtimePageProvider = StateProvider.autoDispose<int>((ref) => 1);
 
-class OvertimeListNotifier extends AutoDisposeAsyncNotifier<List<OvertimeRowEntity>> {
+final overtimeListProvider = AsyncNotifierProvider.autoDispose<OvertimeListNotifier,
+    PaginatedListEntity<OvertimeRowEntity>>(OvertimeListNotifier.new);
+
+class OvertimeListNotifier extends AutoDisposeAsyncNotifier<PaginatedListEntity<OvertimeRowEntity>> {
   AttendanceRepository get _repo => ref.read(attendanceRepositoryProvider);
 
   @override
-  Future<List<OvertimeRowEntity>> build() {
+  Future<PaginatedListEntity<OvertimeRowEntity>> build() {
     final branch = ref.watch(hrAttendanceBranchFilterProvider);
     final department = ref.watch(hrAttendanceDepartmentFilterProvider);
-    return _repo.getOvertimeList(branch: branch, department: department);
+    final date = ref.watch(hrAttendanceDateFilterProvider);
+    final page = ref.watch(overtimePageProvider);
+    return _repo.getOvertimeList(
+      branch: branch,
+      department: department,
+      date: _fmtDate(date),
+      page: page,
+    );
   }
 
   Future<void> refresh() async {
@@ -220,15 +277,69 @@ class OvertimeListNotifier extends AutoDisposeAsyncNotifier<List<OvertimeRowEnti
   }
 }
 
-// ── HR Attendance — Invalid Punches (read-only) ────────────────────────────────
+// ── HR Attendance — Invalid Punches (Assign / Discard / Convert) ───────────────
 
-final invalidPunchesProvider =
-    FutureProvider.autoDispose<List<InvalidPunchEntity>>((ref) {
-  final branch = ref.watch(hrAttendanceBranchFilterProvider);
-  final department = ref.watch(hrAttendanceDepartmentFilterProvider);
-  return ref
-      .watch(attendanceRepositoryProvider)
-      .getInvalidPunches(branch: branch, department: department);
+final invalidPunchesProvider = AsyncNotifierProvider.autoDispose<InvalidPunchesNotifier,
+    List<InvalidPunchEntity>>(InvalidPunchesNotifier.new);
+
+class InvalidPunchesNotifier extends AutoDisposeAsyncNotifier<List<InvalidPunchEntity>> {
+  AttendanceRepository get _repo => ref.read(attendanceRepositoryProvider);
+
+  @override
+  Future<List<InvalidPunchEntity>> build() {
+    final branch = ref.watch(hrAttendanceBranchFilterProvider);
+    final department = ref.watch(hrAttendanceDepartmentFilterProvider);
+    final date = ref.watch(hrAttendanceDateFilterProvider);
+    return _repo.getInvalidPunches(branch: branch, department: department, date: _fmtDate(date));
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => build());
+  }
+
+  /// Returns null on success, or a user-facing error message on failure.
+  Future<String?> assign(String id, {required String assignedTo}) async {
+    try {
+      await _repo.assignInvalidPunch(id, assignedTo: assignedTo);
+      await refresh();
+      ref.invalidate(attendanceDashboardProvider);
+      return null;
+    } catch (e) {
+      return friendlyAttendanceError(e);
+    }
+  }
+
+  /// Returns null on success, or a user-facing error message on failure.
+  Future<String?> discard(String id, {String? remarks}) async {
+    try {
+      await _repo.discardInvalidPunch(id, remarks: remarks);
+      await refresh();
+      ref.invalidate(attendanceDashboardProvider);
+      return null;
+    } catch (e) {
+      return friendlyAttendanceError(e);
+    }
+  }
+
+  /// Returns null on success, or a user-facing error message on failure.
+  Future<String?> convert(String id, {required String targetPunchType, required String targetTime}) async {
+    try {
+      await _repo.convertInvalidPunch(id, targetPunchType: targetPunchType, targetTime: targetTime);
+      await refresh();
+      ref.invalidate(attendanceDashboardProvider);
+      ref.invalidate(attendanceRecordsProvider);
+      return null;
+    } catch (e) {
+      return friendlyAttendanceError(e);
+    }
+  }
+}
+
+// ── HR Attendance — HR users picker (Invalid Punch "Assign") ───────────────────
+
+final hrUsersProvider = FutureProvider.autoDispose<List<HrUserEntity>>((ref) {
+  return ref.watch(attendanceRepositoryProvider).getHrUsers();
 });
 
 // ── HR Attendance — Un-punches queue ────────────────────────────────────────────
@@ -243,7 +354,8 @@ class UnpunchesNotifier extends AutoDisposeAsyncNotifier<List<UnpunchRowEntity>>
   Future<List<UnpunchRowEntity>> build() {
     final branch = ref.watch(hrAttendanceBranchFilterProvider);
     final department = ref.watch(hrAttendanceDepartmentFilterProvider);
-    return _repo.getUnpunches(branch: branch, department: department);
+    final date = ref.watch(hrAttendanceDateFilterProvider);
+    return _repo.getUnpunches(branch: branch, department: department, date: _fmtDate(date));
   }
 
   Future<void> refresh() async {
@@ -261,6 +373,89 @@ class UnpunchesNotifier extends AutoDisposeAsyncNotifier<List<UnpunchRowEntity>>
       return null;
     } catch (e) {
       return friendlyAttendanceError(e);
+    }
+  }
+}
+
+// ── HR Attendance — General Corrections inbox ───────────────────────────────────
+
+final hrCorrectionsStatusFilterProvider = StateProvider.autoDispose<String>((ref) => 'pending');
+
+final hrCorrectionsProvider = AsyncNotifierProvider.autoDispose<HrCorrectionsNotifier,
+    List<HrCorrectionRowEntity>>(HrCorrectionsNotifier.new);
+
+class HrCorrectionsNotifier extends AutoDisposeAsyncNotifier<List<HrCorrectionRowEntity>> {
+  AttendanceRepository get _repo => ref.read(attendanceRepositoryProvider);
+
+  @override
+  Future<List<HrCorrectionRowEntity>> build() {
+    final branch = ref.watch(hrAttendanceBranchFilterProvider);
+    final department = ref.watch(hrAttendanceDepartmentFilterProvider);
+    final status = ref.watch(hrCorrectionsStatusFilterProvider);
+    return _repo.getHrCorrections(
+      branch: branch,
+      department: department,
+      status: status == 'all' ? null : status,
+    );
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => build());
+  }
+
+  /// Returns null on success, or a user-facing error message on failure.
+  Future<String?> reviewCorrection(String correctionId, {required bool approve}) async {
+    try {
+      await _repo.reviewCorrection(correctionId, approve: approve);
+      await refresh();
+      ref.invalidate(attendanceDashboardProvider);
+      return null;
+    } catch (e) {
+      return friendlyAttendanceError(e);
+    }
+  }
+}
+
+// ── HR Attendance — Record audit history ────────────────────────────────────────
+
+final attendanceRecordAuditProvider = FutureProvider.autoDispose
+    .family<List<AttendanceAuditEntryEntity>, String>((ref, recordId) {
+  return ref.watch(attendanceRepositoryProvider).getRecordAudit(recordId);
+});
+
+// ── HR Attendance — Corrections for a single employee+date (record detail) ─────
+
+typedef EmployeeDateKey = ({String employeeId, String date});
+
+/// The corrections list endpoint has no server-side employee_id+date filter,
+/// so — matching web's own approach — this fetches the unfiltered list and
+/// narrows it client-side to the record being viewed.
+final attendanceRecordCorrectionsProvider = FutureProvider.autoDispose
+    .family<List<HrCorrectionRowEntity>, EmployeeDateKey>((ref, key) async {
+  final all = await ref.watch(attendanceRepositoryProvider).getHrCorrections();
+  return all.where((c) => c.employeeId == key.employeeId && c.date == key.date).toList();
+});
+
+// ── HR Attendance — CSV Import (Export is a direct one-shot call, see below) ───
+
+final attendanceImportActionProvider =
+    Provider.autoDispose<AttendanceImportAction>((ref) => AttendanceImportAction(ref));
+
+class AttendanceImportAction {
+  final Ref _ref;
+  AttendanceImportAction(this._ref);
+
+  /// Returns the import result (which itself may report partial row failures),
+  /// or throws a friendly error message string on hard failure.
+  Future<ImportResultEntity> upload(List<int> bytes, String fileName) async {
+    try {
+      final result = await _ref.read(attendanceRepositoryProvider).importCsv(bytes, fileName);
+      await _ref.read(attendanceRecordsProvider.notifier).refresh();
+      _ref.invalidate(attendanceDashboardProvider);
+      return result;
+    } catch (e) {
+      throw friendlyAttendanceError(e);
     }
   }
 }

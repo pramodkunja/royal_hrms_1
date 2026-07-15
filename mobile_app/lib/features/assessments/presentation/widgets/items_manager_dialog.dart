@@ -199,7 +199,7 @@ class _ItemsManagerDialogState extends ConsumerState<ItemsManagerDialog> {
           children: [
             Container(
               padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppColors.primary,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
@@ -302,7 +302,7 @@ class _ItemsManagerDialogState extends ConsumerState<ItemsManagerDialog> {
             ),
             Container(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border(top: BorderSide(color: AppColors.border)),
               ),
               child: Row(
@@ -315,7 +315,7 @@ class _ItemsManagerDialogState extends ConsumerState<ItemsManagerDialog> {
                         label: const Text('Add Item'),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          side: const BorderSide(color: AppColors.primary),
+                          side: BorderSide(color: AppColors.primary),
                           foregroundColor: AppColors.primary,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),

@@ -32,7 +32,7 @@ class _EmployeeCodeScreenState extends ConsumerState<EmployeeCodeScreen> {
             ? TextButton(
                 onPressed: _saving ? null : _submit,
                 child: _saving
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 18, height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
                       )
@@ -236,15 +236,15 @@ class _EmployeeCodeFormState extends State<_EmployeeCodeForm> {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          borderSide: BorderSide(color: AppColors.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.error),
+          borderSide: BorderSide(color: AppColors.error),
         ),
         filled: true,
         fillColor: AppColors.surface,
@@ -266,8 +266,8 @@ class _PreviewCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, Color(0xFF2A6ACC)],
+        gradient: LinearGradient(
+          colors: [AppColors.primary, const Color(0xFF2A6ACC)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -400,7 +400,7 @@ class _HintCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline, size: 18, color: AppColors.primary),
+          Icon(Icons.info_outline, size: 18, color: AppColors.primary),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -426,7 +426,7 @@ class _ErrorBody extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
+          Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
           const SizedBox(height: 12),
           Text('Could not load settings', style: AppTextStyles.h4),
           const SizedBox(height: 6),

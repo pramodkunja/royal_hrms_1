@@ -182,16 +182,17 @@ class _IconBtn extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback onTap;
-  final Color color;
+  final Color? color;
   const _IconBtn({
     required this.icon,
     required this.tooltip,
     required this.onTap,
-    this.color = AppColors.textSecondary,
+    this.color,
   });
 
   @override
   Widget build(BuildContext context) {
+    final resolvedColor = color ?? AppColors.textSecondary;
     return Tooltip(
       message: tooltip,
       child: InkWell(
@@ -199,7 +200,7 @@ class _IconBtn extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.all(7),
-          child: Icon(icon, size: 18, color: color),
+          child: Icon(icon, size: 18, color: resolvedColor),
         ),
       ),
     );
@@ -222,7 +223,7 @@ class _CardFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
       padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),

@@ -8,12 +8,12 @@ import '../../data/models/holiday_model.dart';
 class HolidayStyles {
   HolidayStyles._();
 
-  static const Color national = AppColors.primary; // blue
+  static final Color national = AppColors.primary; // blue
   static const Color nationalBg = Color(0xFFEBF0FA);
-  static const Color regional = AppColors.info; // teal
+  static final Color regional = AppColors.info; // teal
   static const Color regionalBg = Color(0xFFE5F4F5);
-  static const Color company = AppColors.warning; // amber
-  static const Color companyBg = AppColors.warningContainer;
+  static final Color company = AppColors.warning; // amber
+  static final Color companyBg = AppColors.warningContainer;
   static const Color optional = Color(0xFF6B3FA0); // purple
   static const Color optionalBg = Color(0xFFF0EBF9);
 
@@ -31,5 +31,5 @@ class HolidayStyles {
     _ => AppColors.backgroundMid,
   };
 
-  static const Color sunday = AppColors.error;
+  static final Color sunday = AppColors.error;
 }

@@ -66,7 +66,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
               ListTile(
                 title: Text('All', style: AppTextStyles.body),
                 trailing: current.isEmpty
-                    ? const Icon(Icons.check, color: AppColors.primary, size: 18)
+                    ? Icon(Icons.check, color: AppColors.primary, size: 18)
                     : null,
                 onTap: () {
                   onSelect('');
@@ -76,7 +76,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
               ...options.map((opt) => ListTile(
                     title: Text(opt, style: AppTextStyles.body),
                     trailing: current == opt
-                        ? const Icon(Icons.check, color: AppColors.primary, size: 18)
+                        ? Icon(Icons.check, color: AppColors.primary, size: 18)
                         : null,
                     onTap: () {
                       onSelect(opt);
@@ -139,7 +139,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                     hintText: 'Search employees...',
                     hintStyle: AppTextStyles.body
                         .copyWith(color: AppColors.textHint),
-                    prefixIcon: const Icon(Icons.search,
+                    prefixIcon: Icon(Icons.search,
                         size: 20, color: AppColors.textHint),
                     suffixIcon: _searchCtrl.text.isNotEmpty
                         ? IconButton(
@@ -160,11 +160,11 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: AppColors.border),
+                      borderSide: BorderSide(color: AppColors.border),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(
+                      borderSide: BorderSide(
                           color: AppColors.primary, width: 1.5),
                     ),
                     contentPadding: const EdgeInsets.symmetric(
@@ -452,7 +452,7 @@ class _StatCard extends StatelessWidget {
               children: [
                 Text(
                   '$count',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary,
@@ -570,7 +570,7 @@ class _EmptyView extends StatelessWidget {
                 color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(Icons.badge_outlined,
+              child: Icon(Icons.badge_outlined,
                   size: 36, color: AppColors.primary),
             ),
             const SizedBox(height: 16),
@@ -605,7 +605,7 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_outlined,
+            Icon(Icons.cloud_off_outlined,
                 size: 48, color: AppColors.textHint),
             const SizedBox(height: 12),
             Text('Could not load employees', style: AppTextStyles.h4),

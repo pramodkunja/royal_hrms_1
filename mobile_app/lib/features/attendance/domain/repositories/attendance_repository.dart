@@ -14,9 +14,9 @@ abstract class AttendanceRepository {
     String? operatingSystem,
   });
   Future<TodayAttendanceEntity> getToday();
-  Future<AttendanceStatsEntity> getStats({int? month, int? year});
-  Future<MonthlySummaryEntity> getSummary({int? month, int? year});
-  Future<AttendanceCalendarEntity> getCalendar({int? month, int? year});
+  Future<AttendanceStatsEntity> getStats({int? month, int? year, String? employeeId});
+  Future<MonthlySummaryEntity> getSummary({int? month, int? year, String? employeeId});
+  Future<AttendanceCalendarEntity> getCalendar({int? month, int? year, String? employeeId});
   Future<AttendanceCorrectionEntity> submitCorrection({
     required String date,
     required String punchType,
@@ -32,7 +32,7 @@ abstract class AttendanceRepository {
     String? branch,
     String? department,
   });
-  Future<List<AttendanceRowEntity>> getRecords({
+  Future<PaginatedListEntity<AttendanceRowEntity>> getRecords({
     String? date,
     String? branch,
     String? department,
@@ -40,16 +40,20 @@ abstract class AttendanceRepository {
     String? search,
     String sortBy,
     String sortDir,
+    int page,
+    int pageSize,
   });
   Future<AttendanceDetailEntity> getRecordDetail(
     String recordIdOrEmployeeId, {
     String? date,
     bool isEmployeeId,
   });
-  Future<List<OvertimeRowEntity>> getOvertimeList({
+  Future<PaginatedListEntity<OvertimeRowEntity>> getOvertimeList({
     String? date,
     String? branch,
     String? department,
+    int page,
+    int pageSize,
   });
   Future<String> createOvertime({
     required String employeeId,
@@ -76,4 +80,21 @@ abstract class AttendanceRepository {
     String? status,
   });
   Future<void> reviewCorrection(String id, {required bool approve});
+
+  // Invalid Punch actions
+  Future<List<HrUserEntity>> getHrUsers({String? branch});
+  Future<void> assignInvalidPunch(String id, {required String assignedTo});
+  Future<void> discardInvalidPunch(String id, {String? remarks});
+  Future<void> convertInvalidPunch(
+    String id, {
+    required String targetPunchType,
+    required String targetTime,
+  });
+
+  // Export / Import
+  Future<List<int>> exportCsv({String? date, String? branch, String? department});
+  Future<ImportResultEntity> importCsv(List<int> bytes, String fileName);
+
+  // Audit history
+  Future<List<AttendanceAuditEntryEntity>> getRecordAudit(String recordId);
 }

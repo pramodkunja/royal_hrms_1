@@ -5,23 +5,28 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
+import 'leave_request_detail_sheet.dart';
 
 // Matches the reference web dashboard's BALANCE_DISPLAY exactly — icon + color
 // per type is deliberately distinct from the LEAVE_TYPE_CONFIG identity colors
 // used elsewhere (Apply tab, calendar): casual=success, earned=primary, sick=info.
 // Only these 3 leave types get a summary card here (LWP/maternity/paternity excluded too).
-const _kBalanceDisplay = [
-  (code: 'casual', icon: Icons.check_circle_outline,     color: AppColors.success),
-  (code: 'earned', icon: Icons.calendar_month_outlined,  color: AppColors.primary),
-  (code: 'sick',   icon: Icons.medical_services_outlined, color: AppColors.info),
+final _kBalanceDisplay = [
+  (code: 'casual', icon: Icons.check_circle_outline, color: AppColors.success),
+  (
+    code: 'earned',
+    icon: Icons.calendar_month_outlined,
+    color: AppColors.primary
+  ),
+  (code: 'sick', icon: Icons.medical_services_outlined, color: AppColors.info),
 ];
 
 // Web's LeaveDashboard.tsx scopeLabel — subtitle on the approver's Pending card.
 String _scopeLabel(String role) => switch (role) {
-  'manager'  => "Your team's requests",
-  'hr_admin' => 'Your branch requests',
-  _          => 'Organisation-wide requests',
-};
+      'manager' => "Your team's requests",
+      'hr_admin' => 'Your branch requests',
+      _ => 'Organisation-wide requests',
+    };
 
 // ── Date formatter (ISO → 'D MMM') ───────────────────────────────────────────
 
@@ -29,8 +34,21 @@ String _fmtIso(String iso) {
   if (iso.isEmpty) return '—';
   try {
     final d = DateTime.parse(iso);
-    const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const m = [
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
     return '${d.day} ${m[d.month]}';
   } catch (_) {
     return iso;
@@ -58,39 +76,47 @@ class LeaveDashboardTab extends ConsumerStatefulWidget {
 class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
   bool _actionLoading = false;
 
-  Future<void> _approve(String id) async {
-    setState(() => _actionLoading = true);
-    final err = await ref
-        .read(leaveRequestsProvider.notifier)
-        .approveRequest(id);
+  // Web's LeaveDashboard.tsx: two distinct sub-tabs for approver roles —
+  // "pending" (the real scope=team approval queue) vs "mine" (their own
+  // leave history, fetched with no scope param at all).
+  bool _showPending = true;
+
+  // Only ever non-empty for system_admin — the branch selector button that
+  // feeds this is hidden for every other role (see leave_screen.dart). The
+  // backend's `branch` query param only accepts one value, so a multi-select
+  // narrows to the first pick. Switching branches keys a fresh provider
+  // instance (family arg changes), so there's no separate page to reset.
+  String get _branchFilter =>
+      widget.selectedBranches.isEmpty ? '' : widget.selectedBranches.first;
+
+  void _showSnackError(String err) {
     if (!mounted) return;
-    setState(() => _actionLoading = false);
-    if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(err),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(err),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
-  Future<void> _showRejectDialog(String id) async {
+  Future<String?> _promptRejectReason() {
     final ctrl = TextEditingController();
-    final reason = await showDialog<String>(
+    return showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
             Container(
-              width: 32, height: 32,
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
                 color: AppColors.error.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(9),
               ),
-              child: const Icon(Icons.cancel_outlined, size: 17, color: AppColors.error),
+              child: Icon(Icons.cancel_outlined,
+                  size: 17, color: AppColors.error),
             ),
             const SizedBox(width: 10),
             Text('Reject Request', style: AppTextStyles.label),
@@ -102,7 +128,8 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
           children: [
             Text('Rejection Reason *',
                 style: AppTextStyles.caption.copyWith(
-                    fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textSecondary)),
             const SizedBox(height: 6),
             TextField(
               controller: ctrl,
@@ -110,7 +137,8 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
               maxLength: 300,
               autofocus: true,
               decoration: const InputDecoration(
-                  hintText: 'Explain why this leave request is being rejected…'),
+                  hintText:
+                      'Explain why this leave request is being rejected…'),
             ),
           ],
         ),
@@ -126,47 +154,59 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
         ],
       ),
     );
+  }
+
+  Future<void> _approveTeam(String id) async {
+    setState(() => _actionLoading = true);
+    final err = await ref
+        .read(leaveTeamPendingProvider(_branchFilter).notifier)
+        .approveRequest(id);
+    if (!mounted) return;
+    setState(() => _actionLoading = false);
+    if (err != null) _showSnackError(err);
+  }
+
+  Future<void> _rejectTeam(String id) async {
+    final reason = await _promptRejectReason();
     if (reason == null || reason.isEmpty || !mounted) return;
     setState(() => _actionLoading = true);
     final err = await ref
-        .read(leaveRequestsProvider.notifier)
+        .read(leaveTeamPendingProvider(_branchFilter).notifier)
         .rejectRequest(id, reason);
     if (!mounted) return;
     setState(() => _actionLoading = false);
-    if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(err),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
+    if (err != null) _showSnackError(err);
   }
 
   @override
   Widget build(BuildContext context) {
     final balancesAsync = ref.watch(leaveBalancesProvider);
-    final requestsAsync = ref.watch(leaveRequestsProvider);
-    final authAsync     = ref.watch(authStateProvider);
+    final myRequestsAsync = ref.watch(leaveRequestsProvider);
+    final authAsync = ref.watch(authStateProvider);
 
-    final role       = authAsync.valueOrNull?.user?.role ?? 'employee';
+    final role = authAsync.valueOrNull?.user?.role ?? 'employee';
     final isEmployee = role == 'employee';
 
-    final allRequests = requestsAsync.valueOrNull ?? [];
-    final filteredRequests = widget.selectedBranches.isEmpty
-        ? allRequests
-        : allRequests
-            .where((r) => widget.selectedBranches.contains(r.branch))
-            .toList();
-    final pendingCount =
-        allRequests.where((r) => r.isPending).length;
+    final myRequests = myRequestsAsync.valueOrNull ?? [];
+
+    // Approver's real approval queue — only fetched/watched for non-employee
+    // roles, but watched unconditionally (regardless of which sub-tab is
+    // active) so the "Pending Approvals" count on the stat card and the tab
+    // pill badge always reflect the live server-side count.
+    final teamAsync =
+        isEmployee ? null : ref.watch(leaveTeamPendingProvider(_branchFilter));
+    final teamPage = teamAsync?.valueOrNull;
+
+    final pendingCount = isEmployee
+        ? myRequests.where((r) => r.isPending).length
+        : (teamPage?.count ?? 0);
 
     return RefreshIndicator(
       color: AppColors.primary,
       onRefresh: () async {
         ref.invalidate(leaveBalancesProvider);
         ref.invalidate(leaveRequestsProvider);
+        if (!isEmployee) ref.invalidate(leaveTeamPendingProvider);
       },
       child: CustomScrollView(
         slivers: [
@@ -187,8 +227,9 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
                 SizedBox(
                   height: 116,
                   child: balancesAsync.when(
-                    loading: () => const Center(
-                      child: CircularProgressIndicator(color: AppColors.primary),
+                    loading: () => Center(
+                      child:
+                          CircularProgressIndicator(color: AppColors.primary),
                     ),
                     error: (_, __) => Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -208,7 +249,8 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
                         final b = byType[d.code];
                         return _BalanceCard(
                           label: isEmployee
-                              ? (b?.typeName ?? LeaveTypeColors.labelForCode(d.code))
+                              ? (b?.typeName ??
+                                  LeaveTypeColors.labelForCode(d.code))
                               : 'My ${LeaveTypeColors.shortLabelForCode(d.code)}',
                           available: b?.available ?? 0,
                           total: b?.total ?? 0,
@@ -225,7 +267,9 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
                             padding: const EdgeInsets.only(right: 10),
                             child: _PendingCountCard(
                               count: pendingCount,
-                              label: isEmployee ? 'My Pending' : 'Pending Approvals',
+                              label: isEmployee
+                                  ? 'My Pending'
+                                  : 'Pending Approvals',
                               subtitle: isEmployee
                                   ? 'Awaiting approval'
                                   : _scopeLabel(role),
@@ -259,7 +303,7 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.auto_awesome_outlined,
+                  Icon(Icons.auto_awesome_outlined,
                       size: 15, color: AppColors.info),
                   const SizedBox(width: 8),
                   Expanded(
@@ -283,116 +327,471 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
             ),
           ),
 
-          // ── Requests header ─────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-              child: Row(
-                children: [
-                  const Icon(Icons.list_alt_outlined,
-                      size: 15, color: AppColors.primary),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      widget.selectedBranches.isEmpty
-                          ? 'Recent Leave Requests'
-                          : 'Requests · ${filteredRequests.length} shown',
-                      style: AppTextStyles.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton.icon(
-                    onPressed: widget.onApply,
-                    icon: const Icon(Icons.add, size: 14),
-                    label: const Text('Apply My Leave',
-                        style: TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w600)),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      minimumSize: Size.zero,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // ── Loading requests ────────────────────────────────────────────────
-          if (requestsAsync.isLoading)
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(
-                    child: CircularProgressIndicator(color: AppColors.primary)),
-              ),
-            )
-
-          // ── Error ───────────────────────────────────────────────────────────
-          else if (requestsAsync.hasError)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-                child: Text('Could not load requests: ${requestsAsync.error}',
-                    style: AppTextStyles.caption
-                        .copyWith(color: AppColors.error)),
-              ),
-            )
-
-          // ── Empty ───────────────────────────────────────────────────────────
-          else if (filteredRequests.isEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 40, 16, 40),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.business_outlined,
-                        size: 44, color: AppColors.textHint),
-                    const SizedBox(height: 10),
-                    Text(
-                      widget.selectedBranches.isEmpty
-                          ? 'No leave requests yet.'
-                          : 'No requests found for the selected branch.',
-                      style: AppTextStyles.bodySecondary,
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-            )
-
-          // ── Request cards ───────────────────────────────────────────────────
+          if (isEmployee)
+            ..._employeeRequestSlivers(myRequests, myRequestsAsync)
           else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (_, i) {
-                    final r = filteredRequests[i];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _RequestCard(
-                        request: r,
-                        actionLoading: _actionLoading,
-                        onApprove:
-                            r.isPending ? () => _approve(r.id) : null,
-                        onReject:
-                            r.isPending ? () => _showRejectDialog(r.id) : null,
-                      ),
-                    );
-                  },
-                  childCount: filteredRequests.length,
-                ),
-              ),
-            ),
+            ..._approverRequestSlivers(
+                role, myRequests, myRequestsAsync, teamAsync, teamPage),
         ],
       ),
     );
   }
+
+  // ── Employee: single "My Leave Requests" list (unchanged from before) ──────
+
+  List<Widget> _employeeRequestSlivers(
+    List<LeaveRequestEntity> myRequests,
+    AsyncValue<List<LeaveRequestEntity>> myRequestsAsync,
+  ) {
+    return [
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+          child: Row(
+            children: [
+              Icon(Icons.list_alt_outlined,
+                  size: 15, color: AppColors.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text('My Leave Requests',
+                    style: AppTextStyles.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: widget.onApply,
+                icon: const Icon(Icons.add, size: 14),
+                label: const Text('Apply My Leave',
+                    style:
+                        TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  minimumSize: Size.zero,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      if (myRequestsAsync.isLoading)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 40),
+            child: Center(
+                child: CircularProgressIndicator(color: AppColors.primary)),
+          ),
+        )
+      else if (myRequestsAsync.hasError)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+            child: Text(
+                'Could not load requests: ${friendlyLeaveError(myRequestsAsync.error!)}',
+                style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+          ),
+        )
+      else if (myRequests.isEmpty)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 40, 16, 40),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.business_outlined,
+                    size: 44, color: AppColors.textHint),
+                const SizedBox(height: 10),
+                Text('No leave requests yet.',
+                    style: AppTextStyles.bodySecondary,
+                    textAlign: TextAlign.center),
+              ],
+            ),
+          ),
+        )
+      else
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (ctx, i) {
+                final r = myRequests[i];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: GestureDetector(
+                    onTap: () => showLeaveRequestDetailSheet(
+                      ctx,
+                      initial: r,
+                      canApprove: r.canApprove,
+                    ),
+                    child: _RequestCard(
+                      request: r,
+                      actionLoading: false,
+                      onApprove: null,
+                      onReject: null,
+                    ),
+                  ),
+                );
+              },
+              childCount: myRequests.length,
+            ),
+          ),
+        ),
+    ];
+  }
+
+  // ── Approver: "Pending Approvals" (scope=team) / "My Leave Requests" ───────
+
+  List<Widget> _approverRequestSlivers(
+    String role,
+    List<LeaveRequestEntity> myRequests,
+    AsyncValue<List<LeaveRequestEntity>> myRequestsAsync,
+    AsyncValue<LeaveLoadMoreState>? teamAsync,
+    LeaveLoadMoreState? teamPage,
+  ) {
+    final pendingCount = teamPage?.count ?? 0;
+    final hasBranchFilter = _branchFilter.isNotEmpty;
+
+    return [
+      // ── Sub-tab pills ─────────────────────────────────────────────────────
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+          child: Row(
+            children: [
+              _TabPill(
+                label: 'Pending Approvals',
+                count: pendingCount,
+                selected: _showPending,
+                onTap: () => setState(() => _showPending = true),
+              ),
+              const SizedBox(width: 8),
+              _TabPill(
+                label: 'My Leave Requests',
+                selected: !_showPending,
+                onTap: () => setState(() => _showPending = false),
+              ),
+            ],
+          ),
+        ),
+      ),
+
+      // ── Header + Apply button ────────────────────────────────────────────
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: Row(
+            children: [
+              Icon(Icons.list_alt_outlined,
+                  size: 15, color: AppColors.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  _showPending ? 'Pending Approvals' : 'My Leave Requests',
+                  style: AppTextStyles.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: widget.onApply,
+                icon: const Icon(Icons.add, size: 14),
+                label: const Text('Apply My Leave',
+                    style:
+                        TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  minimumSize: Size.zero,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+
+      if (_showPending)
+        ..._teamPendingSlivers(teamAsync, teamPage, hasBranchFilter)
+      else
+        ..._myRequestsSlivers(myRequests, myRequestsAsync),
+    ];
+  }
+
+  List<Widget> _teamPendingSlivers(
+    AsyncValue<LeaveLoadMoreState>? teamAsync,
+    LeaveLoadMoreState? teamPage,
+    bool hasBranchFilter,
+  ) {
+    if (teamAsync == null || teamAsync.isLoading) {
+      return [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 40),
+            child: Center(
+                child: CircularProgressIndicator(color: AppColors.primary)),
+          ),
+        ),
+      ];
+    }
+    if (teamAsync.hasError) {
+      return [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+            child: Text(
+                'Could not load requests: ${friendlyLeaveError(teamAsync.error!)}',
+                style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+          ),
+        ),
+      ];
+    }
+    final results = teamPage?.items ?? const <LeaveRequestEntity>[];
+    if (results.isEmpty) {
+      return [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 40, 16, 40),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.business_outlined,
+                    size: 44, color: AppColors.textHint),
+                const SizedBox(height: 10),
+                Text(
+                  hasBranchFilter
+                      ? 'No requests for the selected branch.'
+                      : 'No pending leave requests.',
+                  style: AppTextStyles.bodySecondary,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ];
+    }
+    return [
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        sliver: SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (ctx, i) {
+              final r = results[i];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: GestureDetector(
+                  onTap: () => showLeaveRequestDetailSheet(
+                    ctx,
+                    initial: r,
+                    canApprove: r.canApprove,
+                  ),
+                  child: _RequestCard(
+                    request: r,
+                    actionLoading: _actionLoading,
+                    onApprove: r.canApprove ? () => _approveTeam(r.id) : null,
+                    onReject: r.canApprove ? () => _rejectTeam(r.id) : null,
+                  ),
+                ),
+              );
+            },
+            childCount: results.length,
+          ),
+        ),
+      ),
+      if (teamPage!.hasMore)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+            child: teamPage.loadingMore
+                ? Center(
+                    child: SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: AppColors.primary),
+                    ),
+                  )
+                : _LoadMoreButton(
+                    onTap: () => ref
+                        .read(leaveTeamPendingProvider(_branchFilter).notifier)
+                        .loadMore(),
+                  ),
+          ),
+        )
+      else
+        const SliverToBoxAdapter(child: SizedBox(height: 96)),
+    ];
+  }
+
+  List<Widget> _myRequestsSlivers(
+    List<LeaveRequestEntity> myRequests,
+    AsyncValue<List<LeaveRequestEntity>> myRequestsAsync,
+  ) {
+    if (myRequestsAsync.isLoading) {
+      return [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 40),
+            child: Center(
+                child: CircularProgressIndicator(color: AppColors.primary)),
+          ),
+        ),
+      ];
+    }
+    if (myRequestsAsync.hasError) {
+      return [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+            child: Text(
+                'Could not load requests: ${friendlyLeaveError(myRequestsAsync.error!)}',
+                style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+          ),
+        ),
+      ];
+    }
+    if (myRequests.isEmpty) {
+      return [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 40, 16, 40),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.business_outlined,
+                    size: 44, color: AppColors.textHint),
+                const SizedBox(height: 10),
+                Text('You have not applied for any leave yet.',
+                    style: AppTextStyles.bodySecondary,
+                    textAlign: TextAlign.center),
+              ],
+            ),
+          ),
+        ),
+      ];
+    }
+    return [
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+        sliver: SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (ctx, i) {
+              final r = myRequests[i];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: GestureDetector(
+                  onTap: () => showLeaveRequestDetailSheet(
+                    ctx,
+                    initial: r,
+                    canApprove: r.canApprove,
+                  ),
+                  child: _RequestCard(
+                    request: r,
+                    actionLoading: false,
+                    onApprove: null,
+                    onReject: null,
+                  ),
+                ),
+              );
+            },
+            childCount: myRequests.length,
+          ),
+        ),
+      ),
+    ];
+  }
+}
+
+// ── Sub-tab pill (mirrors leave_approvals_tab.dart's _SubTabPill for visual
+// consistency between the Dashboard's and Approvals tab's pending/history
+// splits) ─────────────────────────────────────────────────────────────────────
+
+class _TabPill extends StatelessWidget {
+  final String label;
+  final int? count;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _TabPill({
+    required this.label,
+    this.count,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.border,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label,
+                style: AppTextStyles.caption.copyWith(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? Colors.white : AppColors.textSecondary)),
+            if (count != null && count! > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? Colors.white.withValues(alpha: 0.25)
+                      : AppColors.warning.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text('$count',
+                      style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          color: selected ? Colors.white : AppColors.warning)),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Load more button (mirrors audit_screen.dart's _LoadMoreBtn for visual
+// consistency — appears once the user has scrolled to the end of the loaded
+// items, appends the next page instead of replacing the list) ───────────────
+
+class _LoadMoreButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _LoadMoreButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: OutlinedButton.icon(
+          onPressed: onTap,
+          icon: const Icon(Icons.expand_more, size: 18),
+          label: const Text('Load more'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.primary,
+            side: BorderSide(color: AppColors.primary),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+      );
 }
 
 // ── Balance Card ──────────────────────────────────────────────────────────────
@@ -444,14 +843,16 @@ class _BalanceCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 1),
                     Text(_fmt(available),
-                        style: AppTextStyles.h3.copyWith(color: color, fontSize: 20)),
+                        style: AppTextStyles.h3
+                            .copyWith(color: color, fontSize: 20)),
                     Text('of ${_fmt(total)} days left',
                         style: AppTextStyles.caption.copyWith(fontSize: 10)),
                   ],
                 ),
               ),
               Container(
-                width: 26, height: 26,
+                width: 26,
+                height: 26,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(7),
@@ -526,8 +927,8 @@ class _PendingCountCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 1),
                       Text('$count',
-                          style: AppTextStyles.h3
-                              .copyWith(color: AppColors.warning, fontSize: 20)),
+                          style: AppTextStyles.h3.copyWith(
+                              color: AppColors.warning, fontSize: 20)),
                       Text(
                         subtitle,
                         style: AppTextStyles.caption.copyWith(fontSize: 10),
@@ -538,12 +939,13 @@ class _PendingCountCard extends StatelessWidget {
                   ),
                 ),
                 Container(
-                  width: 26, height: 26,
+                  width: 26,
+                  height: 26,
                   decoration: BoxDecoration(
                     color: AppColors.warning.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(7),
                   ),
-                  child: const Icon(Icons.done_all,
+                  child: Icon(Icons.done_all,
                       size: 13, color: AppColors.warning),
                 ),
               ],
@@ -555,7 +957,7 @@ class _PendingCountCard extends StatelessWidget {
                 value: 0,
                 backgroundColor: AppColors.warning.withValues(alpha: 0.12),
                 valueColor:
-                    const AlwaysStoppedAnimation<Color>(AppColors.warning),
+                    AlwaysStoppedAnimation<Color>(AppColors.warning),
                 minHeight: 4,
               ),
             ),
@@ -581,11 +983,11 @@ class _RequestCard extends StatelessWidget {
   });
 
   static Color _statusColor(String s) => switch (s) {
-    'approved'  => AppColors.success,
-    'rejected'  => AppColors.error,
-    'cancelled' => AppColors.textSecondary,
-    _           => AppColors.warning,
-  };
+        'approved' => AppColors.success,
+        'rejected' => AppColors.error,
+        'cancelled' => AppColors.textSecondary,
+        _ => AppColors.warning,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -616,11 +1018,11 @@ class _RequestCard extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(request.employee.isNotEmpty
+                          Text(
+                              request.employee.isNotEmpty
                                   ? request.employee
                                   : 'You',
-                              style:
-                                  AppTextStyles.label.copyWith(fontSize: 13),
+                              style: AppTextStyles.label.copyWith(fontSize: 13),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis),
                           const SizedBox(height: 1),
@@ -641,8 +1043,7 @@ class _RequestCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: sc.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
-                        border:
-                            Border.all(color: sc.withValues(alpha: 0.3)),
+                        border: Border.all(color: sc.withValues(alpha: 0.3)),
                       ),
                       child: Text(request.status,
                           style: AppTextStyles.caption.copyWith(
@@ -682,7 +1083,7 @@ class _RequestCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Icon(Icons.calendar_month_outlined,
+                    Icon(Icons.calendar_month_outlined,
                         size: 11, color: AppColors.textHint),
                     const SizedBox(width: 4),
                     Flexible(
@@ -724,12 +1125,10 @@ class _RequestCard extends StatelessWidget {
                           icon: const Icon(Icons.check, size: 13),
                           label: const Text('Approve',
                               style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600)),
+                                  fontSize: 11, fontWeight: FontWeight.w600)),
                           style: FilledButton.styleFrom(
                             backgroundColor: AppColors.success,
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 8),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
                           ),
                         ),
                       ),
@@ -740,22 +1139,18 @@ class _RequestCard extends StatelessWidget {
                           icon: const Icon(Icons.close, size: 13),
                           label: const Text('Reject',
                               style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600)),
+                                  fontSize: 11, fontWeight: FontWeight.w600)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.error,
-                            side:
-                                const BorderSide(color: AppColors.error),
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 8),
+                            side: BorderSide(color: AppColors.error),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
                           ),
                         ),
                       ),
                     ],
                   ),
                 ],
-                if (request.isRejected &&
-                    request.rejectReason != null) ...[
+                if (request.isRejected && request.rejectReason != null) ...[
                   const SizedBox(height: 6),
                   Container(
                     width: double.infinity,
@@ -767,7 +1162,7 @@ class _RequestCard extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.message_outlined,
+                        Icon(Icons.message_outlined,
                             size: 10, color: AppColors.error),
                         const SizedBox(width: 4),
                         Expanded(

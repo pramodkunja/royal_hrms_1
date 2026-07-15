@@ -351,10 +351,10 @@ class _SearchBar extends StatelessWidget {
       decoration: InputDecoration(
         hintText: 'Search holidays…',
         hintStyle: AppTextStyles.body.copyWith(color: AppColors.textHint),
-        prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textHint),
+        prefixIcon: Icon(Icons.search, size: 20, color: AppColors.textHint),
         suffixIcon: controller.text.isNotEmpty
             ? IconButton(
-                icon: const Icon(Icons.close, size: 18, color: AppColors.textHint),
+                icon: Icon(Icons.close, size: 18, color: AppColors.textHint),
                 onPressed: () {
                   controller.clear();
                   onChanged('');
@@ -364,9 +364,9 @@ class _SearchBar extends StatelessWidget {
         filled: true,
         fillColor: AppColors.surface,
         contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.border)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.border)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.primary, width: 1.5)),
       ),
     );
   }
@@ -596,7 +596,7 @@ class _AdditionalFilters extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.close, size: 13, color: AppColors.error),
+                  Icon(Icons.close, size: 13, color: AppColors.error),
                   const SizedBox(width: 4),
                   Text('Clear Filters', style: AppTextStyles.labelSmall.copyWith(color: AppColors.error, fontWeight: FontWeight.w600)),
                 ],
@@ -631,7 +631,7 @@ class _CompactDropdown<T> extends StatelessWidget {
           value: value,
           isExpanded: true,
           isDense: true,
-          icon: const Icon(Icons.expand_more, size: 18, color: AppColors.textHint),
+          icon: Icon(Icons.expand_more, size: 18, color: AppColors.textHint),
           style: AppTextStyles.labelSmall.copyWith(color: AppColors.textPrimary),
           items: items.map((v) => DropdownMenuItem(
               value: v, child: Text(labelBuilder(v), overflow: TextOverflow.ellipsis))).toList(),
@@ -708,7 +708,7 @@ class _HolidayCard extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(Icons.business_outlined, size: 12, color: AppColors.textHint),
+              Icon(Icons.business_outlined, size: 12, color: AppColors.textHint),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(holiday.applicableBranches,
@@ -823,7 +823,7 @@ class _PaginationBar extends StatelessWidget {
             onPressed: page > 1 ? onPrev : null,
             icon: const Icon(Icons.chevron_left, size: 16),
             label: const Text('Prev'),
-            style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.border)),
+            style: OutlinedButton.styleFrom(side: BorderSide(color: AppColors.border)),
           ),
           const SizedBox(width: 12),
           Text('Page $page of $totalPages', style: AppTextStyles.labelSmall),
@@ -832,7 +832,7 @@ class _PaginationBar extends StatelessWidget {
             onPressed: page < totalPages ? onNext : null,
             icon: const Icon(Icons.chevron_right, size: 16),
             label: const Text('Next'),
-            style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.border)),
+            style: OutlinedButton.styleFrom(side: BorderSide(color: AppColors.border)),
           ),
         ],
       ),
@@ -858,7 +858,7 @@ class _EmptyState extends StatelessWidget {
             Container(
               width: 64, height: 64,
               decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(18)),
-              child: const Icon(Icons.event_busy_outlined, size: 32, color: AppColors.primary),
+              child: Icon(Icons.event_busy_outlined, size: 32, color: AppColors.primary),
             ),
             const SizedBox(height: 14),
             Text('No holidays found for $year', style: AppTextStyles.h4),

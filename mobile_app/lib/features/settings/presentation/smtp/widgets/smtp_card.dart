@@ -37,9 +37,9 @@ class SmtpCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _CardHeader(entry: entry),
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: AppColors.border),
           _FieldGrid(entry: entry),
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: AppColors.border),
           _CardFooter(
             entry: entry,
             onEdit: onEdit,
@@ -149,7 +149,7 @@ class _StatusBadge extends StatelessWidget {
           if (isActive) ...[
             Container(
               width: 6, height: 6,
-              decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: AppColors.success, shape: BoxShape.circle),
             ),
             const SizedBox(width: 4),
           ],

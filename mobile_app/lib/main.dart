@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'app/app.dart';
 import 'core/network/api_client.dart';
+import 'core/security/secure_storage.dart';
+import 'core/theme/app_colors.dart';
+import 'core/theme/theme_mode_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,6 +20,11 @@ void main() async {
       DeviceOrientation.portraitDown,
     ]);
   }
+
+  // Apply the persisted theme before the first frame so there's no
+  // light-mode flash for users who last chose dark mode.
+  final isDark = await ThemeModeNotifier.loadPersisted(SecureStorageService());
+  AppColors.applyMode(isDark);
 
   // On web the browser's native cookie stack handles auth cookies automatically.
   // On native, persist cookies across app restarts using the file system.

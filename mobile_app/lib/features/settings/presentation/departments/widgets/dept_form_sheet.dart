@@ -52,47 +52,51 @@ class _DeptFormSheetState extends State<DeptFormSheet> {
             subtitle: 'Organise your company structure',
             onClose: () => Navigator.pop(context),
           ),
-          Container(
-            color: AppColors.background,
-            padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.viewInsetsOf(context).bottom + 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextFormField(
-                  controller: _nameCtrl,
-                  style: AppTextStyles.body,
-                  autofocus: true,
-                  onChanged: (_) => setState(() => _nameError = null),
-                  decoration: _dec('Department Name *', _nameError),
+          Flexible(
+            child: Container(
+              color: AppColors.background,
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.viewInsetsOf(context).bottom + 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextFormField(
+                      controller: _nameCtrl,
+                      style: AppTextStyles.body,
+                      autofocus: true,
+                      onChanged: (_) => setState(() => _nameError = null),
+                      decoration: _dec('Department Name *', _nameError),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _descCtrl,
+                      style: AppTextStyles.body,
+                      maxLines: 3,
+                      decoration: _dec('Description (optional)'),
+                    ),
+                    const SizedBox(height: 12),
+                    _StatusToggle(
+                      value: _isActive,
+                      onChanged: (v) => setState(() => _isActive = v),
+                    ),
+                    const SizedBox(height: 20),
+                    FilledButton(
+                      onPressed: _saving ? null : _submit,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 48),
+                        backgroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: _saving
+                          ? const SizedBox(width: 20, height: 20,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : Text(_isAdd ? 'Add Department' : 'Save Changes',
+                              style: AppTextStyles.label.copyWith(color: Colors.white)),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _descCtrl,
-                  style: AppTextStyles.body,
-                  maxLines: 3,
-                  decoration: _dec('Description (optional)'),
-                ),
-                const SizedBox(height: 12),
-                _StatusToggle(
-                  value: _isActive,
-                  onChanged: (v) => setState(() => _isActive = v),
-                ),
-                const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: _saving ? null : _submit,
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 48),
-                    backgroundColor: AppColors.primary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: _saving
-                      ? const SizedBox(width: 20, height: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : Text(_isAdd ? 'Add Department' : 'Save Changes',
-                          style: AppTextStyles.label.copyWith(color: Colors.white)),
-                ),
-              ],
+              ),
             ),
           ),
         ],
@@ -107,11 +111,11 @@ class _DeptFormSheetState extends State<DeptFormSheet> {
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.border),
+      borderSide: BorderSide(color: AppColors.border),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+      borderSide: BorderSide(color: AppColors.primary, width: 1.5),
     ),
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
   );
@@ -222,7 +226,7 @@ class _DlgHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.primary,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),

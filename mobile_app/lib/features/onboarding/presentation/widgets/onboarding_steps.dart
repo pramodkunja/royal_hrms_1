@@ -30,13 +30,13 @@ InputDecoration _fieldDec(String label, {String? hint}) => InputDecoration(
           const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.border)),
+          borderSide: BorderSide(color: AppColors.border)),
       enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.border)),
+          borderSide: BorderSide(color: AppColors.border)),
       focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+          borderSide: BorderSide(color: AppColors.primary, width: 1.5)),
     );
 
 Widget _fieldRow(Widget left, Widget right) => Row(
@@ -51,7 +51,7 @@ Widget _sectionLabel(String text) => Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.2,
@@ -747,8 +747,8 @@ class _DocumentsStepState extends State<_DocumentsStep> {
     if (file.size > 5 * 1024 * 1024) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('File must be under 5 MB.'),
+          SnackBar(
+            content: const Text('File must be under 5 MB.'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -833,7 +833,7 @@ class _DocumentsStepState extends State<_DocumentsStep> {
                 label: const Text('Previous'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.textSecondary,
-                  side: const BorderSide(color: AppColors.border),
+                  side: BorderSide(color: AppColors.border),
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 14),
                   shape: RoundedRectangleBorder(
@@ -850,13 +850,13 @@ class _DocumentsStepState extends State<_DocumentsStep> {
                   onPressed: _savingDraft ? null : _handleSaveDraft,
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.textSecondary,
-                    side: const BorderSide(color: AppColors.border),
+                    side: BorderSide(color: AppColors.border),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10)),
                   ),
                   child: _savingDraft
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(
@@ -922,7 +922,7 @@ class _DocTypeCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.insert_drive_file_outlined,
+          Icon(Icons.insert_drive_file_outlined,
               color: AppColors.textSecondary, size: 20),
           const SizedBox(width: 12),
           Expanded(
@@ -947,7 +947,7 @@ class _DocTypeCard extends StatelessWidget {
               visualDensity: VisualDensity.compact,
             ),
             child: isUploading
-                ? const SizedBox(
+                ? SizedBox(
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(
@@ -989,7 +989,7 @@ class _UploadedChip extends StatelessWidget {
                   .showSnackBar(SnackBar(content: Text(err)));
             }
           },
-          child: const Icon(Icons.close,
+          child: Icon(Icons.close,
               size: 14, color: AppColors.textSecondary),
         ),
       ],
@@ -1034,7 +1034,7 @@ class _StepFormWrapper extends StatelessWidget {
                     label: const Text('Previous'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.textSecondary,
-                      side: const BorderSide(color: AppColors.border),
+                      side: BorderSide(color: AppColors.border),
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 14),
                       shape: RoundedRectangleBorder(

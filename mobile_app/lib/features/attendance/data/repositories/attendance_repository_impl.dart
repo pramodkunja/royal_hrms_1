@@ -34,16 +34,16 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
   Future<TodayAttendanceEntity> getToday() => _ds.fetchToday();
 
   @override
-  Future<AttendanceStatsEntity> getStats({int? month, int? year}) =>
-      _ds.fetchStats(month: month, year: year);
+  Future<AttendanceStatsEntity> getStats({int? month, int? year, String? employeeId}) =>
+      _ds.fetchStats(month: month, year: year, employeeId: employeeId);
 
   @override
-  Future<MonthlySummaryEntity> getSummary({int? month, int? year}) =>
-      _ds.fetchSummary(month: month, year: year);
+  Future<MonthlySummaryEntity> getSummary({int? month, int? year, String? employeeId}) =>
+      _ds.fetchSummary(month: month, year: year, employeeId: employeeId);
 
   @override
-  Future<AttendanceCalendarEntity> getCalendar({int? month, int? year}) =>
-      _ds.fetchCalendar(month: month, year: year);
+  Future<AttendanceCalendarEntity> getCalendar({int? month, int? year, String? employeeId}) =>
+      _ds.fetchCalendar(month: month, year: year, employeeId: employeeId);
 
   @override
   Future<AttendanceCorrectionEntity> submitCorrection({
@@ -72,7 +72,7 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
       _ds.fetchDashboard(date: date, branch: branch, department: department);
 
   @override
-  Future<List<AttendanceRowEntity>> getRecords({
+  Future<PaginatedListEntity<AttendanceRowEntity>> getRecords({
     String? date,
     String? branch,
     String? department,
@@ -80,6 +80,8 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
     String? search,
     String sortBy = 'name',
     String sortDir = 'asc',
+    int page = 1,
+    int pageSize = 20,
   }) =>
       _ds.fetchRecords(
         date: date,
@@ -89,6 +91,8 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
         search: search,
         sortBy: sortBy,
         sortDir: sortDir,
+        page: page,
+        pageSize: pageSize,
       );
 
   @override
@@ -100,12 +104,20 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
       _ds.fetchRecordDetail(recordIdOrEmployeeId, date: date, isEmployeeId: isEmployeeId);
 
   @override
-  Future<List<OvertimeRowEntity>> getOvertimeList({
+  Future<PaginatedListEntity<OvertimeRowEntity>> getOvertimeList({
     String? date,
     String? branch,
     String? department,
+    int page = 1,
+    int pageSize = 20,
   }) =>
-      _ds.fetchOvertimeList(date: date, branch: branch, department: department);
+      _ds.fetchOvertimeList(
+        date: date,
+        branch: branch,
+        department: department,
+        page: page,
+        pageSize: pageSize,
+      );
 
   @override
   Future<String> createOvertime({
@@ -154,4 +166,36 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
   @override
   Future<void> reviewCorrection(String id, {required bool approve}) =>
       _ds.reviewCorrection(id, approve: approve);
+
+  @override
+  Future<List<HrUserEntity>> getHrUsers({String? branch}) =>
+      _ds.fetchHrUsers(branch: branch);
+
+  @override
+  Future<void> assignInvalidPunch(String id, {required String assignedTo}) =>
+      _ds.assignInvalidPunch(id, assignedTo: assignedTo);
+
+  @override
+  Future<void> discardInvalidPunch(String id, {String? remarks}) =>
+      _ds.discardInvalidPunch(id, remarks: remarks);
+
+  @override
+  Future<void> convertInvalidPunch(
+    String id, {
+    required String targetPunchType,
+    required String targetTime,
+  }) =>
+      _ds.convertInvalidPunch(id, targetPunchType: targetPunchType, targetTime: targetTime);
+
+  @override
+  Future<List<int>> exportCsv({String? date, String? branch, String? department}) =>
+      _ds.exportCsv(date: date, branch: branch, department: department);
+
+  @override
+  Future<ImportResultEntity> importCsv(List<int> bytes, String fileName) =>
+      _ds.importCsv(bytes, fileName);
+
+  @override
+  Future<List<AttendanceAuditEntryEntity>> getRecordAudit(String recordId) =>
+      _ds.fetchRecordAudit(recordId);
 }

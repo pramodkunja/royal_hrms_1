@@ -168,7 +168,7 @@ class _RolesGroupCard extends StatelessWidget {
           // ── Role rows ────────────────────────────────────────────────
           ...List.generate(roles.length, (i) => Column(
             children: [
-              const Divider(height: 1, color: AppColors.border),
+              Divider(height: 1, color: AppColors.border),
               _RoleRow(
                 role: roles[i],
                 onEdit:   () => onEdit(roles[i]),
@@ -255,7 +255,7 @@ class _RoleRow extends StatelessWidget {
         ),
         // Stats + actions
         Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             border: Border(top: BorderSide(color: AppColors.border)),
           ),
           padding: const EdgeInsets.fromLTRB(14, 8, 10, 10),
@@ -407,7 +407,7 @@ class _ModuleGroupCard extends StatelessWidget {
           // ── Role access rows ─────────────────────────────────────────
           ...List.generate(roles.length, (i) => Column(
             children: [
-              const Divider(height: 1, color: AppColors.border),
+              Divider(height: 1, color: AppColors.border),
               _RoleMatrixRow(role: roles[i], modulePerms: perms),
             ],
           )),
@@ -647,7 +647,7 @@ class _EmptyView extends StatelessWidget {
                 color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(Icons.shield_outlined, size: 36, color: AppColors.primary),
+              child: Icon(Icons.shield_outlined, size: 36, color: AppColors.primary),
             ),
             const SizedBox(height: 16),
             Text('No roles configured', style: AppTextStyles.h4),
@@ -687,7 +687,7 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
+            Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
             const SizedBox(height: 12),
             Text('Could not load roles', style: AppTextStyles.h4),
             const SizedBox(height: 6),

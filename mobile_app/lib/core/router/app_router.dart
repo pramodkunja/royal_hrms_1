@@ -18,6 +18,10 @@ import '../../features/settings/presentation/roles/roles_screen.dart';
 import '../../features/settings/presentation/audit/audit_screen.dart';
 import '../../features/settings/presentation/leave_policy/leave_policy_screen.dart';
 import '../../features/settings/presentation/holiday_calendar/holiday_calendar_screen.dart';
+import '../../features/settings/presentation/attendance_rules/attendance_rules_screen.dart';
+import '../../features/settings/presentation/approval_rules/approval_rules_screen.dart';
+import '../../features/settings/presentation/referral_rules/referral_rules_settings_screen.dart';
+import '../../features/settings/presentation/assessment_config/assessment_config_screen.dart';
 import '../../features/announcements/presentation/announcements_screen.dart';
 import '../../features/employees/presentation/employees_screen.dart';
 import '../../features/employees/presentation/screens/employee_profile_screen.dart';
@@ -38,6 +42,7 @@ import '../../features/attendance/presentation/screens/attendance_screen.dart';
 import '../../features/attendance/presentation/screens/my_attendance_screen.dart';
 import '../../features/payroll/presentation/screens/payroll_screen.dart';
 import '../../features/payroll/presentation/screens/my_payslip_screen.dart';
+import '../../features/referrals/presentation/screens/referrals_screen.dart';
 import '../../features/settings/presentation/payroll_rules/payroll_rules_screen.dart';
 
 // ─── Route path constants ─────────────────────────────────────────────────────
@@ -71,6 +76,7 @@ class AppRoutes {
   static const String separation = '/dashboard/separation';
   static const String documents = '/dashboard/documents';
   static const String myAttendance = '/dashboard/my-attendance';
+  static const String referrals = '/dashboard/referrals';
   static const String myRequests = '/dashboard/my-requests';
   static const String profile = '/dashboard/profile';
   static const String reports = '/dashboard/reports';
@@ -92,6 +98,10 @@ class AppRoutes {
   static const String settingsLeavePolicy = '/settings/leave-policy';
   static const String settingsPayrollRules = '/settings/payroll-rules';
   static const String settingsHolidayCalendar = '/settings/holiday-calendar';
+  static const String settingsAttendanceRules = '/settings/attendance-rules';
+  static const String settingsReferralRules = '/settings/referral-rules';
+  static const String settingsAssessmentConfig = '/settings/assessment-config';
+  static const String settingsApprovalRules = '/settings/approval-rules';
 }
 
 // ─── Router provider ──────────────────────────────────────────────────────────
@@ -222,6 +232,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.settingsHolidayCalendar,
         builder: (_, __) => const HolidayCalendarScreen(),
       ),
+      GoRoute(
+        path: AppRoutes.settingsAttendanceRules,
+        builder: (_, __) => const AttendanceRulesScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.settingsReferralRules,
+        builder: (_, __) => const ReferralRulesSettingsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.settingsAssessmentConfig,
+        builder: (_, __) => const AssessmentConfigScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.settingsApprovalRules,
+        builder: (_, __) => const ApprovalRulesScreen(),
+      ),
 
       // ── Dashboard shell ────────────────────────────────────────────────
       ShellRoute(
@@ -340,6 +366,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.myAttendance,
             pageBuilder: (_, __) =>
                 const NoTransitionPage(child: MyAttendanceScreen()),
+          ),
+          GoRoute(
+            path: AppRoutes.referrals,
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: ReferralsScreen()),
           ),
           GoRoute(
             path: AppRoutes.myRequests,

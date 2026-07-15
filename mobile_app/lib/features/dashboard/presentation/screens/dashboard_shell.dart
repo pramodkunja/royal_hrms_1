@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
+import 'package:mobile_app/core/theme/theme_mode_provider.dart';
 import 'package:mobile_app/features/auth/presentation/providers/auth_providers.dart';
 import '../navigation/nav_config.dart';
 import '../widgets/app_sidebar.dart';
@@ -34,6 +35,7 @@ class _DashboardShellState extends ConsumerState<DashboardShell> {
     // whenever the child route changes (GoRouter rebuilds this widget).
     final currentPath = GoRouterState.of(context).uri.path;
     final title = pageTitle(currentPath);
+    final isDarkMode = ref.watch(themeModeProvider);
 
     return Scaffold(
       key: _scaffoldKey,
@@ -42,9 +44,8 @@ class _DashboardShellState extends ConsumerState<DashboardShell> {
       appBar: AppTopBar(
         title: title,
         onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
-        onNotificationsTap: () {
-          // Notifications module — coming soon.
-        },
+        onThemeToggleTap: () => ref.read(themeModeProvider.notifier).toggle(),
+        isDarkMode: isDarkMode,
         onLogoutTap: _handleLogout,
       ),
       body: widget.child,

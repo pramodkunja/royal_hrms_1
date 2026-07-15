@@ -85,7 +85,7 @@ class CandidateCard extends ConsumerWidget {
           ),
 
           const SizedBox(height: 10),
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: AppColors.border),
 
           // ── Actions ───────────────────────────────────────────────────
           Padding(
@@ -172,7 +172,7 @@ class _StatusChangeButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (candidate.isConverted) return const SizedBox.shrink();
     return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, size: 18,
+      icon: Icon(Icons.more_vert, size: 18,
           color: AppColors.textSecondary),
       tooltip: 'Change status',
       onSelected: (newStatus) async {

@@ -210,9 +210,9 @@ class _LogoSection extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(16, 24, 16, 28),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF102C52), AppColors.primary],
+                colors: [const Color(0xFF102C52), AppColors.primary],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -313,7 +313,7 @@ class _LogoSection extends StatelessWidget {
                       const SizedBox(height: 3),
                       Row(
                         children: [
-                          const Icon(Icons.touch_app_outlined, size: 13, color: AppColors.textHint),
+                          Icon(Icons.touch_app_outlined, size: 13, color: AppColors.textHint),
                           const SizedBox(width: 4),
                           Text(
                             'Tap logo to change',
@@ -378,7 +378,7 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_outlined, size: 52, color: AppColors.textHint),
+            Icon(Icons.cloud_off_outlined, size: 52, color: AppColors.textHint),
             const SizedBox(height: 12),
             Text('Could not load company info', style: AppTextStyles.h4),
             const SizedBox(height: 6),

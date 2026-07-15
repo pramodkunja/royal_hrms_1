@@ -19,7 +19,7 @@ class DocumentEmptyView extends StatelessWidget {
               color: AppColors.backgroundMid,
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.folder_open_outlined,
               size: 36,
               color: AppColors.textHint,
@@ -64,7 +64,7 @@ class DocumentErrorView extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 32),
       child: Column(
         children: [
-          const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+          Icon(Icons.error_outline, size: 48, color: AppColors.error),
           const SizedBox(height: 12),
           Text('Failed to load documents',
               style: AppTextStyles.label

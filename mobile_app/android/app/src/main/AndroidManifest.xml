@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for every API call the app makes — without this, Android
+         blocks all network access at the OS level regardless of backend. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Required to capture GPS coordinates for attendance clock-in geofencing -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>

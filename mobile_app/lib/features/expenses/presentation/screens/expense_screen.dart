@@ -63,7 +63,7 @@ class ExpenseScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: AppColors.border),
 
             // ── Scrollable body ────────────────────────────────────────────────
             Expanded(
@@ -92,9 +92,9 @@ class ExpenseScreen extends ConsumerWidget {
 
                     // ── List ────────────────────────────────────────────────
                     listAsync.when(
-                      loading: () => const SliverToBoxAdapter(
+                      loading: () => SliverToBoxAdapter(
                         child: Padding(
-                          padding: EdgeInsets.only(top: 60),
+                          padding: const EdgeInsets.only(top: 60),
                           child: Center(
                             child: CircularProgressIndicator(
                                 color: AppColors.primary),
@@ -382,7 +382,7 @@ class _EmptyState extends StatelessWidget {
               color:        AppColors.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Icon(Icons.account_balance_wallet_outlined,
+            child: Icon(Icons.account_balance_wallet_outlined,
                 size: 36, color: AppColors.primary),
           ),
           const SizedBox(height: 16),
@@ -423,7 +423,7 @@ class _ErrorState extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: 40),
-          const Icon(Icons.wifi_off_outlined,
+          Icon(Icons.wifi_off_outlined,
               size: 48, color: AppColors.textHint),
           const SizedBox(height: 12),
           Text('Failed to load expenses',

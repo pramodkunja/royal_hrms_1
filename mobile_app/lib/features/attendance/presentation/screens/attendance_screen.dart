@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -307,16 +310,72 @@ class _StatCard extends StatelessWidget {
 
 // ─── Tab 1: Attendance ────────────────────────────────────────────────────────
 
+String _isoDate(DateTime d) =>
+    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+String _shortDate(DateTime d) => '${d.day} ${_monthNames[d.month - 1]} ${d.year}';
+
 class _AttendanceTab extends ConsumerWidget {
   const _AttendanceTab();
+
+  void _resetPages(WidgetRef ref) {
+    ref.read(attendanceRecordsPageProvider.notifier).state = 1;
+    ref.read(overtimePageProvider.notifier).state = 1;
+  }
+
+  Future<void> _pickDate(BuildContext context, WidgetRef ref) async {
+    final current = ref.read(hrAttendanceDateFilterProvider) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) {
+      ref.read(hrAttendanceDateFilterProvider.notifier).state = picked;
+      _resetPages(ref);
+    }
+  }
+
+  Future<void> _exportCsv(BuildContext context, WidgetRef ref) async {
+    final branch = ref.read(hrAttendanceBranchFilterProvider);
+    final department = ref.read(hrAttendanceDepartmentFilterProvider);
+    final date = ref.read(hrAttendanceDateFilterProvider);
+    try {
+      final bytes = await ref.read(attendanceRepositoryProvider).exportCsv(
+            date: date == null ? null : _isoDate(date),
+            branch: branch,
+            department: department,
+          );
+      final path = await FilePicker.platform.saveFile(
+        fileName: 'attendance_${date == null ? _isoDate(DateTime.now()) : _isoDate(date)}.csv',
+        bytes: Uint8List.fromList(bytes),
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+      );
+      if (!context.mounted) return;
+      if (path != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: const Text('Attendance exported.'), backgroundColor: AppColors.success),
+        );
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyAttendanceError(e)), backgroundColor: AppColors.error),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recordsAsync = ref.watch(attendanceRecordsProvider);
+    final dashboardAsync = ref.watch(attendanceDashboardProvider);
     final branchList = ref.watch(employeeBranchNameListProvider);
     final deptList = ref.watch(employeeDepartmentListProvider);
     final selectedBranch = ref.watch(hrAttendanceBranchFilterProvider);
     final selectedDept = ref.watch(hrAttendanceDepartmentFilterProvider);
+    final selectedDate = ref.watch(hrAttendanceDateFilterProvider);
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -324,11 +383,10 @@ class _AttendanceTab extends ConsumerWidget {
         await ref.read(attendanceRecordsProvider.notifier).refresh();
       },
       child: recordsAsync.when(
-        data: (rows) {
-          final counts = <String, int>{};
-          for (final r in rows) {
-            counts[r.status] = (counts[r.status] ?? 0) + 1;
-          }
+        data: (page) {
+          final rows = page.results;
+          final chips = dashboardAsync.valueOrNull?.summaryChips ?? const <String, int>{};
+          final totalEmployees = dashboardAsync.valueOrNull?.totalEmployees ?? rows.length;
 
           return ListView(
             // Each TabBarView child would otherwise inherit the same
@@ -344,8 +402,11 @@ class _AttendanceTab extends ConsumerWidget {
                   child: _Dropdown(
                     value: selectedBranch.isEmpty ? 'All Branches' : selectedBranch,
                     items: ['All Branches', ...branchList],
-                    onChanged: (v) => ref.read(hrAttendanceBranchFilterProvider.notifier).state =
-                        (v == 'All Branches') ? '' : v!,
+                    onChanged: (v) {
+                      ref.read(hrAttendanceBranchFilterProvider.notifier).state =
+                          (v == 'All Branches') ? '' : v!;
+                      _resetPages(ref);
+                    },
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -353,8 +414,56 @@ class _AttendanceTab extends ConsumerWidget {
                   child: _Dropdown(
                     value: selectedDept.isEmpty ? 'All Departments' : selectedDept,
                     items: ['All Departments', ...deptList],
-                    onChanged: (v) => ref.read(hrAttendanceDepartmentFilterProvider.notifier).state =
-                        (v == 'All Departments') ? '' : v!,
+                    onChanged: (v) {
+                      ref.read(hrAttendanceDepartmentFilterProvider.notifier).state =
+                          (v == 'All Departments') ? '' : v!;
+                      _resetPages(ref);
+                    },
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _pickDate(context, ref),
+                    child: _FakeInput(
+                      value: selectedDate == null ? 'Today' : _shortDate(selectedDate),
+                      icon: Icons.calendar_today_outlined,
+                    ),
+                  ),
+                ),
+                if (selectedDate != null)
+                  IconButton(
+                    tooltip: 'Reset to today',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () {
+                      ref.read(hrAttendanceDateFilterProvider.notifier).state = null;
+                      _resetPages(ref);
+                    },
+                    icon: const Icon(Icons.close, size: 18, color: Color(0xFF6B7280)),
+                  ),
+                const SizedBox(width: 4),
+                OutlinedButton.icon(
+                  onPressed: () => _exportCsv(context, ref),
+                  icon: const Icon(Icons.download_outlined, size: 15),
+                  label: const Text('Export'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    textStyle: AppTextStyles.labelSmall,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                OutlinedButton.icon(
+                  onPressed: () => showDialog(
+                    context: context,
+                    builder: (_) => const _ImportAttendanceDialog(),
+                  ),
+                  icon: const Icon(Icons.upload_outlined, size: 15),
+                  label: const Text('Import'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    textStyle: AppTextStyles.labelSmall,
                   ),
                 ),
               ]),
@@ -364,11 +473,11 @@ class _AttendanceTab extends ConsumerWidget {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    ...counts.entries.map((e) => Padding(
+                    ...chips.entries.map((e) => Padding(
                       padding: const EdgeInsets.only(right: 6),
                       child: _Chip(label: '${e.value} ${e.key}', color: _statusColor(e.key), bg: _statusBg(e.key)),
                     )),
-                    Text('Total: ${rows.length} employees',
+                    Text('Total: $totalEmployees employees',
                       style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280))),
                   ],
                 ),
@@ -376,8 +485,22 @@ class _AttendanceTab extends ConsumerWidget {
               const SizedBox(height: 12),
 
               if (rows.isEmpty)
-                const _EmptyState(message: 'No attendance records for today.'),
+                const _EmptyState(message: 'No attendance records for this day.'),
               ...rows.map((r) => _AttendanceCard(record: r)),
+
+              if (page.totalPages > 1) ...[
+                const SizedBox(height: 4),
+                _PaginationBar(
+                  page: page.page,
+                  totalPages: page.totalPages,
+                  onPrev: page.page > 1
+                      ? () => ref.read(attendanceRecordsPageProvider.notifier).state = page.page - 1
+                      : null,
+                  onNext: page.page < page.totalPages
+                      ? () => ref.read(attendanceRecordsPageProvider.notifier).state = page.page + 1
+                      : null,
+                ),
+              ],
             ],
           );
         },
@@ -392,6 +515,166 @@ class _AttendanceTab extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _PaginationBar extends StatelessWidget {
+  final int page;
+  final int totalPages;
+  final VoidCallback? onPrev;
+  final VoidCallback? onNext;
+  const _PaginationBar({required this.page, required this.totalPages, this.onPrev, this.onNext});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      OutlinedButton(
+        onPressed: onPrev,
+        style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6)),
+        child: const Text('Prev'),
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Text('Page $page of $totalPages',
+          style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280))),
+      ),
+      OutlinedButton(
+        onPressed: onNext,
+        style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6)),
+        child: const Text('Next'),
+      ),
+    ],
+  );
+}
+
+class _ImportAttendanceDialog extends ConsumerStatefulWidget {
+  const _ImportAttendanceDialog();
+
+  @override
+  ConsumerState<_ImportAttendanceDialog> createState() => _ImportAttendanceDialogState();
+}
+
+class _ImportAttendanceDialogState extends ConsumerState<_ImportAttendanceDialog> {
+  PlatformFile? _file;
+  bool _uploading = false;
+  String? _error;
+  ImportResultEntity? _result;
+
+  Future<void> _pickFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    setState(() {
+      _file = result.files.single;
+      _error = null;
+    });
+  }
+
+  Future<void> _upload() async {
+    final file = _file;
+    if (file == null || file.bytes == null) {
+      setState(() => _error = 'Please choose a CSV file.');
+      return;
+    }
+    setState(() {
+      _uploading = true;
+      _error = null;
+    });
+    try {
+      final result = await ref.read(attendanceImportActionProvider).upload(file.bytes!, file.name);
+      if (!mounted) return;
+      setState(() {
+        _result = result;
+        _uploading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _uploading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final result = _result;
+    return AlertDialog(
+      title: const Text('Import Attendance'),
+      content: SizedBox(
+        width: 340,
+        child: result != null ? _buildResult(result) : _buildPicker(),
+      ),
+      actions: result != null
+          ? [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Done'))]
+          : [
+              TextButton(
+                onPressed: _uploading ? null : () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: _uploading ? null : _upload,
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                child: _uploading
+                    ? const SizedBox(width: 14, height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Upload'),
+              ),
+            ],
+    );
+  }
+
+  Widget _buildPicker() => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const _InfoBanner(
+        icon: Icons.info_outline,
+        color: Color(0xFF1E4E8C),
+        bg: Color(0xFFEFF6FF),
+        border: Color(0xFFBFDBFE),
+        message: 'Required columns: employee_id, date, punch_in, punch_out — CSV only, max 5 MB.',
+      ),
+      const SizedBox(height: 6),
+      Text('Example: EMP001,2026-07-02,09:05,18:15',
+        style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF9CA3AF))),
+      const SizedBox(height: 12),
+      GestureDetector(
+        onTap: _pickFile,
+        child: _FakeInput(value: _file?.name ?? 'Choose CSV file', icon: Icons.attach_file),
+      ),
+      if (_error != null) ...[
+        const SizedBox(height: 6),
+        Text(_error!, style: TextStyle(color: AppColors.error, fontSize: 12)),
+      ],
+    ],
+  );
+
+  Widget _buildResult(ImportResultEntity r) => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(children: [
+        Expanded(child: _KV(k: 'Total Rows', v: '${r.totalRows}')),
+        Expanded(child: _KV(k: 'Success', v: '${r.success}', vColor: AppColors.success)),
+        Expanded(child: _KV(k: 'Failed', v: '${r.failed}', vColor: r.failed > 0 ? AppColors.error : null)),
+      ]),
+      if (r.errors.isNotEmpty) ...[
+        const SizedBox(height: 10),
+        const Divider(height: 1),
+        const SizedBox(height: 8),
+        Text('First errors', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
+        const SizedBox(height: 4),
+        ...r.errors.take(5).map((e) => Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text('Row ${e.row}: ${e.message}', style: TextStyle(fontSize: 11, color: AppColors.error)),
+        )),
+      ],
+    ],
+  );
 }
 
 class _AttendanceCard extends ConsumerWidget {
@@ -412,31 +695,109 @@ class _AttendanceCard extends ConsumerWidget {
           final detailAsync = ref.watch(attendanceRecordDetailProvider(key));
           return AlertDialog(
             title: Text(record.name),
-            content: detailAsync.when(
-              data: (d) => Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _KVRow('Status', d.status),
-                  _KVRow('Clock In', d.clockIn),
-                  _KVRow('Clock Out', d.clockOut),
-                  _KVRow('Total Hours', d.totalHours),
-                  _KVRow('Overtime', d.overtime),
-                  if (d.note != null && d.note!.isNotEmpty) _KVRow('Note', d.note!),
-                  if (d.punches.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    const Text('Punches', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-                    ...d.punches.map((p) => Text(
-                        '${p.punchType} · ${p.time} · ${p.mode}',
-                        style: const TextStyle(fontSize: 12))),
-                  ],
-                ],
+            content: SizedBox(
+              width: 320,
+              child: SingleChildScrollView(
+                child: detailAsync.when(
+                  data: (d) => Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _KVRow('Status', d.status),
+                      _KVRow('Clock In', d.clockIn),
+                      _KVRow('Clock Out', d.clockOut),
+                      _KVRow('Total Hours', d.totalHours),
+                      _KVRow('Overtime', d.overtime),
+                      if (d.note != null && d.note!.isNotEmpty) _KVRow('Note', d.note!),
+                      if (d.punches.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        const Text('Punches', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                        ...d.punches.map((p) => Text(
+                            '${p.punchType} · ${p.time} · ${p.mode}',
+                            style: const TextStyle(fontSize: 12))),
+                      ],
+                      const SizedBox(height: 12),
+                      const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                      const SizedBox(height: 10),
+                      const Text('Correction Requests', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                      const SizedBox(height: 6),
+                      Consumer(builder: (context, ref, _) {
+                        final correctionsAsync = ref.watch(
+                          attendanceRecordCorrectionsProvider((employeeId: d.employeeId, date: d.date)),
+                        );
+                        return correctionsAsync.when(
+                          data: (rows) => rows.isEmpty
+                              ? Text('No correction requests for this day.',
+                                  style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280)))
+                              : Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: rows.map((c) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: Text(
+                                      '${c.punchType} · ${c.reason} · ${c.status}',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  )).toList(),
+                                ),
+                          loading: () => const SizedBox(
+                            height: 20, child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                          ),
+                          error: (e, _) => Text(friendlyAttendanceError(e),
+                              style: TextStyle(color: AppColors.error, fontSize: 11)),
+                        );
+                      }),
+                      const SizedBox(height: 12),
+                      const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                      const SizedBox(height: 10),
+                      const Text('Audit History', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                      const SizedBox(height: 6),
+                      Consumer(builder: (context, ref, _) {
+                        final recordId = d.recordId;
+                        if (recordId == null) {
+                          return Text('No audit history for this record yet.',
+                              style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280)));
+                        }
+                        final auditAsync = ref.watch(attendanceRecordAuditProvider(recordId));
+                        return auditAsync.when(
+                          data: (entries) => entries.isEmpty
+                              ? Text('No audit history for this record yet.',
+                                  style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280)))
+                              : Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: entries.map((a) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(a.action, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                        Text('${a.performedBy} · ${a.performedAt}',
+                                            style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280))),
+                                        if (a.oldValue != null || a.newValue != null)
+                                          Text('${a.oldValue ?? '—'} → ${a.newValue ?? '—'}',
+                                              style: const TextStyle(fontSize: 11)),
+                                        if (a.remarks != null && a.remarks!.isNotEmpty)
+                                          Text(a.remarks!,
+                                              style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
+                                      ],
+                                    ),
+                                  )).toList(),
+                                ),
+                          loading: () => const SizedBox(
+                            height: 20, child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                          ),
+                          error: (e, _) => Text(friendlyAttendanceError(e),
+                              style: TextStyle(color: AppColors.error, fontSize: 11)),
+                        );
+                      }),
+                    ],
+                  ),
+                  loading: () => const SizedBox(
+                    height: 60, child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  ),
+                  error: (e, _) => Text(friendlyAttendanceError(e),
+                      style: TextStyle(color: AppColors.error, fontSize: 12)),
+                ),
               ),
-              loading: () => const SizedBox(
-                height: 60, child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-              ),
-              error: (e, _) => Text(friendlyAttendanceError(e),
-                  style: const TextStyle(color: AppColors.error, fontSize: 12)),
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
@@ -647,7 +1008,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
       _reasonCtrl.clear();
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('OT entry added.'), backgroundColor: AppColors.success),
+      SnackBar(content: const Text('OT entry added.'), backgroundColor: AppColors.success),
     );
   }
 
@@ -674,7 +1035,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(children: [
-                  const Icon(Icons.timer_outlined, size: 18, color: AppColors.primary),
+                  Icon(Icons.timer_outlined, size: 18, color: AppColors.primary),
                   const SizedBox(width: 8),
                   Text('Add OT Entry', style: AppTextStyles.h4),
                 ]),
@@ -700,7 +1061,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                   ),
                   loading: () => const LinearProgressIndicator(),
                   error: (e, _) => Text(friendlyAttendanceError(e),
-                      style: const TextStyle(color: AppColors.error, fontSize: 12)),
+                      style: TextStyle(color: AppColors.error, fontSize: 12)),
                 ),
                 const SizedBox(height: 12),
                 Row(children: [
@@ -781,7 +1142,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 6),
-                  Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 12)),
+                  Text(_error!, style: TextStyle(color: AppColors.error, fontSize: 12)),
                 ],
                 const SizedBox(height: 14),
                 SizedBox(
@@ -808,21 +1169,36 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
           const SizedBox(height: 16),
 
           Row(children: [
-            const Icon(Icons.table_rows_outlined, size: 16, color: AppColors.primary),
+            Icon(Icons.table_rows_outlined, size: 16, color: AppColors.primary),
             const SizedBox(width: 6),
             Text('OT Records', style: AppTextStyles.h4),
           ]),
           const SizedBox(height: 10),
           overtimeAsync.when(
-            data: (rows) => rows.isEmpty
+            data: (page) => page.results.isEmpty
                 ? const _EmptyState(message: 'No OT entries recorded yet.')
-                : Column(children: rows.map((r) => _OtCard(record: r)).toList()),
+                : Column(children: [
+                    ...page.results.map((r) => _OtCard(record: r)),
+                    if (page.totalPages > 1) ...[
+                      const SizedBox(height: 4),
+                      _PaginationBar(
+                        page: page.page,
+                        totalPages: page.totalPages,
+                        onPrev: page.page > 1
+                            ? () => ref.read(overtimePageProvider.notifier).state = page.page - 1
+                            : null,
+                        onNext: page.page < page.totalPages
+                            ? () => ref.read(overtimePageProvider.notifier).state = page.page + 1
+                            : null,
+                      ),
+                    ],
+                  ]),
             loading: () => const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
               child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
             ),
             error: (e, _) => Text(friendlyAttendanceError(e),
-                style: const TextStyle(color: AppColors.error, fontSize: 12)),
+                style: TextStyle(color: AppColors.error, fontSize: 12)),
           ),
         ],
       ),
@@ -875,7 +1251,7 @@ class _OtCard extends StatelessWidget {
   );
 }
 
-// ─── Tab 3: Invalid Punches (read-only — no persisted model or fix action on backend) ──
+// ─── Tab 3: Invalid Punches (Assign / Convert / Discard) ───────────────────────
 
 class _InvalidPunchesTab extends ConsumerWidget {
   const _InvalidPunchesTab();
@@ -885,7 +1261,7 @@ class _InvalidPunchesTab extends ConsumerWidget {
     final invalidAsync = ref.watch(invalidPunchesProvider);
 
     return RefreshIndicator(
-      onRefresh: () async => ref.invalidate(invalidPunchesProvider),
+      onRefresh: () => ref.read(invalidPunchesProvider.notifier).refresh(),
       child: ListView(
         primary: false,
         padding: const EdgeInsets.all(12),
@@ -895,7 +1271,7 @@ class _InvalidPunchesTab extends ConsumerWidget {
             color: Color(0xFF1E4E8C),
             bg: Color(0xFFEFF6FF),
             border: Color(0xFFBFDBFE),
-            message: 'These punches could not be matched to an employee or contain data errors. This view is read-only — there is no automated fix for flagged punches yet.',
+            message: 'These punches could not be matched to an employee or contain data errors. Assign for investigation, convert to a valid punch, or discard.',
           ),
           const SizedBox(height: 12),
           invalidAsync.when(
@@ -908,7 +1284,7 @@ class _InvalidPunchesTab extends ConsumerWidget {
             ),
             error: (e, _) => _ErrorState(
               message: friendlyAttendanceError(e),
-              onRetry: () => ref.invalidate(invalidPunchesProvider),
+              onRetry: () => ref.read(invalidPunchesProvider.notifier).refresh(),
             ),
           ),
         ],
@@ -917,54 +1293,346 @@ class _InvalidPunchesTab extends ConsumerWidget {
   }
 }
 
-class _InvalidPunchCard extends StatelessWidget {
+class _InvalidPunchCard extends ConsumerStatefulWidget {
   final InvalidPunchEntity punch;
   const _InvalidPunchCard({required this.punch});
 
   @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(bottom: 10),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: const Color(0xFFE5E7EB)),
-      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 2))],
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(6)),
-            child: Row(children: [
-              const Icon(Icons.devices_outlined, size: 13, color: Color(0xFF6B7280)),
-              const SizedBox(width: 4),
-              Text(punch.deviceId, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, color: const Color(0xFF1A2433))),
+  ConsumerState<_InvalidPunchCard> createState() => _InvalidPunchCardState();
+}
+
+class _InvalidPunchCardState extends ConsumerState<_InvalidPunchCard> {
+  bool _busy = false;
+
+  Future<void> _run(Future<String?> Function() action) async {
+    setState(() => _busy = true);
+    final error = await action();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(error ?? 'Done.'),
+        backgroundColor: error != null ? AppColors.error : AppColors.success,
+      ),
+    );
+  }
+
+  Future<void> _assign() async {
+    final assignedTo = await showDialog<String>(
+      context: context,
+      builder: (_) => const _AssignPunchDialog(),
+    );
+    if (assignedTo == null || !mounted) return;
+    await _run(() => ref.read(invalidPunchesProvider.notifier).assign(widget.punch.id, assignedTo: assignedTo));
+  }
+
+  Future<void> _convert() async {
+    final result = await showDialog<({String punchType, String time})>(
+      context: context,
+      builder: (_) => const _ConvertPunchDialog(),
+    );
+    if (result == null || !mounted) return;
+    await _run(() => ref.read(invalidPunchesProvider.notifier).convert(
+          widget.punch.id,
+          targetPunchType: result.punchType,
+          targetTime: result.time,
+        ));
+  }
+
+  Future<void> _discard() async {
+    final remarks = await showDialog<String>(
+      context: context,
+      builder: (_) => const _DiscardPunchDialog(),
+    );
+    if (remarks == null || !mounted) return;
+    await _run(() => ref.read(invalidPunchesProvider.notifier).discard(widget.punch.id, remarks: remarks));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final punch = widget.punch;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 2))],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(6)),
+              child: Row(children: [
+                const Icon(Icons.devices_outlined, size: 13, color: Color(0xFF6B7280)),
+                const SizedBox(width: 4),
+                Text(punch.deviceId, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, color: const Color(0xFF1A2433))),
+              ]),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(color: _issueBg(punch.issueType), borderRadius: BorderRadius.circular(20)),
+              child: Text(punch.issue, style: AppTextStyles.labelSmall.copyWith(color: _issueColor(punch.issueType), fontWeight: FontWeight.w600)),
+            ),
+          ]),
+          const SizedBox(height: 10),
+          const Divider(height: 1, color: Color(0xFFF3F4F6)),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(child: _KV(k: 'Raw Time', v: punch.rawTime, small: true)),
+            Expanded(child: _KV(k: 'Card/Bio', v: punch.biometricId)),
+          ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(child: _KV(k: 'Suggested Fix', v: punch.suggestedMatch)),
+            Expanded(child: _KV(k: 'Branch', v: punch.branch)),
+          ]),
+          const SizedBox(height: 10),
+          if (_busy)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 6),
+              child: Center(child: SizedBox(width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))),
+            )
+          else
+            Row(children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _assign,
+                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 8)),
+                  child: const Text('Assign', style: TextStyle(fontSize: 12)),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _convert,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    foregroundColor: AppColors.primary,
+                    side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
+                  ),
+                  child: const Text('Convert', style: TextStyle(fontSize: 12)),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _discard,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    foregroundColor: AppColors.error,
+                    side: BorderSide(color: AppColors.error.withValues(alpha: 0.4)),
+                  ),
+                  child: const Text('Discard', style: TextStyle(fontSize: 12)),
+                ),
+              ),
             ]),
-          ),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(color: _issueBg(punch.issueType), borderRadius: BorderRadius.circular(20)),
-            child: Text(punch.issue, style: AppTextStyles.labelSmall.copyWith(color: _issueColor(punch.issueType), fontWeight: FontWeight.w600)),
-          ),
         ]),
-        const SizedBox(height: 10),
-        const Divider(height: 1, color: Color(0xFFF3F4F6)),
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(child: _KV(k: 'Raw Time', v: punch.rawTime, small: true)),
-          Expanded(child: _KV(k: 'Card/Bio', v: punch.biometricId)),
-        ]),
-        const SizedBox(height: 8),
-        Row(children: [
-          Expanded(child: _KV(k: 'Suggested Fix', v: punch.suggestedMatch)),
-          Expanded(child: _KV(k: 'Branch', v: punch.branch)),
-        ]),
-      ]),
-    ),
-  );
+      ),
+    );
+  }
+}
+
+class _AssignPunchDialog extends ConsumerStatefulWidget {
+  const _AssignPunchDialog();
+  @override
+  ConsumerState<_AssignPunchDialog> createState() => _AssignPunchDialogState();
+}
+
+class _AssignPunchDialogState extends ConsumerState<_AssignPunchDialog> {
+  String? _selectedId;
+  String? _error;
+
+  @override
+  Widget build(BuildContext context) {
+    final hrUsersAsync = ref.watch(hrUsersProvider);
+    return AlertDialog(
+      title: const Text('Assign Invalid Punch'),
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _FormLabel('HR User'),
+            hrUsersAsync.when(
+              data: (users) => DropdownButtonFormField<String>(
+                initialValue: _selectedId,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Select HR user',
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                isExpanded: true,
+                items: users
+                    .map((u) => DropdownMenuItem(
+                          value: u.id,
+                          child: Text('${u.fullName} (${u.employeeId})', overflow: TextOverflow.ellipsis),
+                        ))
+                    .toList(),
+                onChanged: (v) => setState(() => _selectedId = v),
+              ),
+              loading: () => const LinearProgressIndicator(),
+              error: (e, _) => Text(friendlyAttendanceError(e),
+                  style: TextStyle(color: AppColors.error, fontSize: 12)),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 6),
+              Text(_error!, style: TextStyle(color: AppColors.error, fontSize: 12)),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        ElevatedButton(
+          onPressed: () {
+            if (_selectedId == null) {
+              setState(() => _error = 'Please select an HR user.');
+              return;
+            }
+            Navigator.pop(context, _selectedId);
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+          child: const Text('Assign'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ConvertPunchDialog extends StatefulWidget {
+  const _ConvertPunchDialog();
+  @override
+  State<_ConvertPunchDialog> createState() => _ConvertPunchDialogState();
+}
+
+class _ConvertPunchDialogState extends State<_ConvertPunchDialog> {
+  String _punchType = 'OUT';
+  TimeOfDay? _time;
+  String? _error;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Convert Invalid Punch'),
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _FormLabel('Punch Type'),
+            DropdownButtonFormField<String>(
+              initialValue: _punchType,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              isExpanded: true,
+              items: const [
+                DropdownMenuItem(value: 'IN', child: Text('IN')),
+                DropdownMenuItem(value: 'OUT', child: Text('OUT')),
+              ],
+              onChanged: (v) => setState(() => _punchType = v!),
+            ),
+            const SizedBox(height: 12),
+            _FormLabel('Target Time'),
+            GestureDetector(
+              onTap: () async {
+                final picked = await showTimePicker(context: context, initialTime: _time ?? TimeOfDay.now());
+                if (picked != null) setState(() => _time = picked);
+              },
+              child: _FakeInput(
+                value: _time?.format(context) ?? 'Select time',
+                icon: Icons.access_time_outlined,
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 6),
+              Text(_error!, style: TextStyle(color: AppColors.error, fontSize: 12)),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        ElevatedButton(
+          onPressed: () {
+            if (_time == null) {
+              setState(() => _error = 'Please select a target time.');
+              return;
+            }
+            final hh = _time!.hour.toString().padLeft(2, '0');
+            final mm = _time!.minute.toString().padLeft(2, '0');
+            Navigator.pop(context, (punchType: _punchType, time: '$hh:$mm'));
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+          child: const Text('Convert'),
+        ),
+      ],
+    );
+  }
+}
+
+class _DiscardPunchDialog extends StatefulWidget {
+  const _DiscardPunchDialog();
+  @override
+  State<_DiscardPunchDialog> createState() => _DiscardPunchDialogState();
+}
+
+class _DiscardPunchDialogState extends State<_DiscardPunchDialog> {
+  final _remarksCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _remarksCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Discard Invalid Punch'),
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _FormLabel('Remarks (optional)'),
+            TextField(
+              controller: _remarksCtrl,
+              maxLines: 3,
+              maxLength: 500,
+              decoration: InputDecoration(
+                hintText: 'Why is this punch being discarded?',
+                hintStyle: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF9CA3AF)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.all(10),
+              ),
+              style: AppTextStyles.bodySmall,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, _remarksCtrl.text.trim()),
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+          child: const Text('Discard'),
+        ),
+      ],
+    );
+  }
 }
 
 // ─── Tab 4: Un-punches ────────────────────────────────────────────────────────
@@ -975,9 +1643,14 @@ class _UnpunchesTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final unpunchesAsync = ref.watch(unpunchesProvider);
+    final correctionsAsync = ref.watch(hrCorrectionsProvider);
+    final statusFilter = ref.watch(hrCorrectionsStatusFilterProvider);
 
     return RefreshIndicator(
-      onRefresh: () => ref.read(unpunchesProvider.notifier).refresh(),
+      onRefresh: () async {
+        await ref.read(unpunchesProvider.notifier).refresh();
+        await ref.read(hrCorrectionsProvider.notifier).refresh();
+      },
       child: ListView(
         primary: false,
         padding: const EdgeInsets.all(12),
@@ -1003,7 +1676,146 @@ class _UnpunchesTab extends ConsumerWidget {
               onRetry: () => ref.read(unpunchesProvider.notifier).refresh(),
             ),
           ),
+          const SizedBox(height: 20),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          const SizedBox(height: 16),
+          Row(children: [
+            Icon(Icons.fact_check_outlined, size: 16, color: AppColors.primary),
+            const SizedBox(width: 6),
+            Text('Correction Requests', style: AppTextStyles.h4),
+          ]),
+          const SizedBox(height: 10),
+          _Dropdown(
+            value: switch (statusFilter) {
+              'pending' => 'Pending',
+              'approved' => 'Approved',
+              'rejected' => 'Rejected',
+              _ => 'All',
+            },
+            items: const ['All', 'Pending', 'Approved', 'Rejected'],
+            onChanged: (v) => ref.read(hrCorrectionsStatusFilterProvider.notifier).state = (v ?? 'All').toLowerCase(),
+          ),
+          const SizedBox(height: 10),
+          correctionsAsync.when(
+            data: (rows) => rows.isEmpty
+                ? const _EmptyState(message: 'No correction requests found.')
+                : Column(children: rows.map((r) => _HrCorrectionCard(record: r)).toList()),
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => _ErrorState(
+              message: friendlyAttendanceError(e),
+              onRetry: () => ref.read(hrCorrectionsProvider.notifier).refresh(),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _HrCorrectionCard extends ConsumerStatefulWidget {
+  final HrCorrectionRowEntity record;
+  const _HrCorrectionCard({required this.record});
+
+  @override
+  ConsumerState<_HrCorrectionCard> createState() => _HrCorrectionCardState();
+}
+
+class _HrCorrectionCardState extends ConsumerState<_HrCorrectionCard> {
+  bool _reviewing = false;
+
+  Future<void> _review(bool approve) async {
+    setState(() => _reviewing = true);
+    final error = await ref
+        .read(hrCorrectionsProvider.notifier)
+        .reviewCorrection(widget.record.id, approve: approve);
+    if (!mounted) return;
+    setState(() => _reviewing = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(error ?? (approve ? 'Correction approved.' : 'Correction rejected.')),
+        backgroundColor: error != null ? AppColors.error : AppColors.success,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final record = widget.record;
+    final isPending = record.status.toLowerCase() == 'pending';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 2))],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            _Avatar(name: record.name, initials: ''),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(record.name, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
+              Text('${record.employeeId} · ${record.department}',
+                style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280))),
+            ])),
+            _StatusBadge(status: record.status),
+          ]),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(child: _KV(k: 'Date', v: record.date)),
+            Expanded(child: _KV(k: 'Punch Type', v: record.punchType)),
+            Expanded(child: _KV(k: 'Requested In', v: record.requestedInTime ?? '—')),
+            Expanded(child: _KV(k: 'Requested Out', v: record.requestedOutTime ?? '—')),
+          ]),
+          const SizedBox(height: 8),
+          _KV(k: 'Reason', v: record.reason),
+          if (isPending) ...[
+            const SizedBox(height: 10),
+            if (_reviewing)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 6),
+                child: Center(child: SizedBox(width: 16, height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))),
+              )
+            else
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _review(false),
+                    icon: const Icon(Icons.close, size: 14),
+                    label: const Text('Reject'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                      side: BorderSide(color: AppColors.error.withValues(alpha: 0.4)),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _review(true),
+                    icon: const Icon(Icons.check, size: 14),
+                    label: const Text('Approve'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+              ]),
+          ],
+        ]),
       ),
     );
   }
@@ -1304,7 +2116,7 @@ class _ErrorState extends StatelessWidget {
     padding: const EdgeInsets.all(40),
     child: Column(
       children: [
-        const Icon(Icons.error_outline, color: AppColors.error, size: 32),
+        Icon(Icons.error_outline, color: AppColors.error, size: 32),
         const SizedBox(height: 10),
         Text(message, textAlign: TextAlign.center,
             style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),

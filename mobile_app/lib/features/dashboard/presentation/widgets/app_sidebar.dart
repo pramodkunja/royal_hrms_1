@@ -25,32 +25,36 @@ class AppSidebar extends ConsumerWidget {
           children: [
             // ── Header ──────────────────────────────────────────────────────
             Container(
-              height: 56,
+              height: 68,
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border(bottom: BorderSide(color: AppColors.border)),
               ),
               child: Row(
                 children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.business, color: Colors.white, size: 16),
+                  Expanded(
+                    child: SizedBox(
+                      height: 60,
+                      child: Image.asset(
+                        'assets/images/Royal_logo.png',
+                        fit: BoxFit.contain,
+                        alignment: Alignment.centerLeft,
+                        errorBuilder: (_, __, ___) => Text(
+                          'Royal HRMS',
+                          style: AppTextStyles.labelLarge.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Royal HRMS',
-                    style: AppTextStyles.labelLarge.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.2,
-                    ),
+                  IconButton(
+                    icon: const Icon(Icons.menu_open, size: 20),
+                    color: AppColors.textSecondary,
+                    tooltip: 'Close menu',
+                    onPressed: () => Scaffold.of(context).closeDrawer(),
                   ),
                 ],
               ),
@@ -65,7 +69,7 @@ class AppSidebar extends ConsumerWidget {
                   final entry = visibleNav[index];
                   return switch (entry) {
                     NavSection() => _SectionHeader(title: entry.title),
-                    NavItem()   => _NavTile(
+                    NavItem() => _NavTile(
                         item: entry,
                         isActive: _isActive(entry.path, currentPath),
                         onTap: () => _navigate(context, entry.path),
@@ -76,7 +80,7 @@ class AppSidebar extends ConsumerWidget {
             ),
 
             // ── User card at bottom ──────────────────────────────────────────
-            const Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: AppColors.border),
             _UserCard(
               name: user?.fullName ?? '',
               roleDisplay: user?.roleDisplay ?? '',
@@ -163,7 +167,9 @@ class _NavTile extends StatelessWidget {
                   child: Text(
                     item.label,
                     style: AppTextStyles.label.copyWith(
-                      color: isActive ? AppColors.primary : AppColors.textSecondary,
+                      color: isActive
+                          ? AppColors.primary
+                          : AppColors.textSecondary,
                       fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -171,7 +177,8 @@ class _NavTile extends StatelessWidget {
                 ),
                 if (item.badge != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: AppColors.primary,
                       borderRadius: BorderRadius.circular(10),
@@ -243,7 +250,8 @@ class _UserCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right, color: AppColors.textHint, size: 16),
+                Icon(Icons.chevron_right,
+                    color: AppColors.textHint, size: 16),
               ],
             ),
           ),
@@ -266,7 +274,7 @@ class _InitialsAvatar extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.primary,
         shape: BoxShape.circle,
       ),

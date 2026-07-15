@@ -18,8 +18,46 @@ class LeaveRepositoryImpl implements LeaveRepository {
   Future<LeaveStatsEntity> getLeaveStats() => _ds.fetchLeaveStats();
 
   @override
-  Future<List<LeaveRequestEntity>> getLeaveRequests({String? status, String? scope}) =>
+  Future<List<LeaveRequestEntity>> getLeaveRequests(
+          {String? status, String? scope}) =>
       _ds.fetchLeaveRequests(status: status, scope: scope);
+
+  @override
+  Future<LeaveRequestPageEntity> getLeaveRequestsPaginated({
+    String? status,
+    String? scope,
+    String? branch,
+    int page = 1,
+  }) =>
+      _ds.fetchLeaveRequestsPage(
+        status: status,
+        scope: scope,
+        branch: branch,
+        page: page,
+      );
+
+  @override
+  Future<LeaveRequestEntity> getLeaveRequestById(String id) =>
+      _ds.fetchLeaveRequestById(id);
+
+  @override
+  Future<LeaveRequestPageEntity> getEmployeeLeaveRequestsPaginated({
+    required String employeeId,
+    required int year,
+    int page = 1,
+  }) =>
+      _ds.fetchEmployeeLeaveRequestsPage(
+        employeeId: employeeId,
+        year: year,
+        page: page,
+      );
+
+  @override
+  Future<LeaveStatsEntity> getEmployeeLeaveStats({
+    required String employeeId,
+    required int year,
+  }) =>
+      _ds.fetchEmployeeLeaveStats(employeeId: employeeId, year: year);
 
   @override
   Future<LeaveRequestEntity> applyLeave({
@@ -34,15 +72,15 @@ class LeaveRepositoryImpl implements LeaveRepository {
     MultipartFile? document,
   }) =>
       _ds.applyLeave(
-        leaveTypeCode:      leaveTypeCode,
-        fromDate:           fromDate,
-        toDate:             toDate,
-        reason:             reason,
-        duration:           duration,
-        handoverTo:         handoverTo,
+        leaveTypeCode: leaveTypeCode,
+        fromDate: fromDate,
+        toDate: toDate,
+        reason: reason,
+        duration: duration,
+        handoverTo: handoverTo,
         contactDuringLeave: contactDuringLeave,
-        handoverNotes:      handoverNotes,
-        document:           document,
+        handoverNotes: handoverNotes,
+        document: document,
       );
 
   @override

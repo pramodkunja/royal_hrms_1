@@ -255,7 +255,7 @@ class _SuccessStep extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Icon(Icons.check_circle_outline, color: AppColors.success, size: 56),
+        Icon(Icons.check_circle_outline, color: AppColors.success, size: 56),
         const SizedBox(height: 16),
         Text('Password Reset Successful!',
             style: AppTextStyles.h4, textAlign: TextAlign.center),
@@ -285,7 +285,7 @@ class _ErrorBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+          Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
           const SizedBox(width: 10),
           Expanded(
             child: Text(message,

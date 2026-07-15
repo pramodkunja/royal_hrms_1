@@ -46,7 +46,7 @@ class _NewLeaveRequestSheetState extends ConsumerState<NewLeaveRequestSheet> {
       lastDate: now.add(const Duration(days: 365)),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-            colorScheme: const ColorScheme.light(primary: AppColors.primary)),
+            colorScheme: ColorScheme.light(primary: AppColors.primary)),
         child: child!,
       ),
     );
@@ -136,7 +136,7 @@ class _NewLeaveRequestSheetState extends ConsumerState<NewLeaveRequestSheet> {
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
                 child: Row(
                   children: [
-                    const Icon(Icons.beach_access_outlined,
+                    Icon(Icons.beach_access_outlined,
                         size: 18, color: AppColors.primary),
                     const SizedBox(width: 8),
                     Text('New Leave Request',
@@ -150,7 +150,7 @@ class _NewLeaveRequestSheetState extends ConsumerState<NewLeaveRequestSheet> {
                   ],
                 ),
               ),
-              const Divider(height: 1, color: AppColors.border),
+              Divider(height: 1, color: AppColors.border),
               Flexible(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(16),
@@ -227,14 +227,14 @@ class _NewLeaveRequestSheetState extends ConsumerState<NewLeaveRequestSheet> {
                           border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                               borderSide:
-                                  const BorderSide(color: AppColors.border)),
+                                  BorderSide(color: AppColors.border)),
                           enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                               borderSide:
-                                  const BorderSide(color: AppColors.border)),
+                                  BorderSide(color: AppColors.border)),
                           focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(
+                              borderSide: BorderSide(
                                   color: AppColors.primary, width: 1.5)),
                           contentPadding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 12),
@@ -246,7 +246,7 @@ class _NewLeaveRequestSheetState extends ConsumerState<NewLeaveRequestSheet> {
               ),
               Container(
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: AppColors.surface,
                   border: Border(top: BorderSide(color: AppColors.border)),
                 ),
@@ -259,7 +259,7 @@ class _NewLeaveRequestSheetState extends ConsumerState<NewLeaveRequestSheet> {
                             : () => Navigator.of(context).pop(),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.textSecondary,
-                          side: const BorderSide(color: AppColors.border),
+                          side: BorderSide(color: AppColors.border),
                           padding: const EdgeInsets.symmetric(vertical: 13),
                         ),
                         child: const Text('Cancel',
@@ -329,7 +329,7 @@ class _NewLeaveRequestSheetState extends ConsumerState<NewLeaveRequestSheet> {
                 ),
               ),
             ),
-            const Icon(Icons.expand_more, size: 16, color: AppColors.textHint),
+            Icon(Icons.expand_more, size: 16, color: AppColors.textHint),
           ],
         ),
       ),
@@ -359,7 +359,7 @@ class _NewLeaveRequestSheetState extends ConsumerState<NewLeaveRequestSheet> {
             child: Text('Select Leave Type', style: AppTextStyles.label),
           ),
           const SizedBox(height: 8),
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: AppColors.border),
           ...LeaveTypeColors.allCodes.map((code) {
             final isSelected = _leaveType == code;
             return InkWell(
@@ -396,7 +396,7 @@ class _NewLeaveRequestSheetState extends ConsumerState<NewLeaveRequestSheet> {
                                   : AppColors.textPrimary)),
                     ),
                     if (isSelected)
-                      const Icon(Icons.check_circle,
+                      Icon(Icons.check_circle,
                           size: 18, color: AppColors.primary),
                   ],
                 ),
@@ -456,7 +456,7 @@ class _NewLeaveRequestSheetState extends ConsumerState<NewLeaveRequestSheet> {
                 fontSize: 11,
                 letterSpacing: 0.3)),
         if (required)
-          const Text(' *',
+          Text(' *',
               style: TextStyle(
                   color: AppColors.error,
                   fontSize: 11,
@@ -470,7 +470,7 @@ class _NewLeaveRequestSheetState extends ConsumerState<NewLeaveRequestSheet> {
       padding: const EdgeInsets.only(top: 4),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, size: 12, color: AppColors.error),
+          Icon(Icons.error_outline, size: 12, color: AppColors.error),
           const SizedBox(width: 4),
           Expanded(
             child: Text(text,

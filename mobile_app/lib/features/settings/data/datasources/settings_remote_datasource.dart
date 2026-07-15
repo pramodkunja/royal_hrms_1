@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
+import '../models/assessment_config_model.dart';
+import '../models/attendance_settings_model.dart';
 import '../models/audit_model.dart';
 import '../models/company_model.dart';
 import '../models/departments_model.dart';
@@ -186,9 +188,10 @@ class SettingsRemoteDataSource {
   }
 
   // ── Leave Policy ───────────────────────────────────────────────────────────
-  // No create/delete — the 6 leave types are fixed; only their policy fields
-  // (annual_days, can_carry_forward, max_carry_forward_days, policy_note,
-  // is_active) can be edited. See apps/hrms/views/leave.py LeavePolicyView.
+  // The 6 built-in leave types (casual/earned/sick/lwp/maternity/paternity)
+  // always exist; their full rule set can be edited via updateLeavePolicy.
+  // Custom leave types can additionally be created/deleted — see
+  // apps/hrms/views/leave.py LeavePolicyView (post()/delete()).
 
   Future<List<LeavePolicyModel>> fetchLeavePolicies() async {
     final res = await _dio.get(ApiConstants.leaveTypes);
@@ -203,6 +206,24 @@ class SettingsRemoteDataSource {
     final res = await _dio.put(ApiConstants.leavePolicyDetail(leaveType),
         data: form.toJson());
     return LeavePolicyModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  // POST /api/leave/policy/ — matches LeavePolicyCreateSerializer: requires
+  // 'leave_type_label' (the backend derives the unique 'leave_type' key from
+  // it) plus the same rule-field set as updateLeavePolicy.
+  Future<LeavePolicyModel> createLeavePolicy(
+      LeavePolicyFormData form, {required String leaveTypeLabel}) async {
+    final res = await _dio.post(ApiConstants.leaveTypes, data: {
+      'leave_type_label': leaveTypeLabel,
+      ...form.toJson(),
+    });
+    return LeavePolicyModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  // DELETE /api/leave/policy/<leaveType>/ — built-in types are rejected by
+  // the backend (400); only custom leave types can actually be deleted.
+  Future<void> deleteLeavePolicy(String leaveType) async {
+    await _dio.delete(ApiConstants.leavePolicyDetail(leaveType));
   }
 
   // Real, working backend action (apps/hrms/views/leave.py LeaveBalanceView.post) —
@@ -331,6 +352,46 @@ class SettingsRemoteDataSource {
       );
     }
     return AuditLogPage.empty();
+  }
+
+  // ── Attendance Rules (singleton settings object, 6 sections) ──────────────
+
+  Future<AttendanceSettingsModel> fetchAttendanceSettings() async {
+    final res = await _dio.get(ApiConstants.attendanceSettings);
+    final data = _unwrap(res.data);
+    return AttendanceSettingsModel.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<AttendanceSettingsModel> putAttendanceSettings(
+      AttendanceSettingsModel model) async {
+    final res =
+        await _dio.put(ApiConstants.attendanceSettings, data: model.toJson());
+    return AttendanceSettingsModel.fromJson(
+        _unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  Future<AttendanceSettingsModel> patchAttendanceSettingsSection(
+      String sectionKey, Map<String, dynamic> sectionJson) async {
+    final res = await _dio.patch(ApiConstants.attendanceSettings,
+        data: {sectionKey: sectionJson});
+    return AttendanceSettingsModel.fromJson(
+        _unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  // ── Assessment Config (singleton) ──────────────────────────────────────────
+
+  Future<AssessmentConfigModel> fetchAssessmentConfig() async {
+    final res = await _dio.get(ApiConstants.settingsAssessmentConfig);
+    final data = _unwrap(res.data);
+    return AssessmentConfigModel.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<AssessmentConfigModel> updateAssessmentConfig(
+      AssessmentConfigModel model) async {
+    final res = await _dio.put(ApiConstants.settingsAssessmentConfig,
+        data: model.toJson());
+    return AssessmentConfigModel.fromJson(
+        _unwrap(res.data) as Map<String, dynamic>);
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

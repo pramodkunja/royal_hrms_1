@@ -254,7 +254,7 @@ class _MyLeaveList extends ConsumerWidget {
       color: AppColors.primary,
       onRefresh: () => ref.read(myLeaveRequestsProvider.notifier).refresh(),
       child: requestsAsync.when(
-        loading: () => const Center(
+        loading: () => Center(
             child: CircularProgressIndicator(color: AppColors.primary)),
         error: (e, _) =>
             _ErrorView(message: 'Could not load leave requests: $e'),
@@ -284,7 +284,7 @@ class _MyExpenseList extends ConsumerWidget {
       color: AppColors.primary,
       onRefresh: () => ref.read(myExpensesProvider.notifier).refresh(),
       child: expensesAsync.when(
-        loading: () => const Center(
+        loading: () => Center(
             child: CircularProgressIndicator(color: AppColors.primary)),
         error: (e, _) =>
             _ErrorView(message: 'Could not load expense claims: $e'),
@@ -354,7 +354,7 @@ class _LeaveRequestCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Icon(Icons.calendar_month_outlined,
+                    Icon(Icons.calendar_month_outlined,
                         size: 11, color: AppColors.textHint),
                     const SizedBox(width: 4),
                     Text('${_fmtIso(request.from)} – ${_fmtIso(request.to)}',

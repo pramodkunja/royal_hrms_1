@@ -82,7 +82,7 @@ class _ExpenseFormSheetState extends State<ExpenseFormSheet> {
       lastDate:    now,
       builder:     (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+          colorScheme: ColorScheme.light(primary: AppColors.primary),
         ),
         child: child!,
       ),
@@ -211,7 +211,7 @@ class _ExpenseFormSheetState extends State<ExpenseFormSheet> {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
             child: Row(
               children: [
-                const Icon(Icons.account_balance_wallet_outlined,
+                Icon(Icons.account_balance_wallet_outlined,
                     size: 18, color: AppColors.primary),
                 const SizedBox(width: 8),
                 Text('Submit New Expense',
@@ -225,7 +225,7 @@ class _ExpenseFormSheetState extends State<ExpenseFormSheet> {
               ],
             ),
           ),
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: AppColors.border),
 
           // Scrollable body
           Flexible(
@@ -319,7 +319,7 @@ class _ExpenseFormSheetState extends State<ExpenseFormSheet> {
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.insert_drive_file_outlined,
+                              Icon(Icons.insert_drive_file_outlined,
                                   size: 16, color: AppColors.primary),
                               const SizedBox(width: 8),
                               Expanded(
@@ -336,7 +336,7 @@ class _ExpenseFormSheetState extends State<ExpenseFormSheet> {
                               const SizedBox(width: 6),
                               GestureDetector(
                                 onTap: () => _removeFile(i),
-                                child: const Icon(Icons.close,
+                                child: Icon(Icons.close,
                                     size: 14, color: AppColors.error),
                               ),
                             ],
@@ -415,7 +415,7 @@ class _ExpenseFormSheetState extends State<ExpenseFormSheet> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.info_outline,
+                        Icon(Icons.info_outline,
                             size: 14, color: AppColors.info),
                         const SizedBox(width: 8),
                         Expanded(
@@ -437,7 +437,7 @@ class _ExpenseFormSheetState extends State<ExpenseFormSheet> {
           // Footer
           Container(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color:  AppColors.surface,
               border: Border(top: BorderSide(color: AppColors.border)),
             ),
@@ -450,7 +450,7 @@ class _ExpenseFormSheetState extends State<ExpenseFormSheet> {
                         : () => Navigator.of(context).pop(),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.textSecondary,
-                      side:    const BorderSide(color: AppColors.border),
+                      side:    BorderSide(color: AppColors.border),
                       padding: const EdgeInsets.symmetric(vertical: 13),
                     ),
                     child: const Text('Cancel',
@@ -554,7 +554,7 @@ class _ExpenseFormSheetState extends State<ExpenseFormSheet> {
                     ),
                   ),
                 ),
-                const Icon(Icons.expand_more,
+                Icon(Icons.expand_more,
                     size: 16, color: AppColors.textHint),
               ],
             ),
@@ -629,7 +629,7 @@ class _ExpenseFormSheetState extends State<ExpenseFormSheet> {
             child: Text('Select Category', style: AppTextStyles.label),
           ),
           const SizedBox(height: 8),
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: AppColors.border),
           ...List.generate(_kCategories.length, (i) {
             final opt        = _kCategories[i];
             final isSelected = _category == opt.value;
@@ -673,7 +673,7 @@ class _ExpenseFormSheetState extends State<ExpenseFormSheet> {
                           )),
                     ),
                     if (isSelected)
-                      const Icon(Icons.check_circle,
+                      Icon(Icons.check_circle,
                           size: 18, color: AppColors.primary),
                   ],
                 ),
@@ -739,7 +739,7 @@ class _FieldLabel extends StatelessWidget {
                 fontSize:      11,
                 letterSpacing: 0.3)),
         if (required)
-          const Text(' *',
+          Text(' *',
               style: TextStyle(
                   color: AppColors.error, fontSize: 11, fontWeight: FontWeight.w700)),
       ],
@@ -757,7 +757,7 @@ class _ErrMsg extends StatelessWidget {
       padding: const EdgeInsets.only(top: 4),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, size: 12, color: AppColors.error),
+          Icon(Icons.error_outline, size: 12, color: AppColors.error),
           const SizedBox(width: 4),
           Expanded(
             child: Text(text,
@@ -785,7 +785,7 @@ class _ErrorBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, size: 14, color: AppColors.error),
+          Icon(Icons.error_outline, size: 14, color: AppColors.error),
           const SizedBox(width: 8),
           Expanded(
             child: Text(message,

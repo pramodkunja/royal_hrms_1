@@ -32,7 +32,7 @@ class _InfoBanner extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.info_outline,
+            Icon(Icons.info_outline,
                 size: 16, color: AppColors.info),
             const SizedBox(width: 10),
             Expanded(
@@ -57,7 +57,7 @@ class _EmptyView extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.people_outline,
+          Icon(Icons.people_outline,
               size: 48, color: AppColors.textHint),
           const SizedBox(height: 12),
           Text('No candidates found',
@@ -82,7 +82,7 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline,
+            Icon(Icons.error_outline,
                 size: 48, color: AppColors.error),
             const SizedBox(height: 12),
             Text(message,
@@ -218,7 +218,7 @@ class _SearchFilter extends ConsumerWidget {
             hintText: 'Search candidate...',
             hintStyle: AppTextStyles.bodySmall
                 .copyWith(color: AppColors.textHint),
-            prefixIcon: const Icon(Icons.search,
+            prefixIcon: Icon(Icons.search,
                 size: 18, color: AppColors.textHint),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -226,13 +226,13 @@ class _SearchFilter extends ConsumerWidget {
             fillColor: AppColors.surface,
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.border)),
+                borderSide: BorderSide(color: AppColors.border)),
             enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.border)),
+                borderSide: BorderSide(color: AppColors.border)),
             focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(
+                borderSide: BorderSide(
                     color: AppColors.primary, width: 1.5)),
           ),
         ),

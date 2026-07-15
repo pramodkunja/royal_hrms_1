@@ -69,7 +69,7 @@ class DocumentFilePicker extends StatelessWidget {
               )
             : Row(
                 children: [
-                  const Icon(Icons.insert_drive_file_outlined,
+                  Icon(Icons.insert_drive_file_outlined,
                       size: 28, color: AppColors.primary),
                   const SizedBox(width: 10),
                   Expanded(
@@ -90,7 +90,7 @@ class DocumentFilePicker extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Icon(Icons.check_circle_outline,
+                  Icon(Icons.check_circle_outline,
                       color: AppColors.success, size: 20),
                 ],
               ),

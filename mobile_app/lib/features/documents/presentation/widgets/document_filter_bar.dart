@@ -40,11 +40,11 @@ class _DocumentFilterBarState extends ConsumerState<DocumentFilterBar> {
               decoration: InputDecoration(
                 hintText: 'Search documents...',
                 hintStyle: AppTextStyles.caption,
-                prefixIcon: const Icon(Icons.search,
+                prefixIcon: Icon(Icons.search,
                     size: 18, color: AppColors.textHint),
                 suffixIcon: _searchCtrl.text.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear,
+                        icon: Icon(Icons.clear,
                             size: 16, color: AppColors.textHint),
                         onPressed: () {
                           _searchCtrl.clear();
@@ -58,16 +58,16 @@ class _DocumentFilterBarState extends ConsumerState<DocumentFilterBar> {
                 fillColor: AppColors.surface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppColors.border),
+                  borderSide: BorderSide(color: AppColors.border),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppColors.border),
+                  borderSide: BorderSide(color: AppColors.border),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide:
-                      const BorderSide(color: AppColors.primary, width: 1.5),
+                      BorderSide(color: AppColors.primary, width: 1.5),
                 ),
               ),
             ),

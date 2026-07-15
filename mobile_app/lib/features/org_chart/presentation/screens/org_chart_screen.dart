@@ -32,7 +32,7 @@ class OrgChartScreen extends ConsumerWidget {
 
             // ── Content ──────────────────────────────────────────────────────
             chartAsync.when(
-              loading: () => const SliverFillRemaining(
+              loading: () => SliverFillRemaining(
                 child: Center(
                   child: CircularProgressIndicator(color: AppColors.primary),
                 ),
@@ -233,7 +233,7 @@ class _ErrorView extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+          Icon(Icons.error_outline, size: 48, color: AppColors.error),
           const SizedBox(height: 12),
           Text('Failed to load org chart',
               style: AppTextStyles.label

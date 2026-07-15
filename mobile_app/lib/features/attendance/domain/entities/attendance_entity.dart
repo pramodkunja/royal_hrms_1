@@ -360,6 +360,84 @@ class HrCorrectionRowEntity {
   });
 }
 
+class HrUserEntity {
+  final String id;
+  final String employeeId;
+  final String fullName;
+  final String department;
+  final String branch;
+
+  const HrUserEntity({
+    required this.id,
+    required this.employeeId,
+    required this.fullName,
+    required this.department,
+    required this.branch,
+  });
+}
+
+class AttendanceAuditEntryEntity {
+  final String event;
+  final String performedBy;
+  final String performedAt;
+  final String? oldValue;
+  final String? newValue;
+  final String action;
+  final String? remarks;
+
+  const AttendanceAuditEntryEntity({
+    required this.event,
+    required this.performedBy,
+    required this.performedAt,
+    this.oldValue,
+    this.newValue,
+    required this.action,
+    this.remarks,
+  });
+}
+
+class ImportRowErrorEntity {
+  final int row;
+  final String message;
+  const ImportRowErrorEntity({required this.row, required this.message});
+}
+
+class ImportResultEntity {
+  final String importId;
+  final int totalRows;
+  final int success;
+  final int failed;
+  final String status;
+  final List<ImportRowErrorEntity> errors;
+
+  const ImportResultEntity({
+    required this.importId,
+    required this.totalRows,
+    required this.success,
+    required this.failed,
+    required this.status,
+    required this.errors,
+  });
+}
+
+/// Generic page envelope matching the backend's `{count, page, page_size,
+/// total_pages, results}` pagination shape.
+class PaginatedListEntity<T> {
+  final List<T> results;
+  final int count;
+  final int page;
+  final int pageSize;
+  final int totalPages;
+
+  const PaginatedListEntity({
+    required this.results,
+    required this.count,
+    required this.page,
+    required this.pageSize,
+    required this.totalPages,
+  });
+}
+
 // Reason codes for AttendanceCorrection.reason — must match backend REASON_CHOICES exactly.
 class CorrectionReasonCodes {
   CorrectionReasonCodes._();

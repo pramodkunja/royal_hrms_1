@@ -8,19 +8,19 @@ InputDecoration _inputDec(String? hint) => InputDecoration(
       fillColor: AppColors.surface,
       border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.border)),
+          borderSide: BorderSide(color: AppColors.border)),
       enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.border)),
+          borderSide: BorderSide(color: AppColors.border)),
       focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+          borderSide: BorderSide(color: AppColors.primary, width: 1.5)),
       errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.error)),
+          borderSide: BorderSide(color: AppColors.error)),
       focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.error)),
+          borderSide: BorderSide(color: AppColors.error)),
     );
 
 class _AddCandidateFormContent extends StatelessWidget {
@@ -169,7 +169,7 @@ class _AddCandidateFormContent extends StatelessWidget {
             color: AppColors.surface,
           ),
           child: Row(children: [
-            const Icon(Icons.calendar_today_outlined,
+            Icon(Icons.calendar_today_outlined,
                 size: 14, color: AppColors.textHint),
             const SizedBox(width: 8),
             Text(

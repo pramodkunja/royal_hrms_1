@@ -7,7 +7,7 @@ import '../providers/announcement_providers.dart';
 
 // ── Category metadata ─────────────────────────────────────────────────────────
 
-const _kCategoryMeta = <String, ({Color color, IconData icon, String label})>{
+final _kCategoryMeta = <String, ({Color color, IconData icon, String label})>{
   'general':     (color: AppColors.primary,        icon: Icons.campaign_outlined,    label: 'General'),
   'policy':      (color: Color(0xFFB45309),         icon: Icons.gavel_outlined,       label: 'Policy'),
   'event':       (color: Color(0xFF7C3AED),         icon: Icons.event_outlined,       label: 'Event'),
@@ -111,7 +111,7 @@ class _AnnouncementCardState extends ConsumerState<AnnouncementCard> {
             ),
           ),
           const SizedBox(height: 6),
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: AppColors.border),
           _CardFooter(
             announcement: widget.announcement,
             onEdit:   widget.announcement.canEdit ? widget.onEdit : null,

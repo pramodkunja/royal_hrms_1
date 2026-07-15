@@ -830,7 +830,7 @@ class _ReimbursementsSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.receipt_long_outlined,
+              Icon(Icons.receipt_long_outlined,
                   size: 15, color: AppColors.primary),
               const SizedBox(width: 6),
               Text('REIMBURSEMENTS',

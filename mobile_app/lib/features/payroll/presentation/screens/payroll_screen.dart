@@ -371,7 +371,7 @@ class _DashboardTab extends StatelessWidget {
           // Header
           Row(
             children: [
-              const Icon(Icons.calendar_month_outlined,
+              Icon(Icons.calendar_month_outlined,
                   size: 16, color: AppColors.primary),
               const SizedBox(width: 6),
               Expanded(
@@ -408,7 +408,7 @@ class _DashboardTab extends StatelessWidget {
                       child: Center(
                         child: Text(
                           d,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             color: AppColors.textHint,
@@ -484,13 +484,13 @@ class _DashboardTab extends StatelessWidget {
                   Container(
                     width: 10,
                     height: 10,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: AppColors.primary,
                       shape: BoxShape.circle,
                     ),
                   ),
                   const SizedBox(width: 6),
-                  const Text('Salary Date — 30 Jun',
+                  Text('Salary Date — 30 Jun',
                       style: TextStyle(
                           fontSize: 11, color: AppColors.textSecondary)),
                 ],
@@ -508,7 +508,7 @@ class _DashboardTab extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  const Text('Holidays (3)',
+                  Text('Holidays (3)',
                       style: TextStyle(
                           fontSize: 11, color: AppColors.textSecondary)),
                 ],
@@ -557,7 +557,7 @@ class _DashboardTab extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
             child: Row(
               children: [
-                const Icon(Icons.update_rounded,
+                Icon(Icons.update_rounded,
                     size: 16, color: AppColors.primary),
                 const SizedBox(width: 8),
                 Expanded(
@@ -624,7 +624,7 @@ class _DashboardTab extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
             child: Row(
               children: [
-                const Icon(Icons.people_outline,
+                Icon(Icons.people_outline,
                     size: 16, color: AppColors.primary),
                 const SizedBox(width: 8),
                 Expanded(
@@ -695,7 +695,7 @@ class _StatCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   item.label,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 10, color: AppColors.textSecondary),
                   maxLines: 2,
                 ),
@@ -716,7 +716,7 @@ class _StatCard extends StatelessWidget {
           const Spacer(),
           Text(
             item.value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
@@ -727,7 +727,7 @@ class _StatCard extends StatelessWidget {
           ),
           Text(
             item.sub,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 10, color: AppColors.textHint, height: 1.2),
           ),
         ],
@@ -744,7 +744,7 @@ class _ColHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 10,
         fontWeight: FontWeight.w600,
         color: AppColors.textHint,
@@ -762,7 +762,7 @@ class _PayrollRunRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
       ),
       child: Row(
@@ -774,7 +774,7 @@ class _PayrollRunRow extends StatelessWidget {
               children: [
                 Text(
                   run.month,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: AppColors.textPrimary,
@@ -785,7 +785,7 @@ class _PayrollRunRow extends StatelessWidget {
                 Text(
                   '${run.employees} emp · ${run.grossPayroll}',
                   style:
-                      const TextStyle(fontSize: 10, color: AppColors.textHint),
+                      TextStyle(fontSize: 10, color: AppColors.textHint),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -797,7 +797,7 @@ class _PayrollRunRow extends StatelessWidget {
             child: Text(
               '${run.employees}',
               style:
-                  const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  TextStyle(fontSize: 12, color: AppColors.textSecondary),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -809,7 +809,7 @@ class _PayrollRunRow extends StatelessWidget {
               children: [
                 Text(
                   run.netPayroll,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: AppColors.success,
@@ -820,7 +820,7 @@ class _PayrollRunRow extends StatelessWidget {
                 Text(
                   run.salaryDate,
                   style:
-                      const TextStyle(fontSize: 10, color: AppColors.textHint),
+                      TextStyle(fontSize: 10, color: AppColors.textHint),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -835,7 +835,7 @@ class _PayrollRunRow extends StatelessWidget {
                 const SizedBox(width: 6),
                 GestureDetector(
                   onTap: () {},
-                  child: const Icon(Icons.visibility_outlined,
+                  child: Icon(Icons.visibility_outlined,
                       size: 16, color: AppColors.primary),
                 ),
               ],
@@ -881,7 +881,7 @@ class _EmployeePayrollCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
       ),
       child: Column(
@@ -909,7 +909,7 @@ class _EmployeePayrollCard extends StatelessWidget {
                   children: [
                     Text(
                       emp.name,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary,
@@ -917,7 +917,7 @@ class _EmployeePayrollCard extends StatelessWidget {
                     ),
                     Text(
                       '${emp.empCode} · ${emp.department}',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 11, color: AppColors.textHint),
                     ),
                   ],
@@ -929,7 +929,7 @@ class _EmployeePayrollCard extends StatelessWidget {
                   color: AppColors.warningContainer,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text(
+                child: Text(
                   'Pending',
                   style: TextStyle(
                     fontSize: 10,
@@ -989,7 +989,7 @@ class _SalaryItem extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(fontSize: 9, color: AppColors.textHint),
+            style: TextStyle(fontSize: 9, color: AppColors.textHint),
           ),
           const SizedBox(height: 2),
           Text(
@@ -1103,7 +1103,7 @@ class _ReportsTab extends StatelessWidget {
           const SizedBox(height: 20),
 
           // Statutory Reports
-          const Text(
+          Text(
             'STATUTORY REPORTS',
             style: TextStyle(
               fontSize: 11,
@@ -1120,7 +1120,7 @@ class _ReportsTab extends StatelessWidget {
           const SizedBox(height: 10),
 
           // Payroll Summary
-          const Text(
+          Text(
             'PAYROLL SUMMARY',
             style: TextStyle(
               fontSize: 11,
@@ -1191,13 +1191,13 @@ class _FilterChip extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 12,
                 color: AppColors.textSecondary,
                 fontWeight: FontWeight.w500),
           ),
           const SizedBox(width: 4),
-          const Icon(Icons.keyboard_arrow_down,
+          Icon(Icons.keyboard_arrow_down,
               size: 16, color: AppColors.textHint),
         ],
       ),
@@ -1239,7 +1239,7 @@ class _ReportCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             item.title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
@@ -1248,7 +1248,7 @@ class _ReportCard extends StatelessWidget {
           const SizedBox(height: 3),
           Text(
             item.description,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 10, color: AppColors.textSecondary, height: 1.3),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -1263,7 +1263,7 @@ class _ReportCard extends StatelessWidget {
                   color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: const Text(
+                child: Text(
                   'June 2026',
                   style: TextStyle(
                       fontSize: 9,
@@ -1274,7 +1274,7 @@ class _ReportCard extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 item.size,
-                style: const TextStyle(fontSize: 10, color: AppColors.textHint),
+                style: TextStyle(fontSize: 10, color: AppColors.textHint),
               ),
             ],
           ),
@@ -1459,7 +1459,7 @@ class _AnalyticsTab extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.trending_up_rounded,
+              Icon(Icons.trending_up_rounded,
                   size: 16, color: AppColors.primary),
               const SizedBox(width: 6),
               Text('Monthly Payroll Trend', style: AppTextStyles.h4),
@@ -1510,16 +1510,16 @@ class _AnalyticsTab extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(labels[i],
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 10, color: AppColors.textHint)),
                         const SizedBox(height: 2),
                         Text('₹${gross[i]}L',
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 9,
                                 color: AppColors.primary,
                                 fontWeight: FontWeight.w600)),
                         Text('₹${net[i]}L',
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 9,
                                 color: AppColors.success,
                                 fontWeight: FontWeight.w600)),
@@ -1558,7 +1558,7 @@ class _AnalyticsTab extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.donut_large_outlined,
+              Icon(Icons.donut_large_outlined,
                   size: 16, color: AppColors.primary),
               const SizedBox(width: 6),
               Text('Cost by Department', style: AppTextStyles.h4),
@@ -1596,13 +1596,13 @@ class _AnalyticsTab extends StatelessWidget {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(d.name,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           fontSize: 11,
                                           color: AppColors.textPrimary)),
                                 ),
                                 Text(
                                   '${(d.pct * 100).round()}%',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,
                                       color: AppColors.textPrimary),
@@ -1610,7 +1610,7 @@ class _AnalyticsTab extends StatelessWidget {
                                 const SizedBox(width: 6),
                                 Text(
                                   '(${d.emp} emp)',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontSize: 10, color: AppColors.textHint),
                                 ),
                               ],
@@ -1644,7 +1644,7 @@ class _AnalyticsTab extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.access_time_outlined,
+              Icon(Icons.access_time_outlined,
                   size: 16, color: AppColors.warning),
               const SizedBox(width: 6),
               Text('Overtime Cost Trend', style: AppTextStyles.h4),
@@ -1666,13 +1666,13 @@ class _AnalyticsTab extends StatelessWidget {
                 child: Column(
                   children: [
                     Text('₹${values[i]}K',
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 9,
                             fontWeight: FontWeight.w600,
                             color: AppColors.warning),
                         textAlign: TextAlign.center),
                     Text(labels[i],
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 9, color: AppColors.textHint),
                         textAlign: TextAlign.center),
                   ],
@@ -1708,7 +1708,7 @@ class _AnalyticsTab extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.bar_chart_outlined,
+              Icon(Icons.bar_chart_outlined,
                   size: 16, color: AppColors.primary),
               const SizedBox(width: 6),
               Text('Earnings vs Deductions', style: AppTextStyles.h4),
@@ -1724,14 +1724,14 @@ class _AnalyticsTab extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(d.$1,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
                                   color: AppColors.textPrimary)),
                         ),
                         Text(
                           '${(d.$2 * 100).round()}% deductions',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 11, color: AppColors.textSecondary),
                         ),
                       ],
@@ -1774,7 +1774,7 @@ class _LegendDotInline extends StatelessWidget {
         const SizedBox(width: 4),
         Text(label,
             style:
-                const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                TextStyle(fontSize: 11, color: AppColors.textSecondary)),
       ],
     );
   }
