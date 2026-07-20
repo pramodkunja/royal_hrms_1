@@ -1,13 +1,18 @@
+import '../config/api_config.dart';
+
 class ApiConstants {
   ApiConstants._();
 
-  static String get baseUrl {
-    // Always hits the hosted backend — nginx proxies /api/ to Django on
-    // royalhrms.nxsys.in (see the server's nginx config), so this must keep
-    // the /api suffix or requests fall through to the Next.js frontend block
-    // instead of the Django API and come back as HTML, not JSON.
-    return 'https://royalhrms.nxsys.in/api';
-  }
+  // The base URL itself is centralized in ApiConfig (core/config/api_config.dart)
+  // — change ApiConfig.current there to switch environments; nothing here or
+  // at any call site needs to change. Kept as a getter (not reassigned) so
+  // every existing `ApiConstants.baseUrl` call site keeps working unchanged.
+  //
+  // nginx proxies /api/ to Django on the production host (see the server's
+  // nginx config), so this must keep the /api suffix or requests fall
+  // through to the Next.js frontend block instead of the Django API and
+  // come back as HTML, not JSON.
+  static String get baseUrl => ApiConfig.baseUrl;
 
   static const Duration connectTimeout = Duration(seconds: 30);
   static const Duration receiveTimeout = Duration(seconds: 30);
@@ -226,4 +231,57 @@ class ApiConstants {
   // settings.view for all three verbs (a backend inconsistency — PUT/PATCH
   // should require settings.edit but don't; not something to fix client-side).
   static const String attendanceSettings = '/attendance/settings/';
+
+  // Dashboard app — role-specific widgets, matches backend apps/dashboard.
+  // All views require IsAuthenticated; the system-admin/hr ones additionally
+  // role-gate inside the view (role.name == 'system_admin', or in
+  // ('hr','system_admin')) rather than via a permission codename — a 403
+  // there means the account's role doesn't match, not a missing permission.
+  // Employee-scoped ones (employee/*) have no extra role gate — any
+  // authenticated user gets their own data.
+  static const String dashboardSystemAdminKpis = '/dashboard/system-admin/kpis/';
+  static const String dashboardSystemAdminAnnouncement =
+      '/dashboard/system-admin/announcement/';
+  static const String dashboardSystemAdminPendingApprovals =
+      '/dashboard/system-admin/pending-approvals/';
+  static const String dashboardSystemAdminDepartmentHeadcount =
+      '/dashboard/system-admin/department-headcount/';
+  static const String dashboardSystemAdminEmployeeLifecycle =
+      '/dashboard/system-admin/employee-lifecycle/';
+  static const String dashboardSystemAdminBirthdaysToday =
+      '/dashboard/system-admin/birthdays/today/';
+  static const String dashboardSystemAdminBirthdaysUpcoming =
+      '/dashboard/system-admin/birthdays/upcoming/';
+  static const String dashboardSystemAdminAuditLogs =
+      '/dashboard/system-admin/audit-logs/';
+
+  static const String dashboardHrKpis = '/dashboard/hr/kpis/';
+  static const String dashboardHrAttendanceSummary =
+      '/dashboard/hr/attendance-summary/';
+  static const String dashboardHrActionQueue = '/dashboard/hr/action-queue/';
+  static const String dashboardHrRecruitmentFunnel =
+      '/dashboard/hr/recruitment-funnel/';
+  static const String dashboardHrEmployeeLifecycle =
+      '/dashboard/hr/employee-lifecycle/';
+  static const String dashboardHrBirthdaysToday =
+      '/dashboard/hr/birthdays/today/';
+  static const String dashboardHrBirthdaysUpcoming =
+      '/dashboard/hr/birthdays/upcoming/';
+  static const String dashboardHrDepartmentHeadcount =
+      '/dashboard/department-headcount/';
+
+  static const String dashboardEmployeeKpis = '/dashboard/employee/kpis/';
+  static const String dashboardEmployeeLeaveBalances =
+      '/dashboard/employee/leave-balances/';
+  static const String dashboardEmployeeActionItems =
+      '/dashboard/employee/action-items/';
+  static const String dashboardEmployeeRecentRequests =
+      '/dashboard/employee/recent-requests/';
+  static const String dashboardEmployeeAttendanceSummary =
+      '/dashboard/employee/attendance-summary/';
+  static const String dashboardEmployeeAttendanceStatus =
+      '/dashboard/employee/attendance-status/';
+
+  // Shared announcement (no role gate) — matches web's EmpAnnouncement.
+  static const String dashboardAnnouncement = '/dashboard/announcement/';
 }

@@ -2991,3 +2991,137 @@ lib/features/attendance/presentation/screens/my_attendance_screen.dart
 - [ ] Sweep the older `_friendly(e.toString())` error pattern to `parseDioException()`-style helpers across Leave/Expenses/Documents/Employees (carried over from Sessions 15–18 — still not done).
 - [ ] `/onboarding/assessments` candidate-taking portal — still not ported (carried over from Session 17).
 - [ ] Backend: `Holiday` model/API still doesn't exist for real — Holiday Calendar remains local-only mock state (carried over from Session 17).
+
+
+---
+
+## Session 20 — Dashboard: Role-Specific Ports for Employee, Admin, and HR (New)
+
+**Date:** 2026-07-20
+**Developer:** Pramod Kunja
+
+### Module Worked On
+- Dashboard — full new `apps/dashboard` backend integration: role-specific Employee/Admin/HR dashboards replacing the single generic layout (new)
+- Dashboard — Admin dashboard visual-fidelity pass against reference screenshots (System Console header, Pending Approvals, Employee Lifecycle, Audit Logs)
+- Dashboard — Employee dashboard full redesign to match web's actual `EmployeeDashboard.tsx` layout pixel-for-pixel
+- Shared bug fix — `KpiGrid`'s fixed tile height was too short for a 2-line label, affecting all three role dashboards
+
+---
+
+### Part 1: Dashboard — Full Role-Specific Port (New)
+
+Web's dashboard (a prior, already-merged web commit — `git diff` confirmed nothing changed in it during this session) replaced one generic dashboard page with 4 role-specific ones — `AdminDashboard.tsx`, `HRDashboard.tsx`, `EmployeeDashboard.tsx`, `ManagerDashboard.tsx` — backed by ~20 new `apps/dashboard` endpoints. Mobile had none of this: one `HomeScreen` for every role, zero `apps/dashboard` endpoints wired up, and the existing Leave Balance / Recent Requests cards pulled from unrelated general-purpose endpoints (`/leave/stats/`, `/leave/requests/`) instead.
+
+Read every backend view directly (`apps/dashboard/views/overview.py`, `people.py`) rather than trusting the web frontend's own TypeScript types — the frontend defensively aliases several fields (e.g. `LifecycleEmployee` declares `id?/employee_id?`, `name?/full_name?/employee_name?` all at once) that don't reflect what the backend actually, concretely returns; the mobile models were built off the real backend field names instead (e.g. audit log entries: backend returns `user`, never `actor`/`actor_name`/`ip` as the frontend type speculatively declares).
+
+Built a full new data layer under `features/dashboard/`: models split by role (`dashboard_common_models.dart` for shapes shared across roles — `TodayAttendanceSnapshot`, `DashboardAnnouncement`, `DashboardBirthdayEmployee`, `DeptHeadcount`; `employee_dashboard_models.dart`, `admin_dashboard_models.dart`, `hr_dashboard_models.dart`), one `DashboardRemoteDataSource` covering all ~20 endpoints, and `dashboard_providers.dart` (all `FutureProvider.autoDispose`, plus a shared `friendlyDashboardError` mapper). Extracted three widgets previously private to the old `home_screen.dart` into shared public files so all three role screens could reuse them: `widgets/dashboard_section.dart` (`SectionCard`/`SectionMessage`/`SectionError`/`KpiTile`/`KpiGrid`/`BarRow`), `widgets/quick_access.dart` (role → Quick Actions arrays + `resolveRoleCategory()`, matching web's `resolveRole()` in `app/dashboard/page.tsx` exactly), and `widgets/clock_in_card.dart` (the real interactive punch card, since web embeds the same clock button on both the Employee and HR dashboards).
+
+`home_screen.dart` became a thin role router: `employee` → `EmployeeDashboardView`, `admin` → `AdminDashboardView`, `hr` → `HrDashboardView`, everything else (Manager) → the previous generic layout, kept as-is. **Manager deliberately excluded from the port** — read `ManagerDashboard.tsx` and confirmed every stat/list on it (team size, pending approvals, attendance %, activity feed) is hardcoded mock data with no real backend behind it at all (only its birthday widget is real) — there was nothing genuine to port for that role.
+
+Built the Admin and HR dashboard screens via two parallel background agents (each given exact provider names, model fields, and the shared-widget API up front so their output would compile against what the other was building concurrently), while building the Employee dashboard and the role-router wiring directly. All three passed `dart analyze` clean on first integration; a couple of naming collisions (`employeeAttendanceSummaryProvider` existing in both the attendance feature and the new dashboard feature) were resolved with an explicit `hide` on import.
+
+**Admin dashboard sections:** System Overview KPI+health strip, Pending Approvals, Department Headcount (a `BarRow` list — no chart library in this project's `pubspec.yaml`, so this stands in for web's chart), Latest Announcement, Employee Lifecycle (New Joiners/Notice Period/Work Anniversaries), Birthdays, Audit Logs.
+
+**HR dashboard sections:** HR KPI strip, Today's Attendance Summary (org-wide snapshot counts — a different shape from the Employee dashboard's *monthly* attendance summary despite both being called "attendance summary" in the backend's own naming), Action Queue, Recruitment Funnel, the shared Clock In/Out card, Employee Lifecycle, Department Headcount, Birthdays.
+
+**Employee dashboard sections (first pass):** KPI strip, Clock In/Out, Leave Balances (switched to the dashboard-app's own endpoint — `remaining`/`carried_forward` fields — instead of the old `/leave/stats/`-backed card, which used a different shape entirely with no `carried_forward`), monthly Attendance Summary, Action Items (tap-to-navigate mapped by `action_type`, not the backend's raw `navigation_url` string — mobile's route structure doesn't mirror web's 1:1, e.g. self-service attendance is `/dashboard/my-attendance` here, not `/dashboard/attendance`), Recent Requests (a real mixed leave/expense/attendance-correction feed, replacing the old leave-only card), Announcement, plus the pre-existing Birthdays/Quick Links cards kept since they already worked correctly.
+
+#### Files created
+```
+lib/features/dashboard/data/models/dashboard_common_models.dart
+lib/features/dashboard/data/models/employee_dashboard_models.dart
+lib/features/dashboard/data/models/admin_dashboard_models.dart
+lib/features/dashboard/data/models/hr_dashboard_models.dart
+lib/features/dashboard/data/datasources/dashboard_remote_datasource.dart
+lib/features/dashboard/presentation/providers/dashboard_providers.dart
+lib/features/dashboard/presentation/widgets/dashboard_section.dart
+lib/features/dashboard/presentation/widgets/quick_access.dart
+lib/features/dashboard/presentation/widgets/clock_in_card.dart
+lib/features/dashboard/presentation/screens/employee_dashboard_view.dart
+lib/features/dashboard/presentation/screens/admin_dashboard_view.dart
+lib/features/dashboard/presentation/screens/hr_dashboard_view.dart
+```
+
+#### Files modified
+```
+lib/core/constants/api_constants.dart        ~20 apps/dashboard endpoint paths
+lib/features/dashboard/presentation/screens/home_screen.dart   rewritten as role router + generic/Manager fallback
+```
+
+---
+
+### Part 2: Admin Dashboard — Visual-Fidelity Pass Against Reference Screenshots
+
+User supplied screenshots of web's actual Admin dashboard rendering (System Console header, Pending Approvals card, Employee Lifecycle tabs, Audit Logs table) and asked for the mobile port to match. Rebuilt section-by-section:
+
+**System Console header.** Web's `KpiConsole` is a dark navy hero card (icon badge + "SYSTEM CONSOLE" eyebrow + "Welcome back, {name}", inline health pills for API/DB/Mail/Storage, a 4-stat row below a divider) — not the boxed-tile `SectionCard` originally built. Rebuilt as a bespoke gradient container matching this exactly.
+
+**Pending Approvals.** Reference image shows a distinct light-tinted footer band ("View all pending approvals →") with rounded bottom corners bleeding to the card's full width — not achievable with the shared `SectionCard`'s single uniform padded body, so this card was rebuilt as its own bespoke shell instead of using `SectionCard`. Also connected every row to a real destination: Leave Requests → `/dashboard/leave`, Expense Claims → `/dashboard/expenses`, Separation Requests → `/dashboard/separation` (an existing, if placeholder, route), and Onboarding Reviews → the Employees list pre-filtered to `status: onboarding` (via `employeeFiltersProvider`) since no dedicated onboarding-review screen exists in the app yet — the closest genuine destination rather than a dead link.
+
+**Employee Lifecycle.** Added a real 3-tab selector (New Joiners/Notice Period/Anniversaries, matching web's tab bar with counts and an active-tab underline) instead of three stacked always-visible sections; rows now navigate to the real employee profile route.
+
+**Audit Logs.** Rebuilt as pill-styled ACTION badges + actor/IP icon rows + a module tag + formatted time (`"20 Jul, 01:27 pm"`, hand-rolled — no `intl` package in this project's dependencies), plus a working module-filter dropdown and a functional "Load more" that paginates against the real endpoint (a `FutureProvider.autoDispose.family<AuditLogsResponse, ({int offset, String module})>` backing the first page reactively, with imperative appends for subsequent pages) — not just decorative UI. Added a "View all" link beside the filter, pointed at the pre-existing full-featured Settings → Audit Log screen (`/settings/audit`, `AuditScreen`) rather than duplicating its filters here — that screen already has real search/date-range/pagination against a *different* backend endpoint (`/settings/audit/`, actor_name/actor_email/actor_role shape) than the dashboard summary card's endpoint (`/dashboard/system-admin/audit-logs/`, just `user`) — confirmed these are two genuinely distinct backend views before treating one as a substitute for the other.
+
+**Announcement empty state.** User reported the "No announcements yet" message+icon wasn't displaying. Hardened the empty-state check in both the Admin and Employee announcement cards to treat a blank/malformed announcement (empty `title`) as "no announcement" too, not just a strict `null` — guards against ever silently rendering a blank card if the backend ever returns an empty object instead of a clean `null`.
+
+#### Files modified
+```
+lib/features/dashboard/presentation/screens/admin_dashboard_view.dart
+lib/features/dashboard/presentation/providers/dashboard_providers.dart   auditLogsProvider → auditLogsPageProvider (family)
+```
+
+---
+
+### Part 3: Shared `KpiGrid` Overflow Bug (found during unrelated web-diff re-verification)
+
+Asked to re-check whether web's Employee dashboard had changed since the Part 1 port — a full `git diff` between the commit that introduced the dashboard feature and current `HEAD` on every relevant file (component, sub-components, hooks, types, both backend view files) came back byte-for-byte identical. Nothing had changed; no port work was actually needed there.
+
+Used the opportunity to stress-test the existing implementation instead of reporting back empty-handed, and found a real, pre-existing bug: the shared `KpiTile`/`KpiGrid` widget (used by all three role dashboards' KPI strips) was sized to a 92dp `mainAxisExtent`, but the actual content — icon + a single-line value + a label that can wrap to 2 lines (e.g. "Pending Actions", "Active Branches") — needs roughly 106–108dp. Any tile whose label happened to wrap overflowed. Fixed by bumping `mainAxisExtent` to 116 in the one shared file, correcting it across Employee, Admin, and HR dashboards simultaneously rather than needing a per-screen patch.
+
+#### Files modified
+```
+lib/features/dashboard/presentation/widgets/dashboard_section.dart   KpiGrid mainAxisExtent 92 → 116
+```
+
+---
+
+### Part 4: Employee Dashboard — Full Redesign to Match Web Pixel-Level
+
+User flagged the Employee dashboard "doesn't look like the web design." Read every one of web's actual Employee dashboard components directly (`EmpConsole.tsx`, `EmpLeaveBalances.tsx`, `EmpAttendanceSummary.tsx`, `EmpActionItems.tsx`, `EmpRecentRequests.tsx`, `EmpAnnouncement.tsx`, plus `ClockInButton.tsx` and `useClockWidget.ts`) rather than working from memory of the earlier Part 1 pass, and found the mobile version had drifted from what web actually does in several structural, not just cosmetic, ways:
+
+- **Console header.** Web uses one dark hero card: greeting + inline Clock In/Out pill button + attendance-status pill, a divider, a *plain* 4-stat row (Days Present as a combined `"X / Y"` value, Absent Days, Action Items, Expense Claims — no boxed tiles, no separate "Working Days"/"Documents" tiles web doesn't show at all), another divider, then a Clock In/Clock Out/Working-hours strip. Mobile had this split across three separate boxed-tile cards showing 6 stats. Rebuilt as one console card matching web's structure, and wired `employeeAttendanceStatusProvider` into the new status strip — this provider was already being fetched in the Part 1 build but **never actually rendered anywhere**.
+- **Leave Balances.** Switched from full-width stacked rows to web's 2-up grid-of-cells (small color swatch + label, large `remaining` number + "of N days" caption, thin progress bar, "N used · N carried forward" footer), and added the "Apply Leave" header button web has.
+- **Attendance Summary.** Added the month picker (web has one; mobile was silently locked to the current month), the percentage progress bar with a "Working days: N" caption, and switched to web's exact 9-tile stat grid (mobile was missing "Attendance %" as its own tile). Backed by a new `employeeAttendanceSummaryForProvider` family provider keyed by `(month, year)` so switching months doesn't lose the previous month's cached data.
+- **Action Items.** Added the "N pending" header count badge, the "All caught up!" checkmark empty state, "Done"/"Pending"/"Rejected" status-label remapping, and reduced opacity for completed items — all present on web, absent on mobile.
+- **Recent Requests.** Added the "N pending" header badge and web's exact `"20 Jul"` day-plus-short-month date format.
+- **Announcement — the biggest behavioral gap.** Web's `EmpAnnouncement` returns `null` (renders literally nothing) when there's no announcement or it's been dismissed — it's a lightweight dismissible inline banner, not a card with its own header/empty-state message. Mobile always showed an "Announcement" `SectionCard`, even empty. Rewired to match web exactly: no card chrome, `SizedBox.shrink()` when there's no data or the user dismissed it (local `_dismissed` state, resets on next app open — matches web's `useState`, which also doesn't persist across reloads), a "View →" link to the real Announcements screen, and a working dismiss (×) button.
+
+Birthdays and Quick Links kept at the bottom of the screen — they aren't part of web's Employee dashboard at all, but they already worked correctly before this port and removing them wouldn't make the dashboard look any more like web, just remove a working feature.
+
+#### Files modified
+```
+lib/features/dashboard/presentation/screens/employee_dashboard_view.dart   full rewrite
+lib/features/dashboard/presentation/providers/dashboard_providers.dart     + employeeAttendanceSummaryForProvider (family)
+```
+
+---
+
+### Verification
+- `dart analyze lib` after every part of this session: 0 errors throughout, holding steady at the same 122 pre-existing info-level lints as the pre-session baseline — never regressed, across ~15 new/modified dashboard files.
+- No APK rebuild performed this session — all work verified via `dart analyze` only; the user has twice declined an offered `flutter build apk --release` earlier in this project's history when testing via Flutter Web against a local backend, so one wasn't proactively triggered here either.
+
+### Architecture Notes
+- **When porting a web feature, read the actual backend view/serializer code, not the frontend's own TypeScript types** — this codebase's frontend types are written defensively (multi-aliased optional fields covering shapes the backend might return) rather than describing what it actually, concretely returns today. Building mobile models off the speculative frontend union types would have baked in the frontend's own uncertainty; the real backend `views.py`/`people.py` code is the source of truth.
+- **A `git diff` between commits is worth running before assuming "the web changed"** — asked to re-port the Employee dashboard on the assumption something had changed there; a directory diff proved nothing had, and the actual value of that pass turned out to be an unrelated shared-widget sizing bug found by stress-testing the existing implementation instead.
+- **Two backend views can serve conceptually-overlapping data with genuinely different shapes** — `apps/dashboard`'s audit-log summary endpoint (`user`, `ip_address`) and `apps/accounts`'s full settings audit-trail endpoint (`actor_name`/`actor_email`/`actor_role`) are not interchangeable; confirmed this by reading both view files before wiring a "View all" link between them, rather than assuming one could be swapped for the other.
+- **A shared widget's fixed-size grid delegate needs headroom for the *worst-case* text wrap, not the common case** — `KpiGrid`'s `mainAxisExtent` was tuned against short 1-line labels and silently overflowed the moment a longer label (2 words, narrow column) wrapped to a second line. Any future shared tile/card component sized with a fixed `mainAxisExtent`/`childAspectRatio` should be checked against its longest realistic label, not just whatever was on screen during development.
+
+### Pending Tasks (updated)
+- [ ] Manual on-device pass of all three new role dashboards (Employee/Admin/HR) — verified via `dart analyze` and code-level cross-checking against web only, not yet visually confirmed on a running app/device this session.
+- [ ] HR and Admin dashboards haven't had the same "match web pixel-for-pixel" scrutiny the Employee dashboard just got in Part 4 — Admin got a screenshot-driven pass in Part 2, but HR's dashboard has only ever been built once, against the field-level spec, never visually compared to a live web render.
+- [ ] No dedicated onboarding-review screen exists in the app — Admin's "Onboarding Reviews" pending-approval row currently opens the Employees list filtered to `status: onboarding` as the closest real substitute; a purpose-built review screen (backend endpoint `/onboarding/approvals/` already exists and is unused by mobile) would be a cleaner long-term fix.
+- [ ] Confirm with whoever manages `royalhrms.nxsys.in`'s deployment that `DEBUG=True`/`ALLOWED_HOSTS=*` in production `.env` is intentional or needs tightening (carried over from Session 19 — not mobile's call to fix).
+- [ ] Manual on-device dark-mode pass across every screen (carried over from Session 19 — still not done).
+- [ ] Sweep the older `_friendly(e.toString())` error pattern to `parseDioException()`-style helpers across Leave/Expenses/Documents/Employees (carried over from Sessions 15–18 — still not done).
+- [ ] `/onboarding/assessments` candidate-taking portal — still not ported (carried over from Session 17).
+- [ ] Backend: `Holiday` model/API still doesn't exist for real — Holiday Calendar remains local-only mock state (carried over from Session 17).

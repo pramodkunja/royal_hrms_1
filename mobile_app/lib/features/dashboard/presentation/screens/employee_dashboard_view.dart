@@ -1,0 +1,1734 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:mobile_app/core/location/location_service.dart';
+import 'package:mobile_app/core/router/app_router.dart';
+import 'package:mobile_app/core/theme/app_colors.dart';
+import 'package:mobile_app/core/theme/app_text_styles.dart';
+import 'package:mobile_app/features/attendance/domain/entities/attendance_entity.dart';
+import 'package:mobile_app/features/attendance/presentation/providers/attendance_providers.dart'
+    hide employeeAttendanceSummaryProvider;
+import 'package:mobile_app/features/auth/presentation/providers/auth_providers.dart';
+import 'package:mobile_app/features/hrms/domain/entities/birthday_entity.dart';
+import 'package:mobile_app/features/hrms/presentation/providers/hrms_providers.dart';
+import '../../data/models/employee_dashboard_models.dart';
+import '../providers/dashboard_providers.dart';
+import '../widgets/dashboard_section.dart';
+import '../widgets/quick_access.dart';
+
+/// Full Employee-role dashboard — a pixel-level port of web's
+/// `EmployeeDashboard.tsx`: `EmpConsole` (dark hero card: greeting, clock
+/// control, 4-stat row, attendance status strip) → Quick Actions →
+/// `EmpLeaveBalances` + `EmpAttendanceSummary` → `EmpActionItems` +
+/// `EmpRecentRequests` → `EmpAnnouncement` (a dismissible inline banner,
+/// not a card — renders nothing when there's no announcement, exactly like
+/// web). Birthdays + Quick Links are kept below web's section list — they
+/// aren't part of web's Employee dashboard at all, but they were already
+/// working correctly in this app before this port and don't change how the
+/// core sections above them look, so there's no reason to remove them.
+class EmployeeDashboardView extends ConsumerWidget {
+  const EmployeeDashboardView({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
+    final permissions = user?.permissions ?? const [];
+    final canViewBirthdays = permissions.contains('employees.view');
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(employeeKpisProvider);
+        ref.invalidate(employeeAttendanceStatusProvider);
+        ref.invalidate(todayAttendanceProvider);
+        ref.invalidate(employeeLeaveBalancesProvider);
+        ref.invalidate(employeeAttendanceSummaryForProvider);
+        ref.invalidate(employeeActionItemsProvider);
+        ref.invalidate(employeeRecentRequestsProvider);
+        ref.invalidate(sharedAnnouncementProvider);
+        if (canViewBirthdays) ref.invalidate(birthdaysProvider);
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _EmpConsoleCard(),
+            const SizedBox(height: 20),
+            QuickAccessCard(items: kQuickItemsEmployee),
+            const SizedBox(height: 20),
+            const _EmpLeaveBalancesCard(),
+            const SizedBox(height: 20),
+            const _EmpAttendanceSummaryCard(),
+            const SizedBox(height: 20),
+            const _EmpActionItemsCard(),
+            const SizedBox(height: 20),
+            const _EmpRecentRequestsCard(),
+            const SizedBox(height: 20),
+            const _EmpAnnouncementBanner(),
+            if (canViewBirthdays) ...[
+              const SizedBox(height: 20),
+              const _TodaysBirthdaysCard(),
+              const SizedBox(height: 20),
+              const _UpcomingBirthdaysCard(),
+            ],
+            const SizedBox(height: 20),
+            const _QuickLinksCard(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Console (dark hero card: greeting + clock control + KPIs + status) ─────
+
+const Map<String, String> _kAttendanceLabel = {
+  'present': 'Present',
+  'late': 'Late',
+  'absent': 'Absent',
+  'on_leave': 'On Leave',
+  'weekly_off': 'Weekly Off',
+  'holiday': 'Holiday',
+  'half_day': 'Half Day',
+  'incomplete': 'Incomplete',
+};
+
+Color _attendanceStatusColor(String status) => switch (status) {
+      'present' => const Color(0xFF16A34A),
+      'late' => const Color(0xFFD97706),
+      'absent' => const Color(0xFFDC2626),
+      'on_leave' => const Color(0xFF2563EB),
+      'weekly_off' => const Color(0xFF94A3B8),
+      'holiday' => const Color(0xFF7C3AED),
+      'half_day' => const Color(0xFFD97706),
+      'incomplete' => const Color(0xFFDC2626),
+      _ => Colors.white54,
+    };
+
+class _EmpConsoleCard extends ConsumerWidget {
+  const _EmpConsoleCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
+    final firstName = (user?.fullName ?? '').trim().isEmpty
+        ? 'there'
+        : user!.fullName.trim().split(RegExp(r'\s+')).first;
+    final kpisAsync = ref.watch(employeeKpisProvider);
+    final statusAsync = ref.watch(employeeAttendanceStatusProvider);
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1A3A6E), Color(0xFF0E2447)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: AppColors.elevatedShadow,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Icon(Icons.dashboard_outlined,
+                      size: 14, color: Colors.white),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'MY WORKSPACE',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.1,
+                          color: Colors.white.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      Text(
+                        'Welcome back, $firstName',
+                        style: AppTextStyles.body.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          height: 1.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                kpisAsync.maybeWhen(
+                  data: (kpis) {
+                    final status = kpis.todayAttendance?.status.toLowerCase();
+                    if (status == null || status.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    return _AttendanceStatusPill(status: status);
+                  },
+                  orElse: () => const SizedBox.shrink(),
+                ),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: _ConsoleClockControl(),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
+          ),
+          kpisAsync.when(
+            data: (kpis) => _ConsoleKpiRow(kpis: kpis),
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 18),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation(Colors.white70),
+                  ),
+                ),
+              ),
+            ),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      friendlyDashboardError(e),
+                      style: AppTextStyles.caption.copyWith(color: Colors.white70),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => ref.invalidate(employeeKpisProvider),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 0),
+                    ),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          statusAsync.maybeWhen(
+            data: (status) => Column(
+              children: [
+                Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Wrap(
+                    spacing: 18,
+                    runSpacing: 6,
+                    children: [
+                      _StatusStripItem(
+                        icon: Icons.login,
+                        label: 'Clock In',
+                        value: status.clockInTime ?? '—',
+                      ),
+                      _StatusStripItem(
+                        icon: Icons.logout,
+                        label: 'Clock Out',
+                        value: status.clockOutTime ?? '—',
+                      ),
+                      _StatusStripItem(
+                        icon: Icons.access_time,
+                        label: 'Working',
+                        value: status.workingHours.isEmpty
+                            ? '—'
+                            : status.workingHours,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            orElse: () => const SizedBox(height: 12),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AttendanceStatusPill extends StatelessWidget {
+  final String status;
+  const _AttendanceStatusPill({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _attendanceStatusColor(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.20),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 5,
+            height: 5,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            _kAttendanceLabel[status] ?? status,
+            style: AppTextStyles.labelSmall
+                .copyWith(color: color, fontWeight: FontWeight.w700, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusStripItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _StatusStripItem({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: Colors.white.withValues(alpha: 0.35)),
+        const SizedBox(width: 5),
+        Text(
+          '$label:',
+          style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.45)),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          value,
+          style: AppTextStyles.caption
+              .copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+        ),
+      ],
+    );
+  }
+}
+
+/// Compact Clock In/Out control + "Request Attendance Correction" link,
+/// embedded directly in the console header (matching web's `ClockInButton`
+/// sitting inline in `EmpConsole`) instead of a separate card. Reuses the
+/// same punch flow as the rest of the app (`todayAttendanceProvider`).
+class _ConsoleClockControl extends ConsumerStatefulWidget {
+  const _ConsoleClockControl();
+
+  @override
+  ConsumerState<_ConsoleClockControl> createState() => _ConsoleClockControlState();
+}
+
+class _ConsoleClockControlState extends ConsumerState<_ConsoleClockControl> {
+  bool _punching = false;
+
+  Future<void> _toggleClock(TodayAttendanceEntity today) async {
+    if (_punching) return;
+    setState(() => _punching = true);
+
+    final position = await ref.read(locationServiceProvider).getCurrentPosition();
+    if (!mounted) return;
+
+    final error = await ref.read(todayAttendanceProvider.notifier).punch(
+          isCurrentlyClockedIn: today.isClockedIn,
+          attendanceMode: 'office',
+          latitude: position?.latitude,
+          longitude: position?.longitude,
+          accuracy: position?.accuracy,
+          deviceName: kIsWeb
+              ? 'Web'
+              : Platform.isAndroid
+                  ? 'Android'
+                  : Platform.isIOS
+                      ? 'iOS'
+                      : null,
+          operatingSystem: kIsWeb ? 'web' : Platform.operatingSystem,
+        );
+
+    if (!mounted) return;
+    setState(() => _punching = false);
+
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error), backgroundColor: AppColors.error),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final todayAsync = ref.watch(todayAttendanceProvider);
+
+    return todayAsync.when(
+      data: (today) {
+        final isClockedIn = today.isClockedIn;
+        return Row(
+          children: [
+            SizedBox(
+              height: 34,
+              child: ElevatedButton(
+                onPressed: _punching ? null : () => _toggleClock(today),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      (isClockedIn ? const Color(0xFFDC2626) : const Color(0xFF16A34A))
+                          .withValues(alpha: 0.18),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  side: BorderSide(
+                    color: (isClockedIn ? const Color(0xFFF87171) : const Color(0xFF4ADE80))
+                        .withValues(alpha: 0.45),
+                    width: 1.5,
+                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+                child: _punching
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(Colors.white),
+                        ),
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: BoxDecoration(
+                              color: isClockedIn
+                                  ? const Color(0xFFF87171)
+                                  : const Color(0xFF4ADE80),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 7),
+                          Icon(isClockedIn ? Icons.logout : Icons.login, size: 14),
+                          const SizedBox(width: 6),
+                          Text(
+                            isClockedIn ? 'Clock Out' : 'Clock In',
+                            style: AppTextStyles.labelSmall
+                                .copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            GestureDetector(
+              onTap: () => context.go(AppRoutes.myAttendance),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.flag_outlined, size: 12, color: Colors.white.withValues(alpha: 0.65)),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Request Attendance Correction',
+                    style: AppTextStyles.caption.copyWith(
+                      color: Colors.white.withValues(alpha: 0.65),
+                      decoration: TextDecoration.underline,
+                      decorationColor: Colors.white.withValues(alpha: 0.3),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => Text('Loading…', style: AppTextStyles.caption.copyWith(color: Colors.white54)),
+      error: (e, _) => Text(
+        friendlyAttendanceError(e),
+        style: AppTextStyles.caption.copyWith(color: Colors.white70),
+      ),
+    );
+  }
+}
+
+class _ConsoleKpiRow extends StatelessWidget {
+  final EmployeeKpis kpis;
+  const _ConsoleKpiRow({required this.kpis});
+
+  @override
+  Widget build(BuildContext context) {
+    final stats = [
+      (
+        icon: Icons.fingerprint,
+        value: '${kpis.daysPresent} / ${kpis.workingDays}',
+        label: 'Days Present',
+        sub: 'This month',
+      ),
+      (
+        icon: Icons.event_busy_outlined,
+        value: '${kpis.absentDays}',
+        label: 'Absent Days',
+        sub: 'This month',
+      ),
+      (
+        icon: Icons.checklist_outlined,
+        value: '${kpis.pendingActionItems}',
+        label: 'Action Items',
+        sub: 'Require attention',
+      ),
+      (
+        icon: Icons.receipt_long_outlined,
+        value: '${kpis.pendingExpenseClaims}',
+        label: 'Expense Claims',
+        sub: 'Pending',
+      ),
+    ];
+
+    return Row(
+      children: [
+        for (final s in stats)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(s.icon, size: 12, color: Colors.white.withValues(alpha: 0.4)),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          s.value,
+                          style: AppTextStyles.h4
+                              .copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    s.label,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: 0.72),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    s.sub,
+                    style: AppTextStyles.labelSmall
+                        .copyWith(fontSize: 10, color: Colors.white.withValues(alpha: 0.36)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ── Leave balances (grid-of-cells, matching web's EmpLeaveBalances) ────────
+
+const Map<String, Color> _kLeaveTypeColor = {
+  'casual': Color(0xFF0E7C86),
+  'sick': Color(0xFFB5651D),
+  'earned': Color(0xFF1B8A6B),
+  'lwp': Color(0xFF64748B),
+};
+
+const Map<String, String> _kLeaveTypeLabel = {
+  'casual': 'Casual Leave',
+  'sick': 'Sick Leave',
+  'earned': 'Earned Leave',
+  'maternity': 'Maternity Leave',
+  'paternity': 'Paternity Leave',
+  'lwp': 'Leave Without Pay',
+};
+
+class _EmpLeaveBalancesCard extends ConsumerWidget {
+  const _EmpLeaveBalancesCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final balancesAsync = ref.watch(employeeLeaveBalancesProvider);
+    final year = DateTime.now().year;
+
+    return SectionCard(
+      title: 'Leave Balances — $year',
+      icon: Icons.beach_access_outlined,
+      accentColor: const Color(0xFFB5651D),
+      trailing: TextButton(
+        onPressed: () => context.go(AppRoutes.leave),
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          minimumSize: const Size(0, 0),
+        ),
+        child: Text('Apply Leave', style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w700)),
+      ),
+      child: balancesAsync.when(
+        data: (summary) {
+          if (summary.balances.isEmpty) {
+            return SectionMessage(
+              icon: Icons.beach_access_outlined,
+              label:
+                  'No leave balances found for ${summary.year}. Contact HR to credit your leave.',
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: summary.balances.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  mainAxisExtent: 96,
+                ),
+                itemBuilder: (context, i) => _EmpBalanceCell(balance: summary.balances[i]),
+              ),
+              if (summary.lopDays > 0) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(Icons.error_outline, size: 14, color: AppColors.error),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${summary.lopDays.toStringAsFixed(summary.lopDays == summary.lopDays.roundToDouble() ? 0 : 1)} LOP day${summary.lopDays == 1 ? '' : 's'} this year',
+                      style: AppTextStyles.caption.copyWith(color: AppColors.error),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          );
+        },
+        loading: () => const SectionMessage(
+          icon: Icons.beach_access_outlined,
+          label: 'Loading…',
+        ),
+        error: (e, _) => SectionError(
+          message: friendlyDashboardError(e),
+          onRetry: () => ref.invalidate(employeeLeaveBalancesProvider),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmpBalanceCell extends StatelessWidget {
+  final EmployeeLeaveBalance balance;
+  const _EmpBalanceCell({required this.balance});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _kLeaveTypeColor[balance.leaveType] ?? AppColors.primary;
+    final label = _kLeaveTypeLabel[balance.leaveType] ?? balance.leaveType;
+    final pct = balance.totalDays > 0
+        ? (balance.remaining / balance.totalDays).clamp(0.0, 1.0)
+        : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                balance.remaining.toStringAsFixed(
+                    balance.remaining == balance.remaining.roundToDouble() ? 0 : 1),
+                style: AppTextStyles.h4.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'of ${balance.totalDays.toStringAsFixed(balance.totalDays == balance.totalDays.roundToDouble() ? 0 : 1)} days',
+                  style: AppTextStyles.caption,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: pct,
+              minHeight: 5,
+              backgroundColor: AppColors.backgroundMid,
+              valueColor: AlwaysStoppedAnimation(color),
+            ),
+          ),
+          if (balance.usedDays > 0) ...[
+            const SizedBox(height: 4),
+            Text(
+              '${balance.usedDays.toStringAsFixed(balance.usedDays == balance.usedDays.roundToDouble() ? 0 : 1)} used'
+              '${balance.carriedForward > 0 ? ' · ${balance.carriedForward.toStringAsFixed(balance.carriedForward == balance.carriedForward.roundToDouble() ? 0 : 1)} carried forward' : ''}',
+              style: AppTextStyles.labelSmall.copyWith(fontSize: 10, color: AppColors.textHint),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Attendance summary (month picker + % bar + 9-stat grid) ────────────────
+
+const _kMonthNames = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+class _EmpAttendanceSummaryCard extends ConsumerStatefulWidget {
+  const _EmpAttendanceSummaryCard();
+
+  @override
+  ConsumerState<_EmpAttendanceSummaryCard> createState() =>
+      _EmpAttendanceSummaryCardState();
+}
+
+class _EmpAttendanceSummaryCardState extends ConsumerState<_EmpAttendanceSummaryCard> {
+  late int _month;
+  late final int _year;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _month = now.month;
+    _year = now.year;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final key = (month: _month, year: _year);
+    final summaryAsync = ref.watch(employeeAttendanceSummaryForProvider(key));
+
+    return SectionCard(
+      title: "This Month's Attendance",
+      icon: Icons.calendar_view_month_outlined,
+      accentColor: const Color(0xFF1B8A6B),
+      trailing: _MonthDropdown(
+        month: _month,
+        year: _year,
+        onChanged: (m) => setState(() => _month = m),
+      ),
+      child: summaryAsync.when(
+        data: (s) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Working days: ${s.workingDays}',
+                    style: AppTextStyles.caption,
+                  ),
+                ),
+                Text(
+                  '${s.attendancePercentage.toStringAsFixed(s.attendancePercentage == s.attendancePercentage.roundToDouble() ? 0 : 1)}%',
+                  style: AppTextStyles.labelLarge.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: s.attendancePercentage >= 90
+                        ? AppColors.success
+                        : s.attendancePercentage >= 75
+                            ? AppColors.warning
+                            : AppColors.error,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: (s.attendancePercentage / 100).clamp(0.0, 1.0),
+                minHeight: 7,
+                backgroundColor: AppColors.backgroundMid,
+                valueColor: AlwaysStoppedAnimation(
+                  s.attendancePercentage >= 90
+                      ? AppColors.success
+                      : s.attendancePercentage >= 75
+                          ? AppColors.warning
+                          : AppColors.error,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            GridView.count(
+              crossAxisCount: 3,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              childAspectRatio: 1.15,
+              children: [
+                _AttendanceMiniStat(
+                  icon: Icons.done_all,
+                  value: '${s.presentDays}',
+                  label: 'Present',
+                  color: AppColors.success,
+                ),
+                _AttendanceMiniStat(
+                  icon: Icons.event_busy_outlined,
+                  value: '${s.absentDays}',
+                  label: 'Absent',
+                  color: AppColors.error,
+                ),
+                _AttendanceMiniStat(
+                  icon: Icons.timer_outlined,
+                  value: '${s.lateMarks}',
+                  label: 'Late Marks',
+                  color: AppColors.warning,
+                ),
+                _AttendanceMiniStat(
+                  icon: Icons.beach_access_outlined,
+                  value: '${s.leaveDays}',
+                  label: 'Leave Days',
+                  color: AppColors.info,
+                ),
+                _AttendanceMiniStat(
+                  icon: Icons.brightness_medium_outlined,
+                  value: '${s.halfDays}',
+                  label: 'Half Days',
+                  color: AppColors.warning,
+                ),
+                _AttendanceMiniStat(
+                  icon: Icons.pause_circle_outline,
+                  value: '${s.lopPending}',
+                  label: 'LOP Pending',
+                  color: AppColors.error,
+                ),
+                _AttendanceMiniStat(
+                  icon: Icons.pie_chart_outline,
+                  value:
+                      '${s.attendancePercentage.toStringAsFixed(s.attendancePercentage == s.attendancePercentage.roundToDouble() ? 0 : 1)}%',
+                  label: 'Attendance %',
+                  color: AppColors.primary,
+                ),
+                _AttendanceMiniStat(
+                  icon: Icons.access_time,
+                  value: s.avgHoursPerDay > 0 ? '${s.avgHoursPerDay.toStringAsFixed(1)}h' : '—',
+                  label: 'Avg Hours/Day',
+                  color: AppColors.textPrimary,
+                ),
+                _AttendanceMiniStat(
+                  icon: Icons.more_time_outlined,
+                  value: s.otHours.isEmpty ? '0h' : s.otHours,
+                  label: 'OT Hours',
+                  color: AppColors.secondary,
+                ),
+              ],
+            ),
+          ],
+        ),
+        loading: () => const SectionMessage(
+          icon: Icons.calendar_view_month_outlined,
+          label: 'Loading…',
+        ),
+        error: (e, _) => SectionError(
+          message: friendlyDashboardError(e),
+          onRetry: () => ref.invalidate(employeeAttendanceSummaryForProvider(key)),
+        ),
+      ),
+    );
+  }
+}
+
+class _MonthDropdown extends StatelessWidget {
+  final int month;
+  final int year;
+  final ValueChanged<int> onChanged;
+
+  const _MonthDropdown({required this.month, required this.year, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<int>(
+      initialValue: month,
+      onSelected: onChanged,
+      itemBuilder: (context) => [
+        for (var m = 1; m <= 12; m++)
+          PopupMenuItem(value: m, child: Text('${_kMonthNames[m - 1]} $year')),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('${_kMonthNames[month - 1]} $year', style: AppTextStyles.labelSmall),
+            const SizedBox(width: 2),
+            Icon(Icons.arrow_drop_down, size: 16, color: AppColors.textSecondary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AttendanceMiniStat extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+  final Color color;
+
+  const _AttendanceMiniStat({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundMid,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 15, color: color),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: AppTextStyles.h4.copyWith(fontWeight: FontWeight.w800),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: AppTextStyles.labelSmall.copyWith(fontSize: 10, color: AppColors.textSecondary),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Action items ─────────────────────────────────────────────────────────────
+
+const Map<String, String> _kActionStatusLabel = {
+  'pending': 'Pending',
+  'approved': 'Done',
+  'rejected': 'Rejected',
+};
+
+class _EmpActionItemsCard extends ConsumerWidget {
+  const _EmpActionItemsCard();
+
+  static IconData _iconFor(String actionType) {
+    if (actionType == 'profile_incomplete') return Icons.person_off_outlined;
+    if (actionType == 'missing_document') return Icons.file_present_outlined;
+    if (actionType == 'attendance_correction') return Icons.timer_outlined;
+    if (actionType == 'leave_approved') return Icons.check_circle_outline;
+    if (actionType == 'leave_rejected') return Icons.cancel_outlined;
+    return Icons.info_outline;
+  }
+
+  static Color _colorFor(String actionType) {
+    if (actionType == 'profile_incomplete') return AppColors.error;
+    if (actionType == 'missing_document') return AppColors.warning;
+    if (actionType == 'attendance_correction') return AppColors.warning;
+    if (actionType == 'leave_approved') return AppColors.success;
+    if (actionType == 'leave_rejected') return AppColors.error;
+    return AppColors.primary;
+  }
+
+  static bool _isDone(ActionItem item) =>
+      item.status == 'approved' || item.actionType == 'leave_approved';
+
+  // Mobile's route structure doesn't mirror web's 1:1 (e.g. self-service
+  // attendance lives at /dashboard/my-attendance here, not
+  // /dashboard/attendance as the backend's navigation_url literally says),
+  // so this maps by the stable action_type instead of trusting the
+  // backend's raw navigation_url string.
+  static String? _routeFor(String actionType) {
+    if (actionType == 'profile_incomplete') return AppRoutes.profile;
+    if (actionType == 'missing_document') return AppRoutes.documents;
+    if (actionType == 'attendance_correction') return AppRoutes.myAttendance;
+    if (actionType.startsWith('leave_')) return AppRoutes.leave;
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final itemsAsync = ref.watch(employeeActionItemsProvider);
+
+    return SectionCard(
+      title: 'Action Items',
+      icon: Icons.checklist_outlined,
+      accentColor: AppColors.warning,
+      trailing: itemsAsync.maybeWhen(
+        data: (r) {
+          final pending = r.actionItems.where((i) => !_isDone(i)).length;
+          return pending > 0 ? _CountBadge(count: pending, label: 'pending') : const SizedBox.shrink();
+        },
+        orElse: () => const SizedBox.shrink(),
+      ),
+      child: itemsAsync.when(
+        data: (response) {
+          if (response.actionItems.isEmpty) {
+            return const SectionMessage(
+              icon: Icons.check_circle_outline,
+              label: 'All caught up!',
+            );
+          }
+          return Column(
+            children: [
+              for (var i = 0; i < response.actionItems.length; i++) ...[
+                if (i > 0) Divider(height: 20, color: AppColors.border),
+                _ActionItemRow(
+                  item: response.actionItems[i],
+                  icon: _iconFor(response.actionItems[i].actionType),
+                  color: _colorFor(response.actionItems[i].actionType),
+                  done: _isDone(response.actionItems[i]),
+                  route: _routeFor(response.actionItems[i].actionType),
+                ),
+              ],
+            ],
+          );
+        },
+        loading: () => const SectionMessage(
+          icon: Icons.checklist_outlined,
+          label: 'Loading…',
+        ),
+        error: (e, _) => SectionError(
+          message: friendlyDashboardError(e),
+          onRetry: () => ref.invalidate(employeeActionItemsProvider),
+        ),
+      ),
+    );
+  }
+}
+
+class _CountBadge extends StatelessWidget {
+  final int count;
+  final String label;
+  const _CountBadge({required this.count, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        '$count $label',
+        style: AppTextStyles.labelSmall
+            .copyWith(color: AppColors.warning, fontWeight: FontWeight.w700, fontSize: 10),
+      ),
+    );
+  }
+}
+
+class _ActionItemRow extends StatelessWidget {
+  final ActionItem item;
+  final IconData icon;
+  final Color color;
+  final bool done;
+  final String? route;
+
+  const _ActionItemRow({
+    required this.item,
+    required this.icon,
+    required this.color,
+    required this.done,
+    required this.route,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: done ? 0.6 : 1,
+      child: GestureDetector(
+        onTap: route == null ? null : () => context.go(route!),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 16, color: color),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    style: AppTextStyles.body.copyWith(
+                      fontWeight: done ? FontWeight.w400 : FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  if (item.description.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      item.description,
+                      style: AppTextStyles.caption,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            _StatusBadge(status: item.status, labelMap: _kActionStatusLabel),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final String status;
+  final Map<String, String> labelMap;
+  const _StatusBadge({required this.status, required this.labelMap});
+
+  static Color _colorFor(String s) => switch (s) {
+        'approved' => AppColors.success,
+        'rejected' => AppColors.error,
+        'cancelled' => AppColors.textSecondary,
+        _ => AppColors.warning,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _colorFor(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.1),
+        border: Border.all(color: c.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        labelMap[status] ?? status,
+        style: AppTextStyles.labelSmall
+            .copyWith(color: c, fontWeight: FontWeight.w700, fontSize: 10),
+      ),
+    );
+  }
+}
+
+// ── Recent requests (mixed leave / expense / attendance correction) ────────
+
+const Map<String, String> _kRequestStatusLabel = {
+  'pending': 'Pending',
+  'l2_pending': 'L2 Pending',
+  'approved': 'Approved',
+  'rejected': 'Rejected',
+  'cancelled': 'Cancelled',
+};
+
+class _EmpRecentRequestsCard extends ConsumerWidget {
+  const _EmpRecentRequestsCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final requestsAsync = ref.watch(employeeRecentRequestsProvider);
+
+    return SectionCard(
+      title: 'Recent Requests',
+      icon: Icons.inbox_outlined,
+      accentColor: const Color(0xFFB5651D),
+      trailing: requestsAsync.maybeWhen(
+        data: (r) {
+          final pending =
+              r.requests.where((x) => x.status == 'pending' || x.status == 'l2_pending').length;
+          return pending > 0 ? _CountBadge(count: pending, label: 'pending') : const SizedBox.shrink();
+        },
+        orElse: () => const SizedBox.shrink(),
+      ),
+      child: requestsAsync.when(
+        data: (response) {
+          if (response.requests.isEmpty) {
+            return GestureDetector(
+              onTap: () => context.go(AppRoutes.leave),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: Text.rich(
+                    TextSpan(
+                      style: AppTextStyles.bodySecondary,
+                      children: [
+                        const TextSpan(text: 'No requests yet. '),
+                        TextSpan(
+                          text: 'Apply leave',
+                          style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            );
+          }
+          return Column(
+            children: [
+              for (var i = 0; i < response.requests.length; i++) ...[
+                if (i > 0) Divider(height: 20, color: AppColors.border),
+                _RecentRequestRow(request: response.requests[i]),
+              ],
+            ],
+          );
+        },
+        loading: () => const SectionMessage(
+          icon: Icons.inbox_outlined,
+          label: 'Loading…',
+        ),
+        error: (e, _) => SectionError(
+          message: friendlyDashboardError(e),
+          onRetry: () => ref.invalidate(employeeRecentRequestsProvider),
+        ),
+      ),
+    );
+  }
+}
+
+String _fmtShortDate(String iso) {
+  final dt = DateTime.tryParse(iso);
+  if (dt == null) return iso.isEmpty ? '—' : iso;
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  return '${dt.day} ${months[dt.month - 1]}';
+}
+
+class _RecentRequestRow extends StatelessWidget {
+  final RecentRequest request;
+  const _RecentRequestRow({required this.request});
+
+  static IconData _iconFor(String type) => switch (type) {
+        'leave' => Icons.beach_access_outlined,
+        'expense' => Icons.receipt_long_outlined,
+        'attendance_correction' => Icons.access_time_outlined,
+        _ => Icons.description_outlined,
+      };
+
+  static Color _colorFor(String type) => switch (type) {
+        'leave' => AppColors.success,
+        'expense' => AppColors.warning,
+        'attendance_correction' => AppColors.info,
+        _ => AppColors.textSecondary,
+      };
+
+  String _detailLine() {
+    final d = request.details;
+    switch (request.requestType) {
+      case 'leave':
+        final start = d['start_date'];
+        final end = d['end_date'];
+        final days = d['days'];
+        if (start != null && end != null) {
+          return '${_fmtShortDate('$start')} – ${_fmtShortDate('$end')}'
+              '${days != null ? ' · ${days}d' : ''}';
+        }
+        return '';
+      case 'expense':
+        final amount = d['amount'];
+        final category = d['category'];
+        return [
+          if (category != null) '$category',
+          if (amount != null) '₹$amount',
+        ].join(' · ');
+      case 'attendance_correction':
+        final date = d['date'];
+        final punchType = d['punch_type'];
+        return [
+          if (date != null) _fmtShortDate('$date'),
+          if (punchType != null) '$punchType punch',
+        ].join(' · ');
+      default:
+        return '';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _colorFor(request.requestType);
+    final detail = _detailLine();
+    return Row(
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(_iconFor(request.requestType), size: 15, color: color),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                request.title,
+                style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w500),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              Text(
+                detail.isNotEmpty
+                    ? '$detail · ${_fmtShortDate(request.appliedDate)}'
+                    : _fmtShortDate(request.appliedDate),
+                style: AppTextStyles.caption,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        _StatusBadge(status: request.status, labelMap: _kRequestStatusLabel),
+      ],
+    );
+  }
+}
+
+// ── Announcement (dismissible inline banner — nothing when empty) ──────────
+
+class _EmpAnnouncementBanner extends ConsumerStatefulWidget {
+  const _EmpAnnouncementBanner();
+
+  @override
+  ConsumerState<_EmpAnnouncementBanner> createState() => _EmpAnnouncementBannerState();
+}
+
+class _EmpAnnouncementBannerState extends ConsumerState<_EmpAnnouncementBanner> {
+  bool _dismissed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final announcementAsync = ref.watch(sharedAnnouncementProvider);
+
+    return announcementAsync.maybeWhen(
+      data: (ann) {
+        if (ann == null || ann.title.isEmpty || _dismissed) return const SizedBox.shrink();
+
+        final meta = [
+          _fmtShortDate(ann.createdAt),
+          if (ann.postedBy != null && ann.postedBy!.isNotEmpty) ann.postedBy!,
+        ].join(' · ');
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.07),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  ann.isPinned ? Icons.push_pin_outlined : Icons.campaign_outlined,
+                  size: 16,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 2,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          ann.isPinned ? 'PINNED ANNOUNCEMENT' : 'LATEST ANNOUNCEMENT',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.6,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        if (meta.isNotEmpty)
+                          Text(meta, style: AppTextStyles.labelSmall.copyWith(fontSize: 10, color: AppColors.textHint)),
+                        if (ann.category.isNotEmpty && ann.category != 'general')
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              ann.category[0].toUpperCase() + ann.category.substring(1),
+                              style: AppTextStyles.labelSmall
+                                  .copyWith(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.primary),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      ann.title,
+                      style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      ann.body,
+                      style: AppTextStyles.caption,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                children: [
+                  GestureDetector(
+                    onTap: () => context.go(AppRoutes.announcements),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'View',
+                          style: AppTextStyles.labelSmall
+                              .copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(Icons.arrow_forward, size: 12, color: AppColors.primary),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: () => setState(() => _dismissed = true),
+                    child: Icon(Icons.close, size: 15, color: AppColors.textHint),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+// ── Birthdays (unchanged from the previous generic dashboard) ───────────────
+
+class _TodaysBirthdaysCard extends ConsumerWidget {
+  const _TodaysBirthdaysCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final birthdaysAsync = ref.watch(birthdaysProvider);
+
+    return SectionCard(
+      title: "Today's Birthdays",
+      icon: Icons.cake_outlined,
+      accentColor: AppColors.primary,
+      child: birthdaysAsync.when(
+        data: (result) {
+          if (result.today.isEmpty) {
+            return const SectionMessage(
+              icon: Icons.cake_outlined,
+              label: 'No birthdays today',
+            );
+          }
+          return Column(
+            children: [
+              for (var i = 0; i < result.today.length; i++) ...[
+                if (i > 0) const SizedBox(height: 10),
+                _BirthdayRow(entry: result.today[i], showAge: true),
+              ],
+            ],
+          );
+        },
+        loading: () => const SectionMessage(
+          icon: Icons.cake_outlined,
+          label: 'Loading…',
+        ),
+        error: (e, _) => SectionError(
+          message: friendlyHrmsError(e),
+          onRetry: () => ref.invalidate(birthdaysProvider),
+        ),
+      ),
+    );
+  }
+}
+
+class _UpcomingBirthdaysCard extends ConsumerWidget {
+  const _UpcomingBirthdaysCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final birthdaysAsync = ref.watch(birthdaysProvider);
+
+    return SectionCard(
+      title: 'Upcoming Birthdays',
+      icon: Icons.celebration_outlined,
+      accentColor: AppColors.primary,
+      child: birthdaysAsync.when(
+        data: (result) {
+          if (result.upcoming.isEmpty) {
+            return const SectionMessage(
+              icon: Icons.calendar_month_outlined,
+              label: 'No upcoming birthdays in the next 30 days',
+            );
+          }
+          return Column(
+            children: [
+              for (var i = 0; i < result.upcoming.length; i++) ...[
+                if (i > 0) const SizedBox(height: 10),
+                _BirthdayRow(entry: result.upcoming[i], showAge: false),
+              ],
+            ],
+          );
+        },
+        loading: () => const SectionMessage(
+          icon: Icons.celebration_outlined,
+          label: 'Loading…',
+        ),
+        error: (e, _) => SectionError(
+          message: friendlyHrmsError(e),
+          onRetry: () => ref.invalidate(birthdaysProvider),
+        ),
+      ),
+    );
+  }
+}
+
+class _BirthdayRow extends StatelessWidget {
+  final BirthdayEntity entry;
+  final bool showAge;
+
+  const _BirthdayRow({required this.entry, required this.showAge});
+
+  @override
+  Widget build(BuildContext context) {
+    final age = entry.age;
+    final sub = [
+      entry.designation,
+      entry.department,
+    ].where((s) => s.isNotEmpty).join(' · ');
+
+    return Row(
+      children: [
+        const Text('🎂', style: TextStyle(fontSize: 20)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                entry.name,
+                style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              if (sub.isNotEmpty)
+                Text(
+                  showAge && age != null ? '$sub · Turning $age' : sub,
+                  style: AppTextStyles.caption
+                      .copyWith(color: AppColors.textSecondary),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+            ],
+          ),
+        ),
+        if (!showAge)
+          Text(
+            'In ${entry.daysUntil} day${entry.daysUntil == 1 ? '' : 's'}',
+            style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+            overflow: TextOverflow.ellipsis,
+          ),
+      ],
+    );
+  }
+}
+
+// ── Quick Links (unchanged from the previous generic dashboard) ────────────
+
+class _QuickLinksCard extends StatelessWidget {
+  const _QuickLinksCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return SectionCard(
+      title: 'Quick Links',
+      icon: Icons.link_rounded,
+      accentColor: AppColors.primary,
+      child: GridView.builder(
+        shrinkWrap: true,
+        primary: false,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: _kQuickLinksEmployee.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          mainAxisExtent: 46,
+        ),
+        itemBuilder: (context, index) {
+          final link = _kQuickLinksEmployee[index];
+          return GestureDetector(
+            onTap: () => context.go(link.path),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.backgroundLow,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(link.icon, size: 16, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      link.label,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _QuickLinkItem {
+  final String label;
+  final IconData icon;
+  final String path;
+  const _QuickLinkItem(
+      {required this.label, required this.icon, required this.path});
+}
+
+const _kQuickLinksEmployee = <_QuickLinkItem>[
+  _QuickLinkItem(
+      label: 'Leave History',
+      icon: Icons.beach_access_outlined,
+      path: '/dashboard/leave'),
+  _QuickLinkItem(
+      label: 'My Attendance',
+      icon: Icons.access_time_outlined,
+      path: '/dashboard/my-attendance'),
+  _QuickLinkItem(
+      label: 'Claim Expense',
+      icon: Icons.account_balance_wallet_outlined,
+      path: '/dashboard/expenses'),
+  _QuickLinkItem(
+      label: 'My Documents',
+      icon: Icons.description_outlined,
+      path: '/dashboard/documents'),
+];

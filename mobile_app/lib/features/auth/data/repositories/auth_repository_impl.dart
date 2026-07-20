@@ -48,8 +48,17 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> logout() async {
-    await _dataSource.logout();
-    await clearSession();
+    // clearSession() must run even when the server-side logout call fails
+    // (e.g. a 401 because the session was already invalid — the exact case
+    // when the app's cached user predates a backend switch or an expired/
+    // revoked cookie) — otherwise the stale cached user in secure storage is
+    // never deleted, and AuthNotifier.build() restores it again on every
+    // subsequent launch, permanently re-triggering the same 401 flood.
+    try {
+      await _dataSource.logout();
+    } finally {
+      await clearSession();
+    }
   }
 
   @override
