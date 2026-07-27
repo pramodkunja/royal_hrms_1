@@ -1,5 +1,7 @@
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
+import '../../../../shared/models/bulk_import_result.dart';
 import '../models/employee_model.dart';
 
 // ── Approval matrix row (per-employee) ────────────────────────────────────
@@ -60,22 +62,38 @@ class EmployeesRemoteDataSource {
   EmployeesRemoteDataSource(this._dio);
 
   // ── List ───────────────────────────────────────────────────────────────────
+  //
+  // Backend paginates this endpoint (default page_size 20, max 50) — the
+  // stats/filters UI expects the *complete* employee list client-side, so
+  // this walks every page and concatenates results rather than returning
+  // just the first one (which previously under-counted Total Employees and
+  // the list itself whenever there were more than 20 employees).
 
   Future<List<EmployeeModel>> fetchEmployees() async {
-    final res = await _dio.get(ApiConstants.employees);
-    final raw = _unwrap(res.data);
-    final List<dynamic> list;
-    if (raw is List) {
-      list = raw;
-    } else if (raw is Map<String, dynamic>) {
-      list = raw['results'] as List<dynamic>? ?? [];
-    } else {
-      return [];
-    }
-    return list
-        .whereType<Map<String, dynamic>>()
-        .map(EmployeeModel.fromJson)
-        .toList();
+    final employees = <EmployeeModel>[];
+    var page = 1;
+    var totalPages = 1;
+    do {
+      final res = await _dio.get(
+        ApiConstants.employees,
+        queryParameters: {'page': page, 'page_size': 50},
+      );
+      final raw = _unwrap(res.data);
+      if (raw is List) {
+        employees.addAll(
+            raw.whereType<Map<String, dynamic>>().map(EmployeeModel.fromJson));
+        break;
+      } else if (raw is Map<String, dynamic>) {
+        final list = raw['results'] as List<dynamic>? ?? [];
+        employees.addAll(
+            list.whereType<Map<String, dynamic>>().map(EmployeeModel.fromJson));
+        totalPages = raw['total_pages'] as int? ?? 1;
+      } else {
+        break;
+      }
+      page++;
+    } while (page <= totalPages);
+    return employees;
   }
 
   // ── Detail ─────────────────────────────────────────────────────────────────
@@ -238,6 +256,28 @@ class EmployeesRemoteDataSource {
         .map((e) => e['name'] as String? ?? '')
         .where((n) => n.isNotEmpty)
         .toList();
+  }
+
+  // ── Bulk Import (CSV/XLSX, max 1000 rows / 5MB — system_admin/hr_admin only) ─
+  //
+  // Required columns: first_name, last_name, email, role, department,
+  // designation, branch, date_of_joining. Optional: phone, employee_type,
+  // gender, date_of_birth, blood_group, address. See
+  // EmployeeBulkImportRowSerializer in the backend for exact validation.
+
+  Future<BulkImportResult> bulkImport({
+    required Uint8List bytes,
+    required String filename,
+  }) async {
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: filename),
+    });
+    final res = await _dio.post(
+      ApiConstants.employeeBulkImport,
+      data: formData,
+      options: Options(contentType: 'multipart/form-data'),
+    );
+    return BulkImportResult.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
   // ── Helper ─────────────────────────────────────────────────────────────────

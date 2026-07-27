@@ -20,16 +20,19 @@ import '../../features/settings/presentation/leave_policy/leave_policy_screen.da
 import '../../features/settings/presentation/holiday_calendar/holiday_calendar_screen.dart';
 import '../../features/settings/presentation/attendance_rules/attendance_rules_screen.dart';
 import '../../features/settings/presentation/approval_rules/approval_rules_screen.dart';
+import '../../features/settings/presentation/leave_policy/leave_balance_import_screen.dart';
 import '../../features/settings/presentation/referral_rules/referral_rules_settings_screen.dart';
 import '../../features/settings/presentation/assessment_config/assessment_config_screen.dart';
 import '../../features/announcements/presentation/announcements_screen.dart';
 import '../../features/employees/presentation/employees_screen.dart';
+import '../../features/employees/presentation/screens/employee_bulk_import_screen.dart';
 import '../../features/employees/presentation/screens/employee_profile_screen.dart';
 import '../../features/employees/data/models/employee_model.dart';
 import '../../features/branches/presentation/screens/branches_screen.dart';
 import '../../features/documents/presentation/screens/documents_screen.dart';
 import '../../features/org_chart/presentation/screens/org_chart_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
+import '../../features/interview_list/presentation/screens/candidate_bulk_import_screen.dart';
 import '../../features/interview_list/presentation/screens/interview_list_screen.dart';
 import '../../features/candidate_review/presentation/screens/candidate_review_screen.dart';
 import '../../features/assessments/presentation/screens/assessments_screen.dart';
@@ -40,10 +43,7 @@ import '../../features/expenses/presentation/screens/expense_screen.dart';
 import '../../features/approvals/presentation/screens/approvals_screen.dart';
 import '../../features/attendance/presentation/screens/attendance_screen.dart';
 import '../../features/attendance/presentation/screens/my_attendance_screen.dart';
-import '../../features/payroll/presentation/screens/payroll_screen.dart';
-import '../../features/payroll/presentation/screens/my_payslip_screen.dart';
 import '../../features/referrals/presentation/screens/referrals_screen.dart';
-import '../../features/settings/presentation/payroll_rules/payroll_rules_screen.dart';
 
 // ─── Route path constants ─────────────────────────────────────────────────────
 
@@ -65,11 +65,11 @@ class AppRoutes {
   static const String employees = '/dashboard/employees';
   static String employeeProfilePath(String employeeId) =>
       '/dashboard/employees/$employeeId';
+  static const String employeeBulkImport = '/employees/bulk-import';
+  static const String candidateBulkImport = '/interview-list/bulk-import';
   static const String orgChart = '/dashboard/org-chart';
   static const String branches = '/dashboard/branches';
   static const String attendance = '/dashboard/attendance';
-  static const String payroll = '/dashboard/payroll';
-  static const String myPayslip = '/dashboard/my-payslip';
   static const String leave = '/dashboard/leave';
   static const String expenses = '/dashboard/expenses';
   static const String approvals = '/dashboard/approvals';
@@ -80,7 +80,6 @@ class AppRoutes {
   static const String myRequests = '/dashboard/my-requests';
   static const String profile = '/dashboard/profile';
   static const String reports = '/dashboard/reports';
-  static const String audit = '/dashboard/audit';
   static const String settings = '/dashboard/settings';
 
   // Onboarding
@@ -96,12 +95,29 @@ class AppRoutes {
   static const String settingsSmtp = '/settings/smtp';
   static const String settingsAuditLog = '/settings/audit';
   static const String settingsLeavePolicy = '/settings/leave-policy';
-  static const String settingsPayrollRules = '/settings/payroll-rules';
   static const String settingsHolidayCalendar = '/settings/holiday-calendar';
   static const String settingsAttendanceRules = '/settings/attendance-rules';
   static const String settingsReferralRules = '/settings/referral-rules';
   static const String settingsAssessmentConfig = '/settings/assessment-config';
   static const String settingsApprovalRules = '/settings/approval-rules';
+  static const String settingsLeaveBalanceImport = '/settings/leave-policy/import-balances';
+
+  // Routes whose screen renders its own floatingActionButton. Used by
+  // VoiceMicOverlay (mounted globally, above every route) to decide whether
+  // to sit in the standard bottom-right corner (no FAB on screen) or bumped
+  // up above one (this set) — keep in sync with each screen's own
+  // `floatingActionButton:`. A few of these (leave, settingsLeavePolicy,
+  // settingsReferralRules) only show their FAB conditionally (a tab index,
+  // a permission check) — they're still listed here since the unconditional
+  // "bumped up" position is harmless empty space on the rare screen-state
+  // where their FAB happens to be hidden, and not worth a second per-screen
+  // signal on top of this route-based one.
+  static const Set<String> screensWithFab = {
+    employees, interviewList, attendance, leave, announcements, assessments,
+    branches, documents, expenses, referrals, settingsDepartments,
+    settingsEmailTemplates, settingsHolidayCalendar, settingsLeavePolicy,
+    settingsReferralRules, settingsRoles, settingsSmtp,
+  };
 }
 
 // ─── Router provider ──────────────────────────────────────────────────────────
@@ -225,10 +241,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const LeavePolicyScreen(),
       ),
       GoRoute(
-        path: AppRoutes.settingsPayrollRules,
-        builder: (_, __) => const PayrollRulesScreen(),
-      ),
-      GoRoute(
         path: AppRoutes.settingsHolidayCalendar,
         builder: (_, __) => const HolidayCalendarScreen(),
       ),
@@ -247,6 +259,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.settingsApprovalRules,
         builder: (_, __) => const ApprovalRulesScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.settingsLeaveBalanceImport,
+        builder: (_, __) => const LeaveBalanceImportScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.employeeBulkImport,
+        builder: (_, __) => const EmployeeBulkImportScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.candidateBulkImport,
+        builder: (_, __) => const CandidateBulkImportScreen(),
       ),
 
       // ── Dashboard shell ────────────────────────────────────────────────
@@ -322,16 +346,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 const NoTransitionPage(child: AttendanceScreen()),
           ),
           GoRoute(
-            path: AppRoutes.payroll,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: PayrollScreen()),
-          ),
-          GoRoute(
-            path: AppRoutes.myPayslip,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: MyPayslipScreen()),
-          ),
-          GoRoute(
             path: AppRoutes.leave,
             pageBuilder: (_, __) =>
                 const NoTransitionPage(child: LeaveScreen()),
@@ -391,13 +405,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             pageBuilder: (_, __) => const NoTransitionPage(
               child: PlaceholderScreen(
                   title: 'Reports', icon: Icons.bar_chart_outlined),
-            ),
-          ),
-          GoRoute(
-            path: AppRoutes.audit,
-            pageBuilder: (_, __) => const NoTransitionPage(
-              child: PlaceholderScreen(
-                  title: 'Audit Log', icon: Icons.security_outlined),
             ),
           ),
           GoRoute(

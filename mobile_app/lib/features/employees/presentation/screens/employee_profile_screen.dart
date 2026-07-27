@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../notifications/presentation/widgets/notification_bell_button.dart';
 import '../../data/datasources/employees_remote_datasource.dart';
 import '../../data/models/employee_model.dart';
 import '../providers/employee_providers.dart';
@@ -74,7 +75,7 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 8, vsync: this);
+    _tabCtrl = TabController(length: 6, vsync: this);
     _tabCtrl.addListener(_onTabChange);
   }
 
@@ -135,33 +136,12 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
           color: AppColors.textPrimary,
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Row(
-          children: [
-            Icon(Icons.search, size: 20, color: AppColors.textSecondary),
-            const Spacer(),
-            Text('Employee Profile',
-                style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
-            const Spacer(),
-            Stack(
-              children: [
-                Icon(Icons.notifications_outlined,
-                    size: 22, color: AppColors.textSecondary),
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+        title: Text('Employee Profile',
+            style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
+        actions: const [
+          NotificationBellButton(),
+          SizedBox(width: 4),
+        ],
         titleSpacing: 16,
         automaticallyImplyLeading: false,
         leadingWidth: 44,
@@ -205,8 +185,6 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 tabs: const [
                   Tab(text: 'Profile'),
-                  Tab(text: 'Salary'),
-                  Tab(text: 'Payroll'),
                   Tab(text: 'Leave'),
                   Tab(text: 'Attendance'),
                   Tab(text: 'Approval Matrix'),
@@ -221,8 +199,6 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
           controller: _tabCtrl,
           children: [
             _ProfileTab(employee: emp),
-            const _ComingSoon(label: 'Salary'),
-            const _ComingSoon(label: 'Payroll'),
             EmployeeLeaveTab(employee: emp),
             EmployeeAttendanceTab(employee: emp),
             _ApprovalMatrixTab(employee: emp),

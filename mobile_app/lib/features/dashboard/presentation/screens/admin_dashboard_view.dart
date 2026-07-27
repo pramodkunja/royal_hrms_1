@@ -80,7 +80,7 @@ class _SystemConsoleHeader extends ConsumerWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF0F1B33), Color(0xFF17264D)],
@@ -94,22 +94,23 @@ class _SystemConsoleHeader extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.terminal_rounded,
-                    color: Colors.white, size: 22),
+                    color: Colors.white, size: 18),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       'SYSTEM CONSOLE',
@@ -117,14 +118,15 @@ class _SystemConsoleHeader extends ConsumerWidget {
                         color: Colors.white.withValues(alpha: 0.6),
                         letterSpacing: 1.2,
                         fontWeight: FontWeight.w700,
+                        fontSize: 10,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
                       'Welcome back, $name',
                       style:
-                          AppTextStyles.h3.copyWith(color: Colors.white, height: 1.25),
-                      maxLines: 2,
+                          AppTextStyles.h3.copyWith(color: Colors.white, height: 1.2),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
@@ -132,11 +134,11 @@ class _SystemConsoleHeader extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           kpisAsync.maybeWhen(
             data: (kpis) => Wrap(
-              spacing: 14,
-              runSpacing: 8,
+              spacing: 12,
+              runSpacing: 6,
               children: [
                 _HealthDot(label: 'API', isUp: kpis.apiStatus),
                 _HealthDot(label: 'DB', isUp: kpis.databaseStatus),
@@ -146,51 +148,46 @@ class _SystemConsoleHeader extends ConsumerWidget {
             ),
             orElse: () => const SizedBox.shrink(),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Divider(color: Colors.white.withValues(alpha: 0.12), height: 1),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           kpisAsync.when(
-            data: (kpis) => GridView(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              // A fixed mainAxisExtent (not childAspectRatio) keeps every
-              // tile tall enough for icon + number + a 2-line label + a
-              // 2-line sublabel regardless of screen width — the same
-              // overflow this app's other grids (Quick Access, KpiGrid)
-              // already had to fix by moving off childAspectRatio.
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 18,
-                crossAxisSpacing: 12,
-                mainAxisExtent: 120,
-              ),
-              children: [
+            data: (kpis) {
+              final stats = [
                 _ConsoleStat(
                   icon: Icons.groups_outlined,
                   value: '${kpis.totalEmployees}',
-                  label: 'Total Employees',
-                  sublabel: 'Active headcount',
+                  label: 'Employees',
                 ),
                 _ConsoleStat(
                   icon: Icons.fact_check_outlined,
                   value: '${kpis.pendingApprovals}',
-                  label: 'Pending Approvals',
-                  sublabel: 'Across all modules',
+                  label: 'Approvals',
                 ),
                 _ConsoleStat(
                   icon: Icons.person_add_alt_outlined,
                   value: '${kpis.employeesOnboarding}',
-                  label: 'In Onboarding',
-                  sublabel: 'Onboarding in progress',
+                  label: 'Onboard',
                 ),
                 _ConsoleStat(
                   icon: Icons.apartment_outlined,
                   value: '${kpis.activeBranches}',
-                  label: 'Active Branches',
-                  sublabel: 'All operational',
+                  label: 'Branches',
                 ),
-              ],
-            ),
+              ];
+              // A single row (not a 2x2 grid) keeps this section to one
+              // compact line of value+label per stat instead of stacking
+              // icon+value+label+sublabel across two tall rows.
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < stats.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 8),
+                    Expanded(child: stats[i]),
+                  ],
+                ],
+              );
+            },
             loading: () => const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(
@@ -266,13 +263,11 @@ class _ConsoleStat extends StatelessWidget {
   final IconData icon;
   final String value;
   final String label;
-  final String sublabel;
 
   const _ConsoleStat({
     required this.icon,
     required this.value,
     required this.label,
-    required this.sublabel,
   });
 
   @override
@@ -281,25 +276,22 @@ class _ConsoleStat extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: Colors.white.withValues(alpha: 0.55), size: 18),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: AppTextStyles.h2.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white.withValues(alpha: 0.5), size: 14),
+            const SizedBox(width: 4),
+            Text(
+              value,
+              style: AppTextStyles.h3.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+            ),
+          ],
         ),
         const SizedBox(height: 2),
         Text(
           label,
-          style: AppTextStyles.bodySmall
-              .copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+          style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.65)),
           maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 2),
-        Text(
-          sublabel,
-          style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.5)),
-          maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
       ],

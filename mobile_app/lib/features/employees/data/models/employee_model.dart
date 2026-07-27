@@ -410,11 +410,17 @@ class EmployeeFormData {
     this.dateOfJoining = '',
   });
 
+  static final RegExp _emailRe = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+
   Map<String, String> validate() {
     final errors = <String, String>{};
     if (firstName.trim().isEmpty) errors['first_name'] = 'First name is required.';
     if (lastName.trim().isEmpty)  errors['last_name'] = 'Last name is required.';
-    if (email.trim().isEmpty)     errors['email'] = 'Work email is required.';
+    if (email.trim().isEmpty) {
+      errors['email'] = 'Work email is required.';
+    } else if (!_emailRe.hasMatch(email.trim())) {
+      errors['email'] = 'Enter a valid email address.';
+    }
     if (roleId == null)           errors['role'] = 'Role is required.';
     if (department.isEmpty)       errors['department'] = 'Department is required.';
     if (designation.isEmpty)      errors['designation'] = 'Designation is required.';
@@ -503,24 +509,41 @@ class EmployeeUpdateFormData {
 
   Map<String, String> validate() {
     final errors = <String, String>{};
-    if (fullName.trim().isEmpty) errors['full_name'] = 'Full name is required.';
     if (role.isEmpty)            errors['role'] = 'Role is required.';
     if (department.isEmpty)      errors['department'] = 'Department is required.';
     if (designation.isEmpty)     errors['designation'] = 'Designation is required.';
     if (branch.isEmpty)          errors['branch'] = 'Branch is required.';
-    if (dateOfJoining.isEmpty)   errors['date_of_joining'] = 'Date of joining is required.';
+    if (dateOfBirth.isEmpty) {
+      errors['date_of_birth'] = 'Date of birth is required.';
+    } else {
+      final dob = DateTime.tryParse(dateOfBirth);
+      if (dob == null) {
+        errors['date_of_birth'] = 'Enter a valid date of birth.';
+      } else {
+        final now = DateTime.now();
+        var age = now.year - dob.year;
+        if (now.month < dob.month ||
+            (now.month == dob.month && now.day < dob.day)) {
+          age--;
+        }
+        if (age < 18 || age > 80) {
+          errors['date_of_birth'] = 'Age must be between 18 and 80 years.';
+        }
+      }
+    }
     return errors;
   }
 
+  // Full Name, Phone and Date of Joining are read-only forever on the
+  // Employee Profile (matches web — see the class doc comment above: the
+  // backend's PUT would technically accept changes to them, but the web UI
+  // deliberately never offers them as editable, so neither does this form).
   Map<String, dynamic> toJson() => {
-        'full_name':       fullName.trim(),
-        if (phone.trim().isNotEmpty) 'phone': phone.trim(),
         'role':            role,
         'department':      department,
         'designation':     designation,
         'branch':          branch,
-        'date_of_joining': dateOfJoining,
-        if (dateOfBirth.isNotEmpty) 'date_of_birth': dateOfBirth,
+        'date_of_birth': dateOfBirth,
         // Always sent (even null) so clearing HR works; reporting_manager_id
         // is omitted entirely for managers — sending it at all is rejected.
         'hr_id': hrId,

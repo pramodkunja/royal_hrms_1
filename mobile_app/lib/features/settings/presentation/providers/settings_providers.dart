@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
@@ -42,6 +43,33 @@ class CompanyNotifier extends AutoDisposeAsyncNotifier<CompanyModel> {
       return null;
     } catch (e) {
       state = AsyncError(e, StackTrace.current);
+      return _friendly(e);
+    }
+  }
+}
+
+// ── Company — Financial Year ─────────────────────────────────────────────────
+// Saved independently of the company info form (matches web) — its own
+// provider, its own save() call, own error handling.
+
+final financialYearProvider = AsyncNotifierProvider.autoDispose<
+    FinancialYearNotifier, CompanyFinancialYearModel>(
+  FinancialYearNotifier.new,
+);
+
+class FinancialYearNotifier
+    extends AutoDisposeAsyncNotifier<CompanyFinancialYearModel> {
+  SettingsRemoteDataSource get _ds => ref.read(settingsDataSourceProvider);
+
+  @override
+  Future<CompanyFinancialYearModel> build() => _ds.fetchFinancialYear();
+
+  Future<String?> save(String startMonth) async {
+    try {
+      final updated = await _ds.updateFinancialYear(startMonth);
+      state = AsyncData(updated);
+      return null;
+    } catch (e) {
       return _friendly(e);
     }
   }
@@ -208,6 +236,34 @@ class EmailTemplatesNotifier
       state = AsyncData(
         (state.valueOrNull ?? []).where((e) => e.id != id).toList(),
       );
+      return null;
+    } catch (e) {
+      return _friendly(e);
+    }
+  }
+
+  Future<String?> uploadAttachment(int templateId, File file, String mimeType) async {
+    try {
+      final attachment = await _ds.uploadTemplateAttachment(templateId, file, mimeType);
+      state = AsyncData((state.valueOrNull ?? []).map((t) {
+        if (t.id != templateId) return t;
+        return t.copyWith(attachments: [...t.attachments, attachment]);
+      }).toList());
+      return null;
+    } catch (e) {
+      return _friendly(e);
+    }
+  }
+
+  Future<String?> removeAttachment(int templateId, int attachmentId) async {
+    try {
+      await _ds.deleteTemplateAttachment(templateId, attachmentId);
+      state = AsyncData((state.valueOrNull ?? []).map((t) {
+        if (t.id != templateId) return t;
+        return t.copyWith(
+          attachments: t.attachments.where((a) => a.id != attachmentId).toList(),
+        );
+      }).toList());
       return null;
     } catch (e) {
       return _friendly(e);
@@ -384,6 +440,21 @@ class LeavePoliciesNotifier extends AutoDisposeAsyncNotifier<List<LeavePolicyMod
     }
   }
 }
+
+// ── Carry Forward execution — see ApiConstants.carryForward* doc comment ──────
+
+final carryForwardYearsProvider =
+    FutureProvider.autoDispose<CarryForwardYearsModel>((ref) {
+  return ref.read(settingsDataSourceProvider).fetchCarryForwardYears();
+});
+
+final carryForwardHistoryPageProvider = StateProvider.autoDispose<int>((ref) => 1);
+
+final carryForwardHistoryProvider =
+    FutureProvider.autoDispose<CarryForwardHistoryModel>((ref) {
+  final page = ref.watch(carryForwardHistoryPageProvider);
+  return ref.read(settingsDataSourceProvider).fetchCarryForwardHistory(page: page);
+});
 
 // ── Roles & Permissions ───────────────────────────────────────────────────────
 

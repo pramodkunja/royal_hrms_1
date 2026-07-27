@@ -76,6 +76,7 @@ class CalendarDayEntity {
   final String? clockOut;
   final String? hours;
   final String? note;
+  final String? holidayName;
   final bool canRegularize;
 
   const CalendarDayEntity({
@@ -84,6 +85,7 @@ class CalendarDayEntity {
     this.clockOut,
     this.hours,
     this.note,
+    this.holidayName,
     required this.canRegularize,
   });
 }

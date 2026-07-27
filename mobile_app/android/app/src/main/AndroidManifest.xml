@@ -5,6 +5,8 @@
     <!-- Required to capture GPS coordinates for attendance clock-in geofencing -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- Required for voice command speech recognition -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <application
         android:label="ROYAL HRMS"
         android:name="${applicationName}"
@@ -46,6 +48,11 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Required on Android 11+ so speech_to_text can see the on-device
+             speech recognition service (package visibility). -->
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
         </intent>
     </queries>
 </manifest>

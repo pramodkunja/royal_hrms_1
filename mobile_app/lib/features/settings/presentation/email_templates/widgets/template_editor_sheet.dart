@@ -1,9 +1,26 @@
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../data/models/email_template_model.dart';
 import '../../providers/settings_providers.dart';
+
+// Matches backend's EmailTemplateAttachment.ALLOWED_MIME_TYPES.
+const _kAttachmentExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'xls', 'xlsx'];
+const _kMaxAttachmentBytes = 10 * 1024 * 1024;
+
+const Map<String, String> _kExtToMime = {
+  'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
+  'gif': 'image/gif', 'webp': 'image/webp',
+  'pdf': 'application/pdf',
+  'doc': 'application/msword',
+  'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'xls': 'application/vnd.ms-excel',
+  'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
 
 // Hardcoded template type options — matches backend TEMPLATE_TYPE_CHOICES
 const _kTemplateTypes = [
@@ -32,6 +49,8 @@ class _TemplateEditorSheetState extends State<TemplateEditorSheet> {
   final Map<String, String?> _errors = {};
   bool _saving = false;
   bool _slugEdited = false; // track if user manually edited slug
+  late List<EmailTemplateAttachmentModel> _attachments;
+  bool _uploadingAttachment = false;
 
   bool get _isAdd => widget.template == null;
 
@@ -45,6 +64,7 @@ class _TemplateEditorSheetState extends State<TemplateEditorSheet> {
     _slugCtrl        = TextEditingController(text: _form.name);
     _subjectCtrl     = TextEditingController(text: _form.subject);
     _bodyCtrl        = TextEditingController(text: _form.body);
+    _attachments     = List.of(widget.template?.attachments ?? const []);
   }
 
   @override
@@ -99,6 +119,7 @@ class _TemplateEditorSheetState extends State<TemplateEditorSheet> {
                     _buildBody(),
                     if (!_isAdd && widget.template!.availableVariables.isNotEmpty)
                       _buildVariableChips(widget.template!.availableVariables),
+                    if (!_isAdd) _buildAttachmentsSection(),
                     const SizedBox(height: 8),
                     _buildActiveSwitch(),
                     const SizedBox(height: 16),
@@ -281,6 +302,144 @@ class _TemplateEditorSheetState extends State<TemplateEditorSheet> {
     ),
   );
 
+  Widget _buildAttachmentsSection() => Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'ATTACHMENTS',
+                style: AppTextStyles.caption.copyWith(
+                  fontSize: 11, color: AppColors.textHint,
+                  fontWeight: FontWeight.w700, letterSpacing: 0.7,
+                ),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: _uploadingAttachment ? null : _pickAndUploadAttachment,
+              icon: _uploadingAttachment
+                  ? const SizedBox(
+                      width: 14, height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(Icons.attach_file, size: 16, color: AppColors.primary),
+              label: Text(
+                _uploadingAttachment ? 'Uploading…' : 'Add File',
+                style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700),
+              ),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                visualDensity: VisualDensity.compact,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_attachments.isEmpty)
+          Text(
+            'No files attached. Images, PDF, Word or Excel · max 10 MB.',
+            style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+          )
+        else
+          ..._attachments.map((a) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _AttachmentRow(
+                  attachment: a,
+                  onOpen: () => _openAttachment(a),
+                  onDelete: () => _deleteAttachment(a),
+                ),
+              )),
+      ],
+    ),
+  );
+
+  Future<void> _pickAndUploadAttachment() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: _kAttachmentExtensions,
+    );
+    final picked = result?.files.firstOrNull;
+    if (picked == null || picked.path == null) return;
+
+    if (picked.size > _kMaxAttachmentBytes) {
+      _toast('File size must not exceed 10 MB.', false);
+      return;
+    }
+    final ext = picked.extension?.toLowerCase() ?? '';
+    final mimeType = _kExtToMime[ext];
+    if (mimeType == null) {
+      _toast('Unsupported file type.', false);
+      return;
+    }
+
+    setState(() => _uploadingAttachment = true);
+    final error = await widget.ref.read(emailTemplatesProvider.notifier).uploadAttachment(
+          widget.template!.id,
+          File(picked.path!),
+          mimeType,
+        );
+    if (!mounted) return;
+    setState(() {
+      _uploadingAttachment = false;
+      if (error == null) {
+        final updated = widget.ref.read(emailTemplatesProvider).valueOrNull
+            ?.firstWhere((t) => t.id == widget.template!.id, orElse: () => widget.template!);
+        _attachments = List.of(updated?.attachments ?? _attachments);
+      }
+    });
+    if (error != null) _toast(error, false);
+  }
+
+  Future<void> _openAttachment(EmailTemplateAttachmentModel attachment) async {
+    final uri = Uri.tryParse(attachment.url);
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _deleteAttachment(EmailTemplateAttachmentModel attachment) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Remove Attachment'),
+        content: Text('Remove "${attachment.filename}"? This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    final error = await widget.ref
+        .read(emailTemplatesProvider.notifier)
+        .removeAttachment(widget.template!.id, attachment.id);
+    if (!mounted) return;
+    if (error == null) {
+      setState(() => _attachments.removeWhere((a) => a.id == attachment.id));
+    } else {
+      _toast(error, false);
+    }
+  }
+
+  void _toast(String msg, bool ok) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: ok ? AppColors.success : AppColors.error,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
+  }
+
   Widget _buildActiveSwitch() => SwitchListTile(
     contentPadding: EdgeInsets.zero,
     title: Text('Active', style: AppTextStyles.label),
@@ -398,6 +557,79 @@ class _DlgHeader extends StatelessWidget {
             icon: const Icon(Icons.close, color: Colors.white70, size: 20),
             onPressed: onClose,
             visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AttachmentRow extends StatelessWidget {
+  final EmailTemplateAttachmentModel attachment;
+  final VoidCallback onOpen;
+  final VoidCallback onDelete;
+
+  const _AttachmentRow({required this.attachment, required this.onOpen, required this.onDelete});
+
+  IconData get _icon {
+    if (attachment.mimeType.startsWith('image/')) return Icons.image_outlined;
+    if (attachment.mimeType == 'application/pdf') return Icons.picture_as_pdf_outlined;
+    if (attachment.mimeType.contains('word')) return Icons.description_outlined;
+    if (attachment.mimeType.contains('sheet') || attachment.mimeType.contains('excel')) {
+      return Icons.table_chart_outlined;
+    }
+    return Icons.insert_drive_file_outlined;
+  }
+
+  String get _sizeLabel {
+    final kb = attachment.size / 1024;
+    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
+    return '${(kb / 1024).toStringAsFixed(1)} MB';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(_icon, size: 18, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: InkWell(
+              onTap: onOpen,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    attachment.filename,
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    _sizeLabel,
+                    style: AppTextStyles.caption.copyWith(color: AppColors.textHint, fontSize: 10.5),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 17),
+            color: AppColors.error,
+            visualDensity: VisualDensity.compact,
+            onPressed: onDelete,
+            tooltip: 'Remove',
           ),
         ],
       ),

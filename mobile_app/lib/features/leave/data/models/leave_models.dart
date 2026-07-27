@@ -361,3 +361,54 @@ class BalanceSummaryModel extends BalanceSummaryEntity {
     );
   }
 }
+
+// ── Leave Preview ─────────────────────────────────────────────────────────────
+
+List<NamedDateEntity> _namedDates(dynamic raw, String labelKey) {
+  final list = raw is List ? raw : const [];
+  return list
+      .whereType<Map<String, dynamic>>()
+      .map((j) => NamedDateEntity(
+            date: j['date'] as String? ?? '',
+            label: j[labelKey] as String? ?? '',
+          ))
+      .toList();
+}
+
+class LeavePreviewModel extends LeavePreviewEntity {
+  const LeavePreviewModel({
+    required super.leaveType,
+    required super.calendarDays,
+    required super.companyHolidays,
+    required super.companyHolidayCount,
+    required super.weekOffs,
+    required super.weekOffCount,
+    required super.sandwichLeaveEnabled,
+    required super.actualLeaveDays,
+    required super.availableBalance,
+    required super.earnedLeaveUsed,
+    required super.lopDays,
+    required super.lopEnabled,
+    required super.sufficientBalance,
+    required super.warning,
+  });
+
+  factory LeavePreviewModel.fromJson(Map<String, dynamic> json) {
+    return LeavePreviewModel(
+      leaveType: json['leave_type'] as String? ?? '',
+      calendarDays: (json['calendar_days'] as num? ?? 0).toInt(),
+      companyHolidays: _namedDates(json['company_holidays'], 'name'),
+      companyHolidayCount: (json['company_holiday_count'] as num? ?? 0).toInt(),
+      weekOffs: _namedDates(json['week_offs'], 'day'),
+      weekOffCount: (json['week_off_count'] as num? ?? 0).toInt(),
+      sandwichLeaveEnabled: json['sandwich_leave_enabled'] as bool? ?? false,
+      actualLeaveDays: _toDouble(json['actual_leave_days']),
+      availableBalance: _toDouble(json['available_balance']),
+      earnedLeaveUsed: _toDouble(json['earned_leave_used']),
+      lopDays: _toDouble(json['lop_days']),
+      lopEnabled: json['lop_enabled'] as bool? ?? false,
+      sufficientBalance: json['sufficient_balance'] as bool? ?? true,
+      warning: json['warning'] as String? ?? '',
+    );
+  }
+}

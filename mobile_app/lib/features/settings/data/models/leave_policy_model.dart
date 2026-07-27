@@ -378,3 +378,175 @@ class CreditBalancesResult {
         credited: (json['credited'] as num? ?? 0).toInt(),
       );
 }
+
+// ─── Carry Forward execution (year-range batch job) ───────────────────────────
+// Matches web's types/leave.ts CarryForward* interfaces exactly — see the
+// doc comment on ApiConstants.carryForward* for why these currently 404.
+
+@immutable
+class CarryForwardYearPair {
+  final int fromYear;
+  final int toYear;
+  const CarryForwardYearPair({required this.fromYear, required this.toYear});
+
+  factory CarryForwardYearPair.fromJson(Map<String, dynamic> json) =>
+      CarryForwardYearPair(
+        fromYear: (json['from_year'] as num? ?? 0).toInt(),
+        toYear: (json['to_year'] as num? ?? 0).toInt(),
+      );
+}
+
+@immutable
+class CarryForwardYearsModel {
+  final List<CarryForwardYearPair> years;
+  final int defaultFrom;
+  final int defaultTo;
+  const CarryForwardYearsModel({
+    required this.years,
+    required this.defaultFrom,
+    required this.defaultTo,
+  });
+
+  factory CarryForwardYearsModel.fromJson(Map<String, dynamic> json) =>
+      CarryForwardYearsModel(
+        years: (json['years'] as List<dynamic>? ?? [])
+            .map((e) => CarryForwardYearPair.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        defaultFrom: (json['default_from'] as num? ?? 0).toInt(),
+        defaultTo: (json['default_to'] as num? ?? 0).toInt(),
+      );
+}
+
+@immutable
+class CarryForwardPreviewRow {
+  final String employeeId;
+  final String employeeName;
+  final String leaveType;
+  final String leaveTypeDisplay;
+  final double unusedDays;
+  final double carryForwardAmount;
+  final String? expiryDate;
+  final bool alreadyProcessed;
+
+  const CarryForwardPreviewRow({
+    required this.employeeId,
+    required this.employeeName,
+    required this.leaveType,
+    required this.leaveTypeDisplay,
+    required this.unusedDays,
+    required this.carryForwardAmount,
+    this.expiryDate,
+    required this.alreadyProcessed,
+  });
+
+  factory CarryForwardPreviewRow.fromJson(Map<String, dynamic> json) =>
+      CarryForwardPreviewRow(
+        employeeId: json['employee_id'] as String? ?? '',
+        employeeName: json['employee_name'] as String? ?? '',
+        leaveType: json['leave_type'] as String? ?? '',
+        leaveTypeDisplay: json['leave_type_display'] as String? ?? '',
+        unusedDays: _toDouble(json['unused_days']),
+        carryForwardAmount: _toDouble(json['carry_forward_amount']),
+        expiryDate: json['expiry_date'] as String?,
+        alreadyProcessed: json['already_processed'] as bool? ?? false,
+      );
+}
+
+@immutable
+class CarryForwardPreviewModel {
+  final int fromYear;
+  final int toYear;
+  final int totalRows;
+  final int pendingCount;
+  final int alreadyProcessedCount;
+  final List<CarryForwardPreviewRow> previewRows;
+
+  const CarryForwardPreviewModel({
+    required this.fromYear,
+    required this.toYear,
+    required this.totalRows,
+    required this.pendingCount,
+    required this.alreadyProcessedCount,
+    required this.previewRows,
+  });
+
+  factory CarryForwardPreviewModel.fromJson(Map<String, dynamic> json) =>
+      CarryForwardPreviewModel(
+        fromYear: (json['from_year'] as num? ?? 0).toInt(),
+        toYear: (json['to_year'] as num? ?? 0).toInt(),
+        totalRows: (json['total_rows'] as num? ?? 0).toInt(),
+        pendingCount: (json['pending_count'] as num? ?? 0).toInt(),
+        alreadyProcessedCount:
+            (json['already_processed_count'] as num? ?? 0).toInt(),
+        previewRows: (json['preview_rows'] as List<dynamic>? ?? [])
+            .map((e) =>
+                CarryForwardPreviewRow.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+@immutable
+class CarryForwardLogModel {
+  final String id;
+  final int fromYear;
+  final int toYear;
+  final String executedByName;
+  final int totalProcessed;
+  final int totalSkipped;
+  final int totalFailed;
+  final bool isCompleted;
+  final String createdAt;
+
+  const CarryForwardLogModel({
+    required this.id,
+    required this.fromYear,
+    required this.toYear,
+    required this.executedByName,
+    required this.totalProcessed,
+    required this.totalSkipped,
+    required this.totalFailed,
+    required this.isCompleted,
+    required this.createdAt,
+  });
+
+  factory CarryForwardLogModel.fromJson(Map<String, dynamic> json) =>
+      CarryForwardLogModel(
+        id: json['id']?.toString() ?? '',
+        fromYear: (json['from_year'] as num? ?? 0).toInt(),
+        toYear: (json['to_year'] as num? ?? 0).toInt(),
+        executedByName: json['executed_by_name'] as String? ?? '',
+        totalProcessed: (json['total_processed'] as num? ?? 0).toInt(),
+        totalSkipped: (json['total_skipped'] as num? ?? 0).toInt(),
+        totalFailed: (json['total_failed'] as num? ?? 0).toInt(),
+        isCompleted: json['is_completed'] as bool? ?? false,
+        createdAt: json['created_at'] as String? ?? '',
+      );
+}
+
+@immutable
+class CarryForwardHistoryModel {
+  final int count;
+  final int page;
+  final int totalPages;
+  final List<CarryForwardLogModel> results;
+
+  const CarryForwardHistoryModel({
+    required this.count,
+    required this.page,
+    required this.totalPages,
+    required this.results,
+  });
+
+  factory CarryForwardHistoryModel.fromJson(Map<String, dynamic> json) =>
+      CarryForwardHistoryModel(
+        count: (json['count'] as num? ?? 0).toInt(),
+        page: (json['page'] as num? ?? 1).toInt(),
+        totalPages: (json['total_pages'] as num? ?? 1).toInt(),
+        results: (json['results'] as List<dynamic>? ?? [])
+            .map((e) => CarryForwardLogModel.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+
+  static const empty = CarryForwardHistoryModel(
+      count: 0, page: 1, totalPages: 1, results: []);
+}

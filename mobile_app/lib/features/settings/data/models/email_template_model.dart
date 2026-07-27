@@ -23,6 +23,38 @@ class EmailTemplateCategoryModel {
       );
 }
 
+// A file attached to a template — sent as an extra part of a transactional
+// email. Real backend model: EmailTemplateAttachment (10 MB max, whitelisted
+// MIME types only), served under EmailTemplate.attachments.
+@immutable
+class EmailTemplateAttachmentModel {
+  final int id;
+  final String filename;
+  final String mimeType;
+  final int size; // bytes
+  final String url;
+  final String? uploadedAt;
+
+  const EmailTemplateAttachmentModel({
+    required this.id,
+    required this.filename,
+    required this.mimeType,
+    required this.size,
+    required this.url,
+    this.uploadedAt,
+  });
+
+  factory EmailTemplateAttachmentModel.fromJson(Map<String, dynamic> json) =>
+      EmailTemplateAttachmentModel(
+        id:         json['id'] as int,
+        filename:   json['filename'] as String? ?? '',
+        mimeType:   json['mime_type'] as String? ?? '',
+        size:       json['size'] as int? ?? 0,
+        url:        json['url'] as String? ?? '',
+        uploadedAt: json['uploaded_at'] as String?,
+      );
+}
+
 @immutable
 class EmailTemplateModel {
   final int id;
@@ -36,6 +68,7 @@ class EmailTemplateModel {
   final bool isActive;
   final bool isBuiltin;
   final List<String> availableVariables;
+  final List<EmailTemplateAttachmentModel> attachments;
   final String? updatedAt;
 
   const EmailTemplateModel({
@@ -50,10 +83,14 @@ class EmailTemplateModel {
     required this.isActive,
     required this.isBuiltin,
     required this.availableVariables,
+    this.attachments = const [],
     this.updatedAt,
   });
 
-  EmailTemplateModel copyWith({bool? isActive}) => EmailTemplateModel(
+  EmailTemplateModel copyWith({
+    bool? isActive,
+    List<EmailTemplateAttachmentModel>? attachments,
+  }) => EmailTemplateModel(
     id:                 id,
     name:               name,
     displayName:        displayName,
@@ -65,6 +102,7 @@ class EmailTemplateModel {
     isActive:           isActive ?? this.isActive,
     isBuiltin:          isBuiltin,
     availableVariables: availableVariables,
+    attachments:        attachments ?? this.attachments,
     updatedAt:          updatedAt,
   );
 
@@ -73,6 +111,12 @@ class EmailTemplateModel {
     final vars = <String>[];
     if (rawVars is List) {
       vars.addAll(rawVars.map((e) => e.toString()));
+    }
+    final rawAttachments = json['attachments'];
+    final attachments = <EmailTemplateAttachmentModel>[];
+    if (rawAttachments is List) {
+      attachments.addAll(rawAttachments
+          .map((e) => EmailTemplateAttachmentModel.fromJson(e as Map<String, dynamic>)));
     }
     return EmailTemplateModel(
       id:                 json['id'] as int,
@@ -86,6 +130,7 @@ class EmailTemplateModel {
       isActive:           json['is_active'] as bool? ?? true,
       isBuiltin:          json['is_builtin'] as bool? ?? false,
       availableVariables: vars,
+      attachments:        attachments,
       updatedAt:          json['updated_at'] as String?,
     );
   }

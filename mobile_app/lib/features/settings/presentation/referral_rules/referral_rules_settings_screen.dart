@@ -17,7 +17,9 @@ class ReferralRulesSettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(referralRulesAdminProvider);
     final permissions = ref.watch(authStateProvider).valueOrNull?.user?.permissions ?? const [];
-    final canEdit = permissions.contains('settings.edit');
+    // Backend (ReferralRuleListCreateView/ReferralRuleDetailView) actually
+    // authorizes create/update/delete on 'settings.view', not 'settings.edit'.
+    final canEdit = permissions.contains('settings.view');
 
     return Scaffold(
       backgroundColor: AppColors.background,

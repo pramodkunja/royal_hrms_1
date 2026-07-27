@@ -13,7 +13,7 @@ class AppSidebar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authStateProvider).valueOrNull?.user;
     final permissions = user?.permissions ?? const [];
-    final visibleNav = buildNav(permissions);
+    final visibleNav = buildNav(permissions, role: user?.role);
     final currentPath = GoRouterState.of(context).uri.path;
 
     return Drawer(

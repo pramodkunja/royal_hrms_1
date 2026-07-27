@@ -2,30 +2,36 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../branches/domain/entities/branch_entity.dart';
+import '../../../../branches/presentation/providers/branch_providers.dart';
 import '../../../data/models/holiday_model.dart';
 import '../holiday_calendar_providers.dart';
 import '../holiday_styles.dart';
 
-class HolidayFormDialog extends StatefulWidget {
-  final HolidayModel? holiday;
-  final WidgetRef ref;
+const _kCompanyWideLabel = 'All Branches (Company-wide)';
 
-  const HolidayFormDialog({super.key, this.holiday, required this.ref});
+class HolidayFormDialog extends ConsumerStatefulWidget {
+  final HolidayModel? holiday;
+  final HolidaysKey holidaysKey;
+
+  const HolidayFormDialog({super.key, this.holiday, required this.holidaysKey});
 
   @override
-  State<HolidayFormDialog> createState() => _HolidayFormDialogState();
+  ConsumerState<HolidayFormDialog> createState() => _HolidayFormDialogState();
 }
 
-class _HolidayFormDialogState extends State<HolidayFormDialog> {
+class _HolidayFormDialogState extends ConsumerState<HolidayFormDialog> {
   late final TextEditingController _nameCtrl;
-  late final TextEditingController _branchesCtrl;
+  late final TextEditingController _descriptionCtrl;
   late String _type;
   DateTime? _date;
   late bool _isOptional;
   late bool _isActive;
+  int? _branchId; // null = company-wide
   bool _saving = false;
   String? _nameError;
   String? _dateError;
+  String? _submitError;
 
   bool get _isAdd => widget.holiday == null;
 
@@ -34,17 +40,18 @@ class _HolidayFormDialogState extends State<HolidayFormDialog> {
     super.initState();
     final h = widget.holiday;
     _nameCtrl = TextEditingController(text: h?.name ?? '');
-    _branchesCtrl = TextEditingController(text: h?.applicableBranches ?? 'All');
+    _descriptionCtrl = TextEditingController(text: h?.description ?? '');
     _type = h?.type ?? HolidayType.national;
     _date = h?.date;
     _isOptional = h?.isOptional ?? false;
     _isActive = h?.isActive ?? true;
+    _branchId = h?.branchId;
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
-    _branchesCtrl.dispose();
+    _descriptionCtrl.dispose();
     super.dispose();
   }
 
@@ -68,6 +75,8 @@ class _HolidayFormDialogState extends State<HolidayFormDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final branchesAsync = ref.watch(branchListProvider);
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: Column(
@@ -93,7 +102,16 @@ class _HolidayFormDialogState extends State<HolidayFormDialog> {
                     style: AppTextStyles.body,
                     autofocus: true,
                     maxLength: 80,
-                    onChanged: (_) => setState(() => _nameError = null),
+                    onChanged: (v) {
+                      final cleaned = HolidayFormData.sanitizeName(v);
+                      if (cleaned != v) {
+                        _nameCtrl.value = _nameCtrl.value.copyWith(
+                          text: cleaned,
+                          selection: TextSelection.collapsed(offset: cleaned.length),
+                        );
+                      }
+                      setState(() => _nameError = null);
+                    },
                     decoration: _dec('Holiday Name *', _nameError).copyWith(
                       hintText: 'e.g. Independence Day',
                     ),
@@ -133,11 +151,29 @@ class _HolidayFormDialogState extends State<HolidayFormDialog> {
                     ],
                   ),
                   const SizedBox(height: 12),
+                  branchesAsync.when(
+                    loading: () => InputDecorator(
+                      decoration: _dec('Applicable Branch'),
+                      child: Text('Loading branches…', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
+                    ),
+                    error: (_, __) => InputDecorator(
+                      decoration: _dec('Applicable Branch'),
+                      child: Text('Company-wide (branch list unavailable)',
+                          style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
+                    ),
+                    data: (branches) => _BranchDropdown(
+                      branches: branches,
+                      selectedId: _branchId,
+                      onChanged: (id) => setState(() => _branchId = id),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   TextFormField(
-                    controller: _branchesCtrl,
+                    controller: _descriptionCtrl,
                     style: AppTextStyles.body,
-                    decoration: _dec('Applicable Branches').copyWith(
-                      hintText: 'All, or comma-separated branch names',
+                    maxLines: 2,
+                    decoration: _dec('Description (optional)').copyWith(
+                      hintText: 'Any notes about this holiday',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -162,6 +198,10 @@ class _HolidayFormDialogState extends State<HolidayFormDialog> {
                     color: AppColors.success,
                     onChanged: (v) => setState(() => _isActive = v),
                   ),
+                  if (_submitError != null) ...[
+                    const SizedBox(height: 12),
+                    Text(_submitError!, style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+                  ],
                   const SizedBox(height: 20),
                   FilledButton(
                     onPressed: _saving ? null : _submit,
@@ -208,8 +248,9 @@ class _HolidayFormDialogState extends State<HolidayFormDialog> {
       name: _nameCtrl.text,
       date: _date,
       type: _type,
-      applicableBranches: _branchesCtrl.text,
       isOptional: _isOptional,
+      description: _descriptionCtrl.text,
+      branchId: _branchId,
       isActive: _isActive,
     );
     final errors = form.validate();
@@ -220,15 +261,57 @@ class _HolidayFormDialogState extends State<HolidayFormDialog> {
       });
       return;
     }
-    setState(() => _saving = true);
-    final notifier = widget.ref.read(holidaysProvider.notifier);
-    if (_isAdd) {
-      await notifier.add(form);
-    } else {
-      await notifier.edit(widget.holiday!.id, form);
-    }
+    setState(() { _saving = true; _submitError = null; });
+    final notifier = ref.read(holidaysProvider(widget.holidaysKey).notifier);
+    final error = _isAdd ? await notifier.add(form) : await notifier.edit(widget.holiday!.id, form);
     if (!mounted) return;
+    if (error != null) {
+      setState(() { _saving = false; _submitError = error; });
+      return;
+    }
     Navigator.pop(context);
+  }
+}
+
+// ── Branch dropdown (real branches + Company-wide option) ───────────────────
+
+class _BranchDropdown extends StatelessWidget {
+  final List<BranchEntity> branches;
+  final int? selectedId;
+  final ValueChanged<int?> onChanged;
+  const _BranchDropdown({required this.branches, required this.selectedId, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final validIds = branches.map((b) => b.id).toSet();
+    final value = selectedId != null && !validIds.contains(selectedId) ? null : selectedId;
+    return DropdownButtonFormField<int?>(
+      initialValue: value,
+      decoration: InputDecoration(
+        labelText: 'Applicable Branch',
+        labelStyle: AppTextStyles.caption,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: AppColors.primary, width: 1.5),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      ),
+      style: AppTextStyles.body.copyWith(color: AppColors.textPrimary),
+      isExpanded: true,
+      items: [
+        const DropdownMenuItem<int?>(value: null, child: Text(_kCompanyWideLabel, overflow: TextOverflow.ellipsis)),
+        ...branches.map((b) => DropdownMenuItem<int?>(
+              value: b.id,
+              child: Text(b.branchName, overflow: TextOverflow.ellipsis),
+            )),
+      ],
+      onChanged: onChanged,
+    );
   }
 }
 

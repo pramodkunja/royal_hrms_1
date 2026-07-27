@@ -4,16 +4,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
-import '../widgets/my_requests_tab.dart';
+import '../widgets/attendance_approval_tab.dart';
 import '../widgets/team_approvals_tab.dart';
 
-// Ports web's app/dashboard/approvals/page.tsx — a "My Requests" section
-// (own leave + expense requests, with quick-create) and a "Team Approvals"
-// section (pending items awaiting the current user's action). Unlike the
-// web page, "Team Approvals" is hidden entirely for users with neither
-// leave.approve nor expenses.approve, since an approval queue that only
-// ever shows your own pending request (and 403s on Approve/Reject) is a
-// dead end — same reasoning as hiding the Leave module's Approvals tab.
+// Ports web's app/dashboard/approvals/page.tsx (2026-07-21 change) — the
+// "My Requests" tab was removed there since a standalone /dashboard/my-requests
+// page already covers self-service leave/expense creation; the remaining tabs
+// ("Team Approvals", "Attendance Approval") are derived from permission,
+// switching to the first still-valid tab if the active one becomes invalid.
+// Mobile's own self-service equivalent lives in the Leave and Expenses
+// modules (Apply Leave / Add Expense), so this mirrors web exactly rather
+// than removing functionality with no replacement.
 class ApprovalsScreen extends ConsumerStatefulWidget {
   const ApprovalsScreen({super.key});
 
@@ -21,19 +22,46 @@ class ApprovalsScreen extends ConsumerStatefulWidget {
   ConsumerState<ApprovalsScreen> createState() => _ApprovalsScreenState();
 }
 
-class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
-  bool _showTeamApprovals = false;
+class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTickerProviderStateMixin {
+  TabController? _tabCtrl;
+  List<String> _tabKeys = const [];
+
+  void _syncTabs(List<String> keys) {
+    if (_listEquals(_tabKeys, keys)) return;
+    final oldIndex = _tabCtrl?.index ?? 0;
+    _tabCtrl?.dispose();
+    _tabKeys = keys;
+    _tabCtrl = TabController(length: keys.length, vsync: this, initialIndex: oldIndex < keys.length ? oldIndex : 0);
+  }
+
+  bool _listEquals(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  @override
+  void dispose() {
+    _tabCtrl?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull?.user;
     final canApproveLeave = user?.hasPermission('leave.approve') ?? false;
     final canApproveExpense = user?.hasPermission('expenses.approve') ?? false;
-    final canApproveAnything = canApproveLeave || canApproveExpense;
+    final canApproveTeam = canApproveLeave || canApproveExpense;
+    final canApproveAttendance = user?.hasPermission('payroll.view') == true || user?.hasPermission('payroll.approve') == true;
 
-    if (!canApproveAnything && _showTeamApprovals) {
-      _showTeamApprovals = false;
-    }
+    final keys = <String>[
+      if (canApproveTeam) 'team',
+      if (canApproveAttendance) 'attendance',
+    ];
+    _syncTabs(keys);
+    final tabCtrl = _tabCtrl;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -48,29 +76,38 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
                 children: [
                   Text('Approvals', style: AppTextStyles.h4),
                   const SizedBox(height: 2),
-                  Text(
-                    'Your requests and items waiting on your action',
-                    style: AppTextStyles.caption,
-                  ),
+                  Text('Items waiting on your action', style: AppTextStyles.caption),
                 ],
               ),
             ),
-            if (canApproveAnything)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-                child: _SectionSwitch(
-                  showTeamApprovals: _showTeamApprovals,
-                  onChanged: (v) => setState(() => _showTeamApprovals = v),
+            if (keys.isEmpty)
+              Expanded(child: _EmptyState())
+            else if (tabCtrl != null) ...[
+              if (keys.length > 1)
+                TabBar(
+                  controller: tabCtrl,
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  labelColor: AppColors.primary,
+                  unselectedLabelColor: AppColors.textSecondary,
+                  indicatorColor: AppColors.primary,
+                  labelStyle: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, fontSize: 13),
+                  unselectedLabelStyle: AppTextStyles.label.copyWith(fontSize: 13),
+                  tabs: keys
+                      .map((k) => Tab(text: k == 'team' ? 'Team Approvals' : 'Attendance Approval'))
+                      .toList(),
+                ),
+              Expanded(
+                child: TabBarView(
+                  controller: tabCtrl,
+                  children: keys
+                      .map((k) => k == 'team'
+                          ? TeamApprovalsTab(canApproveLeave: canApproveLeave, canApproveExpense: canApproveExpense)
+                          : const AttendanceApprovalTab())
+                      .toList(),
                 ),
               ),
-            Expanded(
-              child: _showTeamApprovals
-                  ? TeamApprovalsTab(
-                      canApproveLeave: canApproveLeave,
-                      canApproveExpense: canApproveExpense,
-                    )
-                  : const MyRequestsTab(),
-            ),
+            ],
           ],
         ),
       ),
@@ -78,82 +115,21 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
   }
 }
 
-class _SectionSwitch extends StatelessWidget {
-  final bool showTeamApprovals;
-  final ValueChanged<bool> onChanged;
-  const _SectionSwitch(
-      {required this.showTeamApprovals, required this.onChanged});
-
+class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: AppColors.backgroundLow,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _SwitchPill(
-              label: 'My Requests',
-              icon: Icons.inbox_outlined,
-              selected: !showTeamApprovals,
-              onTap: () => onChanged(false),
-            ),
-          ),
-          Expanded(
-            child: _SwitchPill(
-              label: 'Team Approvals',
-              icon: Icons.checklist_outlined,
-              selected: showTeamApprovals,
-              onTap: () => onChanged(true),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SwitchPill extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-  const _SwitchPill({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.surface : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: selected ? AppColors.cardShadow : null,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                size: 15,
-                color: selected ? AppColors.primary : AppColors.textSecondary),
-            const SizedBox(width: 6),
+            Icon(Icons.inbox_outlined, size: 44, color: AppColors.textHint),
+            const SizedBox(height: 12),
             Text(
-              label,
-              style: AppTextStyles.label.copyWith(
-                fontSize: 12,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected ? AppColors.primary : AppColors.textSecondary,
-              ),
+              'You have no approval permissions.',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
             ),
           ],
         ),

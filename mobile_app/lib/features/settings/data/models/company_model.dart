@@ -111,6 +111,46 @@ class CompanyModel {
   );
 }
 
+// Financial Year Configuration — GET/PUT /settings/company/financial-year/.
+// Leave Allocation, Carry Forward, Attendance, Payroll and Reports all derive
+// their current/previous/next year from this one setting.
+@immutable
+class CompanyFinancialYearModel {
+  final String startMonth;
+  final String previousFinancialYear;
+  final String currentFinancialYear;
+  final String nextFinancialYear;
+
+  const CompanyFinancialYearModel({
+    required this.startMonth,
+    required this.previousFinancialYear,
+    required this.currentFinancialYear,
+    required this.nextFinancialYear,
+  });
+
+  factory CompanyFinancialYearModel.fromJson(Map<String, dynamic> json) =>
+      CompanyFinancialYearModel(
+        startMonth: json['financial_year_start_month'] as String? ?? 'April',
+        previousFinancialYear:
+            json['previous_financial_year'] as String? ?? '',
+        currentFinancialYear: json['current_financial_year'] as String? ?? '',
+        nextFinancialYear: json['next_financial_year'] as String? ?? '',
+      );
+
+  CompanyFinancialYearModel copyWith({String? startMonth}) =>
+      CompanyFinancialYearModel(
+        startMonth: startMonth ?? this.startMonth,
+        previousFinancialYear: previousFinancialYear,
+        currentFinancialYear: currentFinancialYear,
+        nextFinancialYear: nextFinancialYear,
+      );
+}
+
+const kMonthNames = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
 // Indian states list used in the company form dropdown.
 const kIndianStates = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',

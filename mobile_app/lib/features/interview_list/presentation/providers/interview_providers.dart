@@ -62,15 +62,48 @@ class CandidateListNotifier
     await ref.read(candidateStatsProvider.notifier).refresh();
   }
 
-  Future<String?> updateStatus(int id, String newStatus) async {
+  Future<String?> updateCandidate(int id, Map<String, dynamic> data) async {
     try {
-      final updated = await _ds.updateStatus(id, newStatus);
+      final updated = await _ds.updateCandidate(id, data);
+      state.whenData((list) {
+        state = AsyncData(
+          list.map((c) => c.id == id ? updated : c).toList(),
+        );
+      });
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<String?> updateStatus(int id, String newStatus,
+      {String? remarks}) async {
+    try {
+      final updated =
+          await _ds.updateStatus(id, newStatus, remarks: remarks);
       state.whenData((list) {
         state = AsyncData(
           list.map((c) => c.id == id ? updated : c).toList(),
         );
       });
       await ref.read(candidateStatsProvider.notifier).refresh();
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  // Fire-and-forget: mirrors web, where a failed email send doesn't undo an
+  // already-successful status/edit change. Errors are returned (not thrown)
+  // so the caller can surface a non-blocking warning.
+  Future<String?> sendStatusEmail(
+    int id, {
+    required String templateName,
+    required Map<String, String> extraContext,
+  }) async {
+    try {
+      await _ds.sendEmail(id,
+          templateName: templateName, extraContext: extraContext);
       return null;
     } catch (e) {
       return e.toString();

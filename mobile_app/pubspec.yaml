@@ -42,6 +42,10 @@ dependencies:
   # URL launching (preview / download)
   url_launcher: ^6.3.0
 
+  # Voice commands — native speech-to-text / text-to-speech
+  speech_to_text: ^7.0.0
+  flutter_tts: ^4.2.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

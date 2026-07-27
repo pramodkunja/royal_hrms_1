@@ -52,12 +52,6 @@ final kQuickItemsEmployee = <QuickItem>[
       path: '/dashboard/leave',
       permission: 'leave.view'),
   QuickItem(
-      label: 'My Payslips',
-      icon: Icons.receipt_long_outlined,
-      color: AppColors.primary,
-      path: '/dashboard/my-payslip',
-      permission: 'payroll.view'),
-  QuickItem(
       label: 'Attendance',
       icon: Icons.access_time_outlined,
       color: AppColors.info,
@@ -97,12 +91,6 @@ final kQuickItemsManager = <QuickItem>[
       path: '/dashboard/leave',
       permission: 'leave.view'),
   QuickItem(
-      label: 'My Payslip',
-      icon: Icons.receipt_long_outlined,
-      color: AppColors.primary,
-      path: '/dashboard/my-payslip',
-      permission: 'payroll.view'),
-  QuickItem(
       label: 'Team Members',
       icon: Icons.groups_outlined,
       color: AppColors.info,
@@ -136,12 +124,6 @@ final kQuickItemsHr = <QuickItem>[
       path: '/dashboard/leave',
       permission: 'leave.view'),
   QuickItem(
-      label: 'Run Payroll',
-      icon: Icons.payments_outlined,
-      color: AppColors.warning,
-      path: '/dashboard/payroll',
-      permission: 'payroll.view'),
-  QuickItem(
       label: 'Employees',
       icon: Icons.badge_outlined,
       color: AppColors.info,
@@ -171,11 +153,8 @@ final kQuickItemsAdmin = <QuickItem>[
   QuickItem(
       label: 'Roles & Perms',
       icon: Icons.verified_user_outlined,
-      // Web links straight to /dashboard/settings/permissions; this app has
-      // no distinct route for that sub-page, so this opens the Settings hub
-      // it lives inside instead.
       color: AppColors.success,
-      path: '/dashboard/settings',
+      path: '/settings/roles',
       permission: 'settings.view'),
   QuickItem(
       label: 'Attendance',
@@ -183,12 +162,6 @@ final kQuickItemsAdmin = <QuickItem>[
       color: AppColors.info,
       path: '/dashboard/attendance',
       permission: 'attendance.view'),
-  QuickItem(
-      label: 'Payroll',
-      icon: Icons.payments_outlined,
-      color: AppColors.warning,
-      path: '/dashboard/payroll',
-      permission: 'payroll.view'),
   QuickItem(
       label: 'Branches',
       icon: Icons.business_outlined,
@@ -265,7 +238,13 @@ class QuickTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => context.go(item.path),
+      // Settings sub-screens (e.g. Roles & Perms) live outside the dashboard
+      // shell and use their own AppBar with a back button that calls
+      // context.pop() — they must be pushed, not go()'d to, or there's
+      // nothing on the stack for that back button to pop.
+      onTap: () => item.path.startsWith('/settings/')
+          ? context.push(item.path)
+          : context.go(item.path),
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(

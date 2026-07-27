@@ -48,6 +48,24 @@ abstract class AttendanceRepository {
     String? date,
     bool isEmployeeId,
   });
+  Future<AttendanceDetailEntity> createRecord({
+    required String employeeId,
+    required String date,
+    required String status,
+    String? clockIn,
+    String? clockOut,
+    String? note,
+    required String reason,
+  });
+  Future<AttendanceDetailEntity> updateRecord(
+    String recordId, {
+    String? status,
+    String? clockIn,
+    String? clockOut,
+    String? note,
+    required String reason,
+  });
+  Future<void> reprocessDay({required String date, String? branch, String? department});
   Future<PaginatedListEntity<OvertimeRowEntity>> getOvertimeList({
     String? date,
     String? branch,
@@ -94,6 +112,7 @@ abstract class AttendanceRepository {
   // Export / Import
   Future<List<int>> exportCsv({String? date, String? branch, String? department});
   Future<ImportResultEntity> importCsv(List<int> bytes, String fileName);
+  Future<List<int>> fetchImportSample({String format});
 
   // Audit history
   Future<List<AttendanceAuditEntryEntity>> getRecordAudit(String recordId);

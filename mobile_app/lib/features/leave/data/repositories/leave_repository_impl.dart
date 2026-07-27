@@ -99,4 +99,18 @@ class LeaveRepositoryImpl implements LeaveRepository {
     int? month,
   }) =>
       _ds.fetchCalendar(year: year, month: month);
+
+  @override
+  Future<LeavePreviewEntity> getLeavePreview({
+    required String leaveType,
+    required String startDate,
+    required String endDate,
+    String? duration,
+  }) =>
+      _ds.fetchLeavePreview(
+        leaveType: leaveType,
+        startDate: startDate,
+        endDate: endDate,
+        duration: duration,
+      );
 }

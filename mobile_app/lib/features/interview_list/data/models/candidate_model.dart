@@ -37,6 +37,8 @@ class CandidateModel extends CandidateEntity {
     required super.addedByName,
     required super.createdAt,
     super.logs,
+    super.referralBy,
+    super.referralByName,
   });
 
   factory CandidateModel.fromJson(Map<String, dynamic> j) {
@@ -62,6 +64,9 @@ class CandidateModel extends CandidateEntity {
           .map((l) =>
               CandidateLogModel.fromJson(l as Map<String, dynamic>))
           .toList(),
+      // referral_by is a FK to User, whose PK is a UUID — not an int.
+      referralBy: j['referral_by'] as String?,
+      referralByName: j['referral_by_name'] as String? ?? '',
     );
   }
 }

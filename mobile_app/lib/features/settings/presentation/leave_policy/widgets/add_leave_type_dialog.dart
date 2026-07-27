@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../../shared/validators/form_validators.dart';
 import '../../../data/models/leave_policy_model.dart';
 import '../../providers/settings_providers.dart';
 
@@ -68,8 +69,9 @@ class _AddLeaveTypeDialogState extends State<AddLeaveTypeDialog> {
     );
     final errors = form.validate();
     final name = _nameCtrl.text.trim();
-    if (name.isEmpty) {
-      errors['name'] = 'Leave type name is required.';
+    final nameError = FormValidators.leaveTypeName(name);
+    if (nameError != null) {
+      errors['name'] = nameError;
     }
     if (errors.isNotEmpty) {
       setState(() {
@@ -162,7 +164,16 @@ class _AddLeaveTypeDialogState extends State<AddLeaveTypeDialog> {
                         controller: _nameCtrl,
                         style: AppTextStyles.body,
                         autofocus: true,
-                        onChanged: (_) => setState(() => _nameError = null),
+                        onChanged: (v) {
+                          final cleaned = FormValidators.sanitizeLeaveTypeName(v);
+                          if (cleaned != v) {
+                            _nameCtrl.value = _nameCtrl.value.copyWith(
+                              text: cleaned,
+                              selection: TextSelection.collapsed(offset: cleaned.length),
+                            );
+                          }
+                          setState(() => _nameError = null);
+                        },
                         decoration: _dec('Leave Type Name *', _nameError),
                       ),
                       const SizedBox(height: 14),
@@ -186,7 +197,13 @@ class _AddLeaveTypeDialogState extends State<AddLeaveTypeDialog> {
                         subtitleOn: 'Unused days roll over to next year',
                         subtitleOff: 'Unused days expire at year end',
                         value: _canCarryForward,
-                        onChanged: (v) => setState(() => _canCarryForward = v),
+                        onChanged: (v) => setState(() {
+                          _canCarryForward = v;
+                          if (!v) {
+                            _carryFwdLimitCtrl.text = '0';
+                            _carryFwdLimitError = null;
+                          }
+                        }),
                       ),
                       if (_canCarryForward) ...[
                         const SizedBox(height: 12),

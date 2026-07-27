@@ -104,6 +104,48 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
       _ds.fetchRecordDetail(recordIdOrEmployeeId, date: date, isEmployeeId: isEmployeeId);
 
   @override
+  Future<AttendanceDetailEntity> createRecord({
+    required String employeeId,
+    required String date,
+    required String status,
+    String? clockIn,
+    String? clockOut,
+    String? note,
+    required String reason,
+  }) =>
+      _ds.createRecord(
+        employeeId: employeeId,
+        date: date,
+        status: status,
+        clockIn: clockIn,
+        clockOut: clockOut,
+        note: note,
+        reason: reason,
+      );
+
+  @override
+  Future<AttendanceDetailEntity> updateRecord(
+    String recordId, {
+    String? status,
+    String? clockIn,
+    String? clockOut,
+    String? note,
+    required String reason,
+  }) =>
+      _ds.updateRecord(
+        recordId,
+        status: status,
+        clockIn: clockIn,
+        clockOut: clockOut,
+        note: note,
+        reason: reason,
+      );
+
+  @override
+  Future<void> reprocessDay({required String date, String? branch, String? department}) =>
+      _ds.reprocessDay(date: date, branch: branch, department: department);
+
+  @override
   Future<PaginatedListEntity<OvertimeRowEntity>> getOvertimeList({
     String? date,
     String? branch,
@@ -194,6 +236,10 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
   @override
   Future<ImportResultEntity> importCsv(List<int> bytes, String fileName) =>
       _ds.importCsv(bytes, fileName);
+
+  @override
+  Future<List<int>> fetchImportSample({String format = 'csv'}) =>
+      _ds.fetchImportSample(format: format);
 
   @override
   Future<List<AttendanceAuditEntryEntity>> getRecordAudit(String recordId) =>

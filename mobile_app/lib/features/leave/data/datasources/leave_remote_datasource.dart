@@ -175,6 +175,26 @@ class LeaveRemoteDataSource {
     return LeaveStatsModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
+  // Authoritative day-count/LOP breakdown for a candidate leave request —
+  // GET /leave/requests/?action=preview (no dedicated URL; a read-only
+  // branch on the same list endpoint). leaveType is the short code ('EL',
+  // 'CL', ...); dates are 'YYYY-MM-DD'; duration matches DURATION_CHOICES.
+  Future<LeavePreviewModel> fetchLeavePreview({
+    required String leaveType,
+    required String startDate,
+    required String endDate,
+    String? duration,
+  }) async {
+    final res = await _dio.get(ApiConstants.leaves, queryParameters: {
+      'action': 'preview',
+      'leave_type': leaveType,
+      'start_date': startDate,
+      'end_date': endDate,
+      if (duration != null) 'duration': duration,
+    });
+    return LeavePreviewModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
   Future<List<LeaveCalendarEventModel>> fetchCalendar({
     int? year,
     int? month,

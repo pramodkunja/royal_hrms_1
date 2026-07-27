@@ -247,6 +247,50 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
 
   bool get _isHalfDay => _duration != _Duration.fullDay;
 
+  // Non-null once a leave type + full date range is selected — used to key
+  // the authoritative server-side day-count/LOP preview.
+  LeavePreviewParams? _previewParams(LeaveTypeOption? lt) {
+    if (lt == null || _fromDate == null) return null;
+    final end = _isHalfDay ? _fromDate! : _toDate;
+    if (end == null) return null;
+    return (
+      leaveType: lt.code,
+      startDate: _toIso(_fromDate!),
+      endDate: _toIso(end),
+      duration: _durationCode(),
+    );
+  }
+
+  // Prefers the server preview (accounts for holidays, which the local
+  // `_workingDays` estimate below does not) once it has loaded; falls back to
+  // the local estimate while the request is in flight or if it fails, so the
+  // form never blocks on this endpoint's availability.
+  double _effectiveDays(double localDays, LeavePreviewEntity? preview) =>
+      preview?.actualLeaveDays ?? localDays;
+
+  _BalanceCheck? _effectiveBalanceCheck(
+      _BalanceCheck? localCheck, LeavePreviewEntity? preview) {
+    if (preview == null) return localCheck;
+    if (preview.lopDays > 0) {
+      return _BalanceCheck(
+        mode: _BalanceMode.lop,
+        available: preview.availableBalance,
+        requested: preview.actualLeaveDays,
+        excess: preview.lopDays,
+      );
+    }
+    if (!preview.sufficientBalance) {
+      return _BalanceCheck(
+        mode: _BalanceMode.blocked,
+        available: preview.availableBalance,
+        requested: preview.actualLeaveDays,
+        excess: (preview.actualLeaveDays - preview.availableBalance)
+            .clamp(0, double.infinity),
+      );
+    }
+    return null;
+  }
+
   // Mirrors backend `_calc_working_days`: weekly-off days (Sat/Sun) are
   // excluded from the count UNLESS the leave type's policy has sandwich
   // leave enabled or counts week-offs as leave, in which case every
@@ -325,8 +369,17 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
     final lt = typeOptions.firstWhere((t) => t.key == _selectedType,
         orElse: () => typeOptions.first);
     final entity = _resolveLeaveEntity(typeEntities, lt.code);
-    final days =
+    final localDays =
         _isHalfDay ? 0.5 : _workingDays(_fromDate!, _toDate, entity).toDouble();
+
+    // Prefer the server preview (already fetched for display) as the
+    // authoritative day count / balance check — it accounts for company
+    // holidays, which the local estimate above does not.
+    final previewParams = _previewParams(lt);
+    final preview = previewParams == null
+        ? null
+        : ref.read(leavePreviewProvider(previewParams)).valueOrNull;
+    final days = _effectiveDays(localDays, preview);
 
     final preErrors = _preSubmitErrors(
         entity: entity, isHalfDay: _isHalfDay, start: _fromDate!, days: days);
@@ -336,13 +389,14 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
     }
 
     final isLwp = LeaveTypeColors.isLwp(lt.code);
-    final balanceCheck = _evaluateBalance(
+    final localBalanceCheck = _evaluateBalance(
       isLwp: isLwp,
       available: lt.balance.toDouble(),
       requested: days,
       convertToLop: entity.convertToLop,
       allowNegativeBalance: entity.allowNegativeBalance,
     );
+    final balanceCheck = _effectiveBalanceCheck(localBalanceCheck, preview);
     if (balanceCheck?.mode == _BalanceMode.blocked) {
       setState(() => _error =
           'Exceeds balance by ${_fmtDays(balanceCheck!.excess)}d. Only ${_fmtDays(balanceCheck.available)}d available.');
@@ -567,13 +621,24 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
     final selectedEntity =
         _resolveLeaveEntity(typeEntities, lt?.code ?? _selectedType);
 
-    final days = _fromDate != null
+    final localDays = _fromDate != null
         ? (_isHalfDay
             ? 0.5
             : _workingDays(_fromDate!, _toDate, selectedEntity).toDouble())
         : 0.0;
 
-    final balanceCheck = lt == null
+    // Authoritative server-side breakdown (holiday-aware) — only fetched once
+    // a full type + date range is selected; falls back to the local estimate
+    // above while loading/on error so the form stays responsive offline.
+    final previewParams = _previewParams(lt);
+    final previewAsync = previewParams == null
+        ? const AsyncValue<LeavePreviewEntity>.loading()
+        : ref.watch(leavePreviewProvider(previewParams));
+    final preview = previewAsync.valueOrNull;
+
+    final days = _effectiveDays(localDays, preview);
+
+    final localBalanceCheck = lt == null
         ? null
         : _evaluateBalance(
             isLwp: LeaveTypeColors.isLwp(lt.code),
@@ -582,6 +647,7 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
             convertToLop: selectedEntity.convertToLop,
             allowNegativeBalance: selectedEntity.allowNegativeBalance,
           );
+    final balanceCheck = _effectiveBalanceCheck(localBalanceCheck, preview);
     final blocked = balanceCheck?.mode == _BalanceMode.blocked;
 
     final hasDateRange = _fromDate != null && (_isHalfDay || _toDate != null);
@@ -716,6 +782,13 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
                     if (balanceCheck != null) ...[
                       const SizedBox(height: 10),
                       _BalanceStatusBanner(check: balanceCheck),
+                    ],
+                    if (preview != null &&
+                        (preview.companyHolidayCount > 0 ||
+                            preview.weekOffCount > 0 ||
+                            preview.warning.isNotEmpty)) ...[
+                      const SizedBox(height: 8),
+                      _PreviewBreakdownNote(preview: preview),
                     ],
                   ],
                 ],
@@ -1309,6 +1382,77 @@ class _InlineErrors extends StatelessWidget {
                 ),
               ))
           .toList(),
+    );
+  }
+}
+
+// ── Preview breakdown note (holidays/week-offs excluded, policy warning) ────
+//
+// Surfaces the server preview's holiday/week-off exclusions and any policy
+// warning (e.g. max-consecutive-days-with-LOP) so the day count shown in the
+// chip above isn't a mystery — mirrors the breakdown panel the web preview
+// endpoint was built to drive.
+
+class _PreviewBreakdownNote extends StatelessWidget {
+  final LeavePreviewEntity preview;
+  const _PreviewBreakdownNote({required this.preview});
+
+  @override
+  Widget build(BuildContext context) {
+    final parts = <String>[
+      if (preview.companyHolidayCount > 0)
+        '${preview.companyHolidayCount} holiday${preview.companyHolidayCount == 1 ? "" : "s"}',
+      if (preview.weekOffCount > 0)
+        '${preview.weekOffCount} week-off${preview.weekOffCount == 1 ? "" : "s"}',
+    ];
+    final excludedNote = parts.isEmpty
+        ? null
+        : (preview.sandwichLeaveEnabled
+            ? '${parts.join(" + ")} included (sandwich leave policy).'
+            : '${parts.join(" + ")} excluded from the day count.');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.info.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.info.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (excludedNote != null)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, size: 13, color: AppColors.info),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(excludedNote,
+                      style: AppTextStyles.caption
+                          .copyWith(fontSize: 10.5, color: AppColors.info)),
+                ),
+              ],
+            ),
+          if (preview.warning.isNotEmpty) ...[
+            if (excludedNote != null) const SizedBox(height: 4),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.warning_amber_outlined,
+                    size: 13, color: AppColors.warning),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(preview.warning,
+                      style: AppTextStyles.caption.copyWith(
+                          fontSize: 10.5, color: AppColors.warning)),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

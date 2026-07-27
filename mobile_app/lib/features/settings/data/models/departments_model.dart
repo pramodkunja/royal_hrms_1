@@ -1,5 +1,20 @@
 import 'package:flutter/foundation.dart';
 
+// A role currently active within a department — read-only, computed by the
+// backend from users with that department + role (DepartmentSerializer.get_roles).
+@immutable
+class DepartmentRoleTag {
+  final String name;
+  final String displayName;
+
+  const DepartmentRoleTag({required this.name, required this.displayName});
+
+  factory DepartmentRoleTag.fromJson(Map<String, dynamic> json) => DepartmentRoleTag(
+    name:        json['name'] as String? ?? '',
+    displayName: json['display_name'] as String? ?? '',
+  );
+}
+
 @immutable
 class DepartmentModel {
   final int id;
@@ -8,6 +23,7 @@ class DepartmentModel {
   final bool isActive;
   final int designationCount;  // designation_count
   final int employeeCount;     // employee_count
+  final List<DepartmentRoleTag> roles;
 
   const DepartmentModel({
     required this.id,
@@ -16,6 +32,7 @@ class DepartmentModel {
     required this.isActive,
     required this.designationCount,
     required this.employeeCount,
+    this.roles = const [],
   });
 
   factory DepartmentModel.fromJson(Map<String, dynamic> json) => DepartmentModel(
@@ -25,6 +42,9 @@ class DepartmentModel {
     isActive:         json['is_active'] as bool? ?? true,
     designationCount: json['designation_count'] as int? ?? 0,
     employeeCount:    json['employee_count'] as int? ?? 0,
+    roles: (json['roles'] as List<dynamic>? ?? [])
+        .map((e) => DepartmentRoleTag.fromJson(e as Map<String, dynamic>))
+        .toList(),
   );
 }
 

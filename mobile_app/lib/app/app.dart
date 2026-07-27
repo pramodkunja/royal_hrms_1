@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_theme.dart';
 import 'package:mobile_app/core/theme/theme_mode_provider.dart';
+import 'package:mobile_app/features/voice_commands/presentation/widgets/voice_mic_overlay.dart';
 
 class RoyalHrmsApp extends ConsumerWidget {
   const RoyalHrmsApp({super.key});
@@ -28,6 +29,28 @@ class RoyalHrmsApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.themeFor(isDark),
       routerConfig: router,
+      // Wraps every route the router produces (not just the dashboard
+      // shell) so the voice mic is available on every screen — the overlay
+      // itself decides whether it's eligible to show (see VoiceMicOverlay).
+      //
+      // This Stack sits alongside `child` (the router's own Navigator), not
+      // inside it, so it has no Overlay ancestor of its own — and
+      // FloatingActionButton/IconButton's `tooltip` internally need one
+      // (RawTooltip requires Overlay.of(context)). Giving the mic overlay
+      // its own nested Overlay, rather than dropping the tooltips, is the
+      // fix Flutter's own assertion message points at.
+      builder: (context, child) => Stack(
+        children: [
+          if (child != null) child,
+          Positioned.fill(
+            child: Overlay(
+              initialEntries: [
+                OverlayEntry(builder: (_) => const VoiceMicOverlay()),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

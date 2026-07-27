@@ -16,6 +16,7 @@ const _kWorkflowIcons = <String, IconData>{
   'expense': Icons.account_balance_wallet_outlined,
   'resignation': Icons.logout_outlined,
   'loan': Icons.payments_outlined,
+  'attendance_correction': Icons.edit_calendar_outlined,
 };
 
 // The 3 approver roles a rule's L1/L2 can be set to — matches backend's
@@ -32,8 +33,8 @@ class ApprovalRulesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(approvalRulesProvider);
-    final role = ref.watch(authStateProvider).valueOrNull?.user?.role ?? '';
-    final canEdit = role == 'hr_admin' || role == 'system_admin';
+    final permissions = ref.watch(authStateProvider).valueOrNull?.user?.permissions ?? const [];
+    final canEdit = permissions.contains('settings.edit');
 
     return Scaffold(
       backgroundColor: AppColors.background,

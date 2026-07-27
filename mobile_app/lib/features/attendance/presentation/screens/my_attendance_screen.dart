@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/location/location_service.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/device_identifier.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/attendance_entity.dart';
 import '../providers/attendance_providers.dart';
@@ -113,11 +114,13 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
     if (_punching) return;
     setState(() => _punching = true);
 
-    // Matches web's ClockWidget exactly: geolocation is only requested for
-    // 'office' mode — other modes are recorded without a geofence check.
-    final position = _attendanceMode == 'office'
-        ? await ref.read(locationServiceProvider).getCurrentPosition()
-        : null;
+    // Location is captured best-effort for every mode, not just 'office' —
+    // only 'office' punches are geofence-checked server-side, but wfh/field/
+    // client_location/remote_office still record GPS for the audit trail
+    // when it's available. getCurrentPosition() never throws and resolves to
+    // null on any permission/timeout/service failure, so this never blocks
+    // the punch.
+    final position = await ref.read(locationServiceProvider).getCurrentPosition();
 
     if (!mounted) return;
     final error = await ref.read(todayAttendanceProvider.notifier).punch(
@@ -137,6 +140,7 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
                       ? 'iOS'
                       : null,
           operatingSystem: kIsWeb ? 'web' : Platform.operatingSystem,
+          deviceId: await ref.read(deviceIdProvider.future),
         );
 
     if (!mounted) return;
@@ -593,7 +597,7 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
                   crossAxisCount: 3,
                   mainAxisSpacing: 10,
                   crossAxisSpacing: 10,
-                  mainAxisExtent: 64,
+                  mainAxisExtent: 72,
                 ),
                 itemCount: cells.length,
                 itemBuilder: (_, i) => cells[i],
@@ -758,15 +762,23 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
                             height: 30,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: isToday ? AppColors.primary : Colors.transparent,
+                              color: isToday
+                                  ? AppColors.primary
+                                  : dotColor != null
+                                      ? dotColor.withValues(alpha: 0.15)
+                                      : Colors.transparent,
                             ),
                             alignment: Alignment.center,
                             child: Text(
                               '$day',
                               style: TextStyle(
                                 fontSize: 12,
-                                fontWeight: isToday ? FontWeight.w700 : FontWeight.w400,
-                                color: isToday ? Colors.white : AppColors.textPrimary,
+                                fontWeight: isToday || dotColor != null
+                                    ? FontWeight.w700
+                                    : FontWeight.w400,
+                                color: isToday
+                                    ? Colors.white
+                                    : dotColor ?? AppColors.textPrimary,
                               ),
                             ),
                           ),
@@ -863,7 +875,12 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _DetailRow('Status', record.status),
+            _DetailRow(
+              'Status',
+              (record.holidayName != null && record.holidayName!.isNotEmpty)
+                  ? '${record.status} — ${record.holidayName}'
+                  : record.status,
+            ),
             if (record.clockIn != null) _DetailRow('Clock In', record.clockIn!),
             if (record.clockOut != null) _DetailRow('Clock Out', record.clockOut!),
             if (record.hours != null) _DetailRow('Hours', record.hours!),

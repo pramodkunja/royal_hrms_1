@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../shared/widgets/expandable_fab.dart';
 import '../data/models/employee_model.dart';
 import 'providers/employee_providers.dart';
 import 'widgets/add_employee_sheet.dart';
@@ -20,6 +21,7 @@ class EmployeesScreen extends ConsumerStatefulWidget {
 
 class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   final _searchCtrl = TextEditingController();
+  bool _fabExpanded = false;
 
   @override
   void dispose() {
@@ -48,7 +50,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
             children: [
               const SizedBox(height: 8),
               Container(
-                width: 36, height: 4,
+                width: 36,
+                height: 4,
                 decoration: BoxDecoration(
                   color: AppColors.border,
                   borderRadius: BorderRadius.circular(2),
@@ -93,256 +96,276 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final statsAsync    = ref.watch(employeeStatsProvider);
+    final statsAsync = ref.watch(employeeStatsProvider);
     final filteredAsync = ref.watch(filteredEmployeesProvider);
-    final filters       = ref.watch(employeeFiltersProvider);
-    final branches      = ref.watch(employeeBranchNameListProvider);
-    final depts         = ref.watch(employeeDepartmentListProvider);
+    final filters = ref.watch(employeeFiltersProvider);
+    final branches = ref.watch(employeeBranchNameListProvider);
+    final depts = ref.watch(employeeDepartmentListProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final added = await AddEmployeeSheet.show(context);
-          if (added == true) {
-            ref.read(employeesProvider.notifier).refresh();
-          }
-        },
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.person_add_outlined, size: 20),
-        label: Text('Add Employee',
-            style: AppTextStyles.label
-                .copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
+      floatingActionButton: ExpandableFab(
+        heroTag: 'employees_fab',
+        expanded: _fabExpanded,
+        onToggle: () => setState(() => _fabExpanded = !_fabExpanded),
+        actions: [
+          ExpandableFabAction(
+            icon: Icons.upload_file_outlined,
+            label: 'Bulk Import',
+            onTap: () {
+              setState(() => _fabExpanded = false);
+              context.push(AppRoutes.employeeBulkImport);
+            },
+          ),
+          ExpandableFabAction(
+            icon: Icons.person_add_outlined,
+            label: 'Add Employee',
+            onTap: () async {
+              setState(() => _fabExpanded = false);
+              final added = await AddEmployeeSheet.show(context);
+              if (added == true) {
+                ref.read(employeesProvider.notifier).refresh();
+              }
+            },
+          ),
+        ],
       ),
-      body: RefreshIndicator(
-        color: AppColors.primary,
-        onRefresh: () => ref.read(employeesProvider.notifier).refresh(),
-        child: CustomScrollView(
-          slivers: [
-            // ── Stats 2×2 grid ─────────────────────────────────────────
-            SliverToBoxAdapter(
-              child: _StatsGrid(statsAsync: statsAsync),
-            ),
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            color: AppColors.primary,
+            onRefresh: () => ref.read(employeesProvider.notifier).refresh(),
+            child: CustomScrollView(
+              slivers: [
+                // ── Stats 2×2 grid ─────────────────────────────────────────
+                SliverToBoxAdapter(
+                  child: _StatsGrid(statsAsync: statsAsync),
+                ),
 
-            // ── Search ─────────────────────────────────────────────────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-                child: TextField(
-                  controller: _searchCtrl,
-                  style: AppTextStyles.body,
-                  onChanged: (v) => ref
-                      .read(employeeFiltersProvider.notifier)
-                      .state = filters.copyWith(search: v),
-                  decoration: InputDecoration(
-                    hintText: 'Search employees...',
-                    hintStyle: AppTextStyles.body
-                        .copyWith(color: AppColors.textHint),
-                    prefixIcon: Icon(Icons.search,
-                        size: 20, color: AppColors.textHint),
-                    suffixIcon: _searchCtrl.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, size: 18),
-                            onPressed: () {
-                              _searchCtrl.clear();
-                              ref
+                // ── Search ─────────────────────────────────────────────────
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+                    child: TextField(
+                      controller: _searchCtrl,
+                      style: AppTextStyles.body,
+                      onChanged: (v) => ref
+                          .read(employeeFiltersProvider.notifier)
+                          .state = filters.copyWith(search: v),
+                      decoration: InputDecoration(
+                        hintText: 'Search employees...',
+                        hintStyle: AppTextStyles.body
+                            .copyWith(color: AppColors.textHint),
+                        prefixIcon: Icon(Icons.search,
+                            size: 20, color: AppColors.textHint),
+                        suffixIcon: _searchCtrl.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, size: 18),
+                                onPressed: () {
+                                  _searchCtrl.clear();
+                                  ref
+                                      .read(employeeFiltersProvider.notifier)
+                                      .state = filters.copyWith(search: '');
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: AppColors.surface,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: AppColors.border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide:
+                              BorderSide(color: AppColors.primary, width: 1.5),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // ── Filter pill chips ───────────────────────────────────────
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 42,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                      children: [
+                        // Branch chip
+                        if (branches.isNotEmpty) ...[
+                          _FilterChip(
+                            label: 'All Branches',
+                            selected: filters.branch,
+                            onTap: () => _showPicker(
+                              context: context,
+                              title: 'Filter by Branch',
+                              options: branches,
+                              current: filters.branch,
+                              onSelect: (v) => ref
                                   .read(employeeFiltersProvider.notifier)
-                                  .state = filters.copyWith(search: '');
-                            },
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: AppColors.surface,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: AppColors.border),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                          color: AppColors.primary, width: 1.5),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 12),
-                  ),
-                ),
-              ),
-            ),
-
-            // ── Filter pill chips ───────────────────────────────────────
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 42,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                  children: [
-                    // Branch chip
-                    if (branches.isNotEmpty) ...[
-                      _FilterChip(
-                        label: 'All Branches',
-                        selected: filters.branch,
-                        onTap: () => _showPicker(
-                          context: context,
-                          title: 'Filter by Branch',
-                          options: branches,
-                          current: filters.branch,
-                          onSelect: (v) => ref
-                              .read(employeeFiltersProvider.notifier)
-                              .state = filters.copyWith(branch: v),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                    ],
-                    // Department chip
-                    if (depts.isNotEmpty) ...[
-                      _FilterChip(
-                        label: 'All Departments',
-                        selected: filters.department,
-                        onTap: () => _showPicker(
-                          context: context,
-                          title: 'Filter by Department',
-                          options: depts,
-                          current: filters.department,
-                          onSelect: (v) => ref
-                              .read(employeeFiltersProvider.notifier)
-                              .state = filters.copyWith(department: v),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                    ],
-                    // Status chip
-                    _FilterChip(
-                      label: 'All Status',
-                      selected: filters.status,
-                      displayMap: const {
-                        'active':     'Active',
-                        'onboarding': 'Onboarding',
-                        'inactive':   'Inactive',
-                      },
-                      onTap: () => _showPicker(
-                        context: context,
-                        title: 'Filter by Status',
-                        options: const ['active', 'onboarding', 'inactive'],
-                        current: filters.status,
-                        onSelect: (v) => ref
-                            .read(employeeFiltersProvider.notifier)
-                            .state = filters.copyWith(status: v),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SliverToBoxAdapter(child: SizedBox(height: 8)),
-
-            // ── Active filter count banner ───────────────────────────────
-            if (filters.hasActive)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                              color:
-                                  AppColors.primary.withValues(alpha: 0.20)),
-                        ),
-                        child: Text(
-                          '${filters.activeCount} filter${filters.activeCount == 1 ? '' : 's'} active',
-                          style: AppTextStyles.caption.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      GestureDetector(
-                        onTap: () {
-                          _searchCtrl.clear();
-                          ref
-                              .read(employeeFiltersProvider.notifier)
-                              .state = const EmployeeFilters();
-                        },
-                        child: Text('Clear all',
-                            style: AppTextStyles.caption.copyWith(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.w700,
-                                decoration: TextDecoration.underline)),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            // ── Results count ───────────────────────────────────────────
-            if (filteredAsync.valueOrNull != null)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                  child: Text(
-                    '${filteredAsync.valueOrNull!.length} employee${filteredAsync.valueOrNull!.length == 1 ? '' : 's'}',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textHint,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-
-            // ── Employee list ───────────────────────────────────────────
-            filteredAsync.when(
-              loading: () => const SliverFillRemaining(
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              error: (err, _) => SliverFillRemaining(
-                child: _ErrorView(message: err.toString()),
-              ),
-              data: (employees) => employees.isEmpty
-                  ? SliverFillRemaining(
-                      child: _EmptyView(hasFilters: filters.hasActive),
-                    )
-                  : SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
-                      sliver: SliverList.separated(
-                        itemCount: employees.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: 10),
-                        itemBuilder: (_, i) {
-                          final emp = employees[i];
-                          return EmployeeCard(
-                            employee: emp,
-                            onView: () => context.push(
-                              AppRoutes.employeeProfilePath(emp.employeeId),
-                              extra: emp,
+                                  .state = filters.copyWith(branch: v),
                             ),
-                            onEdit: () async {
-                              final updated =
-                                  await AddEmployeeSheet.show(context,
-                                      editing: emp);
-                              if (updated == true) {
-                                ref
-                                    .read(employeesProvider.notifier)
-                                    .refresh();
-                              }
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        // Department chip
+                        if (depts.isNotEmpty) ...[
+                          _FilterChip(
+                            label: 'All Departments',
+                            selected: filters.department,
+                            onTap: () => _showPicker(
+                              context: context,
+                              title: 'Filter by Department',
+                              options: depts,
+                              current: filters.department,
+                              onSelect: (v) => ref
+                                  .read(employeeFiltersProvider.notifier)
+                                  .state = filters.copyWith(department: v),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        // Status chip
+                        _FilterChip(
+                          label: 'All Status',
+                          selected: filters.status,
+                          displayMap: const {
+                            'active': 'Active',
+                            'onboarding': 'Onboarding',
+                            'inactive': 'Inactive',
+                          },
+                          onTap: () => _showPicker(
+                            context: context,
+                            title: 'Filter by Status',
+                            options: const ['active', 'onboarding', 'inactive'],
+                            current: filters.status,
+                            onSelect: (v) => ref
+                                .read(employeeFiltersProvider.notifier)
+                                .state = filters.copyWith(status: v),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SliverToBoxAdapter(child: SizedBox(height: 8)),
+
+                // ── Active filter count banner ───────────────────────────────
+                if (filters.hasActive)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                  color: AppColors.primary
+                                      .withValues(alpha: 0.20)),
+                            ),
+                            child: Text(
+                              '${filters.activeCount} filter${filters.activeCount == 1 ? '' : 's'} active',
+                              style: AppTextStyles.caption.copyWith(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          GestureDetector(
+                            onTap: () {
+                              _searchCtrl.clear();
+                              ref.read(employeeFiltersProvider.notifier).state =
+                                  const EmployeeFilters();
                             },
-                          );
-                        },
+                            child: Text('Clear all',
+                                style: AppTextStyles.caption.copyWith(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w700,
+                                    decoration: TextDecoration.underline)),
+                          ),
+                        ],
                       ),
                     ),
+                  ),
+
+                // ── Results count ───────────────────────────────────────────
+                if (filteredAsync.valueOrNull != null)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                      child: Text(
+                        '${filteredAsync.valueOrNull!.length} employee${filteredAsync.valueOrNull!.length == 1 ? '' : 's'}',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.textHint,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // ── Employee list ───────────────────────────────────────────
+                filteredAsync.when(
+                  loading: () => const SliverFillRemaining(
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  error: (err, _) => SliverFillRemaining(
+                    child: _ErrorView(message: err.toString()),
+                  ),
+                  data: (employees) => employees.isEmpty
+                      ? SliverFillRemaining(
+                          child: _EmptyView(hasFilters: filters.hasActive),
+                        )
+                      : SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+                          sliver: SliverList.separated(
+                            itemCount: employees.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 10),
+                            itemBuilder: (_, i) {
+                              final emp = employees[i];
+                              return EmployeeCard(
+                                employee: emp,
+                                onView: () => context.push(
+                                  AppRoutes.employeeProfilePath(emp.employeeId),
+                                  extra: emp,
+                                ),
+                                onEdit: () async {
+                                  final updated = await AddEmployeeSheet.show(
+                                      context,
+                                      editing: emp);
+                                  if (updated == true) {
+                                    ref
+                                        .read(employeesProvider.notifier)
+                                        .refresh();
+                                  }
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          // Tap-outside-to-dismiss barrier for the expanded FAB menu.
+          ExpandableFabBarrier(
+            visible: _fabExpanded,
+            onDismiss: () => setState(() => _fabExpanded = false),
+          ),
+        ],
       ),
     );
   }
@@ -605,8 +628,7 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.cloud_off_outlined,
-                size: 48, color: AppColors.textHint),
+            Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
             const SizedBox(height: 12),
             Text('Could not load employees', style: AppTextStyles.h4),
             const SizedBox(height: 6),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../settings/data/models/departments_model.dart';
 import '../../../settings/data/models/roles_model.dart';
 import '../../data/models/employee_model.dart';
@@ -38,6 +39,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
   EmployeeUpdateFormData? _editForm;
   final _errors = <String, String>{};
   bool _submitting = false;
+  bool _branchPrefilled = false;
 
   @override
   void initState() {
@@ -53,6 +55,24 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // Mirrors web's AddEmployeeModal: non-system_admin users can only add
+    // employees under their own branch, so the field is pre-filled and
+    // locked as soon as the branch list loads (the backend doesn't enforce
+    // this server-side, so the client is the only guard).
+    final currentUser = ref.watch(authStateProvider).valueOrNull?.user;
+    final branchLocked = !_isEditing && currentUser != null && currentUser.role != 'system_admin';
+    if (branchLocked && !_branchPrefilled) {
+      final branches = ref.watch(employeeBranchesProvider).valueOrNull;
+      if (branches != null && (_createForm?.branch.isEmpty ?? false)) {
+        final own = branches
+            .where((b) => b.name.toLowerCase() == (currentUser.branch ?? '').toLowerCase())
+            .toList();
+        if (own.isNotEmpty) {
+          _createForm!.branch = own.first.name;
+          _branchPrefilled = true;
+        }
+      }
+    }
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -67,7 +87,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: _isEditing ? _editFields() : _createFields(),
+                children: _isEditing ? _editFields() : _createFields(branchLocked),
               ),
             ),
           ),
@@ -84,7 +104,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
 
   // ── Create-mode fields ───────────────────────────────────────────────────
 
-  List<Widget> _createFields() {
+  List<Widget> _createFields(bool branchLocked) {
     final form = _createForm!;
     return [
       const _SectionHeader(
@@ -190,6 +210,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
             child: _BranchDropdown(
               selectedBranch: form.branch.isEmpty ? null : form.branch,
               error: _errors['branch'],
+              locked: branchLocked,
               onSelected: (v) => setState(() => form.branch = v ?? ''),
             ),
           ),
@@ -247,37 +268,40 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
 
   List<Widget> _editFields() {
     final form = _editForm!;
+    // The employee record only stores `department` as a name string — the
+    // Designation dropdown needs the matching Department's id to enable
+    // itself, so resolve it here once the department list loads (it's never
+    // set by EmployeeUpdateFormData.fromModel, which has no access to it).
+    if (form.departmentId == null && form.department.isNotEmpty) {
+      final depts = ref.watch(employeeFormDepartmentsProvider).valueOrNull ?? [];
+      final match = depts.where((d) => d.name == form.department).firstOrNull;
+      if (match != null) form.departmentId = match.id;
+    }
     return [
       const _SectionHeader(
         icon: Icons.person_outline,
         label: 'PERSONAL INFORMATION',
       ),
       const SizedBox(height: 14),
-      _Field(
-        label: 'Full Name',
-        required: true,
-        initialValue: form.fullName,
-        error: _errors['full_name'],
-        onChanged: (v) => form.fullName = v,
-        hint: 'e.g. Anjali Sharma',
-      ),
+      // Full Name, Phone and Date of Joining are read-only forever here —
+      // matches web's Profile tab, which never offers them as editable even
+      // though the backend's PUT would technically accept a change.
+      _ReadOnlyField(label: 'Full Name', value: form.fullName),
       const SizedBox(height: 14),
       Row(
         children: [
           Expanded(
-            child: _Field(
+            child: _ReadOnlyField(
               label: 'Phone',
-              initialValue: form.phone,
-              onChanged: (v) => form.phone = v,
-              hint: '+91 98765 43210',
-              keyboardType: TextInputType.phone,
+              value: form.phone.isEmpty ? '—' : form.phone,
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: _DateField(
               label: 'Date of Birth',
-              required: false,
+              required: true,
+              error: _errors['date_of_birth'],
               isoValue: form.dateOfBirth,
               onChanged: (iso) => setState(() => form.dateOfBirth = iso),
               firstDate: DateTime(1950),
@@ -345,11 +369,9 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
         ],
       ),
       const SizedBox(height: 14),
-      _DateField(
+      _ReadOnlyField(
         label: 'Date of Joining',
-        isoValue: form.dateOfJoining,
-        error: _errors['date_of_joining'],
-        onChanged: (iso) => setState(() => form.dateOfJoining = iso),
+        value: form.dateOfJoining.isEmpty ? '—' : form.dateOfJoining,
       ),
       const SizedBox(height: 22),
       const _SectionHeader(
@@ -561,6 +583,41 @@ class _Field extends StatelessWidget {
   }
 }
 
+// ── Read-only display field (edit mode — identity fields locked forever) ───────
+
+class _ReadOnlyField extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ReadOnlyField({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          _Label(text: label),
+          const SizedBox(width: 6),
+          Icon(Icons.lock_outline, size: 11, color: AppColors.textHint),
+        ]),
+        const SizedBox(height: 5),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Text(value,
+              style: AppTextStyles.body.copyWith(color: AppColors.textSecondary)),
+        ),
+      ],
+    );
+  }
+}
+
 // ── Role dropdown (create mode — keyed by role id) ─────────────────────────────
 
 class _RoleIdDropdown extends ConsumerWidget {
@@ -577,7 +634,10 @@ class _RoleIdDropdown extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final rolesAsync = ref.watch(employeeFormRolesProvider);
-    final roles = rolesAsync.valueOrNull ?? [];
+    // system_admin is never assignable via employee create/edit — the
+    // backend rejects it outright, and web excludes it from this dropdown.
+    final roles =
+        (rolesAsync.valueOrNull ?? []).where((r) => r.name != 'system_admin').toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -621,7 +681,10 @@ class _RoleSlugDropdown extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final rolesAsync = ref.watch(employeeFormRolesProvider);
-    final roles = rolesAsync.valueOrNull ?? [];
+    // system_admin is never assignable via employee create/edit — the
+    // backend rejects it outright, and web excludes it from this dropdown.
+    final roles =
+        (rolesAsync.valueOrNull ?? []).where((r) => r.name != 'system_admin').toList();
     final selected = roles.where((r) => r.name == selectedName).firstOrNull;
 
     return Column(
@@ -769,11 +832,13 @@ class _DesignationDropdown extends ConsumerWidget {
 class _BranchDropdown extends ConsumerWidget {
   final String? selectedBranch;
   final String? error;
+  final bool locked;
   final ValueChanged<String?> onSelected;
 
   const _BranchDropdown({
     this.selectedBranch,
     this.error,
+    this.locked = false,
     required this.onSelected,
   });
 
@@ -785,19 +850,31 @@ class _BranchDropdown extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _Label(text: 'Branch', required: true),
+        Row(children: [
+          const _Label(text: 'Branch', required: true),
+          if (locked) ...[
+            const SizedBox(width: 6),
+            Icon(Icons.lock_outline, size: 11, color: AppColors.textHint),
+          ],
+        ]),
         const SizedBox(height: 5),
-        DropdownButtonFormField<String>(
-          initialValue: selectedBranch,
-          style: AppTextStyles.body,
-          isExpanded: true,
-          decoration: _inputDec('— Select Branch —', error: error),
-          hint: Text('— Select Branch —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
-          items: branches.map((b) => DropdownMenuItem(
-            value: b.name,
-            child: Text(b.name, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
-          )).toList(),
-          onChanged: onSelected,
+        IgnorePointer(
+          ignoring: locked,
+          child: Opacity(
+            opacity: locked ? 0.6 : 1,
+            child: DropdownButtonFormField<String>(
+              initialValue: selectedBranch,
+              style: AppTextStyles.body,
+              isExpanded: true,
+              decoration: _inputDec('— Select Branch —', error: error),
+              hint: Text('— Select Branch —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
+              items: branches.map((b) => DropdownMenuItem(
+                value: b.name,
+                child: Text(b.name, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+              )).toList(),
+              onChanged: onSelected,
+            ),
+          ),
         ),
         if (error != null) ...[
           const SizedBox(height: 3),
@@ -924,7 +1001,7 @@ class _EmployeeTypeDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const types = ['Permanent', 'Contract', 'Intern', 'Part-time'];
+    const types = ['Permanent', 'Contract', 'Intern', 'Probation'];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

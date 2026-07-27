@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../branches/presentation/providers/branch_providers.dart';
 import '../../data/models/holiday_model.dart';
 import '../widgets/settings_app_bar.dart';
 import 'holiday_calendar_providers.dart';
@@ -16,7 +17,6 @@ const _kMonthNames = [
 const _kMonthShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const _kWeekdayShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const _kDayHeaders = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-const _kBranches = ['All Branches', 'Head Office', 'Mumbai', 'Chennai', 'Hyderabad', 'Bengaluru', 'Delhi'];
 const _kPageSize = 10;
 
 class HolidayCalendarScreen extends ConsumerStatefulWidget {
@@ -54,11 +54,48 @@ class _HolidayCalendarScreenState extends ConsumerState<HolidayCalendarScreen> {
 
   void _resetPage() => setState(() => _page = 1);
 
+  HolidaysKey get _key => (year: _year, branchName: _branch == 'All Branches' ? null : _branch);
+
   @override
   Widget build(BuildContext context) {
-    final holidays = ref.watch(holidaysProvider);
-    final yearHolidays = holidays.where((h) => h.date.year == _year).toList();
+    final asyncHolidays = ref.watch(holidaysProvider(_key));
+    final branchNames = ref.watch(branchListProvider).valueOrNull
+            ?.map((b) => b.branchName)
+            .toList() ??
+        const <String>[];
 
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: const SettingsAppBar(title: 'Holiday Calendar'),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _openHolidayForm(null),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Holiday', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      body: SafeArea(
+        child: asyncHolidays.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => _ErrorView(
+            message: friendlyHolidayError(e),
+            onRetry: () => ref.read(holidaysProvider(_key).notifier).refresh(),
+          ),
+          data: (yearHolidays) => RefreshIndicator(
+            onRefresh: () => ref.read(holidaysProvider(_key).notifier).refresh(),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+              child: _buildContent(yearHolidays, branchNames),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(List<HolidayModel> yearHolidays, List<String> branchNames) {
     final stats = (
       total: yearHolidays.length,
       national: yearHolidays.where((h) => h.type == HolidayType.national).length,
@@ -71,11 +108,6 @@ class _HolidayCalendarScreenState extends ConsumerState<HolidayCalendarScreen> {
       if (_filterTab == 'optional' && !h.isOptional) return false;
       if (_filterTab != 'all' && _filterTab != 'optional' && h.type != _filterTab) return false;
       if (_typeFilter.isNotEmpty && h.type != _typeFilter) return false;
-      if (_branch != 'All Branches' &&
-          h.applicableBranches != 'All' &&
-          !h.applicableBranches.contains(_branch)) {
-        return false;
-      }
       if (_monthFilter != null && h.date.month - 1 != _monthFilter) return false;
       if (_query.isNotEmpty && !h.name.toLowerCase().contains(_query.toLowerCase())) return false;
       return true;
@@ -91,122 +123,106 @@ class _HolidayCalendarScreenState extends ConsumerState<HolidayCalendarScreen> {
     final hasActiveFilters =
         _query.isNotEmpty || _branch != 'All Branches' || _typeFilter.isNotEmpty || _monthFilter != null;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: const SettingsAppBar(title: 'Holiday Calendar'),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openHolidayForm(null),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Holiday', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Manage national, regional and company holidays', style: AppTextStyles.bodySecondary),
-              const SizedBox(height: 14),
-              _YearAndBranchRow(
-                year: _year,
-                branch: _branch,
-                onYearChanged: (y) => setState(() { _year = y; _resetPage(); }),
-                onBranchChanged: (b) => setState(() { _branch = b; _resetPage(); }),
-              ),
-              const SizedBox(height: 12),
-              _SearchBar(
-                controller: _searchCtrl,
-                onChanged: (v) => setState(() { _query = v; _resetPage(); }),
-              ),
-              const SizedBox(height: 14),
-              _StatsRow(stats: stats),
-              const SizedBox(height: 14),
-              _FilterTabsRow(
-                active: _filterTab,
-                stats: stats,
-                onSelect: (t) => setState(() { _filterTab = t; _resetPage(); }),
-              ),
-              const SizedBox(height: 10),
-              _ViewToggle(
-                mode: _viewMode,
-                onChanged: (m) => setState(() => _viewMode = m),
-              ),
-              const SizedBox(height: 12),
-              _AdditionalFilters(
-                typeFilter: _typeFilter,
-                monthFilter: _monthFilter,
-                hasActiveFilters: hasActiveFilters,
-                onTypeChanged: (t) => setState(() { _typeFilter = t; _resetPage(); }),
-                onMonthChanged: (m) => setState(() { _monthFilter = m; _resetPage(); }),
-                onClear: () => setState(() {
-                  _searchCtrl.clear();
-                  _query = '';
-                  _branch = 'All Branches';
-                  _typeFilter = '';
-                  _monthFilter = null;
-                  _page = 1;
-                }),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                '${filtered.length} holiday${filtered.length == 1 ? '' : 's'}',
-                style: AppTextStyles.caption,
-              ),
-              const SizedBox(height: 10),
-
-              if (_viewMode == 'list') ...[
-                if (pageItems.isEmpty)
-                  _EmptyState(year: _year, onAdd: () => _openHolidayForm(null))
-                else
-                  ...pageItems.map((h) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _HolidayCard(
-                          holiday: h,
-                          onView: () => _openHolidayView(h),
-                          onEdit: () => _openHolidayForm(h),
-                          onDelete: () => _confirmDelete(h),
-                          onToggleActive: () => ref.read(holidaysProvider.notifier).toggleActive(h.id),
-                        ),
-                      )),
-                if (totalPages > 1)
-                  _PaginationBar(
-                    page: _page,
-                    totalPages: totalPages,
-                    onPrev: () => setState(() => _page--),
-                    onNext: () => setState(() => _page++),
-                  ),
-              ] else ...[
-                _CalendarMonthNav(
-                  calMonth: _calMonth,
-                  onPrev: () => setState(() => _calMonth = DateTime(_calMonth.year, _calMonth.month - 1, 1)),
-                  onNext: () => setState(() => _calMonth = DateTime(_calMonth.year, _calMonth.month + 1, 1)),
-                ),
-                const SizedBox(height: 8),
-                _CalendarGrid(
-                  calMonth: _calMonth,
-                  holidays: yearHolidays.where((h) => h.date.month == _calMonth.month).toList(),
-                  onTapHoliday: _openHolidayView,
-                ),
-                if (calHolidays.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Text('Holidays in ${_kMonthNames[_calMonth.month - 1]}', style: AppTextStyles.h4),
-                  const SizedBox(height: 8),
-                  ...calHolidays.map((h) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: _CalendarSummaryRow(holiday: h, onTap: () => _openHolidayView(h)),
-                      )),
-                ],
-              ],
-
-              const SizedBox(height: 16),
-              const _Legend(),
-            ],
-          ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Manage national, regional and company holidays', style: AppTextStyles.bodySecondary),
+        const SizedBox(height: 14),
+        _YearAndBranchRow(
+          year: _year,
+          branch: _branch,
+          branchOptions: ['All Branches', ...branchNames],
+          onYearChanged: (y) => setState(() { _year = y; _resetPage(); }),
+          onBranchChanged: (b) => setState(() { _branch = b; _resetPage(); }),
         ),
-      ),
+        const SizedBox(height: 12),
+        _SearchBar(
+          controller: _searchCtrl,
+          onChanged: (v) => setState(() { _query = v; _resetPage(); }),
+        ),
+        const SizedBox(height: 14),
+        _StatsRow(stats: stats),
+        const SizedBox(height: 14),
+        _FilterTabsRow(
+          active: _filterTab,
+          stats: stats,
+          onSelect: (t) => setState(() { _filterTab = t; _resetPage(); }),
+        ),
+        const SizedBox(height: 10),
+        _ViewToggle(
+          mode: _viewMode,
+          onChanged: (m) => setState(() => _viewMode = m),
+        ),
+        const SizedBox(height: 12),
+        _AdditionalFilters(
+          typeFilter: _typeFilter,
+          monthFilter: _monthFilter,
+          hasActiveFilters: hasActiveFilters,
+          onTypeChanged: (t) => setState(() { _typeFilter = t; _resetPage(); }),
+          onMonthChanged: (m) => setState(() { _monthFilter = m; _resetPage(); }),
+          onClear: () => setState(() {
+            _searchCtrl.clear();
+            _query = '';
+            _branch = 'All Branches';
+            _typeFilter = '';
+            _monthFilter = null;
+            _page = 1;
+          }),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          '${filtered.length} holiday${filtered.length == 1 ? '' : 's'}',
+          style: AppTextStyles.caption,
+        ),
+        const SizedBox(height: 10),
+
+        if (_viewMode == 'list') ...[
+          if (pageItems.isEmpty)
+            _EmptyState(year: _year, onAdd: () => _openHolidayForm(null))
+          else
+            ...pageItems.map((h) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _HolidayCard(
+                    holiday: h,
+                    onView: () => _openHolidayView(h),
+                    onEdit: () => _openHolidayForm(h),
+                    onDelete: () => _confirmDelete(h),
+                    onToggleActive: () => _toggleActive(h),
+                  ),
+                )),
+          if (totalPages > 1)
+            _PaginationBar(
+              page: _page,
+              totalPages: totalPages,
+              onPrev: () => setState(() => _page--),
+              onNext: () => setState(() => _page++),
+            ),
+        ] else ...[
+          _CalendarMonthNav(
+            calMonth: _calMonth,
+            onPrev: () => setState(() => _calMonth = DateTime(_calMonth.year, _calMonth.month - 1, 1)),
+            onNext: () => setState(() => _calMonth = DateTime(_calMonth.year, _calMonth.month + 1, 1)),
+          ),
+          const SizedBox(height: 8),
+          _CalendarGrid(
+            calMonth: _calMonth,
+            holidays: yearHolidays.where((h) => h.date.month == _calMonth.month).toList(),
+            onTapHoliday: _openHolidayView,
+          ),
+          if (calHolidays.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text('Holidays in ${_kMonthNames[_calMonth.month - 1]}', style: AppTextStyles.h4),
+            const SizedBox(height: 8),
+            ...calHolidays.map((h) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _CalendarSummaryRow(holiday: h, onTap: () => _openHolidayView(h)),
+                )),
+          ],
+        ],
+
+        const SizedBox(height: 16),
+        const _Legend(),
+      ],
     );
   }
 
@@ -218,7 +234,7 @@ class _HolidayCalendarScreenState extends ConsumerState<HolidayCalendarScreen> {
         insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 60),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        child: HolidayFormDialog(holiday: holiday, ref: ref),
+        child: HolidayFormDialog(holiday: holiday, holidaysKey: _key),
       ),
     );
   }
@@ -233,6 +249,18 @@ class _HolidayCalendarScreenState extends ConsumerState<HolidayCalendarScreen> {
         child: HolidayViewDialog(holiday: holiday, onEdit: () => _openHolidayForm(holiday)),
       ),
     );
+  }
+
+  Future<void> _toggleActive(HolidayModel holiday) async {
+    final error = await ref.read(holidaysProvider(_key).notifier).toggleActive(holiday.id);
+    if (error != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
+    }
   }
 
   Future<void> _confirmDelete(HolidayModel holiday) async {
@@ -264,17 +292,56 @@ class _HolidayCalendarScreenState extends ConsumerState<HolidayCalendarScreen> {
         ],
       ),
     );
-    if (confirmed == true) {
-      ref.read(holidaysProvider.notifier).remove(holiday.id);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('"${holiday.name}" deleted.'),
-          backgroundColor: AppColors.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ));
-      }
+    if (confirmed != true) return;
+
+    final error = await ref.read(holidaysProvider(_key).notifier).remove(holiday.id);
+    if (!mounted) return;
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('"${holiday.name}" deleted.'),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
     }
+  }
+}
+
+// ── Error state ───────────────────────────────────────────────────────────────
+
+class _ErrorView extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _ErrorView({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 40, color: AppColors.error),
+            const SizedBox(height: 12),
+            Text(message, style: AppTextStyles.body, textAlign: TextAlign.center),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -283,15 +350,17 @@ class _HolidayCalendarScreenState extends ConsumerState<HolidayCalendarScreen> {
 class _YearAndBranchRow extends StatelessWidget {
   final int year;
   final String branch;
+  final List<String> branchOptions;
   final ValueChanged<int> onYearChanged;
   final ValueChanged<String> onBranchChanged;
   const _YearAndBranchRow({
-    required this.year, required this.branch,
+    required this.year, required this.branch, required this.branchOptions,
     required this.onYearChanged, required this.onBranchChanged,
   });
 
   @override
   Widget build(BuildContext context) {
+    final options = branchOptions.contains(branch) ? branchOptions : [branch, ...branchOptions];
     return Row(
       children: [
         Container(
@@ -325,7 +394,7 @@ class _YearAndBranchRow extends StatelessWidget {
         Expanded(
           child: _CompactDropdown<String>(
             value: branch,
-            items: _kBranches,
+            items: options,
             labelBuilder: (v) => v,
             onChanged: (v) => onBranchChanged(v!),
           ),
@@ -711,7 +780,7 @@ class _HolidayCard extends StatelessWidget {
               Icon(Icons.business_outlined, size: 12, color: AppColors.textHint),
               const SizedBox(width: 4),
               Expanded(
-                child: Text(holiday.applicableBranches,
+                child: Text(holiday.branchName,
                     style: AppTextStyles.caption.copyWith(fontSize: 11),
                     maxLines: 1, overflow: TextOverflow.ellipsis),
               ),

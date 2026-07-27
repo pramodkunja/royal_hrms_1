@@ -348,6 +348,30 @@ final leaveRequestDetailProvider =
   return ref.read(leaveRepositoryProvider).getLeaveRequestById(id);
 });
 
+// ── Leave Preview ─────────────────────────────────────────────────────────────
+//
+// Authoritative day-count/LOP breakdown from GET /leave/requests/?action=preview
+// — the Apply Leave form uses this (when available) instead of re-deriving
+// sandwich/holiday/week-off exclusion client-side, since the local estimate
+// has no knowledge of company holidays. Keyed so the same (type, dates,
+// duration) combination is cached and doesn't re-fetch on every rebuild.
+typedef LeavePreviewParams = ({
+  String leaveType,
+  String startDate,
+  String endDate,
+  String? duration,
+});
+
+final leavePreviewProvider = FutureProvider.autoDispose
+    .family<LeavePreviewEntity, LeavePreviewParams>((ref, params) {
+  return ref.read(leaveRepositoryProvider).getLeavePreview(
+        leaveType: params.leaveType,
+        startDate: params.startDate,
+        endDate: params.endDate,
+        duration: params.duration,
+      );
+});
+
 // ── Error helper ──────────────────────────────────────────────────────────────
 
 /// Public alias of [_friendly] for use outside this file (e.g. dashboard

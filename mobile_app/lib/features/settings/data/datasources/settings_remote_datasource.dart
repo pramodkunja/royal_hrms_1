@@ -8,6 +8,7 @@ import '../models/company_model.dart';
 import '../models/departments_model.dart';
 import '../models/email_template_model.dart';
 import '../models/employee_code_model.dart';
+import '../models/leave_import_model.dart';
 import '../models/leave_policy_model.dart';
 import '../models/roles_model.dart';
 import '../models/smtp_model.dart';
@@ -39,6 +40,25 @@ class SettingsRemoteDataSource {
       res = await _dio.put(ApiConstants.settingsCompany, data: model.toJson());
     }
     return CompanyModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  // ── Company — Financial Year ──────────────────────────────────────────────
+
+  Future<CompanyFinancialYearModel> fetchFinancialYear() async {
+    final res = await _dio.get(ApiConstants.settingsCompanyFinancialYear);
+    final data = _unwrap(res.data);
+    return CompanyFinancialYearModel.fromJson(data as Map<String, dynamic>);
+  }
+
+  // system_admin only — the backend returns 403 for anyone else.
+  Future<CompanyFinancialYearModel> updateFinancialYear(
+      String startMonth) async {
+    final res = await _dio.put(
+      ApiConstants.settingsCompanyFinancialYear,
+      data: {'financial_year_start_month': startMonth},
+    );
+    return CompanyFinancialYearModel.fromJson(
+        _unwrap(res.data) as Map<String, dynamic>);
   }
 
   // ── Employee Code ──────────────────────────────────────────────────────────
@@ -161,6 +181,32 @@ class SettingsRemoteDataSource {
     await _dio.delete(ApiConstants.settingsEmailTemplateDetail(id));
   }
 
+  // 10 MB / whitelisted-MIME limits are enforced server-side
+  // (EmailTemplateAttachment.ALLOWED_MIME_TYPES, EmailTemplateDetailView._MAX_BYTES).
+  Future<EmailTemplateAttachmentModel> uploadTemplateAttachment(
+      int templateId, File file, String mimeType) async {
+    final formData = FormData.fromMap({
+      'file': await MultipartFile.fromFile(
+        file.path,
+        filename: file.path.split('/').last,
+        contentType: DioMediaType.parse(mimeType),
+      ),
+    });
+    final res = await _dio.post(
+      ApiConstants.settingsEmailTemplateDetail(templateId),
+      data: formData,
+    );
+    return EmailTemplateAttachmentModel.fromJson(
+        _unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  Future<void> deleteTemplateAttachment(int templateId, int attachmentId) async {
+    await _dio.delete(
+      ApiConstants.settingsEmailTemplateDetail(templateId),
+      queryParameters: {'attachment_id': attachmentId},
+    );
+  }
+
   // ── Departments ────────────────────────────────────────────────────────────
 
   Future<List<DepartmentModel>> fetchDepartments() async {
@@ -237,6 +283,38 @@ class SettingsRemoteDataSource {
         'employee_id': employeeId,
     });
     return CreditBalancesResult.fromJson(
+        _unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  // ── Carry Forward execution — see ApiConstants.carryForward* doc comment ──
+
+  Future<CarryForwardYearsModel> fetchCarryForwardYears() async {
+    final res = await _dio.get(ApiConstants.carryForwardYears);
+    return CarryForwardYearsModel.fromJson(
+        _unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  Future<CarryForwardPreviewModel> previewCarryForward(
+      {required int fromYear, required int toYear}) async {
+    final res = await _dio.post(ApiConstants.carryForwardPreview,
+        data: {'from_year': fromYear, 'to_year': toYear});
+    return CarryForwardPreviewModel.fromJson(
+        _unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  Future<CarryForwardLogModel> runCarryForward(
+      {required int fromYear, required int toYear}) async {
+    final res = await _dio.post(ApiConstants.carryForwardRun,
+        data: {'from_year': fromYear, 'to_year': toYear});
+    return CarryForwardLogModel.fromJson(
+        _unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  Future<CarryForwardHistoryModel> fetchCarryForwardHistory(
+      {int page = 1, int pageSize = 20}) async {
+    final res = await _dio.get(ApiConstants.carryForwardHistory,
+        queryParameters: {'page': page, 'page_size': pageSize});
+    return CarryForwardHistoryModel.fromJson(
         _unwrap(res.data) as Map<String, dynamic>);
   }
 
@@ -392,6 +470,34 @@ class SettingsRemoteDataSource {
         data: model.toJson());
     return AssessmentConfigModel.fromJson(
         _unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  // ── Opening Balance & History bulk import (one-time migration tool) ───────
+
+  Future<List<int>> downloadLeaveBalanceImportSample(String format) async {
+    final res = await _dio.get(
+      ApiConstants.leaveBalanceImportSample,
+      queryParameters: {'format': format},
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return res.data as List<int>;
+  }
+
+  Future<LeaveImportValidateResult> validateLeaveBalanceImport(
+      List<int> bytes, String filename) async {
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: filename),
+    });
+    final res = await _dio.post(ApiConstants.leaveBalanceImportValidate, data: formData);
+    return LeaveImportValidateResult.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  Future<LeaveImportResult> importLeaveBalanceFile(List<int> bytes, String filename) async {
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: filename),
+    });
+    final res = await _dio.post(ApiConstants.leaveBalanceImport, data: formData);
+    return LeaveImportResult.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

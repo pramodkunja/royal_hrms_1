@@ -58,13 +58,11 @@ String _fmtIso(String iso) {
 // ── Widget ────────────────────────────────────────────────────────────────────
 
 class LeaveDashboardTab extends ConsumerStatefulWidget {
-  final VoidCallback onApply;
   final VoidCallback? onApprovals;
   final List<String> selectedBranches;
 
   const LeaveDashboardTab({
     super.key,
-    required this.onApply,
     this.onApprovals,
     this.selectedBranches = const [],
   });
@@ -358,20 +356,6 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
               ),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: widget.onApply,
-                icon: const Icon(Icons.add, size: 14),
-                label: const Text('Apply My Leave',
-                    style:
-                        TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  minimumSize: Size.zero,
-                ),
-              ),
             ],
           ),
         ),
@@ -492,20 +476,6 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
                   style: AppTextStyles.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: widget.onApply,
-                icon: const Icon(Icons.add, size: 14),
-                label: const Text('Apply My Leave',
-                    style:
-                        TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  minimumSize: Size.zero,
                 ),
               ),
             ],

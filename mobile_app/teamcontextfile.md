@@ -3125,3 +3125,123 @@ lib/features/dashboard/presentation/providers/dashboard_providers.dart     + emp
 - [ ] Sweep the older `_friendly(e.toString())` error pattern to `parseDioException()`-style helpers across Leave/Expenses/Documents/Employees (carried over from Sessions 15–18 — still not done).
 - [ ] `/onboarding/assessments` candidate-taking portal — still not ported (carried over from Session 17).
 - [ ] Backend: `Holiday` model/API still doesn't exist for real — Holiday Calendar remains local-only mock state (carried over from Session 17).
+
+---
+
+## Session 21 — Interview List / Employees / Attendance Parity Audit, Leave Policy Settings Restructure (Leave Types / Leave Policy / Credit Rules / Carry Forward), UI Polish Pass
+
+**Date:** 2026-07-23
+**Developer:** Pramod Kunja
+
+### Module Worked On
+- Interview List, Employees, Attendance — full field/validation parity audit against web + Django backend, gap fixes
+- Settings — Leave Policy screen restructured from 2 tabs to 4, matching web's actual tab split
+- Settings — Leave Policy — new Carry Forward tab (real API wiring against currently-nonexistent backend routes, mirroring web's own broken state)
+- Settings — Leave Policy — UI polish pass (tab icons, section icon avatars, dropdown legibility, footer button redesign)
+
+---
+
+### Part 1: Interview List / Employees / Attendance — Web Parity Audit
+
+Dispatched deep-research agents to read the web frontend and Django backend directly (models/serializers/views, not just the React components) for Interview List, Employees, Attendance, and Leave Policy settings, then diffed field-by-field and validation-by-validation against mobile's existing implementations. Confirmed all four modules were already fully built and backend-wired going into this session — this was a gap-fix pass, not a from-scratch port. Found and fixed 13 concrete gaps:
+
+**Interview List (2):** branch wasn't locked to the user's own branch for non-`system_admin` users in Add/Edit (web locks it client-side since the backend doesn't enforce it server-side either); status→selected/rejected was an instant PATCH with no confirmation, no remarks capture, and no email — added `MarkCandidateSheet` (mirrors web's `MarkCandidateModal`: fixed template by status, remarks textarea, sends `candidate_selected`/`candidate_rejected` via the existing `send-email` endpoint) plus a first-schedule `interview_scheduled_candidate` email trigger on Edit, matching `EditCandidateModal.tsx` exactly — including deliberately reusing the candidate's *original* branch name in the email template vars, a real web quirk worth replicating rather than "fixing" silently.
+
+**Employees (5):** Employee Type dropdown had `'Part-time'` where it should say `'Probation'`; branch/role weren't locked/filtered for non-admins in Add Employee (web excludes `system_admin` from the role list and locks branch); no client-side email format validation; the Edit sheet let HR rewrite Full Name/Phone/Date of Joining even though web treats those as read-only forever, and didn't require or age-validate (18–80) Date of Birth even though the backend does persist DOB.
+
+**Attendance (6):** the Records tab was missing a manual Add/Edit/Reprocess action entirely, and was missing status filter/sort/search controls even though `AttendanceRemoteDataSource.fetchRecords` already accepted all those params — the UI/provider layer simply never used them; OT Entry had no client-side end-time > start-time check; GPS wasn't captured for non-office punch modes (only 'office' triggered a location fetch, though `LocationService.getCurrentPosition()` already fails gracefully to `null` and was safe to call unconditionally).
+
+Two apparent Employees gaps turned out to be false positives once the backend was read directly rather than trusted from the web UI's apparent behavior: `EmployeeDetailView.put` (`backend/apps/accounts/views.py`) only ever persists 9 whitelisted keys (role/department/designation/branch/phone/full_name/date_of_joining/date_of_birth/hr_id/reporting_manager_id) — no bank/education/emergency-contact/document fields at all — and `EmployeeDocumentView.post` is hardcoded to `user=request.user` and blocked entirely once onboarding is complete, so HR can never upload a KYC document on another employee's behalf regardless of platform. Web's own "editable" Bank/Education/Emergency/Documents sections on the Employee Profile silently no-op on save for exactly this reason. Left mobile's read-only treatment of those sections as-is rather than building matching "editable" UI that would be fake functionality with nothing real behind it.
+
+#### Files modified
+```
+lib/features/interview_list/data/datasources/interview_datasource.dart
+lib/features/interview_list/presentation/providers/interview_providers.dart
+lib/features/interview_list/presentation/widgets/add_candidate_sheet.dart
+lib/features/interview_list/presentation/widgets/add_candidate_form.dart
+lib/features/interview_list/presentation/widgets/candidate_card.dart
+lib/features/interview_list/presentation/widgets/mark_candidate_sheet.dart   (new)
+lib/features/employees/data/models/employee_model.dart
+lib/features/employees/presentation/widgets/add_employee_sheet.dart
+lib/features/attendance/data/datasources/attendance_remote_datasource.dart
+lib/features/attendance/data/repositories/attendance_repository_impl.dart
+lib/features/attendance/domain/repositories/attendance_repository.dart
+lib/features/attendance/presentation/providers/attendance_providers.dart
+lib/features/attendance/presentation/screens/attendance_screen.dart
+lib/features/attendance/presentation/screens/my_attendance_screen.dart
+lib/core/constants/api_constants.dart        attendanceRecordCreate, attendanceReprocess
+```
+
+---
+
+### Part 2: Leave Policy Settings — Tab Restructure (2 → 3 tabs)
+
+A follow-up ask flagged this specific screen's structure as wrong after the fact — Part 1's audit had checked every field existed *somewhere* on screen and concluded "zero gaps" for Leave Policy settings, but never checked the tab/navigation shape against web's actual `page.tsx`. Web's Leave Policy settings page has 4 tabs: **Leave Types** (a simple list + a lightweight quick-edit modal — annual days, carry-forward toggle/limit, note, active only), **Leave Policy** (a completely separate full-page rule editor with its own leave-type dropdown selector and ~25 fields across 6 rule sections), **Credit Rules**, and **Carry Forward** (role-gated). Mobile had merged the first two into one "Policy" tab — a card list whose Edit button opened one all-fields sheet covering everything at once.
+
+Split `leave_policy_form_sheet.dart` back down to just the lightweight quick-edit (matching web's `PolicyTab.tsx` edit modal exactly) and built a new `leave_policy_rules_tab.dart`: a full-page tab with a leave-type dropdown selector at the top and all 6 rule sections (Leave Application Rules, Holiday & Week-off Rules, Eligibility Rules, Documentation Rules, Leave Restrictions, Additional Rules) plus a Carry Forward section holding only the 2 real fields (`can_carry_forward`, `max_carry_forward_days`) — the 3 phantom fields web's own `CarryForwardSettingsSection` edits (`carry_forward_type`/`carry_forward_mode`/`carry_forward_expiry_days`) don't exist on the backend `LeavePolicy` model at all (confirmed via grep of `apps/hrms/models.py`/`serializers.py`), so they were deliberately left out rather than built as inputs that silently discard whatever the user types, which is what web itself does. `LeavePolicyScreen`'s `TabController` went from a fixed `length: 2` to `3` (or `4`, see Part 3).
+
+---
+
+### Part 3: Leave Policy Settings — Carry Forward Tab (New)
+
+User explicitly asked for the Carry Forward tab to be added too, overriding an earlier recommendation to skip it on the grounds that its backend routes (`/leave/carry-forward/years|preview|run|history/`) don't exist anywhere in `apps/hrms/urls.py` (confirmed by grep — zero hits). Built `leave_carry_forward_tab.dart` with full visual and functional parity to web's `CarryForwardTab.tsx`: From/To Year dropdowns, a Preview action (shows total-rows/pending/already-done counts plus a per-employee-leave-type breakdown), a Run action behind a confirmation dialog with a dismissible duplicate-run warning banner, and a paginated History list. Gated to `system_admin`/`hr_admin`/`hr` (`kCarryForwardRoles`) — the tab is hidden entirely for other roles, matching web's own tab-bar-level gate rather than showing a disabled tab.
+
+Added real endpoint constants (`ApiConstants.carryForward*`), models (`CarryForwardYearsModel`/`PreviewModel`/`LogModel`/`HistoryModel` in `leave_policy_model.dart`, mirroring web's `types/leave.ts` interfaces field-for-field), datasource methods, and providers (`carryForwardYearsProvider`, `carryForwardHistoryProvider` + a page `StateProvider`) — genuine API wiring against the intended real endpoints, not a mock/seed-data stand-in. Every action here currently 404s against the live backend, exactly as it would against the live web app today; this is a faithful port of a frontend-only feature, not a mobile-specific stub, and needs zero further mobile changes once the backend grows those 4 routes + a `CarryForwardLog` model.
+
+#### Files created
+```
+lib/features/settings/presentation/leave_policy/widgets/leave_policy_rules_tab.dart
+lib/features/settings/presentation/leave_policy/widgets/leave_carry_forward_tab.dart
+```
+
+#### Files modified
+```
+lib/features/settings/presentation/leave_policy/leave_policy_screen.dart
+lib/features/settings/presentation/leave_policy/widgets/leave_policy_form_sheet.dart   trimmed back to quick-edit only
+lib/features/settings/data/models/leave_policy_model.dart                              + CarryForward* models
+lib/features/settings/data/datasources/settings_remote_datasource.dart                 + carry-forward methods
+lib/features/settings/presentation/providers/settings_providers.dart                   + carryForwardYears/HistoryProvider
+lib/core/constants/api_constants.dart                                                  + carryForward* endpoints
+```
+
+---
+
+### Part 4: UI Polish Pass (3 rounds of follow-up design feedback)
+
+**Round 1 — tab icons + "make it beautiful" pass.** Added compact icon+label tabs via a custom `_iconTab()` helper (`Tab(child: Row([Icon, SizedBox, Text]))`) — a horizontal icon-then-label layout rather than Material's default stacked icon-above-text, to stay compact across 4 scrollable tabs. Pulled the "icon-avatar box + colored shadow" card style already established in `holiday_calendar_screen.dart`'s stat cards (the most polished existing reference screen in this app) and applied it consistently across the restructured screen: the Leave Types tab's stat row, each of the 7 `_RuleSection` headers in the new rules tab (each given its own distinct semantic color — primary/warning/info/secondary/error/success — instead of one repeated primary-blue icon), and the Carry Forward tab's scope banner plus Preview-card and History-card headers.
+
+**Round 2 — dropdown clarity + page heading + button cleanup.** User reported the Leave Type dropdown in the new rules tab wasn't clearly visible and asked for a page heading (matching the Leave Types tab's own subtitle pattern) plus cleaner Save/Discard buttons. Fixed the dropdown with an explicit `dropdownColor`/`elevation`/`borderRadius` so its open popup renders with correct contrast; each item now shows a small colored dot matching that leave type's own color plus a checkmark on the current selection (previously plain unlabeled text with no visual differentiation); the closed field always shows bold, high-contrast text via `selectedItemBuilder` regardless of popup styling. Added a subtitle heading above the leave-type selector card, copying the Leave Types tab's exact heading style/spacing. Restructured Save/Discard from buttons that scrolled away at the end of a long list into a pinned footer (`Column` → `Expanded(ListView)` + fixed `_PolicyFooter`), matching the app's already-established form-footer pattern (`AddEmployeeSheet`'s `_Footer`: top border divider, subdued secondary action + prominent primary action at 2:1 width).
+
+**Round 3 — footer buttons still not legible.** Root cause, once looked at more carefully: the Discard button was a plain `OutlinedButton` with a very light border (`AppColors.border`, `#D3DAE8`) and a transparent fill sitting on a white (`AppColors.surface`) footer — technically present but visually near-invisible, which is exactly what "not looking good, can't see clearly" was describing. Fixed by giving it a solid tonal fill (`AppColors.backgroundMid`) instead of transparency, a stronger border (`AppColors.borderStrong`), and dark bold text/icon (`AppColors.textPrimary`) so it reads as an unmistakable, clearly-bounded button instead of relying on a faint outline against a same-toned background. The Save button got an explicit `foregroundColor`/`disabledBackgroundColor` and a subtle colored shadow for depth, plus bold text.
+
+#### Files modified (this part only)
+```
+lib/features/settings/presentation/leave_policy/leave_policy_screen.dart
+lib/features/settings/presentation/leave_policy/widgets/leave_policy_rules_tab.dart
+lib/features/settings/presentation/leave_policy/widgets/leave_carry_forward_tab.dart
+```
+
+---
+
+### Verification
+- `dart analyze` run after every change across all four parts of this session: 0 errors throughout — only the same pre-existing `prefer_const_constructors`/`deprecated_member_use` info-level lints as the pre-session baseline, never regressed.
+- `dart format` run on `leave_policy_rules_tab.dart` after the footer restructure, to normalize indentation left by the manual `Column`/`Expanded` edit.
+- No on-device/APK verification performed this session — all changes verified via `dart analyze` only; the UI-clarity feedback in Part 4 was iterative in-chat design feedback (no screenshot shared), addressed by reasoning about actual color/contrast values (`AppColors.border` vs `AppColors.surface`, etc.) rather than a visual diff.
+
+### Architecture Notes
+- **A fields/validation audit is not the same as a screen-structure audit.** Checking that every backend field is editable *somewhere* on a screen can still miss that the screen's tab/navigation shape itself has drifted from the reference (web merged into one tab vs. mobile's two). Both need to be checked explicitly.
+- **Verify a "feature looks broken on web" read by grepping the backend directly, not by re-reading the frontend more carefully.** Carry Forward's 4 endpoints and the Credit Rules accrual table were both confirmed to have zero backend support via `grep` of `apps/hrms/urls.py`/`models.py`. The two Employees false-positive gaps in Part 1 were caught the same way — reading `EmployeeDetailView.put`'s actual whitelisted-key list and `EmployeeDocumentView.post`'s `user=request.user` hardcoding directly, rather than inferring backend capability from what the web form merely *displays* as editable.
+- **A plain `OutlinedButton` can be technically present but functionally invisible.** When a secondary-action button's transparent fill sits on a container that's the same light color as its border, the border is the only visual cue it's a button at all — and a low-contrast theme border color (`#D3DAE8` on white) isn't enough on its own. A solid tonal fill is a more robust default for secondary actions in this app's light, mostly-white surface palette than relying on an outline.
+- **`Tab(icon: ..., text: ...)` stacks vertically by default** and eats real vertical space across a 4-tab `isScrollable: true` bar. A custom `Tab(child: Row([Icon, Text]))` keeps each tab compact when horizontal space is tight and icons are wanted inline rather than stacked.
+
+### Pending Tasks (updated)
+- [ ] Manual on-device visual pass of the restructured Leave Policy screen (all 4 tabs) — every fix this session was reasoned about from code-level color/contrast values, not confirmed against a running app or screenshot.
+- [ ] Carry Forward tab will 404 against the real backend until `apps/hrms` grows the 4 missing routes + a `CarryForwardLog` model — flagged for the backend team, not a mobile-side fix.
+- [ ] Manual on-device pass of all three new role dashboards (Employee/Admin/HR) (carried over from Session 20 — still not done).
+- [ ] HR and Admin dashboards haven't had the same "match web pixel-for-pixel" scrutiny the Employee dashboard got in Session 20 Part 4 (carried over from Session 20).
+- [ ] No dedicated onboarding-review screen exists in the app (carried over from Session 20).
+- [ ] Confirm with whoever manages `royalhrms.nxsys.in`'s deployment that `DEBUG=True`/`ALLOWED_HOSTS=*` in production `.env` is intentional or needs tightening (carried over from Session 19 — not mobile's call to fix).
+- [ ] Manual on-device dark-mode pass across every screen (carried over from Session 19 — still not done).
+- [ ] Sweep the older `_friendly(e.toString())` error pattern to `parseDioException()`-style helpers across Leave/Expenses/Documents/Employees (carried over from Sessions 15–18 — still not done).
+- [ ] `/onboarding/assessments` candidate-taking portal — still not ported (carried over from Session 17).
+- [ ] Backend: `Holiday` model/API still doesn't exist for real — Holiday Calendar remains local-only mock state (carried over from Session 17).

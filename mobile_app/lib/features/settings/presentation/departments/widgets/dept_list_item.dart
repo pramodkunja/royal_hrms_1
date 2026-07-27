@@ -79,6 +79,7 @@ class DeptListItem extends StatelessWidget {
           ),
           if (isExpanded) ...[
             Divider(height: 1, color: AppColors.border),
+            if (dept.roles.isNotEmpty) _RolesPanel(roles: dept.roles),
             _DesignationPanel(
               designations: designations,
               onAdd: onAddDesig,
@@ -186,7 +187,9 @@ class _DeptHeader extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(height: 8),
-                  Row(
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
                     children: [
                       _CountChip(
                         icon: Icons.work_outline,
@@ -194,13 +197,19 @@ class _DeptHeader extends StatelessWidget {
                         label: 'Desig',
                         color: AppColors.primary,
                       ),
-                      const SizedBox(width: 6),
                       _CountChip(
                         icon: Icons.people_outline,
                         value: dept.employeeCount,
                         label: 'People',
                         color: const Color(0xFF7C3AED),
                       ),
+                      if (dept.roles.isNotEmpty)
+                        _CountChip(
+                          icon: Icons.shield_outlined,
+                          value: dept.roles.length,
+                          label: 'Roles',
+                          color: const Color(0xFF0E7C86),
+                        ),
                     ],
                   ),
                 ],
@@ -228,6 +237,60 @@ class _DeptHeader extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Roles panel (read-only — computed from active users in this dept) ────────
+
+class _RolesPanel extends StatelessWidget {
+  final List<DepartmentRoleTag> roles;
+  const _RolesPanel({required this.roles});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFF0F7F8),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          Text(
+            'ROLES',
+            style: AppTextStyles.caption.copyWith(
+              color: AppColors.textHint,
+              fontWeight: FontWeight.w700,
+              fontSize: 10.5,
+              letterSpacing: 0.4,
+            ),
+          ),
+          ...roles.map((r) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0E7C86).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFF0E7C86).withValues(alpha: 0.20)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.shield_outlined, size: 11, color: Color(0xFF0E7C86)),
+                    const SizedBox(width: 5),
+                    Text(
+                      r.displayName,
+                      style: AppTextStyles.caption.copyWith(
+                        color: const Color(0xFF0E7C86),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+        ],
       ),
     );
   }

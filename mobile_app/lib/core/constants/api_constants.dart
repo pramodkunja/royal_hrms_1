@@ -28,6 +28,8 @@ class ApiConstants {
 
   // Settings — Company
   static const String settingsCompany = '/settings/company/';
+  static const String settingsCompanyFinancialYear =
+      '/settings/company/financial-year/';
 
   // Settings — Employee Code
   static const String settingsEmployeeCode = '/settings/employee-code/';
@@ -69,6 +71,7 @@ class ApiConstants {
 
   // Employees
   static const String employees = '/employees/';
+  static const String employeeBulkImport = '/employees/bulk-import/';
   static String employeeDetail(String employeeId) => '/employees/$employeeId/';
 
   // Employees — per-employee Approval Matrix (GET list of workflow rows /
@@ -102,6 +105,7 @@ class ApiConstants {
   static String candidateResendLogin(int id) =>
       '/recruitment/candidates/$id/resend-portal-login/';
   static const String candidatesReview = '/recruitment/candidates/review/';
+  static const String candidateBulkImport = '/recruitment/candidates/bulk-import/';
   // Accepts either the numeric candidate pk or the human-readable employee
   // code (e.g. "EMP0001") — SendCandidateEmailView falls back to
   // `portal_user__employee_id` when the path segment isn't purely digits.
@@ -130,6 +134,20 @@ class ApiConstants {
   // Settings — Assessment Config (singleton) — matches backend /api/assessments/settings/
   static const String settingsAssessmentConfig =
       '/assessments/settings/'; // GET (assessments.view) / PUT (assessments.edit)
+
+  // Payroll cycle endpoints (apps/payroll) — the mobile Payroll module itself
+  // was removed, but the Attendance Approval tab still gates its L1/L2
+  // sign-off flow on the backend's payroll cycles, so these stay.
+  static const String payrollSettings = '/payroll/settings/';
+  static String payrollApproveAttendance(String id) => '/payroll/cycles/$id/approve-attendance/';
+  static const String payrollPendingApproval = '/payroll/cycles/pending-approval/';
+  static String payrollAttendanceSummary(String cycleId) => '/payroll/cycles/$cycleId/attendance-summary/';
+  static String payrollEmployeeDailyAttendance(String cycleId, String employeeId) =>
+      '/payroll/cycles/$cycleId/attendance-daily/$employeeId/';
+
+  // Holiday Calendar — matches backend /api/leave/holidays/
+  static const String holidays = '/leave/holidays/';
+  static String holidayDetail(String id) => '/leave/holidays/$id/';
 
   // Branch management
   static const String branchStates = '/branch/states/';
@@ -164,6 +182,23 @@ class ApiConstants {
       '/leave/policy/$leaveType/';
   static const String leaveBalanceCredit = '/leave/balance/credit/';
 
+  // Opening Balance & History bulk import (one-time historical migration
+  // tool) — matches web's API.leave.balanceImport*.
+  static const String leaveBalanceImport = '/leave/balance/import/';
+  static const String leaveBalanceImportValidate = '/leave/balance/import/validate/';
+  static const String leaveBalanceImportSample = '/leave/balance/import/sample/';
+
+  // Carry Forward execution (year-range batch job) — matches web's
+  // API.leave.carryForward.*. NOTE: as of this writing these routes do not
+  // exist in the backend (apps/hrms/urls.py has no carry-forward paths at
+  // all), so calls here 404 on the real server exactly as they do on web —
+  // this mirrors web's own (currently non-functional) feature, not a mobile
+  // gap. See LeaveCarryForwardTab's doc comment.
+  static const String carryForwardYears = '/leave/carry-forward/years/';
+  static const String carryForwardPreview = '/leave/carry-forward/preview/';
+  static const String carryForwardRun = '/leave/carry-forward/run/';
+  static const String carryForwardHistory = '/leave/carry-forward/history/';
+
   // Expenses
   static const String expenses = '/expenses/';
   static const String expenseStats = '/expenses/stats/';
@@ -193,7 +228,9 @@ class ApiConstants {
   // Attendance — HR admin management
   static const String attendanceDashboard = '/attendance/dashboard/';
   static const String attendanceRecords = '/attendance/records/';
+  static const String attendanceRecordCreate = '/attendance/records/create/';
   static String attendanceRecordDetail(String id) => '/attendance/records/$id/';
+  static const String attendanceReprocess = '/attendance/reprocess/';
   static const String attendanceOvertimeList = '/attendance/overtime/';
   static const String attendanceOvertimeCreate = '/attendance/overtime/create/';
   static const String attendanceInvalidPunches = '/attendance/invalid-punches/';
@@ -213,6 +250,7 @@ class ApiConstants {
   // Attendance — Export / Import
   static const String attendanceExport = '/attendance/export/';
   static const String attendanceImport = '/attendance/import/';
+  static const String attendanceImportSample = '/attendance/import/sample/';
 
   // Attendance — Record audit history
   static String attendanceRecordAudit(String id) =>
@@ -284,4 +322,9 @@ class ApiConstants {
 
   // Shared announcement (no role gate) — matches web's EmpAnnouncement.
   static const String dashboardAnnouncement = '/dashboard/announcement/';
+
+  // Voice Commands — matches backend apps/voice_commands (single endpoint,
+  // dispatches every intent server-side; see registry/intents_en.yaml for
+  // the full intent list).
+  static const String voiceParse = '/voice/parse/';
 }

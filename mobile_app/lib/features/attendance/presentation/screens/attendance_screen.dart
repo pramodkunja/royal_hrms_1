@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/expandable_fab.dart' show expandableFabOpenProvider;
+import '../../../employees/data/models/employee_model.dart';
 import '../../../employees/presentation/providers/employee_providers.dart';
+import '../../../employees/presentation/widgets/employee_attendance_tab.dart';
 import '../../domain/entities/attendance_entity.dart';
 import '../providers/attendance_providers.dart';
 
@@ -40,6 +43,43 @@ Color _statusBg(String s) => switch (s) {
   'rejected' || 'Rejected'   => const Color(0xFFFFDAD6),
   _            => const Color(0xFFF3F4F6),
 };
+
+const _kAttendanceStatusFilterOptions = <MapEntry<String, String>>[
+  MapEntry('', 'All Statuses'),
+  MapEntry('present', 'Present'),
+  MapEntry('late', 'Late'),
+  MapEntry('half_day', 'Half Day'),
+  MapEntry('on_leave', 'On Leave'),
+  MapEntry('absent', 'Absent'),
+  MapEntry('weekly_off', 'Weekly Off'),
+  MapEntry('holiday', 'Holiday'),
+  MapEntry('incomplete', 'Incomplete'),
+];
+
+// Backend summary-chip keys are raw snake_case (e.g. 'on_leave', 'half_day').
+// Resolve through the status filter's key→label map first (single source of
+// truth for the "correct" display label), falling back to a generic
+// snake_case→Title Case conversion for any key not in that list.
+String _titleCaseStatus(String key) {
+  final match = _kAttendanceStatusFilterOptions.firstWhere(
+    (e) => e.key == key,
+    orElse: () => const MapEntry('', ''),
+  );
+  if (match.value.isNotEmpty) return match.value;
+  return key
+      .split('_')
+      .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+      .join(' ');
+}
+
+const _kAttendanceSortByOptions = <MapEntry<String, String>>[
+  MapEntry('name', 'Name'),
+  MapEntry('employee_id', 'Employee ID'),
+  MapEntry('department', 'Department'),
+  MapEntry('branch', 'Branch'),
+  MapEntry('clock_in', 'Clock In'),
+  MapEntry('status', 'Status'),
+];
 
 Color _issueColor(String issueType) => switch (issueType) {
   'no-match'  => const Color(0xFFC0392B),
@@ -229,11 +269,18 @@ class _StatsBar extends ConsumerWidget {
                     Icons.event_available_outlined, const Color(0xFF1E4E8C), const Color(0xFFDDEAFB),
                     const Color(0xFF1B8A6B), (d.onLeave / total).clamp(0.0, 1.0)),
               ];
-              return Row(
-                children: stats.map((s) => Expanded(child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 3),
-                  child: _StatCard(stat: s),
-                ))).toList(),
+              // A fixed-width horizontally-scrolling strip (not an Expanded
+              // Row) — matching EmployeeAttendanceTab's stat-card pattern —
+              // so labels like "Present Today" never get squeezed down to
+              // "Pres…" on narrow phones.
+              return SizedBox(
+                height: 96,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: stats.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) => SizedBox(width: 148, child: _StatCard(stat: stats[i])),
+                ),
               );
             },
             loading: () => const SizedBox(
@@ -315,8 +362,346 @@ String _isoDate(DateTime d) =>
 
 String _shortDate(DateTime d) => '${d.day} ${_monthNames[d.month - 1]} ${d.year}';
 
-class _AttendanceTab extends ConsumerWidget {
+// Wraps the "Team Day View" (flat records list) / "Employee Month View"
+// (per-employee search + calendar) toggle that web's Attendance & Time page
+// has above the records table — the mobile port originally only had the
+// Team Day View, with no way to jump to a single employee's monthly
+// calendar from this screen (it only existed inside Employee Profile).
+class _AttendanceTab extends ConsumerStatefulWidget {
   const _AttendanceTab();
+
+  @override
+  ConsumerState<_AttendanceTab> createState() => _AttendanceTabState();
+}
+
+class _AttendanceTabState extends ConsumerState<_AttendanceTab> {
+  int _viewMode = 0; // 0 = Team Day View, 1 = Employee Month View
+
+  @override
+  Widget build(BuildContext context) {
+    // A nested Scaffold just for this tab's FAB — Add Record / Reprocess only
+    // make sense against Team Day View's filters, so the FAB (and its
+    // speed-dial actions) only appears there, not on Employee Month View.
+    return Scaffold(
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _ViewModeButton(
+                    label: 'Team Day View',
+                    icon: Icons.view_agenda_outlined,
+                    selected: _viewMode == 0,
+                    onTap: () => setState(() => _viewMode = 0),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _ViewModeButton(
+                    label: 'Employee Month View',
+                    icon: Icons.calendar_month_outlined,
+                    selected: _viewMode == 1,
+                    onTap: () => setState(() => _viewMode = 1),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _viewMode == 0 ? const _TeamDayView() : const _EmployeeMonthView(),
+          ),
+        ],
+      ),
+      floatingActionButton: _viewMode == 0
+          ? _AttendanceSpeedDial(
+              onAddRecord: () => showDialog(
+                context: context,
+                builder: (_) => const _AttendanceRecordFormDialog.create(),
+              ),
+              onReprocess: () => _reprocessAttendance(context, ref),
+            )
+          : null,
+    );
+  }
+}
+
+// Replaces the old always-visible "Add Record" / "Reprocess" OutlinedButtons
+// with a single expandable FAB — tapping it reveals both actions as labeled
+// mini-FABs instead of the buttons permanently eating a row in the filters.
+class _AttendanceSpeedDial extends ConsumerStatefulWidget {
+  final VoidCallback onAddRecord;
+  final VoidCallback onReprocess;
+  const _AttendanceSpeedDial({required this.onAddRecord, required this.onReprocess});
+
+  @override
+  ConsumerState<_AttendanceSpeedDial> createState() => _AttendanceSpeedDialState();
+}
+
+class _AttendanceSpeedDialState extends ConsumerState<_AttendanceSpeedDial> {
+  bool _open = false;
+
+  // Publishes to the same provider shared/widgets/expandable_fab.dart uses —
+  // the global voice-mic overlay watches it to step out of the way while
+  // this speed dial's mini actions are expanded, instead of colliding with
+  // them (see ExpandableFab, which every other multi-action FAB in the app
+  // uses; this screen has its own bespoke speed-dial look instead but needs
+  // the same overlap fix).
+  void _publish(bool value) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final notifier = ref.read(expandableFabOpenProvider.notifier);
+      if (notifier.state != value) notifier.state = value;
+    });
+  }
+
+  void _toggle() {
+    setState(() => _open = !_open);
+    _publish(_open);
+  }
+
+  @override
+  void dispose() {
+    if (_open) {
+      final notifier = ref.read(expandableFabOpenProvider.notifier);
+      WidgetsBinding.instance.addPostFrameCallback((_) => notifier.state = false);
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 150),
+          child: !_open
+              ? const SizedBox.shrink()
+              : Column(
+                  key: const ValueKey('speedDialActions'),
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    _SpeedDialAction(
+                      label: 'Reprocess',
+                      icon: Icons.refresh,
+                      heroTag: 'attendance-fab-reprocess',
+                      onTap: () {
+                        _toggle();
+                        widget.onReprocess();
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _SpeedDialAction(
+                      label: 'Add Record',
+                      icon: Icons.add,
+                      heroTag: 'attendance-fab-add-record',
+                      onTap: () {
+                        _toggle();
+                        widget.onAddRecord();
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
+        ),
+        FloatingActionButton(
+          heroTag: 'attendance-fab-main',
+          backgroundColor: AppColors.primary,
+          onPressed: _toggle,
+          child: AnimatedRotation(
+            turns: _open ? 0.125 : 0,
+            duration: const Duration(milliseconds: 200),
+            child: Icon(_open ? Icons.close : Icons.add, color: Colors.white),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SpeedDialAction extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final String heroTag;
+  final VoidCallback onTap;
+  const _SpeedDialAction({
+    required this.label,
+    required this.icon,
+    required this.heroTag,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 6, offset: const Offset(0, 2))],
+        ),
+        child: Text(label, style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w600)),
+      ),
+      const SizedBox(width: 10),
+      FloatingActionButton.small(
+        heroTag: heroTag,
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.primary,
+        onPressed: onTap,
+        child: Icon(icon, size: 18),
+      ),
+    ],
+  );
+}
+
+class _ViewModeButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ViewModeButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: selected ? AppColors.primary : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: selected ? AppColors.primary : const Color(0xFFD1D5DB)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 15, color: selected ? Colors.white : const Color(0xFF6B7280)),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              style: AppTextStyles.labelSmall.copyWith(
+                fontWeight: FontWeight.w700,
+                color: selected ? Colors.white : const Color(0xFF374151),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+// "Employee Month View" — search any employee, then reuse the exact same
+// read-only stats/summary/calendar widget Employee Profile's Attendance tab
+// already renders for one employee, instead of duplicating that layout.
+class _EmployeeMonthView extends ConsumerStatefulWidget {
+  const _EmployeeMonthView();
+
+  @override
+  ConsumerState<_EmployeeMonthView> createState() => _EmployeeMonthViewState();
+}
+
+class _EmployeeMonthViewState extends ConsumerState<_EmployeeMonthView> {
+  EmployeeModel? _selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final employeesAsync = ref.watch(employeesProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: employeesAsync.when(
+            data: (employees) => Autocomplete<EmployeeModel>(
+              displayStringForOption: (e) => '${e.fullName} (${e.employeeId})',
+              optionsBuilder: (v) {
+                if (v.text.isEmpty) return const Iterable<EmployeeModel>.empty();
+                final q = v.text.toLowerCase();
+                return employees.where((e) =>
+                    e.fullName.toLowerCase().contains(q) ||
+                    e.employeeId.toLowerCase().contains(q));
+              },
+              onSelected: (e) => setState(() => _selected = e),
+              fieldViewBuilder: (context, controller, focusNode, onSubmit) => TextField(
+                controller: controller,
+                focusNode: focusNode,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Search employee by name or ID…',
+                  prefixIcon: const Icon(Icons.search, size: 16),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB))),
+                ),
+              ),
+            ),
+            loading: () => const LinearProgressIndicator(),
+            error: (e, _) => Text(friendlyAttendanceError(e), style: TextStyle(color: AppColors.error, fontSize: 12)),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: _selected == null
+              ? const _EmptyState(message: 'Search and select an employee above to view their monthly attendance.')
+              : EmployeeAttendanceTab(employee: _selected!),
+        ),
+      ],
+    );
+  }
+}
+
+// Shared by the FAB (Add Record / Reprocess now live there, not inline in
+// the filter list) and previously by _TeamDayView directly.
+Future<void> _reprocessAttendance(BuildContext context, WidgetRef ref) async {
+  final date = ref.read(hrAttendanceDateFilterProvider) ?? DateTime.now();
+  final iso = _isoDate(date);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text('Reprocess Attendance'),
+      content: Text(
+        'Recalculate attendance for $iso from all recorded punches? This '
+        'may overwrite manual edits made for this day.',
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+          child: const Text('Reprocess'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+  final branch = ref.read(hrAttendanceBranchFilterProvider);
+  final department = ref.read(hrAttendanceDepartmentFilterProvider);
+  final error = await ref.read(attendanceRecordsProvider.notifier).reprocess(
+        date: iso,
+        branch: branch.isEmpty ? null : branch,
+        department: department.isEmpty ? null : department,
+      );
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    content: Text(error ?? 'Attendance reprocessed for $iso.'),
+    backgroundColor: error == null ? AppColors.success : AppColors.error,
+  ));
+}
+
+class _TeamDayView extends ConsumerWidget {
+  const _TeamDayView();
 
   void _resetPages(WidgetRef ref) {
     ref.read(attendanceRecordsPageProvider.notifier).state = 1;
@@ -376,6 +761,15 @@ class _AttendanceTab extends ConsumerWidget {
     final selectedBranch = ref.watch(hrAttendanceBranchFilterProvider);
     final selectedDept = ref.watch(hrAttendanceDepartmentFilterProvider);
     final selectedDate = ref.watch(hrAttendanceDateFilterProvider);
+    final selectedStatus = ref.watch(attendanceRecordsStatusFilterProvider);
+    final statusLabel = _kAttendanceStatusFilterOptions
+        .firstWhere((e) => e.key == selectedStatus, orElse: () => _kAttendanceStatusFilterOptions.first)
+        .value;
+    final selectedSortBy = ref.watch(attendanceRecordsSortByProvider);
+    final sortByLabel = _kAttendanceSortByOptions
+        .firstWhere((e) => e.key == selectedSortBy, orElse: () => _kAttendanceSortByOptions.first)
+        .value;
+    final selectedSortDir = ref.watch(attendanceRecordsSortDirProvider);
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -397,86 +791,177 @@ class _AttendanceTab extends ConsumerWidget {
             primary: false,
             padding: const EdgeInsets.all(12),
             children: [
-              Row(children: [
-                Expanded(
-                  child: _Dropdown(
-                    value: selectedBranch.isEmpty ? 'All Branches' : selectedBranch,
-                    items: ['All Branches', ...branchList],
-                    onChanged: (v) {
-                      ref.read(hrAttendanceBranchFilterProvider.notifier).state =
-                          (v == 'All Branches') ? '' : v!;
-                      _resetPages(ref);
-                    },
-                  ),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _Dropdown(
-                    value: selectedDept.isEmpty ? 'All Departments' : selectedDept,
-                    items: ['All Departments', ...deptList],
-                    onChanged: (v) {
-                      ref.read(hrAttendanceDepartmentFilterProvider.notifier).state =
-                          (v == 'All Departments') ? '' : v!;
-                      _resetPages(ref);
-                    },
-                  ),
-                ),
-              ]),
-              const SizedBox(height: 8),
-              Row(children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => _pickDate(context, ref),
-                    child: _FakeInput(
-                      value: selectedDate == null ? 'Today' : _shortDate(selectedDate),
-                      icon: Icons.calendar_today_outlined,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.filter_list, size: 16, color: Color(0xFF6B7280)),
+                        const SizedBox(width: 6),
+                        Text('Filters',
+                          style: AppTextStyles.label.copyWith(
+                            fontWeight: FontWeight.w700, color: const Color(0xFF374151))),
+                      ],
                     ),
-                  ),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(
+                        child: _Dropdown(
+                          value: selectedBranch.isEmpty ? 'All Branches' : selectedBranch,
+                          items: ['All Branches', ...branchList],
+                          onChanged: (v) {
+                            ref.read(hrAttendanceBranchFilterProvider.notifier).state =
+                                (v == 'All Branches') ? '' : v!;
+                            _resetPages(ref);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _Dropdown(
+                          value: selectedDept.isEmpty ? 'All Departments' : selectedDept,
+                          items: ['All Departments', ...deptList],
+                          onChanged: (v) {
+                            ref.read(hrAttendanceDepartmentFilterProvider.notifier).state =
+                                (v == 'All Departments') ? '' : v!;
+                            _resetPages(ref);
+                          },
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Expanded(
+                        flex: 2,
+                        child: TextFormField(
+                          initialValue: ref.read(attendanceRecordsSearchProvider),
+                          onChanged: (v) {
+                            ref.read(attendanceRecordsSearchProvider.notifier).state = v;
+                            _resetPages(ref);
+                          },
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: 'Search employee…',
+                            prefixIcon: const Icon(Icons.search, size: 16),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB))),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB))),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _Dropdown(
+                          value: statusLabel,
+                          items: _kAttendanceStatusFilterOptions.map((e) => e.value).toList(),
+                          onChanged: (v) {
+                            final entry = _kAttendanceStatusFilterOptions.firstWhere((e) => e.value == v);
+                            ref.read(attendanceRecordsStatusFilterProvider.notifier).state = entry.key;
+                            _resetPages(ref);
+                          },
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => _pickDate(context, ref),
+                          child: _FakeInput(
+                            value: selectedDate == null ? 'Today' : _shortDate(selectedDate),
+                            icon: Icons.calendar_today_outlined,
+                          ),
+                        ),
+                      ),
+                      if (selectedDate != null)
+                        IconButton(
+                          tooltip: 'Reset to today',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () {
+                            ref.read(hrAttendanceDateFilterProvider.notifier).state = null;
+                            _resetPages(ref);
+                          },
+                          icon: const Icon(Icons.close, size: 18, color: Color(0xFF6B7280)),
+                        ),
+                      const SizedBox(width: 4),
+                      OutlinedButton.icon(
+                        onPressed: () => _exportCsv(context, ref),
+                        icon: const Icon(Icons.download_outlined, size: 15),
+                        label: const Text('Export'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          textStyle: AppTextStyles.labelSmall,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      OutlinedButton.icon(
+                        onPressed: () => showDialog(
+                          context: context,
+                          builder: (_) => const _ImportAttendanceDialog(),
+                        ),
+                        icon: const Icon(Icons.upload_outlined, size: 15),
+                        label: const Text('Import'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          textStyle: AppTextStyles.labelSmall,
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Expanded(
+                        child: _Dropdown(
+                          value: sortByLabel,
+                          items: _kAttendanceSortByOptions.map((e) => e.value).toList(),
+                          onChanged: (v) {
+                            final entry = _kAttendanceSortByOptions.firstWhere((e) => e.value == v);
+                            ref.read(attendanceRecordsSortByProvider.notifier).state = entry.key;
+                            _resetPages(ref);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: selectedSortDir == 'asc' ? 'Ascending' : 'Descending',
+                        visualDensity: VisualDensity.compact,
+                        style: IconButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFD1D5DB)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () {
+                          ref.read(attendanceRecordsSortDirProvider.notifier).state =
+                              selectedSortDir == 'asc' ? 'desc' : 'asc';
+                          _resetPages(ref);
+                        },
+                        icon: Icon(
+                          selectedSortDir == 'asc' ? Icons.arrow_upward : Icons.arrow_downward,
+                          size: 16,
+                        ),
+                      ),
+                    ]),
+                  ],
                 ),
-                if (selectedDate != null)
-                  IconButton(
-                    tooltip: 'Reset to today',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () {
-                      ref.read(hrAttendanceDateFilterProvider.notifier).state = null;
-                      _resetPages(ref);
-                    },
-                    icon: const Icon(Icons.close, size: 18, color: Color(0xFF6B7280)),
-                  ),
-                const SizedBox(width: 4),
-                OutlinedButton.icon(
-                  onPressed: () => _exportCsv(context, ref),
-                  icon: const Icon(Icons.download_outlined, size: 15),
-                  label: const Text('Export'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    textStyle: AppTextStyles.labelSmall,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                OutlinedButton.icon(
-                  onPressed: () => showDialog(
-                    context: context,
-                    builder: (_) => const _ImportAttendanceDialog(),
-                  ),
-                  icon: const Icon(Icons.upload_outlined, size: 15),
-                  label: const Text('Import'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    textStyle: AppTextStyles.labelSmall,
-                  ),
-                ),
-              ]),
-              const SizedBox(height: 10),
+              ),
+              const SizedBox(height: 12),
 
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    ...chips.entries.map((e) => Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: _Chip(label: '${e.value} ${e.key}', color: _statusColor(e.key), bg: _statusBg(e.key)),
-                    )),
+                    ...chips.entries.map((e) {
+                      final label = _titleCaseStatus(e.key);
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: _Chip(label: '${e.value} $label', color: _statusColor(label), bg: _statusBg(label)),
+                      );
+                    }),
                     Text('Total: $totalEmployees employees',
                       style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280))),
                   ],
@@ -559,6 +1044,33 @@ class _ImportAttendanceDialogState extends ConsumerState<_ImportAttendanceDialog
   bool _uploading = false;
   String? _error;
   ImportResultEntity? _result;
+  bool _downloadingSample = false;
+
+  Future<void> _downloadSample(String format) async {
+    setState(() => _downloadingSample = true);
+    try {
+      final bytes = await ref.read(attendanceRepositoryProvider).fetchImportSample(format: format);
+      final path = await FilePicker.platform.saveFile(
+        fileName: 'attendance_import_sample.$format',
+        bytes: Uint8List.fromList(bytes),
+        type: FileType.custom,
+        allowedExtensions: [format],
+      );
+      if (!mounted) return;
+      setState(() => _downloadingSample = false);
+      if (path != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: const Text('Sample template downloaded.'), backgroundColor: AppColors.success),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _downloadingSample = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyAttendanceError(e)), backgroundColor: AppColors.error),
+      );
+    }
+  }
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
@@ -641,7 +1153,31 @@ class _ImportAttendanceDialogState extends ConsumerState<_ImportAttendanceDialog
       const SizedBox(height: 6),
       Text('Example: EMP001,2026-07-02,09:05,18:15',
         style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF9CA3AF))),
-      const SizedBox(height: 12),
+      const SizedBox(height: 8),
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Download sample:', style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280))),
+          const SizedBox(width: 4),
+          TextButton(
+            onPressed: _downloadingSample ? null : () => _downloadSample('csv'),
+            style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
+            child: const Text('CSV', style: TextStyle(fontSize: 12)),
+          ),
+          const Text('·', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+          TextButton(
+            onPressed: _downloadingSample ? null : () => _downloadSample('xlsx'),
+            style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
+            child: const Text('XLSX', style: TextStyle(fontSize: 12)),
+          ),
+          if (_downloadingSample) ...[
+            const SizedBox(width: 6),
+            const SizedBox(width: 12, height: 12,
+              child: CircularProgressIndicator(strokeWidth: 2)),
+          ],
+        ],
+      ),
+      const SizedBox(height: 8),
       GestureDetector(
         onTap: _pickFile,
         child: _FakeInput(value: _file?.name ?? 'Choose CSV file', icon: Icons.attach_file),
@@ -801,6 +1337,32 @@ class _AttendanceCard extends ConsumerWidget {
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+              Builder(builder: (context) {
+                final d = detailAsync.valueOrNull;
+                return ElevatedButton.icon(
+                  onPressed: d == null
+                      ? null
+                      : () {
+                          Navigator.pop(context);
+                          showDialog(
+                            context: context,
+                            builder: (_) => _AttendanceRecordFormDialog.edit(
+                              recordId: recordId,
+                              employeeId: d.employeeId,
+                              employeeName: record.name,
+                              date: DateTime.parse(d.date),
+                              initialStatus: d.statusKey,
+                              initialClockIn: d.clockIn,
+                              initialClockOut: d.clockOut,
+                              initialNote: d.note,
+                            ),
+                          );
+                        },
+                  icon: const Icon(Icons.edit_outlined, size: 15),
+                  label: const Text('Edit'),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                );
+              }),
             ],
           );
         },
@@ -877,6 +1439,316 @@ class _AttendanceCard extends ConsumerWidget {
       ),
     ),
   );
+}
+
+const _kAttendanceRecordStatuses = <MapEntry<String, String>>[
+  MapEntry('present', 'Present'),
+  MapEntry('late', 'Late Arrival'),
+  MapEntry('half_day', 'Half Day'),
+  MapEntry('on_leave', 'On Leave'),
+  MapEntry('absent', 'Absent'),
+  MapEntry('weekly_off', 'Week Off'),
+  MapEntry('holiday', 'Holiday'),
+  MapEntry('incomplete', 'Incomplete'),
+];
+
+// Handles both manual creation and editing of an attendance record — mirrors
+// web's shared AttendanceEditForm (same status list, same required "reason"
+// audit field). [recordId] non-null means edit mode: employee/date are then
+// fixed (display-only) and status/clock_in/clock_out/note are pre-filled from
+// the existing record.
+class _AttendanceRecordFormDialog extends ConsumerStatefulWidget {
+  final String? recordId;
+  final String? employeeId;
+  final String? employeeName;
+  final DateTime? date;
+  final String? initialStatus;
+  final String? initialClockIn;
+  final String? initialClockOut;
+  final String? initialNote;
+
+  const _AttendanceRecordFormDialog.create()
+      : recordId = null,
+        employeeId = null,
+        employeeName = null,
+        date = null,
+        initialStatus = null,
+        initialClockIn = null,
+        initialClockOut = null,
+        initialNote = null;
+
+  const _AttendanceRecordFormDialog.edit({
+    required String this.recordId,
+    required String this.employeeId,
+    required String this.employeeName,
+    required DateTime this.date,
+    this.initialStatus,
+    this.initialClockIn,
+    this.initialClockOut,
+    this.initialNote,
+  });
+
+  bool get isEdit => recordId != null;
+
+  @override
+  ConsumerState<_AttendanceRecordFormDialog> createState() => _AttendanceRecordFormDialogState();
+}
+
+class _AttendanceRecordFormDialogState extends ConsumerState<_AttendanceRecordFormDialog> {
+  String? _employeeId;
+  DateTime _date = DateTime.now();
+  late String _status;
+  TimeOfDay? _clockIn;
+  TimeOfDay? _clockOut;
+  final _noteCtrl = TextEditingController();
+  final _reasonCtrl = TextEditingController();
+  bool _submitting = false;
+  String? _error;
+
+  static TimeOfDay? _parseTime(String? raw) {
+    if (raw == null || raw.isEmpty || raw == '—') return null;
+    final parts = raw.split(':');
+    if (parts.length < 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _employeeId = widget.employeeId;
+    if (widget.date != null) _date = widget.date!;
+    _status = widget.initialStatus ?? 'present';
+    _clockIn = _parseTime(widget.initialClockIn);
+    _clockOut = _parseTime(widget.initialClockOut);
+    _noteCtrl.text = widget.initialNote ?? '';
+  }
+
+  @override
+  void dispose() {
+    _noteCtrl.dispose();
+    _reasonCtrl.dispose();
+    super.dispose();
+  }
+
+  String _fmtDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  String _fmtTime(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:00';
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) setState(() => _date = picked);
+  }
+
+  Future<void> _pickTime(bool isIn) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: (isIn ? _clockIn : _clockOut) ?? TimeOfDay.now(),
+    );
+    if (picked != null) setState(() => isIn ? _clockIn = picked : _clockOut = picked);
+  }
+
+  Future<void> _submit() async {
+    if (!widget.isEdit && (_employeeId == null || _employeeId!.isEmpty)) {
+      setState(() => _error = 'Please select an employee.');
+      return;
+    }
+    if (_clockIn != null && _clockOut != null) {
+      final inMin = _clockIn!.hour * 60 + _clockIn!.minute;
+      final outMin = _clockOut!.hour * 60 + _clockOut!.minute;
+      if (outMin <= inMin) {
+        setState(() => _error = 'Clock out must be after clock in.');
+        return;
+      }
+    }
+    if (_reasonCtrl.text.trim().isEmpty) {
+      setState(() => _error = "Reason is required — it's recorded in the audit log.");
+      return;
+    }
+
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+
+    final notifier = ref.read(attendanceRecordsProvider.notifier);
+    final error = widget.isEdit
+        ? await notifier.updateRecord(
+            widget.recordId!,
+            status: _status,
+            clockIn: _clockIn == null ? null : _fmtTime(_clockIn!),
+            clockOut: _clockOut == null ? null : _fmtTime(_clockOut!),
+            note: _noteCtrl.text.trim(),
+            reason: _reasonCtrl.text.trim(),
+          )
+        : await notifier.createRecord(
+            employeeId: _employeeId!,
+            date: _fmtDate(_date),
+            status: _status,
+            clockIn: _clockIn == null ? null : _fmtTime(_clockIn!),
+            clockOut: _clockOut == null ? null : _fmtTime(_clockOut!),
+            note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+            reason: _reasonCtrl.text.trim(),
+          );
+
+    if (!mounted) return;
+    setState(() => _submitting = false);
+    if (error != null) {
+      setState(() => _error = error);
+      return;
+    }
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(widget.isEdit ? 'Attendance record updated.' : 'Attendance record created.'),
+        backgroundColor: AppColors.success,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final employeesAsync = ref.watch(employeesProvider);
+    return AlertDialog(
+      title: Text(widget.isEdit ? 'Edit Attendance — ${widget.employeeName}' : 'Add Attendance Record'),
+      content: SizedBox(
+        width: 340,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_error != null) ...[
+                Text(_error!, style: TextStyle(color: AppColors.error, fontSize: 12)),
+                const SizedBox(height: 10),
+              ],
+              if (!widget.isEdit) ...[
+                _FormLabel('Employee'),
+                employeesAsync.when(
+                  data: (employees) => DropdownButtonFormField<String>(
+                    initialValue: _employeeId,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: 'Select employee',
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    isExpanded: true,
+                    items: employees
+                        .map((e) => DropdownMenuItem(
+                              value: e.employeeId,
+                              child: Text('${e.fullName} (${e.employeeId})', overflow: TextOverflow.ellipsis),
+                            ))
+                        .toList(),
+                    onChanged: (v) => setState(() => _employeeId = v),
+                  ),
+                  loading: () => const LinearProgressIndicator(),
+                  error: (e, _) => Text(friendlyAttendanceError(e),
+                      style: TextStyle(color: AppColors.error, fontSize: 12)),
+                ),
+                const SizedBox(height: 12),
+                _FormLabel('Date'),
+                GestureDetector(
+                  onTap: _pickDate,
+                  child: _FakeInput(value: _fmtDate(_date), icon: Icons.calendar_today_outlined),
+                ),
+                const SizedBox(height: 12),
+              ] else ...[
+                _KVRow('Employee', '${widget.employeeName} (${widget.employeeId})'),
+                _KVRow('Date', _fmtDate(widget.date!)),
+                const SizedBox(height: 8),
+              ],
+              _FormLabel('Status'),
+              DropdownButtonFormField<String>(
+                initialValue: _status,
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                isExpanded: true,
+                items: _kAttendanceRecordStatuses
+                    .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                    .toList(),
+                onChanged: (v) => setState(() => _status = v!),
+              ),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _FormLabel('Clock In'),
+                  GestureDetector(
+                    onTap: () => _pickTime(true),
+                    child: _FakeInput(
+                      value: _clockIn == null ? '—' : _fmtTime(_clockIn!).substring(0, 5),
+                      icon: Icons.access_time,
+                    ),
+                  ),
+                ])),
+                const SizedBox(width: 10),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _FormLabel('Clock Out'),
+                  GestureDetector(
+                    onTap: () => _pickTime(false),
+                    child: _FakeInput(
+                      value: _clockOut == null ? '—' : _fmtTime(_clockOut!).substring(0, 5),
+                      icon: Icons.access_time,
+                    ),
+                  ),
+                ])),
+              ]),
+              const SizedBox(height: 12),
+              _FormLabel('Note'),
+              TextField(
+                controller: _noteCtrl,
+                maxLength: 200,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Optional note',
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              _FormLabel('Reason *'),
+              TextField(
+                controller: _reasonCtrl,
+                maxLength: 500,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: "Why this record is being ${widget.isEdit ? 'edited' : 'added'}…",
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _submitting ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _submitting ? null : _submit,
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+          child: _submitting
+              ? const SizedBox(width: 14, height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : Text(widget.isEdit ? 'Save Changes' : 'Add Record'),
+        ),
+      ],
+    );
+  }
 }
 
 class _KVRow extends StatelessWidget {
@@ -975,6 +1847,12 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
     }
     if (_otStart == null || _otEnd == null) {
       setState(() => _error = 'Please select OT start and end times.');
+      return;
+    }
+    final startMinutes = _otStart!.hour * 60 + _otStart!.minute;
+    final endMinutes = _otEnd!.hour * 60 + _otEnd!.minute;
+    if (endMinutes <= startMinutes) {
+      setState(() => _error = 'OT end time must be after the start time.');
       return;
     }
 

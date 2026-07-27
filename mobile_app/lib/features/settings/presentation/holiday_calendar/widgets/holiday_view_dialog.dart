@@ -83,9 +83,13 @@ class HolidayViewDialog extends StatelessWidget {
                       children: [
                         Expanded(child: _Field('Status', holiday.isActive ? 'Active' : 'Inactive')),
                         const SizedBox(width: 16),
-                        Expanded(child: _Field('Branches', holiday.applicableBranches)),
+                        Expanded(child: _Field('Branch', holiday.branchName)),
                       ],
                     ),
+                    if (holiday.description.trim().isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _Field('Description', holiday.description),
+                    ],
                     const SizedBox(height: 20),
                     Row(
                       children: [

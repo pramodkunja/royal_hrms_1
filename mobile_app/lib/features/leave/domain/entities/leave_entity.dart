@@ -421,3 +421,51 @@ class BalanceSummaryEntity {
   double get pct =>
       totalDays > 0 ? (usedDays / totalDays).clamp(0.0, 1.0) : 0.0;
 }
+
+// ── Leave Preview (GET /leave/requests/?action=preview) ─────────────────────
+//
+// Authoritative server-side day-count/LOP breakdown for a candidate leave
+// request — mirrors exactly what LeaveRequestListCreateView.post() will do
+// on submit (sandwich/holiday/week-off exclusion, LOP split, balance check),
+// so the Apply Leave screen doesn't have to re-derive this logic (and risk
+// drifting from it — the client-side estimate doesn't know about holidays).
+
+class NamedDateEntity {
+  final String date; // "15 Aug" (holiday) or "2026-08-09" (week-off)
+  final String label; // holiday name, or weekday name for week-offs
+  const NamedDateEntity({required this.date, required this.label});
+}
+
+class LeavePreviewEntity {
+  final String leaveType;
+  final int calendarDays;
+  final List<NamedDateEntity> companyHolidays;
+  final int companyHolidayCount;
+  final List<NamedDateEntity> weekOffs;
+  final int weekOffCount;
+  final bool sandwichLeaveEnabled;
+  final double actualLeaveDays;
+  final double availableBalance;
+  final double earnedLeaveUsed;
+  final double lopDays;
+  final bool lopEnabled;
+  final bool sufficientBalance;
+  final String warning;
+
+  const LeavePreviewEntity({
+    required this.leaveType,
+    required this.calendarDays,
+    required this.companyHolidays,
+    required this.companyHolidayCount,
+    required this.weekOffs,
+    required this.weekOffCount,
+    required this.sandwichLeaveEnabled,
+    required this.actualLeaveDays,
+    required this.availableBalance,
+    required this.earnedLeaveUsed,
+    required this.lopDays,
+    required this.lopEnabled,
+    required this.sufficientBalance,
+    required this.warning,
+  });
+}

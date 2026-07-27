@@ -2,15 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../../shared/validators/form_validators.dart';
 import '../../../data/models/leave_credit_rule_model.dart';
 
 typedef CreditRuleSubmit = void Function(CreditRuleFormData form);
 
 class CreditRuleFormSheet extends StatefulWidget {
   final LeaveCreditRuleModel? rule; // null = add
+  final List<LeaveCreditRuleModel> existingRules;
   final CreditRuleSubmit onSubmit;
 
-  const CreditRuleFormSheet({super.key, this.rule, required this.onSubmit});
+  const CreditRuleFormSheet(
+      {super.key,
+      this.rule,
+      this.existingRules = const [],
+      required this.onSubmit});
 
   @override
   State<CreditRuleFormSheet> createState() => _CreditRuleFormSheetState();
@@ -89,8 +95,16 @@ class _CreditRuleFormSheetState extends State<CreditRuleFormSheet> {
                         controller: _leaveTypeCtrl,
                         style: AppTextStyles.body,
                         autofocus: true,
-                        onChanged: (_) =>
-                            setState(() => _errors.remove('leaveType')),
+                        onChanged: (v) {
+                          final cleaned = FormValidators.sanitizeLeaveTypeName(v);
+                          if (cleaned != v) {
+                            _leaveTypeCtrl.value = _leaveTypeCtrl.value.copyWith(
+                              text: cleaned,
+                              selection: TextSelection.collapsed(offset: cleaned.length),
+                            );
+                          }
+                          setState(() => _errors.remove('leaveType'));
+                        },
                         decoration: _dec('Leave Type *', _errors['leaveType']),
                       ),
                       const SizedBox(height: 12),
@@ -118,11 +132,13 @@ class _CreditRuleFormSheetState extends State<CreditRuleFormSheet> {
                           Expanded(
                             child: DropdownButtonFormField<AccrualFrequency>(
                               initialValue: _frequency,
+                              isExpanded: true,
                               style: AppTextStyles.body,
                               decoration: _dec('Frequency'),
                               items: AccrualFrequency.values
                                   .map((f) => DropdownMenuItem(
-                                      value: f, child: Text(f.label)))
+                                      value: f,
+                                      child: Text(f.label, overflow: TextOverflow.ellipsis)))
                                   .toList(),
                               onChanged: (v) =>
                                   setState(() => _frequency = v ?? _frequency),
@@ -247,7 +263,10 @@ class _CreditRuleFormSheetState extends State<CreditRuleFormSheet> {
       minServiceMonths: int.tryParse(_minServiceCtrl.text) ?? 0,
       isActive: _isActive,
     );
-    final errors = form.validate();
+    final errors = form.validate(
+      existingRules: widget.existingRules,
+      excludeId: widget.rule?.id,
+    );
     if (errors.isNotEmpty) {
       setState(() {
         _errors

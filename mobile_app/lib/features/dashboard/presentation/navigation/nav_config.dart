@@ -18,7 +18,9 @@ final class NavItem extends NavEntry {
   final IconData icon;
   final String label;
   final String path;
-  final String? permission; // null = always visible
+  final String? permission; // null (with anyOfPermissions also null) = always visible
+  final List<String>? anyOfPermissions; // visible if user holds ANY of these
+  final List<String>? excludeRoles; // hidden for these role names regardless of permission
   final String? badge;
 
   const NavItem({
@@ -27,6 +29,8 @@ final class NavItem extends NavEntry {
     required this.label,
     required this.path,
     this.permission,
+    this.anyOfPermissions,
+    this.excludeRoles,
     this.badge,
   });
 }
@@ -52,25 +56,30 @@ const kAllNav = <NavEntry>[
   NavItem(id: 'branches',         icon: Icons.business_outlined,               label: 'Branches',         path: '/dashboard/branches',         permission: 'branches.view'),
 
   NavSection('Time & Pay'),
-  NavItem(id: 'attendance',       icon: Icons.access_time_outlined,            label: 'Attendance',       path: '/dashboard/attendance',       permission: 'attendance.view'),
-  NavItem(id: 'payroll',          icon: Icons.payments_outlined,               label: 'Payroll',          path: '/dashboard/payroll',          permission: 'payroll.view'),
-  NavItem(id: 'my-payslip',       icon: Icons.receipt_long_outlined,           label: 'My Payslips',      path: '/dashboard/my-payslip',       permission: 'payroll.view'),
+  NavItem(id: 'attendance',       icon: Icons.access_time_outlined,            label: 'Attendance',       path: '/dashboard/attendance',       permission: 'attendance.view', excludeRoles: ['employee']),
   NavItem(id: 'leave',            icon: Icons.beach_access_outlined,           label: 'Leave Management', path: '/dashboard/leave',            permission: 'leave.view'),
   NavItem(id: 'expenses',         icon: Icons.account_balance_wallet_outlined, label: 'Expenses',         path: '/dashboard/expenses',         permission: 'expenses.view'),
 
   NavSection('HR Ops'),
-  NavItem(id: 'approvals',        icon: Icons.checklist_outlined,              label: 'Approvals',        path: '/dashboard/approvals',        permission: 'leave.view'),
+  // Backend's approval endpoints authorize on 'leave.approve' OR 'expenses.approve'
+  // (any one grants access) and HR/HR Admin manage approvals through their own
+  // dedicated workflows, not this generic link — matches web's navConfig.ts exactly.
+  NavItem(id: 'approvals',        icon: Icons.checklist_outlined,              label: 'Approvals',        path: '/dashboard/approvals',        anyOfPermissions: ['leave.approve', 'expenses.approve'], excludeRoles: ['hr', 'hr_admin']),
   NavItem(id: 'separation',       icon: Icons.exit_to_app_outlined,            label: 'Separation & FnF', path: '/dashboard/separation',       permission: 'employees.view'),
   NavItem(id: 'documents',        icon: Icons.folder_outlined,                 label: 'Document Center',  path: '/dashboard/documents',        permission: 'documents.view'),
 
   NavSection('My'),
   NavItem(id: 'my-attendance',    icon: Icons.fingerprint,                     label: 'My Attendance',    path: '/dashboard/my-attendance',    permission: null),
+  NavItem(id: 'referrals',        icon: Icons.person_add_alt_1_outlined,       label: 'My Referrals',     path: '/dashboard/referrals',        permission: null),
   NavItem(id: 'my-requests',      icon: Icons.inbox_outlined,                  label: 'My Requests',      path: '/dashboard/my-requests',      permission: null),
   NavItem(id: 'profile',          icon: Icons.account_circle_outlined,         label: 'My Profile',       path: '/dashboard/profile',          permission: null),
 
   NavSection('System'),
   NavItem(id: 'reports',          icon: Icons.bar_chart_outlined,              label: 'Reports',          path: '/dashboard/reports',          permission: 'reports.view'),
-  NavItem(id: 'audit',            icon: Icons.security_outlined,               label: 'Audit Log',        path: '/dashboard/audit',            permission: 'audit.view'),
+  // Points straight at the real, fully-wired Audit Log screen (same one
+  // reachable from Settings → Audit Log) instead of the unimplemented
+  // placeholder that used to sit at /dashboard/audit.
+  NavItem(id: 'audit',            icon: Icons.security_outlined,               label: 'Audit Log',        path: '/settings/audit',             permission: 'audit.view'),
   NavItem(id: 'settings',         icon: Icons.settings_outlined,               label: 'Settings',         path: '/dashboard/settings',         permission: 'settings.view'),
 ];
 
@@ -78,7 +87,7 @@ const kAllNav = <NavEntry>[
 // Filters kAllNav to items the user can see, suppressing sections that would
 // be empty. Mirrors the logic in frontend/lib/navConfig.ts exactly.
 
-List<NavEntry> buildNav(List<String> permissions) {
+List<NavEntry> buildNav(List<String> permissions, {String? role}) {
   final permSet = <String>{...permissions};
   final result = <NavEntry>[];
   NavSection? pendingSection;
@@ -90,9 +99,13 @@ List<NavEntry> buildNav(List<String> permissions) {
         pendingSection = entry;
         sectionHasItem = false;
       case NavItem():
-        final visible =
-            entry.permission == null || permSet.contains(entry.permission!);
-        if (visible) {
+        final permVisible = entry.anyOfPermissions != null
+            ? entry.anyOfPermissions!.any(permSet.contains)
+            : (entry.permission == null || permSet.contains(entry.permission!));
+        final roleVisible = role == null ||
+            entry.excludeRoles == null ||
+            !entry.excludeRoles!.contains(role);
+        if (permVisible && roleVisible) {
           if (pendingSection != null && !sectionHasItem) {
             result.add(pendingSection);
           }
@@ -118,18 +131,16 @@ const kPageTitles = <String, String>{
   '/dashboard/org-chart':       'Organisation Chart',
   '/dashboard/branches':        'Branch Management',
   '/dashboard/attendance':      'Attendance & Time',
-  '/dashboard/payroll':         'Payroll Management',
-  '/dashboard/my-payslip':      'My Payslips',
   '/dashboard/leave':           'Leave Management',
   '/dashboard/expenses':        'Expense Claims',
   '/dashboard/approvals':       'Team Approvals',
   '/dashboard/separation':      'Separation & FnF',
   '/dashboard/documents':       'Document Center',
   '/dashboard/my-attendance':   'My Attendance',
+  '/dashboard/referrals':       'My Referrals',
   '/dashboard/my-requests':     'My Requests',
   '/dashboard/profile':         'My Profile',
   '/dashboard/reports':         'Reports',
-  '/dashboard/audit':           'Audit Log',
   '/dashboard/settings':        'Settings',
 };
 

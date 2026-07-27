@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../leave/domain/entities/leave_entity.dart';
 import '../../../leave/presentation/widgets/leave_type_icons.dart';
 import '../../data/models/leave_policy_model.dart';
@@ -9,17 +12,43 @@ import '../leave_credit_rules/leave_credit_rules_screen.dart';
 import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
 import 'widgets/add_leave_type_dialog.dart';
+import 'widgets/leave_carry_forward_tab.dart';
 import 'widgets/leave_policy_form_sheet.dart';
+import 'widgets/leave_policy_rules_tab.dart';
 
-// Two tabs: "Policy" lists all leave types — the 6 built-in ones plus any
-// custom types — and lets HR/system admins edit their real, backend-persisted
-// fields (see LeavePoliciesNotifier.updatePolicy) or create/delete custom
-// types via the real POST/DELETE /api/leave/policy/ endpoints (createPolicy/
-// deletePolicy). The 6 built-in leave type codes (casual/earned/sick/lwp/
-// maternity/paternity) cannot be deleted server-side, so the delete action is
-// hidden for them. "Credit Rules" hosts the real "Credit Annual Leave" action
-// plus a local-only accrual-rules preview (see CreditRulesTab doc comment for
-// why that part isn't backend-connected).
+// Compact icon+label tab, matching web's tab bar (small icon inline before
+// the label) rather than Material's default stacked icon-above-text layout,
+// which eats too much vertical space across 4 scrollable tabs.
+Tab _iconTab(IconData icon, String label) => Tab(
+      height: 40,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15),
+          const SizedBox(width: 6),
+          Text(label),
+        ],
+      ),
+    );
+
+// Tabs, matching web's LeavePolicyPage tab split exactly:
+// - "Leave Types" lists all leave types — the 6 built-in ones plus any custom
+//   types — and lets HR/system admins quick-edit the basic fields (annual
+//   days, carry-forward toggle/limit, note, active) or create/delete custom
+//   types via the real POST/DELETE /api/leave/policy/ endpoints. The 6
+//   built-in leave type codes (casual/earned/sick/lwp/maternity/paternity)
+//   cannot be deleted server-side, so the delete action is hidden for them.
+// - "Leave Policy" is the full ~25-field rule engine (application rules,
+//   eligibility, documentation, etc.) for one leave type at a time, picked
+//   via a dropdown — see LeavePolicyRulesTab, matching web's
+//   LeavePoliciesTab.tsx.
+// - "Credit Rules" hosts the real "Credit Annual Leave" action plus a
+//   local-only accrual-rules preview (see CreditRulesTab doc comment for why
+//   that part isn't backend-connected).
+// - "Carry Forward" (system_admin/hr_admin/hr only, same role gate as web)
+//   mirrors web's CarryForwardTab.tsx — see LeaveCarryForwardTab's doc
+//   comment for why every action there currently 404s (no backend routes
+//   exist yet, on web either).
 class LeavePolicyScreen extends ConsumerStatefulWidget {
   const LeavePolicyScreen({super.key});
 
@@ -30,13 +59,16 @@ class LeavePolicyScreen extends ConsumerStatefulWidget {
 class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  late final bool _showCarryForward;
   final _creditRulesKey = GlobalKey<CreditRulesTabState>();
   final _policyKey = GlobalKey<_PolicyTabState>();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this)
+    final role = ref.read(authStateProvider).valueOrNull?.user?.role;
+    _showCarryForward = role != null && kCarryForwardRoles.contains(role);
+    _tabController = TabController(length: _showCarryForward ? 4 : 3, vsync: this)
       ..addListener(() => setState(() {}));
   }
 
@@ -54,9 +86,24 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
       backgroundColor: AppColors.background,
       appBar: SettingsAppBar(
         title: 'Leave Policy',
+        trailing: _showCarryForward
+            ? IconButton(
+                icon: const Icon(Icons.file_upload_outlined, size: 20),
+                color: AppColors.textSecondary,
+                tooltip: 'Import Opening Balances',
+                onPressed: () => context.push(AppRoutes.settingsLeaveBalanceImport),
+              )
+            : null,
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [Tab(text: 'Policy'), Tab(text: 'Credit Rules')],
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: [
+            _iconTab(Icons.beach_access_outlined, 'Leave Types'),
+            _iconTab(Icons.rule_outlined, 'Leave Policy'),
+            _iconTab(Icons.paid_outlined, 'Credit Rules'),
+            if (_showCarryForward) _iconTab(Icons.repeat_rounded, 'Carry Forward'),
+          ],
           labelColor: AppColors.primary,
           unselectedLabelColor: AppColors.textSecondary,
           indicatorColor: AppColors.primary,
@@ -66,27 +113,27 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
           dividerColor: AppColors.border,
         ),
       ),
-      floatingActionButton: _tabController.index == 1
-          ? FloatingActionButton.extended(
-              onPressed: () => _creditRulesKey.currentState?.openAdd(),
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add),
-              label: const Text('Add Rule',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-            )
-          : FloatingActionButton.extended(
-              onPressed: () => _policyKey.currentState?.openAdd(),
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add),
-              label: const Text('Add Leave Type',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-            ),
+      floatingActionButton: switch (_tabController.index) {
+        0 => FloatingActionButton.extended(
+            onPressed: () => _policyKey.currentState?.openAdd(),
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.add),
+            label: const Text('Add Leave Type',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+        2 => FloatingActionButton.extended(
+            onPressed: () => _creditRulesKey.currentState?.openAdd(),
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.add),
+            label: const Text('Add Rule',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+        _ => null,
+      },
       body: TabBarView(
         controller: _tabController,
         children: [
@@ -96,7 +143,9 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
             data: (policies) =>
                 _PolicyTab(key: _policyKey, policies: policies, ref: ref),
           ),
+          const LeavePolicyRulesTab(),
           CreditRulesTab(key: _creditRulesKey),
+          if (_showCarryForward) const LeaveCarryForwardTab(),
         ],
       ),
     );
@@ -116,6 +165,7 @@ class _PolicyTab extends ConsumerStatefulWidget {
 
 class _PolicyTabState extends ConsumerState<_PolicyTab> {
   bool _deleting = false;
+  String? _togglingType;
 
   static bool _isBuiltIn(String code) =>
       LeaveTypeColors.allCodes.contains(code.toLowerCase());
@@ -145,6 +195,22 @@ class _PolicyTabState extends ConsumerState<_PolicyTab> {
         child: LeavePolicyFormSheet(policy: p, ref: widget.ref),
       ),
     );
+  }
+
+  Future<void> _toggleActive(LeavePolicyModel p) async {
+    setState(() => _togglingType = p.leaveType);
+    final form = LeavePolicyFormData.fromModel(p)..isActive = !p.isActive;
+    final result = await ref
+        .read(leavePoliciesProvider.notifier)
+        .updatePolicy(p.leaveType, form);
+    if (!mounted) return;
+    setState(() => _togglingType = null);
+    if (result != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result),
+        backgroundColor: AppColors.error,
+      ));
+    }
   }
 
   Future<void> _deleteCustom(LeavePolicyModel p) async {
@@ -216,6 +282,9 @@ class _PolicyTabState extends ConsumerState<_PolicyTab> {
                 child: _PolicyCard(
                   policy: p,
                   onEdit: () => _openEdit(p),
+                  onToggleActive:
+                      _togglingType != null ? null : () => _toggleActive(p),
+                  toggling: _togglingType == p.leaveType,
                 ),
               )),
           ...customTypes.map((p) => Padding(
@@ -223,6 +292,9 @@ class _PolicyTabState extends ConsumerState<_PolicyTab> {
                 child: _PolicyCard(
                   policy: p,
                   onEdit: () => _openEdit(p),
+                  onToggleActive:
+                      _togglingType != null ? null : () => _toggleActive(p),
+                  toggling: _togglingType == p.leaveType,
                   onDelete: _deleting ? null : () => _deleteCustom(p),
                 ),
               )),
@@ -287,24 +359,34 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withValues(alpha: 0.18)),
+        boxShadow: [
+          BoxShadow(color: color.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(height: 6),
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(7)),
+            child: Icon(icon, size: 14, color: color),
+          ),
+          const SizedBox(height: 8),
           Text('$count',
               style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.w800, color: color)),
+                  fontSize: 19, fontWeight: FontWeight.w800, color: color, height: 1)),
+          const SizedBox(height: 2),
           Text(label,
               style: AppTextStyles.caption
-                  .copyWith(fontSize: 9, color: AppColors.textHint),
+                  .copyWith(fontSize: 10, color: AppColors.textHint),
               maxLines: 1,
               overflow: TextOverflow.ellipsis),
         ],
@@ -318,9 +400,15 @@ class _StatCard extends StatelessWidget {
 class _PolicyCard extends StatelessWidget {
   final LeavePolicyModel policy;
   final VoidCallback onEdit;
+  final VoidCallback? onToggleActive;
+  final bool toggling;
   final VoidCallback? onDelete;
   const _PolicyCard(
-      {required this.policy, required this.onEdit, this.onDelete});
+      {required this.policy,
+      required this.onEdit,
+      this.onToggleActive,
+      this.toggling = false,
+      this.onDelete});
 
   static String _fmt(double v) =>
       v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
@@ -414,20 +502,61 @@ class _PolicyCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8)),
                 ),
               ),
-              if (onDelete != null) ...[
-                const SizedBox(width: 6),
-                IconButton(
-                  onPressed: onDelete,
-                  icon: Icon(Icons.delete_outline,
-                      size: 18, color: AppColors.error),
-                  visualDensity: VisualDensity.compact,
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.error.withValues(alpha: 0.06),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+              const SizedBox(width: 6),
+              // Toggle + Delete folded into one menu (rather than 2-3 separate
+              // IconButtons) to keep this header row's fixed-width footprint
+              // from squeezing the Expanded name column on narrow screens,
+              // especially for custom (user-entered, unbounded-length) types.
+              if (toggling)
+                const SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: Padding(
+                    padding: EdgeInsets.all(8),
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
+                )
+              else
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_vert,
+                      size: 18, color: AppColors.textSecondary),
+                  padding: EdgeInsets.zero,
+                  onSelected: (v) {
+                    if (v == 'toggle') {
+                      onToggleActive?.call();
+                    } else if (v == 'delete') {
+                      onDelete?.call();
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'toggle',
+                      child: Row(children: [
+                        Icon(
+                            policy.isActive
+                                ? Icons.toggle_off_outlined
+                                : Icons.toggle_on,
+                            size: 18,
+                            color: AppColors.textSecondary),
+                        const SizedBox(width: 10),
+                        Text(policy.isActive ? 'Deactivate' : 'Activate',
+                            style: AppTextStyles.bodySmall),
+                      ]),
+                    ),
+                    if (onDelete != null)
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(children: [
+                          Icon(Icons.delete_outline,
+                              size: 18, color: AppColors.error),
+                          const SizedBox(width: 10),
+                          Text('Delete',
+                              style: AppTextStyles.bodySmall
+                                  .copyWith(color: AppColors.error)),
+                        ]),
+                      ),
+                  ],
                 ),
-              ],
             ],
           ),
           const SizedBox(height: 10),

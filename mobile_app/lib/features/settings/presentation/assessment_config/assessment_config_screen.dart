@@ -149,8 +149,9 @@ class _Body extends ConsumerWidget {
   }
 
   static String _formatDate(String iso) {
-    final dt = DateTime.tryParse(iso);
-    if (dt == null) return iso;
+    final parsed = DateTime.tryParse(iso);
+    if (parsed == null) return iso;
+    final dt = parsed.toLocal();
     const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
     final ampm = dt.hour >= 12 ? 'PM' : 'AM';

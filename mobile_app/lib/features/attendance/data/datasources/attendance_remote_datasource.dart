@@ -141,6 +141,63 @@ class AttendanceRemoteDataSource {
     return parsePaginated(_unwrap(res.data), AttendanceRowModel.fromJson);
   }
 
+  // Manual attendance creation — POST /attendance/records/create/. `reason`
+  // is required by the backend for the audit trail, same as edit.
+  Future<AttendanceDetailModel> createRecord({
+    required String employeeId,
+    required String date,
+    required String status,
+    String? clockIn,
+    String? clockOut,
+    String? note,
+    required String reason,
+  }) async {
+    final res = await _dio.post(ApiConstants.attendanceRecordCreate, data: {
+      'employee_id': employeeId,
+      'date': date,
+      'status': status,
+      if (clockIn != null && clockIn.isNotEmpty) 'clock_in': clockIn,
+      if (clockOut != null && clockOut.isNotEmpty) 'clock_out': clockOut,
+      if (note != null && note.isNotEmpty) 'note': note,
+      'reason': reason,
+    });
+    return AttendanceDetailModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  // Edit an existing record — PATCH /attendance/records/<id>/. `reason` is
+  // required server-side for every edit (recorded in the audit log).
+  Future<AttendanceDetailModel> updateRecord(
+    String recordId, {
+    String? status,
+    String? clockIn,
+    String? clockOut,
+    String? note,
+    required String reason,
+  }) async {
+    final res = await _dio.patch(ApiConstants.attendanceRecordDetail(recordId), data: {
+      if (status != null) 'status': status,
+      if (clockIn != null) 'clock_in': clockIn,
+      if (clockOut != null) 'clock_out': clockOut,
+      if (note != null) 'note': note,
+      'reason': reason,
+    });
+    return AttendanceDetailModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  // Reprocess a day — recomputes attendance for everyone with punches or an
+  // existing record on that date. POST /attendance/reprocess/.
+  Future<void> reprocessDay({
+    required String date,
+    String? branch,
+    String? department,
+  }) async {
+    await _dio.post(ApiConstants.attendanceReprocess, data: {
+      'date': date,
+      if (branch != null && branch.isNotEmpty) 'branch': branch,
+      if (department != null && department.isNotEmpty) 'department': department,
+    });
+  }
+
   Future<AttendanceDetailModel> fetchRecordDetail(
     String recordIdOrEmployeeId, {
     String? date,
@@ -303,6 +360,15 @@ class AttendanceRemoteDataSource {
       options: Options(contentType: 'multipart/form-data'),
     );
     return ImportResultModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  Future<List<int>> fetchImportSample({String format = 'csv'}) async {
+    final res = await _dio.get(
+      ApiConstants.attendanceImportSample,
+      queryParameters: {'format': format},
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return res.data as List<int>;
   }
 
   // ── Audit history ────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_app/core/location/location_service.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
+import 'package:mobile_app/core/utils/device_identifier.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
 import 'package:mobile_app/features/attendance/domain/entities/attendance_entity.dart';
 import 'package:mobile_app/features/attendance/presentation/providers/attendance_providers.dart';
@@ -46,6 +47,7 @@ class _ClockInCardState extends ConsumerState<ClockInCard> {
                       ? 'iOS'
                       : null,
           operatingSystem: kIsWeb ? 'web' : Platform.operatingSystem,
+          deviceId: await ref.read(deviceIdProvider.future),
         );
 
     if (!mounted) return;

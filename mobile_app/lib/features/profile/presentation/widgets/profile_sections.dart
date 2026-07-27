@@ -113,7 +113,10 @@ class _ProfilePersonalSectionState extends State<ProfilePersonalSection> {
           ProfileDisplayFieldRow(
             label1: 'Branch', value1: _s(p.branch),
             label2: 'Date of Joining', value2: _fmtDate(p.dateOfJoining),
-            padBottom: false,
+          ),
+          _StatusBadgeRow(
+            label1: 'Onboarding Status', status1: p.onboardingStatus,
+            label2: 'Assessment Status', status2: p.assessmentStatus,
           ),
           const SizedBox(height: 6),
           Align(
@@ -138,17 +141,100 @@ class _ProfilePersonalSectionState extends State<ProfilePersonalSection> {
             Divider(height: 1, color: AppColors.border),
             const SizedBox(height: 14),
             ProfileDisplayFieldRow(
-              label1: 'Gender', value1: _s(p.detail.gender),
-              label2: 'Marital Status', value2: _s(p.detail.maritalStatus),
+              label1: 'Date of Birth', value1: _fmtDate(p.detail.dateOfBirth),
+              label2: 'Gender', value2: _s(p.detail.gender),
             ),
             ProfileDisplayFieldRow(
-              label1: "Father's Name", value1: _s(p.detail.fatherName),
+              label1: 'Marital Status', value1: _s(p.detail.maritalStatus),
               label2: 'Blood Group', value2: _s(p.detail.bloodGroup),
+            ),
+            ProfileDisplayField(
+              label: "Father's Name", value: _s(p.detail.fatherName),
               padBottom: false,
             ),
           ],
         ],
       ),
+    );
+  }
+}
+
+// Onboarding/assessment status pill row — matches web's colored badge
+// treatment (green when 'complete', amber otherwise) rather than a plain
+// bordered display field, since these are state indicators, not text values.
+class _StatusBadgeRow extends StatelessWidget {
+  final String label1;
+  final String status1;
+  final String label2;
+  final String status2;
+
+  const _StatusBadgeRow({
+    required this.label1,
+    required this.status1,
+    required this.label2,
+    required this.status2,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: _StatusBadge(label: label1, status: status1)),
+          const SizedBox(width: 12),
+          Expanded(child: _StatusBadge(label: label2, status: status2)),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final String label;
+  final String status;
+  const _StatusBadge({required this.label, required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final isComplete = status == 'complete';
+    final color = status.isEmpty
+        ? AppColors.textHint
+        : (isComplete ? AppColors.success : AppColors.warning);
+    final text = status.isEmpty
+        ? '—'
+        : '${status[0].toUpperCase()}${status.substring(1)}';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.caption.copyWith(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+            fontSize: 11,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            text,
+            style: AppTextStyles.caption.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }

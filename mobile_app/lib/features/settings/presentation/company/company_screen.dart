@@ -8,6 +8,7 @@ import '../../data/models/company_model.dart';
 import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
 import 'widgets/company_form_fields.dart';
+import 'widgets/financial_year_section.dart';
 
 class CompanyScreen extends ConsumerStatefulWidget {
   const CompanyScreen({super.key});
@@ -120,6 +121,8 @@ class _Body extends StatelessWidget {
               onTap: onLogoTap,
               onRemove: onRemoveLogo,
             ),
+            const SizedBox(height: 16),
+            const FinancialYearSection(),
             const SizedBox(height: 24),
             CompanyFormFields(company: company, onChanged: onChanged),
             const SizedBox(height: 28),

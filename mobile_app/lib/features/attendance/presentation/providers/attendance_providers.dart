@@ -181,6 +181,9 @@ final attendanceDashboardProvider =
 
 final attendanceRecordsSearchProvider = StateProvider.autoDispose<String>((ref) => '');
 final attendanceRecordsPageProvider = StateProvider.autoDispose<int>((ref) => 1);
+final attendanceRecordsStatusFilterProvider = StateProvider.autoDispose<String>((ref) => '');
+final attendanceRecordsSortByProvider = StateProvider.autoDispose<String>((ref) => 'name');
+final attendanceRecordsSortDirProvider = StateProvider.autoDispose<String>((ref) => 'asc');
 
 final attendanceRecordsProvider = AsyncNotifierProvider.autoDispose<
     AttendanceRecordsNotifier, PaginatedListEntity<AttendanceRowEntity>>(AttendanceRecordsNotifier.new);
@@ -195,12 +198,18 @@ class AttendanceRecordsNotifier
     final department = ref.watch(hrAttendanceDepartmentFilterProvider);
     final date = ref.watch(hrAttendanceDateFilterProvider);
     final search = ref.watch(attendanceRecordsSearchProvider);
+    final status = ref.watch(attendanceRecordsStatusFilterProvider);
+    final sortBy = ref.watch(attendanceRecordsSortByProvider);
+    final sortDir = ref.watch(attendanceRecordsSortDirProvider);
     final page = ref.watch(attendanceRecordsPageProvider);
     return _repo.getRecords(
       branch: branch,
       department: department,
       date: _fmtDate(date),
       search: search,
+      status: status.isEmpty ? null : status,
+      sortBy: sortBy,
+      sortDir: sortDir,
       page: page,
     );
   }
@@ -208,6 +217,72 @@ class AttendanceRecordsNotifier
   Future<void> refresh() async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() => build());
+  }
+
+  /// Returns null on success, or a user-facing error message on failure.
+  Future<String?> createRecord({
+    required String employeeId,
+    required String date,
+    required String status,
+    String? clockIn,
+    String? clockOut,
+    String? note,
+    required String reason,
+  }) async {
+    try {
+      await _repo.createRecord(
+        employeeId: employeeId,
+        date: date,
+        status: status,
+        clockIn: clockIn,
+        clockOut: clockOut,
+        note: note,
+        reason: reason,
+      );
+      await refresh();
+      ref.invalidate(attendanceDashboardProvider);
+      return null;
+    } catch (e) {
+      return friendlyAttendanceError(e);
+    }
+  }
+
+  /// Returns null on success, or a user-facing error message on failure.
+  Future<String?> updateRecord(
+    String recordId, {
+    String? status,
+    String? clockIn,
+    String? clockOut,
+    String? note,
+    required String reason,
+  }) async {
+    try {
+      await _repo.updateRecord(
+        recordId,
+        status: status,
+        clockIn: clockIn,
+        clockOut: clockOut,
+        note: note,
+        reason: reason,
+      );
+      await refresh();
+      ref.invalidate(attendanceDashboardProvider);
+      return null;
+    } catch (e) {
+      return friendlyAttendanceError(e);
+    }
+  }
+
+  /// Returns null on success, or a user-facing error message on failure.
+  Future<String?> reprocess({required String date, String? branch, String? department}) async {
+    try {
+      await _repo.reprocessDay(date: date, branch: branch, department: department);
+      await refresh();
+      ref.invalidate(attendanceDashboardProvider);
+      return null;
+    } catch (e) {
+      return friendlyAttendanceError(e);
+    }
   }
 }
 

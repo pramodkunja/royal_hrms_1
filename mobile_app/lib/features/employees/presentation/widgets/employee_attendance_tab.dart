@@ -480,7 +480,12 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _DetailRow('Status', record.status),
+            _DetailRow(
+              'Status',
+              (record.holidayName != null && record.holidayName!.isNotEmpty)
+                  ? '${record.status} — ${record.holidayName}'
+                  : record.status,
+            ),
             if (record.clockIn != null) _DetailRow('Clock In', record.clockIn!),
             if (record.clockOut != null)
               _DetailRow('Clock Out', record.clockOut!),

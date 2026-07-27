@@ -32,7 +32,12 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
       return;
     }
     _tabController?.dispose();
-    _tabController = TabController(length: isEmployee ? 4 : 5, vsync: this);
+    _tabController = TabController(length: isEmployee ? 4 : 5, vsync: this)
+      // Rebuilds so the "Apply My Leave" FAB can hide itself while already
+      // on the Apply Leave tab (index 1 in both the 4- and 5-tab layouts).
+      ..addListener(() {
+        if (mounted) setState(() {});
+      });
     _isEmployeeForController = isEmployee;
   }
 
@@ -99,7 +104,6 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
     ];
     final tabViews = [
       LeaveDashboardTab(
-        onApply: () => tabController.animateTo(1),
         onApprovals: isEmployee ? null : () => tabController.animateTo(2),
         selectedBranches: _selectedBranches,
       ),
@@ -251,6 +255,18 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
           ],
         ),
       ),
+      // Hidden while already on the Apply Leave tab (index 1 in both the
+      // employee's 4-tab and approver's 5-tab layout) — redundant there.
+      floatingActionButton: tabController.index == 1
+          ? null
+          : FloatingActionButton.extended(
+              heroTag: 'leave-apply-fab',
+              onPressed: () => tabController.animateTo(1),
+              backgroundColor: AppColors.primary,
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text('Apply My Leave',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+            ),
     );
   }
 }

@@ -41,6 +41,8 @@ class CandidateEntity {
   final String addedByName;
   final DateTime createdAt;
   final List<CandidateLogEntity> logs;
+  final String? referralBy;
+  final String referralByName;
 
   const CandidateEntity({
     required this.id,
@@ -57,6 +59,8 @@ class CandidateEntity {
     required this.addedByName,
     required this.createdAt,
     this.logs = const [],
+    this.referralBy,
+    this.referralByName = '',
   });
 
   // Convenience

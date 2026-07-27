@@ -80,13 +80,6 @@ const _kTiles = <_Tile>[
   ),
   _Tile(
     cat: _Tab.modules,
-    icon: Icons.payments_outlined, iconColor: Color(0xFF4A148C), iconBg: Color(0xFFF3E5F5),
-    label: 'Payroll Rules',
-    desc: 'Salary components, tax slabs and statutory',
-    route: AppRoutes.settingsPayrollRules,
-  ),
-  _Tile(
-    cat: _Tab.modules,
     icon: Icons.access_time_outlined, iconColor: Color(0xFF006064), iconBg: Color(0xFFE0F4F4),
     label: 'Attendance Rules',
     desc: 'Shift timings, late marks and overtime',

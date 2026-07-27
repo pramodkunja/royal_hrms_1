@@ -79,7 +79,8 @@ class CreditRulesTabState extends ConsumerState<CreditRulesTab> {
         insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 80),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        child: CreditRuleFormSheet(rule: rule, onSubmit: onSubmit),
+        child: CreditRuleFormSheet(
+            rule: rule, existingRules: _rules, onSubmit: onSubmit),
       ),
     );
   }

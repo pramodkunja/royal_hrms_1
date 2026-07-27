@@ -153,10 +153,24 @@ class CreditRuleFormData {
         'is_active': isActive,
       };
 
-  Map<String, String?> validate() {
+  // [existingRules]/[excludeId]: pass the current rule list (and, when
+  // editing, the row's own id) to reject a leave type name that duplicates
+  // another rule, case-insensitively — matches web's CreditTab.tsx behaviour.
+  Map<String, String?> validate({
+    List<LeaveCreditRuleModel>? existingRules,
+    int? excludeId,
+  }) {
     final errors = <String, String?>{};
-    if (leaveType.trim().isEmpty) {
+    final name = leaveType.trim();
+    if (name.isEmpty) {
       errors['leaveType'] = 'Leave type is required.';
+    } else if (!RegExp(r'^[A-Za-z][A-Za-z -]*$').hasMatch(name)) {
+      errors['leaveType'] =
+          'Leave type can only contain letters, spaces, and hyphens.';
+    } else if (existingRules != null &&
+        existingRules.any((r) =>
+            r.id != excludeId && r.leaveType.trim().toLowerCase() == name.toLowerCase())) {
+      errors['leaveType'] = 'A credit rule for this leave type already exists.';
     }
     if (accrualDays <= 0) errors['accrualDays'] = 'Must be greater than 0.';
     if (maxBalance < 1) {

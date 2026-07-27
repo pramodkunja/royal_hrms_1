@@ -119,6 +119,7 @@ class CalendarDayModel extends CalendarDayEntity {
     super.clockOut,
     super.hours,
     super.note,
+    super.holidayName,
     required super.canRegularize,
   });
 
@@ -129,6 +130,7 @@ class CalendarDayModel extends CalendarDayEntity {
       clockOut: json['clockOut'] as String?,
       hours: json['hours'] as String?,
       note: json['note'] as String?,
+      holidayName: json['holiday_name'] as String?,
       canRegularize: _toBool(json['canRegularize']),
     );
   }

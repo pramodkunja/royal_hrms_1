@@ -5,7 +5,11 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/candidate_entity.dart';
 import '../providers/interview_providers.dart';
 import 'activity_log_dialog.dart';
+import 'add_candidate_sheet.dart';
 import 'interview_status_badge.dart';
+import 'mark_candidate_sheet.dart';
+
+const _kReferredByColor = Color(0xFF7C3AED); // matches web's exact accent color
 
 class CandidateCard extends ConsumerWidget {
   final CandidateEntity candidate;
@@ -48,10 +52,34 @@ class CandidateCard extends ConsumerWidget {
                     children: [
                       Text(c.name,
                           style: AppTextStyles.label.copyWith(
-                              fontWeight: FontWeight.w700)),
+                              fontWeight: FontWeight.w700),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
                       Text(c.email,
                           style: AppTextStyles.caption
-                              .copyWith(color: AppColors.textSecondary)),
+                              .copyWith(color: AppColors.textSecondary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                      if (c.referralBy != null) ...[
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.person_add_alt_outlined,
+                                size: 10, color: _kReferredByColor),
+                            const SizedBox(width: 3),
+                            Flexible(
+                              child: Text(
+                                'Referred by ${c.referralByName.isNotEmpty ? c.referralByName : 'Employee'}',
+                                style: AppTextStyles.caption.copyWith(
+                                    color: _kReferredByColor, fontSize: 11),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -93,6 +121,7 @@ class CandidateCard extends ConsumerWidget {
             child: Row(
               children: [
                 _LogsButton(candidate: c),
+                _EditButton(candidate: c),
                 const Spacer(),
                 _StatusChangeButton(candidate: c),
                 const SizedBox(width: 8),
@@ -143,7 +172,7 @@ class _LogsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextButton.icon(
+    return IconButton(
       onPressed: () => showDialog(
         context: context,
         builder: (_) => ActivityLogDialog(
@@ -151,13 +180,35 @@ class _LogsButton extends StatelessWidget {
           candidateName: candidate.name,
         ),
       ),
-      icon: const Icon(Icons.access_time_outlined, size: 14),
-      label: const Text('Logs'),
-      style: TextButton.styleFrom(
-        foregroundColor: AppColors.textSecondary,
-        textStyle: const TextStyle(fontSize: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      icon: const Icon(Icons.access_time_outlined, size: 18),
+      tooltip: 'Activity Logs',
+      color: AppColors.textSecondary,
+      visualDensity: VisualDensity.compact,
+      padding: const EdgeInsets.all(6),
+      constraints: const BoxConstraints(),
+    );
+  }
+}
+
+// ── Edit button ──────────────────────────────────────────────────────────────
+
+class _EditButton extends StatelessWidget {
+  final CandidateEntity candidate;
+  const _EditButton({required this.candidate});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: () => showDialog(
+        context: context,
+        builder: (_) => AddCandidateDialog(existing: candidate),
       ),
+      icon: const Icon(Icons.edit_outlined, size: 18),
+      tooltip: 'Edit Candidate',
+      color: AppColors.textSecondary,
+      visualDensity: VisualDensity.compact,
+      padding: const EdgeInsets.all(6),
+      constraints: const BoxConstraints(),
     );
   }
 }
@@ -176,6 +227,14 @@ class _StatusChangeButton extends ConsumerWidget {
           color: AppColors.textSecondary),
       tooltip: 'Change status',
       onSelected: (newStatus) async {
+        // Selected/Rejected always route through a confirmation step (remarks
+        // + fixed email template), matching web's MarkCandidateModal — every
+        // other status is an instant PATCH.
+        if (newStatus == 'selected' || newStatus == 'rejected') {
+          await MarkCandidateSheet.show(context,
+              candidate: candidate, targetStatus: newStatus);
+          return;
+        }
         final err = await ref
             .read(candidateListProvider.notifier)
             .updateStatus(candidate.id, newStatus);
