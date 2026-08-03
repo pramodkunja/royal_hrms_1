@@ -5,6 +5,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../controllers/voice_command_controller.dart';
 import '../providers/voice_mute_provider.dart';
 import '../state/voice_conversation_state.dart';
+import 'payslip_summary_card.dart';
 
 /// Mirrors frontend/components/VoiceConversationPanel.tsx's phase-driven
 /// layout: listening -> transcript (in flight) -> result. A conversational
@@ -107,6 +108,32 @@ class _VoiceConversationPanelState extends ConsumerState<VoiceConversationPanel>
           ],
         );
 
+      case VoicePanelPhase.typing:
+        return Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _textController,
+                autofocus: true,
+                style: AppTextStyles.body,
+                decoration: InputDecoration(
+                  hintText: 'Type a command…',
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onSubmitted: (_) => _submitTyped(controller),
+              ),
+            ),
+            const SizedBox(width: 6),
+            IconButton(
+              icon: const Icon(Icons.send, size: 18),
+              onPressed: () => _submitTyped(controller),
+              color: AppColors.primary,
+            ),
+          ],
+        );
+
       case VoicePanelPhase.transcript:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -130,11 +157,13 @@ class _VoiceConversationPanelState extends ConsumerState<VoiceConversationPanel>
         );
 
       case VoicePanelPhase.result:
+        final payslipCard = PayslipCardData.tryExtract(c.result);
         if (c.conversational) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(c.message, style: AppTextStyles.body),
+              if (payslipCard != null) PayslipSummaryCard(data: payslipCard),
               if (c.awaitingInput) ...[
                 const SizedBox(height: 12),
                 SizedBox(
@@ -178,16 +207,22 @@ class _VoiceConversationPanelState extends ConsumerState<VoiceConversationPanel>
             ],
           );
         }
-        return Row(
+        return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              c.resultStatus == VoiceResultStatus.error ? Icons.error_outline : Icons.check_circle_outline,
-              color: c.resultStatus == VoiceResultStatus.error ? AppColors.error : AppColors.success,
-              size: 20,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  c.resultStatus == VoiceResultStatus.error ? Icons.error_outline : Icons.check_circle_outline,
+                  color: c.resultStatus == VoiceResultStatus.error ? AppColors.error : AppColors.success,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: Text(c.message, style: AppTextStyles.body)),
+              ],
             ),
-            const SizedBox(width: 8),
-            Expanded(child: Text(c.message, style: AppTextStyles.body)),
+            if (payslipCard != null) PayslipSummaryCard(data: payslipCard),
           ],
         );
     }

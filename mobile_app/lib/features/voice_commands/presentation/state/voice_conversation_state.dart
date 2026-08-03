@@ -1,10 +1,14 @@
 // Mirrors frontend/hooks/useVoiceCommand.ts's VoiceConversationState /
 // VoicePanelPhase / VoiceResultStatus.
 
-/// "listening": mic capturing speech. "transcript": recognized speech shown
-/// while the request is in flight. "result": a response has come back —
-/// either the next turn of a conversational dialogue, or the final answer.
-enum VoicePanelPhase { listening, transcript, result }
+/// "listening": mic capturing speech. "typing": composing a fresh command by
+/// text instead of speech (the keyboard-badge entry point next to the mic
+/// bubble — a typed-fallback alternative to speaking, same idea as the web
+/// app's keyboard-icon toggle, left as this app's own UI/UX call). "transcript":
+/// recognized/typed text shown while the request is in flight. "result": a
+/// response has come back — either the next turn of a conversational
+/// dialogue, or the final answer.
+enum VoicePanelPhase { listening, typing, transcript, result }
 
 enum VoiceResultStatus { success, error }
 
@@ -20,6 +24,14 @@ class VoiceConversationState {
   // request itself and a recognized command the backend rejected (permission
   // denied, a geofencing rejection that survived the retry, etc.).
   final VoiceResultStatus? resultStatus;
+  // The raw `data.result` payload from the backend envelope (see
+  // conversation.py's _payload) — intent-specific, e.g. a payslip's
+  // gross/net/status fields for check_my_payslip/check_employee_payslip.
+  // Most intents' UI needs nothing beyond `message`; this exists only so a
+  // result view (see PayslipSummaryCard) can render a richer summary when
+  // the shape is recognized, without the controller needing to know about
+  // any particular intent.
+  final dynamic result;
 
   const VoiceConversationState({
     this.transcript = '',
@@ -30,6 +42,7 @@ class VoiceConversationState {
     this.awaitingInput = false,
     this.isProcessing = false,
     this.resultStatus,
+    this.result,
   });
 
   VoiceConversationState copyWith({
@@ -41,6 +54,7 @@ class VoiceConversationState {
     bool? awaitingInput,
     bool? isProcessing,
     VoiceResultStatus? resultStatus,
+    dynamic result,
   }) {
     return VoiceConversationState(
       transcript: transcript ?? this.transcript,
@@ -51,6 +65,7 @@ class VoiceConversationState {
       awaitingInput: awaitingInput ?? this.awaitingInput,
       isProcessing: isProcessing ?? this.isProcessing,
       resultStatus: resultStatus ?? this.resultStatus,
+      result: result ?? this.result,
     );
   }
 }

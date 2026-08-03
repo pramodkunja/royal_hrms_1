@@ -65,6 +65,14 @@ class ExpenseListNotifier
   }
 }
 
+// ── Single expense detail (view popup — refreshes status behind the row's
+// already-known data, matching web's ExpenseDetailModal) ───────────────────────
+
+final expenseDetailProvider =
+    FutureProvider.autoDispose.family<ExpenseModel, int>((ref, expenseNumber) {
+  return ref.read(expenseDataSourceProvider).fetchExpense(expenseNumber);
+});
+
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 final expenseStatsProvider =

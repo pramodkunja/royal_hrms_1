@@ -38,10 +38,16 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<UserEntity> login(String email, String password) async {
     final response = await _dataSource.login(LoginRequestModel(email: email, password: password));
     await _cacheUser(response.user);
-    // Persist the access token so AuthInterceptor can send it as a Bearer header.
-    // This makes auth work reliably on native even if the cookie jar is empty.
+    // Persist the access/refresh tokens so AuthInterceptor can send the access
+    // token as a Bearer header and drive silent refresh from the stored
+    // refresh token. This makes auth work reliably on native even if the
+    // cookie jar is empty, and on web when the httpOnly refresh cookie can't
+    // reach the server (e.g. a cross-site dev setup).
     if (response.accessToken != null && response.accessToken!.isNotEmpty) {
       await _storage.write(AppConstants.keyAccessToken, response.accessToken!);
+    }
+    if (response.refreshToken != null && response.refreshToken!.isNotEmpty) {
+      await _storage.write(AppConstants.keyRefreshToken, response.refreshToken!);
     }
     return response.user;
   }

@@ -52,6 +52,14 @@ final kQuickItemsEmployee = <QuickItem>[
       path: '/dashboard/leave',
       permission: 'leave.view'),
   QuickItem(
+      label: 'My Payslips',
+      icon: Icons.receipt_long_outlined,
+      color: AppColors.primary,
+      path: '/dashboard/my-payslip',
+      // Gated server-side on 'payroll.view_own', seeded for every role — not
+      // the HR-only 'payroll.view' the removed tile used to declare here.
+      permission: 'payroll.view_own'),
+  QuickItem(
       label: 'Attendance',
       icon: Icons.access_time_outlined,
       color: AppColors.info,
@@ -90,6 +98,12 @@ final kQuickItemsManager = <QuickItem>[
       color: AppColors.success,
       path: '/dashboard/leave',
       permission: 'leave.view'),
+  QuickItem(
+      label: 'My Payslip',
+      icon: Icons.receipt_long_outlined,
+      color: AppColors.primary,
+      path: '/dashboard/my-payslip',
+      permission: 'payroll.view_own'),
   QuickItem(
       label: 'Team Members',
       icon: Icons.groups_outlined,

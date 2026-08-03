@@ -15,7 +15,7 @@ class ApiConfig {
   ApiConfig._();
 
   // ─── The one value to change when switching environments ─────────────────
-  static const Environment current = Environment.local;
+  static const Environment current = Environment.production;
 
   // ─── Environment URLs ──────────────────────────────────────────────────────
   // Must be `localhost`, not `127.0.0.1` — the backend sets SameSite=Lax

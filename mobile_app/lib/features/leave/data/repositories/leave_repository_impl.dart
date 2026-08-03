@@ -27,12 +27,14 @@ class LeaveRepositoryImpl implements LeaveRepository {
     String? status,
     String? scope,
     String? branch,
+    String? department,
     int page = 1,
   }) =>
       _ds.fetchLeaveRequestsPage(
         status: status,
         scope: scope,
         branch: branch,
+        department: department,
         page: page,
       );
 

@@ -68,17 +68,22 @@ class LeaveRemoteDataSource {
   // used by the approver Dashboard's "Pending Approvals" sub-tab (scope=team),
   // which needs real Prev/Next pagination instead of a client-truncated list.
   // branch is system_admin-only server-side (silently ignored for other
-  // roles) — see LeaveRequestListCreateView.get.
+  // roles); department just requires leave.approve (any approver role) —
+  // see LeaveRequestListCreateView.get.
   Future<LeaveRequestPageModel> fetchLeaveRequestsPage({
     String? status,
     String? scope,
     String? branch,
+    String? department,
     int page = 1,
   }) async {
     final params = <String, dynamic>{'page': page};
     if (status != null) params['status'] = status;
     if (scope != null) params['scope'] = scope;
     if (branch != null && branch.isNotEmpty) params['branch'] = branch;
+    if (department != null && department.isNotEmpty) {
+      params['department'] = department;
+    }
     final res = await _dio.get(ApiConstants.leaves, queryParameters: params);
     return LeaveRequestPageModel.fromJson(_unwrap(res.data));
   }

@@ -153,6 +153,7 @@ class LeaveRequestModel extends LeaveRequestEntity {
   const LeaveRequestModel({
     required super.id,
     required super.employee,
+    super.employeeCode,
     required super.branch,
     required super.department,
     required super.leaveType,
@@ -200,6 +201,7 @@ class LeaveRequestModel extends LeaveRequestEntity {
     return LeaveRequestModel(
       id: json['id']?.toString() ?? '',
       employee: json['employee_name'] as String? ?? '',
+      employeeCode: json['employee_code'] as String? ?? '',
       branch: json['employee_branch'] as String? ?? '',
       department: json['employee_dept'] as String? ?? '',
       leaveType: json['leave_type_display'] as String? ?? '',

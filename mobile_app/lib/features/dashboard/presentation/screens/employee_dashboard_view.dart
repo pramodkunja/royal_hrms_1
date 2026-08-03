@@ -119,8 +119,14 @@ class _EmpConsoleCard extends ConsumerWidget {
         ? 'there'
         : user!.fullName.trim().split(RegExp(r'\s+')).first;
     final kpisAsync = ref.watch(employeeKpisProvider);
-    final statusAsync = ref.watch(employeeAttendanceStatusProvider);
 
+    // Redesigned to be far more compact — the previous version stacked a
+    // header, a clock button, its own correction-request line, a KPI
+    // section spanning two rows, and a THIRD section repeating the same
+    // clock-in/out times already implied by the button above. Now: one
+    // header row, one row that merges the clock control with those same
+    // times (no more separate/duplicated status strip), and a single-row
+    // KPI strip instead of a 2-row grid.
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -137,45 +143,18 @@ class _EmpConsoleCard extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Icon(Icons.dashboard_outlined,
-                      size: 14, color: Colors.white),
-                ),
-                const SizedBox(width: 8),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'MY WORKSPACE',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.1,
-                          color: Colors.white.withValues(alpha: 0.5),
-                        ),
-                      ),
-                      Text(
-                        'Welcome back, $firstName',
-                        style: AppTextStyles.body.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          height: 1.2,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                  child: Text(
+                    'Welcome back, $firstName',
+                    style: AppTextStyles.body.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -193,31 +172,31 @@ class _EmpConsoleCard extends ConsumerWidget {
             ),
           ),
           const Padding(
-            padding: EdgeInsets.fromLTRB(16, 10, 16, 0),
-            child: _ConsoleClockControl(),
+            padding: EdgeInsets.fromLTRB(14, 10, 14, 0),
+            child: _ConsoleClockRow(),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
             child: Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
           ),
-          kpisAsync.when(
-            data: (kpis) => _ConsoleKpiRow(kpis: kpis),
-            loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 18),
-              child: Center(
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation(Colors.white70),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+            child: kpisAsync.when(
+              data: (kpis) => _ConsoleKpiRow(kpis: kpis),
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Center(
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(Colors.white70),
+                    ),
                   ),
                 ),
               ),
-            ),
-            error: (e, _) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-              child: Row(
+              error: (e, _) => Row(
                 children: [
                   Expanded(
                     child: Text(
@@ -237,40 +216,6 @@ class _EmpConsoleCard extends ConsumerWidget {
                 ],
               ),
             ),
-          ),
-          statusAsync.maybeWhen(
-            data: (status) => Column(
-              children: [
-                Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Wrap(
-                    spacing: 18,
-                    runSpacing: 6,
-                    children: [
-                      _StatusStripItem(
-                        icon: Icons.login,
-                        label: 'Clock In',
-                        value: status.clockInTime ?? '—',
-                      ),
-                      _StatusStripItem(
-                        icon: Icons.logout,
-                        label: 'Clock Out',
-                        value: status.clockOutTime ?? '—',
-                      ),
-                      _StatusStripItem(
-                        icon: Icons.access_time,
-                        label: 'Working',
-                        value: status.workingHours.isEmpty
-                            ? '—'
-                            : status.workingHours,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            orElse: () => const SizedBox(height: 12),
           ),
         ],
       ),
@@ -312,47 +257,20 @@ class _AttendanceStatusPill extends StatelessWidget {
   }
 }
 
-class _StatusStripItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _StatusStripItem({required this.icon, required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 13, color: Colors.white.withValues(alpha: 0.35)),
-        const SizedBox(width: 5),
-        Text(
-          '$label:',
-          style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.45)),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          value,
-          style: AppTextStyles.caption
-              .copyWith(color: Colors.white, fontWeight: FontWeight.w700),
-        ),
-      ],
-    );
-  }
-}
-
-/// Compact Clock In/Out control + "Request Attendance Correction" link,
-/// embedded directly in the console header (matching web's `ClockInButton`
-/// sitting inline in `EmpConsole`) instead of a separate card. Reuses the
-/// same punch flow as the rest of the app (`todayAttendanceProvider`).
-class _ConsoleClockControl extends ConsumerStatefulWidget {
-  const _ConsoleClockControl();
+/// Compact Clock In/Out control merged with the clock-in/out/working-hours
+/// summary and the "Request Attendance Correction" action — one row instead
+/// of three separate sections (a button, its own link line, and a whole
+/// second divider+row repeating the same in/out times). Reuses the same
+/// punch flow as the rest of the app (`todayAttendanceProvider`) plus
+/// `employeeAttendanceStatusProvider` for the inline times.
+class _ConsoleClockRow extends ConsumerStatefulWidget {
+  const _ConsoleClockRow();
 
   @override
-  ConsumerState<_ConsoleClockControl> createState() => _ConsoleClockControlState();
+  ConsumerState<_ConsoleClockRow> createState() => _ConsoleClockRowState();
 }
 
-class _ConsoleClockControlState extends ConsumerState<_ConsoleClockControl> {
+class _ConsoleClockRowState extends ConsumerState<_ConsoleClockRow> {
   bool _punching = false;
 
   Future<void> _toggleClock(TodayAttendanceEntity today) async {
@@ -392,81 +310,85 @@ class _ConsoleClockControlState extends ConsumerState<_ConsoleClockControl> {
   @override
   Widget build(BuildContext context) {
     final todayAsync = ref.watch(todayAttendanceProvider);
+    final statusAsync = ref.watch(employeeAttendanceStatusProvider);
 
     return todayAsync.when(
       data: (today) {
         final isClockedIn = today.isClockedIn;
         return Row(
           children: [
-            SizedBox(
-              height: 34,
-              child: ElevatedButton(
-                onPressed: _punching ? null : () => _toggleClock(today),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      (isClockedIn ? const Color(0xFFDC2626) : const Color(0xFF16A34A))
-                          .withValues(alpha: 0.18),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  side: BorderSide(
-                    color: (isClockedIn ? const Color(0xFFF87171) : const Color(0xFF4ADE80))
-                        .withValues(alpha: 0.45),
-                    width: 1.5,
+            // IntrinsicWidth: a Row gives a non-flex child unbounded main-axis
+            // (width) constraints by default, expecting the child to size
+            // itself — SizedBox here only fixes height, so the ElevatedButton
+            // was receiving maxWidth: infinity, which its own internal layout
+            // (ButtonStyleButton._computeSize) asserts against and throws on.
+            // IntrinsicWidth measures the button's natural content width first
+            // and hands that down as a bounded constraint instead.
+            IntrinsicWidth(
+              child: SizedBox(
+                height: 32,
+                child: ElevatedButton(
+                  onPressed: _punching ? null : () => _toggleClock(today),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor:
+                        (isClockedIn ? const Color(0xFFDC2626) : const Color(0xFF16A34A))
+                            .withValues(alpha: 0.18),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    side: BorderSide(
+                      color: (isClockedIn ? const Color(0xFFF87171) : const Color(0xFF4ADE80))
+                          .withValues(alpha: 0.45),
+                      width: 1.5,
+                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                   ),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                ),
-                child: _punching
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation(Colors.white),
-                        ),
-                      )
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 7,
-                            height: 7,
-                            decoration: BoxDecoration(
-                              color: isClockedIn
-                                  ? const Color(0xFFF87171)
-                                  : const Color(0xFF4ADE80),
-                              shape: BoxShape.circle,
+                  child: _punching
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation(Colors.white),
+                          ),
+                        )
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(isClockedIn ? Icons.logout : Icons.login, size: 13),
+                            const SizedBox(width: 5),
+                            Text(
+                              isClockedIn ? 'Clock Out' : 'Clock In',
+                              style: AppTextStyles.labelSmall
+                                  .copyWith(color: Colors.white, fontWeight: FontWeight.w700),
                             ),
-                          ),
-                          const SizedBox(width: 7),
-                          Icon(isClockedIn ? Icons.logout : Icons.login, size: 14),
-                          const SizedBox(width: 6),
-                          Text(
-                            isClockedIn ? 'Clock Out' : 'Clock In',
-                            style: AppTextStyles.labelSmall
-                                .copyWith(color: Colors.white, fontWeight: FontWeight.w700),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
+                ),
               ),
             ),
-            const SizedBox(width: 12),
-            GestureDetector(
-              onTap: () => context.go(AppRoutes.myAttendance),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.flag_outlined, size: 12, color: Colors.white.withValues(alpha: 0.65)),
-                  const SizedBox(width: 5),
-                  Text(
-                    'Request Attendance Correction',
-                    style: AppTextStyles.caption.copyWith(
-                      color: Colors.white.withValues(alpha: 0.65),
-                      decoration: TextDecoration.underline,
-                      decorationColor: Colors.white.withValues(alpha: 0.3),
-                    ),
-                  ),
-                ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: statusAsync.maybeWhen(
+                data: (status) => Text(
+                  '${status.clockInTime ?? '—'} → ${status.clockOutTime ?? '—'}'
+                  '${status.workingHours.isEmpty ? '' : '  ·  ${status.workingHours}'}',
+                  style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.6)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                orElse: () => const SizedBox.shrink(),
+              ),
+            ),
+            Tooltip(
+              message: 'Request Attendance Correction',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () => context.go(AppRoutes.myAttendance),
+                child: Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Icon(Icons.flag_outlined, size: 16, color: Colors.white.withValues(alpha: 0.65)),
+                ),
               ),
             ),
           ],
@@ -481,6 +403,11 @@ class _ConsoleClockControlState extends ConsumerState<_ConsoleClockControl> {
   }
 }
 
+/// Single-row KPI strip (was a 2-row grid) — a shorter, plainer label
+/// (dropping the old "This month"/"Require attention"/"Pending" sub-line
+/// entirely) fits four columns without the truncation a 4-across layout
+/// hit before; letting the label wrap to 2 lines instead of an ellipsis
+/// covers the rare case a value is unexpectedly wide.
 class _ConsoleKpiRow extends StatelessWidget {
   final EmployeeKpis kpis;
   const _ConsoleKpiRow({required this.kpis});
@@ -488,81 +415,60 @@ class _ConsoleKpiRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stats = [
-      (
-        icon: Icons.fingerprint,
-        value: '${kpis.daysPresent} / ${kpis.workingDays}',
-        label: 'Days Present',
-        sub: 'This month',
-      ),
-      (
-        icon: Icons.event_busy_outlined,
-        value: '${kpis.absentDays}',
-        label: 'Absent Days',
-        sub: 'This month',
-      ),
-      (
-        icon: Icons.checklist_outlined,
-        value: '${kpis.pendingActionItems}',
-        label: 'Action Items',
-        sub: 'Require attention',
-      ),
-      (
-        icon: Icons.receipt_long_outlined,
-        value: '${kpis.pendingExpenseClaims}',
-        label: 'Expense Claims',
-        sub: 'Pending',
-      ),
+      (icon: Icons.fingerprint, value: '${kpis.daysPresent}/${kpis.workingDays}', label: 'Days Present'),
+      (icon: Icons.event_busy_outlined, value: '${kpis.absentDays}', label: 'Absent Days'),
+      (icon: Icons.checklist_outlined, value: '${kpis.pendingActionItems}', label: 'Action Items'),
+      (icon: Icons.receipt_long_outlined, value: '${kpis.pendingExpenseClaims}', label: 'Expenses'),
     ];
 
     return Row(
-      children: [
-        for (final s in stats)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(s.icon, size: 12, color: Colors.white.withValues(alpha: 0.4)),
-                      const SizedBox(width: 5),
-                      Flexible(
-                        child: Text(
-                          s.value,
-                          style: AppTextStyles.h4
-                              .copyWith(color: Colors.white, fontWeight: FontWeight.w800),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    s.label,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withValues(alpha: 0.72),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    s.sub,
-                    style: AppTextStyles.labelSmall
-                        .copyWith(fontSize: 10, color: Colors.white.withValues(alpha: 0.36)),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+      children: [for (final s in stats) Expanded(child: _KpiCell(stat: s))],
+    );
+  }
+}
+
+typedef _KpiStat = ({IconData icon, String value, String label});
+
+class _KpiCell extends StatelessWidget {
+  final _KpiStat stat;
+  const _KpiCell({required this.stat});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(stat.icon, size: 12, color: Colors.white.withValues(alpha: 0.4)),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  stat.value,
+                  style: AppTextStyles.h4
+                      .copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ),
+            ],
           ),
-      ],
+          const SizedBox(height: 2),
+          Text(
+            stat.label,
+            style: AppTextStyles.labelSmall.copyWith(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: Colors.white.withValues(alpha: 0.72),
+            ),
+            maxLines: 2,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -625,7 +531,11 @@ class _EmpLeaveBalancesCard extends ConsumerWidget {
                   crossAxisCount: 2,
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
-                  mainAxisExtent: 96,
+                  // Tall enough for _EmpBalanceCell's optional trailing "N
+                  // used" line (only rendered when balance.usedDays > 0) —
+                  // 96 fit the common case but overflowed by 6px on any
+                  // balance with recorded usage.
+                  mainAxisExtent: 104,
                 ),
                 itemBuilder: (context, i) => _EmpBalanceCell(balance: summary.balances[i]),
               ),

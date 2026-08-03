@@ -310,6 +310,84 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
           ),
         ],
       ),
+      const SizedBox(height: 14),
+      Row(
+        children: [
+          Expanded(
+            child: _ChoiceDropdown(
+              label: 'Gender',
+              value: form.gender,
+              items: const [
+                {'value': 'male', 'label': 'Male'},
+                {'value': 'female', 'label': 'Female'},
+                {'value': 'other', 'label': 'Other / Prefer not to say'},
+              ],
+              onChanged: (v) => setState(() => form.gender = v ?? ''),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _ChoiceDropdown(
+              label: 'Marital Status',
+              value: form.maritalStatus,
+              items: const [
+                {'value': 'single', 'label': 'Single'},
+                {'value': 'married', 'label': 'Married'},
+                {'value': 'divorced', 'label': 'Divorced'},
+                {'value': 'widowed', 'label': 'Widowed'},
+              ],
+              onChanged: (v) => setState(() => form.maritalStatus = v ?? ''),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 14),
+      Row(
+        children: [
+          Expanded(
+            child: _Field(
+              label: "Father's Name",
+              initialValue: form.fatherName,
+              onChanged: (v) => form.fatherName = v,
+              hint: "Father's full name",
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _ChoiceDropdown(
+              label: 'Blood Group',
+              value: form.bloodGroup,
+              items: const [
+                {'value': 'A+', 'label': 'A+'},
+                {'value': 'A-', 'label': 'A-'},
+                {'value': 'B+', 'label': 'B+'},
+                {'value': 'B-', 'label': 'B-'},
+                {'value': 'O+', 'label': 'O+'},
+                {'value': 'O-', 'label': 'O-'},
+                {'value': 'AB+', 'label': 'AB+'},
+                {'value': 'AB-', 'label': 'AB-'},
+              ],
+              onChanged: (v) => setState(() => form.bloodGroup = v ?? ''),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 14),
+      _Field(
+        label: 'Current Address',
+        initialValue: form.currentAddress,
+        onChanged: (v) => form.currentAddress = v,
+        hint: 'House / Flat no., Street, City, State, PIN',
+        maxLines: 3,
+      ),
+      const SizedBox(height: 14),
+      _Field(
+        label: 'Permanent Address',
+        initialValue: form.permanentAddress,
+        onChanged: (v) => form.permanentAddress = v,
+        hint: 'Leave blank if same as current',
+        maxLines: 3,
+      ),
       const SizedBox(height: 22),
       const _SectionHeader(
         icon: Icons.work_outline,
@@ -545,6 +623,7 @@ class _Field extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final String? hint;
   final TextInputType? keyboardType;
+  final int maxLines;
 
   const _Field({
     required this.label,
@@ -554,6 +633,7 @@ class _Field extends StatelessWidget {
     required this.onChanged,
     this.hint,
     this.keyboardType,
+    this.maxLines = 1,
   });
 
   @override
@@ -567,6 +647,7 @@ class _Field extends StatelessWidget {
           initialValue: initialValue,
           style: AppTextStyles.body,
           keyboardType: keyboardType,
+          maxLines: maxLines,
           onChanged: onChanged,
           decoration: _inputDec(hint ?? '', error: error),
         ),
@@ -578,6 +659,45 @@ class _Field extends StatelessWidget {
                   color: AppColors.error,
                   fontWeight: FontWeight.w500)),
         ],
+      ],
+    );
+  }
+}
+
+// ── Choice dropdown (edit mode — Gender / Marital Status / Blood Group) ────────
+
+class _ChoiceDropdown extends StatelessWidget {
+  final String label;
+  final String value;
+  final List<Map<String, String>> items;
+  final ValueChanged<String?> onChanged;
+
+  const _ChoiceDropdown({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _Label(text: label),
+        const SizedBox(height: 5),
+        DropdownButtonFormField<String>(
+          initialValue: value.isEmpty ? null : value,
+          style: AppTextStyles.body,
+          isExpanded: true,
+          decoration: _inputDec('— Select —'),
+          hint: Text('— Select —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
+          items: items.map((it) => DropdownMenuItem<String>(
+            value: it['value'],
+            child: Text(it['label']!, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+          )).toList(),
+          onChanged: onChanged,
+        ),
       ],
     );
   }

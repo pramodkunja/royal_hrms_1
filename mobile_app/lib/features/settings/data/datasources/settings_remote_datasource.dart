@@ -136,6 +136,16 @@ class SettingsRemoteDataSource {
         .toList();
   }
 
+  Future<EmailTemplateCategoryModel> createTemplateCategory(
+      String displayName) async {
+    final res = await _dio.post(ApiConstants.settingsEmailTemplateCategories, data: {
+      'name': EmailTemplateFormData.toSlug(displayName),
+      'display_name': displayName,
+    });
+    return EmailTemplateCategoryModel.fromJson(
+        _unwrap(res.data) as Map<String, dynamic>);
+  }
+
   Future<List<EmailTemplateModel>> fetchTemplates() async {
     final res = await _dio.get(ApiConstants.settingsEmailTemplates);
     final data = _unwrap(res.data);

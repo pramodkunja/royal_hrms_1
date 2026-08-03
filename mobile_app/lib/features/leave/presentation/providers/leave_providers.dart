@@ -164,26 +164,32 @@ class LeaveRequestsNotifier
 
 // ── Team Pending Requests (scope=team, accumulating "load more") ─────────────
 
+// Filter key shared by leaveTeamPendingProvider/leaveTeamHistoryProvider —
+// branch is system_admin-only server-side (silently ignored for other
+// roles); department just needs leave.approve, but the UI (matching web's
+// canFilterDept) only shows that filter to system_admin/hr. Both empty means
+// "no filter" for that dimension.
+typedef LeaveTeamFilter = ({String branch, String department});
+
 // Backs the approver Dashboard's "Pending Approvals" sub-tab and the
 // Approvals tab's "Pending" sub-tab — a real server-side approval queue
 // (scope=team), distinct from leaveRequestsProvider above (which is always
 // the viewer's OWN requests, no matter the role — see fetchLeaveRequests'
-// doc comment). Keyed by branch alone (page is tracked internally and grows
-// via loadMore() instead of being part of the key) — branch is '' when no
-// filter is applied (system_admin only — the backend silently ignores it for
-// other roles, so it's harmless to always send).
+// doc comment). Keyed by (branch, department) — page is tracked internally
+// and grows via loadMore() instead of being part of the key.
 final leaveTeamPendingProvider = AsyncNotifierProvider.autoDispose
-    .family<LeaveTeamPendingNotifier, LeaveLoadMoreState, String>(
+    .family<LeaveTeamPendingNotifier, LeaveLoadMoreState, LeaveTeamFilter>(
         LeaveTeamPendingNotifier.new);
 
-class LeaveTeamPendingNotifier
-    extends AutoDisposeFamilyAsyncNotifier<LeaveLoadMoreState, String> {
+class LeaveTeamPendingNotifier extends AutoDisposeFamilyAsyncNotifier<
+    LeaveLoadMoreState, LeaveTeamFilter> {
   @override
-  Future<LeaveLoadMoreState> build(String branch) async {
+  Future<LeaveLoadMoreState> build(LeaveTeamFilter filter) async {
     final page = await ref.read(leaveRepositoryProvider).getLeaveRequestsPaginated(
           scope: 'team',
           page: 1,
-          branch: branch.isEmpty ? null : branch,
+          branch: filter.branch.isEmpty ? null : filter.branch,
+          department: filter.department.isEmpty ? null : filter.department,
         );
     return LeaveLoadMoreState(
       items: page.results,
@@ -203,7 +209,8 @@ class LeaveTeamPendingNotifier
       final next = await ref.read(leaveRepositoryProvider).getLeaveRequestsPaginated(
             scope: 'team',
             page: current.page + 1,
-            branch: arg.isEmpty ? null : arg,
+            branch: arg.branch.isEmpty ? null : arg.branch,
+            department: arg.department.isEmpty ? null : arg.department,
           );
       state = AsyncData(LeaveLoadMoreState(
         items: [...current.items, ...next.results],
@@ -258,18 +265,19 @@ class LeaveTeamPendingNotifier
 // frontend's equivalent History fetch hits the exact same limitation), not a
 // mobile-side bug — see apps/hrms/views/leave.py _approval_scope_filter.
 final leaveTeamHistoryProvider = AsyncNotifierProvider.autoDispose
-    .family<LeaveTeamHistoryNotifier, LeaveLoadMoreState, String>(
+    .family<LeaveTeamHistoryNotifier, LeaveLoadMoreState, LeaveTeamFilter>(
         LeaveTeamHistoryNotifier.new);
 
-class LeaveTeamHistoryNotifier
-    extends AutoDisposeFamilyAsyncNotifier<LeaveLoadMoreState, String> {
+class LeaveTeamHistoryNotifier extends AutoDisposeFamilyAsyncNotifier<
+    LeaveLoadMoreState, LeaveTeamFilter> {
   @override
-  Future<LeaveLoadMoreState> build(String branch) async {
+  Future<LeaveLoadMoreState> build(LeaveTeamFilter filter) async {
     final page = await ref.read(leaveRepositoryProvider).getLeaveRequestsPaginated(
           scope: 'team',
           status: 'approved,rejected,cancelled',
           page: 1,
-          branch: branch.isEmpty ? null : branch,
+          branch: filter.branch.isEmpty ? null : filter.branch,
+          department: filter.department.isEmpty ? null : filter.department,
         );
     return LeaveLoadMoreState(
       items: page.results,
@@ -288,7 +296,8 @@ class LeaveTeamHistoryNotifier
             scope: 'team',
             status: 'approved,rejected,cancelled',
             page: current.page + 1,
-            branch: arg.isEmpty ? null : arg,
+            branch: arg.branch.isEmpty ? null : arg.branch,
+            department: arg.department.isEmpty ? null : arg.department,
           );
       state = AsyncData(LeaveLoadMoreState(
         items: [...current.items, ...next.results],

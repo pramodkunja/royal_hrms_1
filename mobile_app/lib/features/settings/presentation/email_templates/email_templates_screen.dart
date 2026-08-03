@@ -5,6 +5,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../data/models/email_template_model.dart';
 import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
+import 'widgets/email_branding_card.dart';
 import 'widgets/template_card.dart';
 import 'widgets/template_editor_sheet.dart';
 import 'widgets/template_preview_sheet.dart';
@@ -74,7 +75,15 @@ class _EmailTemplatesScreenState extends ConsumerState<EmailTemplatesScreen> {
   }
 
   Widget _buildBody(BuildContext context, List<EmailTemplateModel> templates) {
-    if (templates.isEmpty) return _EmptyView(onAdd: () => _openEditor(context, null));
+    if (templates.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const EmailBrandingCard(),
+          Expanded(child: _EmptyView(onAdd: () => _openEditor(context, null))),
+        ],
+      );
+    }
 
     final filtered = _search.isEmpty
         ? templates
@@ -100,6 +109,7 @@ class _EmailTemplatesScreenState extends ConsumerState<EmailTemplatesScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const EmailBrandingCard(),
         _SubHeader(),
         _SearchBar(
           controller: _searchCtrl,
@@ -154,7 +164,7 @@ class _EmailTemplatesScreenState extends ConsumerState<EmailTemplatesScreen> {
         insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        child: TemplateEditorSheet(template: t, ref: ref),
+        child: TemplateEditorSheet(template: t),
       ),
     );
   }

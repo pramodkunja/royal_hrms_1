@@ -465,6 +465,12 @@ class EmployeeUpdateFormData {
   String branch;
   String dateOfJoining;
   String dateOfBirth;
+  String gender;
+  String maritalStatus;
+  String fatherName;
+  String bloodGroup;
+  String currentAddress;
+  String permanentAddress;
   String? hrId;
   String? hrName;
   String? reportingManagerId;
@@ -480,6 +486,12 @@ class EmployeeUpdateFormData {
     this.branch = '',
     this.dateOfJoining = '',
     this.dateOfBirth = '',
+    this.gender = '',
+    this.maritalStatus = '',
+    this.fatherName = '',
+    this.bloodGroup = '',
+    this.currentAddress = '',
+    this.permanentAddress = '',
     this.hrId,
     this.hrName,
     this.reportingManagerId,
@@ -496,6 +508,12 @@ class EmployeeUpdateFormData {
         branch:     model.branch,
         dateOfJoining: model.dateOfJoining,
         dateOfBirth:   model.dateOfBirth,
+        gender:        model.gender,
+        maritalStatus: model.maritalStatus,
+        fatherName:    model.fatherName,
+        bloodGroup:    model.bloodGroup,
+        currentAddress:   model.currentAddress,
+        permanentAddress: model.permanentAddress,
         hrId:       model.hrId,
         hrName:     model.hrName,
         reportingManagerId:   model.reportingManagerId,
@@ -544,6 +562,12 @@ class EmployeeUpdateFormData {
         'designation':     designation,
         'branch':          branch,
         'date_of_birth': dateOfBirth,
+        'gender': gender,
+        'marital_status': maritalStatus,
+        'father_name': fatherName,
+        'blood_group': bloodGroup,
+        'current_address': currentAddress,
+        'permanent_address': permanentAddress,
         // Always sent (even null) so clearing HR works; reporting_manager_id
         // is omitted entirely for managers — sending it at all is rejected.
         'hr_id': hrId,

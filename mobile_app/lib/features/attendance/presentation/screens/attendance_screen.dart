@@ -11,6 +11,7 @@ import '../../../employees/presentation/providers/employee_providers.dart';
 import '../../../employees/presentation/widgets/employee_attendance_tab.dart';
 import '../../domain/entities/attendance_entity.dart';
 import '../providers/attendance_providers.dart';
+import '../widgets/hr_correction_card.dart';
 
 // ─── Colour helpers ───────────────────────────────────────────────────────────
 
@@ -2565,19 +2566,37 @@ class _UnpunchesTab extends ConsumerWidget {
           const SizedBox(height: 10),
           _Dropdown(
             value: switch (statusFilter) {
-              'pending' => 'Pending',
+              'pending' => 'Pending — Manager',
+              'l2_pending' => 'Pending — HR',
               'approved' => 'Approved',
               'rejected' => 'Rejected',
               _ => 'All',
             },
-            items: const ['All', 'Pending', 'Approved', 'Rejected'],
-            onChanged: (v) => ref.read(hrCorrectionsStatusFilterProvider.notifier).state = (v ?? 'All').toLowerCase(),
+            items: const [
+              'All',
+              'Pending — Manager',
+              'Pending — HR',
+              'Approved',
+              'Rejected',
+            ],
+            onChanged: (v) => ref.read(hrCorrectionsStatusFilterProvider.notifier).state = switch (v) {
+              'Pending — Manager' => 'pending',
+              'Pending — HR' => 'l2_pending',
+              'Approved' => 'approved',
+              'Rejected' => 'rejected',
+              _ => 'all',
+            },
           ),
           const SizedBox(height: 10),
           correctionsAsync.when(
             data: (rows) => rows.isEmpty
                 ? const _EmptyState(message: 'No correction requests found.')
-                : Column(children: rows.map((r) => _HrCorrectionCard(record: r)).toList()),
+                : Column(children: rows.map((r) => HrCorrectionCard(
+                    record: r,
+                    onReview: (approve) => ref
+                        .read(hrCorrectionsProvider.notifier)
+                        .reviewCorrection(r.id, approve: approve),
+                  )).toList()),
             loading: () => const Padding(
               padding: EdgeInsets.symmetric(vertical: 40),
               child: Center(child: CircularProgressIndicator()),
@@ -2593,111 +2612,6 @@ class _UnpunchesTab extends ConsumerWidget {
   }
 }
 
-class _HrCorrectionCard extends ConsumerStatefulWidget {
-  final HrCorrectionRowEntity record;
-  const _HrCorrectionCard({required this.record});
-
-  @override
-  ConsumerState<_HrCorrectionCard> createState() => _HrCorrectionCardState();
-}
-
-class _HrCorrectionCardState extends ConsumerState<_HrCorrectionCard> {
-  bool _reviewing = false;
-
-  Future<void> _review(bool approve) async {
-    setState(() => _reviewing = true);
-    final error = await ref
-        .read(hrCorrectionsProvider.notifier)
-        .reviewCorrection(widget.record.id, approve: approve);
-    if (!mounted) return;
-    setState(() => _reviewing = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(error ?? (approve ? 'Correction approved.' : 'Correction rejected.')),
-        backgroundColor: error != null ? AppColors.error : AppColors.success,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final record = widget.record;
-    final isPending = record.status.toLowerCase() == 'pending';
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 2))],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            _Avatar(name: record.name, initials: ''),
-            const SizedBox(width: 10),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(record.name, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
-              Text('${record.employeeId} · ${record.department}',
-                style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280))),
-            ])),
-            _StatusBadge(status: record.status),
-          ]),
-          const SizedBox(height: 10),
-          Row(children: [
-            Expanded(child: _KV(k: 'Date', v: record.date)),
-            Expanded(child: _KV(k: 'Punch Type', v: record.punchType)),
-            Expanded(child: _KV(k: 'Requested In', v: record.requestedInTime ?? '—')),
-            Expanded(child: _KV(k: 'Requested Out', v: record.requestedOutTime ?? '—')),
-          ]),
-          const SizedBox(height: 8),
-          _KV(k: 'Reason', v: record.reason),
-          if (isPending) ...[
-            const SizedBox(height: 10),
-            if (_reviewing)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 6),
-                child: Center(child: SizedBox(width: 16, height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2))),
-              )
-            else
-              Row(children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _review(false),
-                    icon: const Icon(Icons.close, size: 14),
-                    label: const Text('Reject'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.error,
-                      side: BorderSide(color: AppColors.error.withValues(alpha: 0.4)),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _review(true),
-                    icon: const Icon(Icons.check, size: 14),
-                    label: const Text('Approve'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 0,
-                    ),
-                  ),
-                ),
-              ]),
-          ],
-        ]),
-      ),
-    );
-  }
-}
 
 class _UnpunchCard extends ConsumerStatefulWidget {
   final UnpunchRowEntity record;

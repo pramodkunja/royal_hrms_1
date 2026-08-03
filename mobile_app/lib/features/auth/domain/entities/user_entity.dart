@@ -11,6 +11,7 @@ class UserEntity {
   final bool mustChangePassword;
   final List<String> permissions;
   final String? onboardingStatus;
+  final bool canManageTeam;
 
   const UserEntity({
     required this.id,
@@ -25,6 +26,7 @@ class UserEntity {
     required this.mustChangePassword,
     required this.permissions,
     this.onboardingStatus,
+    this.canManageTeam = false,
   });
 
   bool get needsOnboarding =>
@@ -47,6 +49,7 @@ class UserEntity {
         mustChangePassword: mustChangePassword,
         permissions: permissions,
         onboardingStatus: onboardingStatus ?? this.onboardingStatus,
+        canManageTeam: canManageTeam,
       );
 
   @override

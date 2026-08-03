@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../attendance/presentation/widgets/hr_correction_card.dart';
 import '../../../expenses/data/models/expense_model.dart';
 import '../../../leave/domain/entities/leave_entity.dart';
 import '../providers/approvals_providers.dart';
@@ -32,16 +33,19 @@ String _fmtIso(String iso) {
   }
 }
 
-// Pending items awaiting the current user's approval, for Leave and/or
-// Expense depending on which of leave.approve / expenses.approve they hold.
-// If they only hold one, the type toggle is hidden and that type is forced.
+// Pending items awaiting the current user's approval, for Leave, Expense
+// and/or Attendance Correction depending on which of leave.approve /
+// expenses.approve / attendance.view they hold. If only one type is
+// available, the toggle is hidden and that type is forced.
 class TeamApprovalsTab extends ConsumerStatefulWidget {
   final bool canApproveLeave;
   final bool canApproveExpense;
+  final bool canApproveCorrections;
   const TeamApprovalsTab({
     super.key,
     required this.canApproveLeave,
     required this.canApproveExpense,
+    this.canApproveCorrections = false,
   });
 
   @override
@@ -141,55 +145,66 @@ class _TeamApprovalsTabState extends ConsumerState<TeamApprovalsTab> {
     ));
   }
 
+  bool _isAvailable(ApprovalsRequestType t) => switch (t) {
+        ApprovalsRequestType.leave => widget.canApproveLeave,
+        ApprovalsRequestType.expense => widget.canApproveExpense,
+        ApprovalsRequestType.attendanceCorrection =>
+          widget.canApproveCorrections,
+      };
+
   @override
   Widget build(BuildContext context) {
-    final canBoth = widget.canApproveLeave && widget.canApproveExpense;
+    final available =
+        ApprovalsRequestType.values.where(_isAvailable).toList();
     var type = ref.watch(teamApprovalsTypeProvider);
-    if (!widget.canApproveLeave && type == ApprovalsRequestType.leave) {
-      type = ApprovalsRequestType.expense;
-    } else if (!widget.canApproveExpense &&
-        type == ApprovalsRequestType.expense) {
-      type = ApprovalsRequestType.leave;
+    if (!_isAvailable(type) && available.isNotEmpty) {
+      type = available.first;
     }
-    final isLeave = type == ApprovalsRequestType.leave;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (canBoth)
+        if (available.length > 1)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-            child: Row(
-              children: [
-                _ToggleChip(
-                  label: 'Leave',
-                  selected: isLeave,
-                  onTap: () => ref
-                      .read(teamApprovalsTypeProvider.notifier)
-                      .state = ApprovalsRequestType.leave,
-                ),
-                const SizedBox(width: 8),
-                _ToggleChip(
-                  label: 'Expense',
-                  selected: !isLeave,
-                  onTap: () => ref
-                      .read(teamApprovalsTypeProvider.notifier)
-                      .state = ApprovalsRequestType.expense,
-                ),
-              ],
+            padding: const EdgeInsets.fromLTRB(16, 6, 0, 8),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.only(right: 16),
+              child: Row(
+                children: available
+                    .map((t) => Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: _ToggleChip(
+                            label: switch (t) {
+                              ApprovalsRequestType.leave => 'Leave',
+                              ApprovalsRequestType.expense => 'Expense',
+                              ApprovalsRequestType.attendanceCorrection =>
+                                'Attendance Correction',
+                            },
+                            selected: type == t,
+                            onTap: () => ref
+                                .read(teamApprovalsTypeProvider.notifier)
+                                .state = t,
+                          ),
+                        ))
+                    .toList(),
+              ),
             ),
           ),
         Expanded(
-          child: isLeave
-              ? _PendingLeaveList(
-                  actionLoading: _actionLoading,
-                  onApprove: _approveLeave,
-                  onReject: _rejectLeaveDialog,
-                )
-              : _PendingExpenseList(
-                  actionLoading: _actionLoading,
-                  onSetStatus: _setExpenseStatus,
-                ),
+          child: switch (type) {
+            ApprovalsRequestType.leave => _PendingLeaveList(
+                actionLoading: _actionLoading,
+                onApprove: _approveLeave,
+                onReject: _rejectLeaveDialog,
+              ),
+            ApprovalsRequestType.expense => _PendingExpenseList(
+                actionLoading: _actionLoading,
+                onSetStatus: _setExpenseStatus,
+              ),
+            ApprovalsRequestType.attendanceCorrection =>
+              const _PendingCorrectionsList(),
+          },
         ),
       ],
     );
@@ -312,6 +327,80 @@ class _PendingExpenseList extends ConsumerWidget {
   }
 }
 
+class _PendingCorrectionsList extends ConsumerWidget {
+  const _PendingCorrectionsList();
+
+  static const _statusOptions = [
+    MapEntry('pending', 'Pending — Manager'),
+    MapEntry('l2_pending', 'Pending — HR'),
+    MapEntry('approved', 'Approved'),
+    MapEntry('rejected', 'Rejected'),
+    MapEntry('all', 'All'),
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final correctionsAsync = ref.watch(teamCorrectionsProvider);
+    final statusFilter = ref.watch(teamCorrectionsStatusFilterProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 0, 10),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.only(right: 16),
+            child: Row(
+              children: _statusOptions
+                  .map((opt) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: _ToggleChip(
+                          label: opt.value,
+                          selected: statusFilter == opt.key,
+                          onTap: () => ref
+                              .read(teamCorrectionsStatusFilterProvider
+                                  .notifier)
+                              .state = opt.key,
+                        ),
+                      ))
+                  .toList(),
+            ),
+          ),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            color: AppColors.primary,
+            onRefresh: () =>
+                ref.read(teamCorrectionsProvider.notifier).refresh(),
+            child: correctionsAsync.when(
+              loading: () => Center(
+                  child:
+                      CircularProgressIndicator(color: AppColors.primary)),
+              error: (e, _) =>
+                  _errorView('Could not load correction requests: $e'),
+              data: (items) => items.isEmpty
+                  ? _emptyView(Icons.fact_check_outlined,
+                      'No correction requests for your approval.')
+                  : ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (_, i) => HrCorrectionCard(
+                        record: items[i],
+                        onReview: (approve) => ref
+                            .read(teamCorrectionsProvider.notifier)
+                            .reviewCorrection(items[i].id, approve: approve),
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 Widget _emptyView(IconData icon, String text) {
   return Center(
     child: SingleChildScrollView(
@@ -388,10 +477,14 @@ class _LeaveApprovalCard extends StatelessWidget {
                               style: AppTextStyles.label.copyWith(fontSize: 13),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis),
-                          if (request.department.isNotEmpty)
-                            Text(request.department,
-                                style: AppTextStyles.caption
-                                    .copyWith(fontSize: 11)),
+                          Text(
+                              [request.employeeCode, request.department]
+                                  .where((s) => s.isNotEmpty)
+                                  .join(' · '),
+                              style: AppTextStyles.caption
+                                  .copyWith(fontSize: 11),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
                         ],
                       ),
                     ),
@@ -433,6 +526,21 @@ class _LeaveApprovalCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis),
                 ],
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (request.appliedOn.isNotEmpty) ...[
+                      Icon(Icons.access_time_outlined,
+                          size: 10, color: AppColors.textHint),
+                      const SizedBox(width: 3),
+                      Text('Applied ${_fmtIso(request.appliedOn)}',
+                          style: AppTextStyles.caption.copyWith(
+                              fontSize: 10, color: AppColors.textHint)),
+                    ],
+                    const Spacer(),
+                    _LeaveStatusBadge(status: request.status),
+                  ],
+                ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
@@ -471,6 +579,42 @@ class _LeaveApprovalCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// Matches web's STATUS_LABEL/STATUS_BADGE (app/dashboard/leave/_data.ts) —
+// the pending stages get distinct labels since pendingLeaveApprovalsProvider
+// mixes both l1 (manager) and l2 (HR) stage rows in one list.
+class _LeaveStatusBadge extends StatelessWidget {
+  final String status;
+  const _LeaveStatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = switch (status) {
+      'pending' => 'Pending Manager Approval',
+      'l2_pending' => 'Pending HR Approval',
+      'approved' => 'Approved',
+      'rejected' => 'Rejected',
+      'cancelled' => 'Cancelled',
+      _ => status,
+    };
+    final color = switch (status) {
+      'approved' => AppColors.success,
+      'rejected' => AppColors.error,
+      'cancelled' => AppColors.textSecondary,
+      _ => AppColors.warning,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(label,
+          style: AppTextStyles.caption.copyWith(
+              fontSize: 9.5, fontWeight: FontWeight.w700, color: color)),
     );
   }
 }

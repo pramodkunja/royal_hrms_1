@@ -66,22 +66,35 @@ class AssessmentsRemoteDataSource {
   // ── Assign ─────────────────────────────────────────────────────────────────
 
   Future<void> assignAssessment({
-    required int candidateId,
+    required String candidateId,
     required String assessmentId,
+    required String templateName,
   }) async {
     await _dio.post(ApiConstants.assessmentAssign, data: {
       'candidate_id': candidateId,
       'assessment_id': assessmentId,
+      'template_name': templateName,
     });
   }
 
-  // ── Candidates (for Assign dropdown) ──────────────────────────────────────
+  // ── Employees (for Assign checklist) ──────────────────────────────────────
+  // The backend caps page_size at 50 (EmployeeListCreateView) regardless of
+  // what's requested — matches web's own (unavoidable) limitation exactly.
 
-  Future<List<ReviewCandidateModel>> fetchReviewCandidates() async {
-    final res = await _dio.get(ApiConstants.candidatesReview);
+  Future<List<AssignableEmployeeModel>> fetchAssignableEmployees() async {
+    final res = await _dio
+        .get(ApiConstants.employees, queryParameters: {'page_size': 50});
     final data = _unwrap(res.data);
     return _toList(data)
-        .map((e) => ReviewCandidateModel.fromJson(e as Map<String, dynamic>))
+        .map((e) => AssignableEmployeeModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<EmailTemplateOptionModel>> fetchEmailTemplateOptions() async {
+    final res = await _dio.get(ApiConstants.assessmentEmailTemplateOptions);
+    final data = _unwrap(res.data);
+    return _toList(data)
+        .map((e) => EmailTemplateOptionModel.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 

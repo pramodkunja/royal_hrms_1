@@ -182,6 +182,27 @@ final emailTemplateCategoriesProvider =
   return ref.read(settingsDataSourceProvider).fetchTemplateCategories();
 });
 
+/// Creates a category, then refreshes [emailTemplateCategoriesProvider] so
+/// the new category is immediately selectable. Returns the created category
+/// on success, or null (with [onError] receiving a friendly message) on
+/// failure.
+Future<EmailTemplateCategoryModel?> createEmailTemplateCategory(
+  WidgetRef ref,
+  String displayName, {
+  required void Function(String message) onError,
+}) async {
+  try {
+    final created =
+        await ref.read(settingsDataSourceProvider).createTemplateCategory(displayName);
+    ref.invalidate(emailTemplateCategoriesProvider);
+    await ref.read(emailTemplateCategoriesProvider.future);
+    return created;
+  } catch (e) {
+    onError(_friendly(e));
+    return null;
+  }
+}
+
 final emailTemplatesProvider =
     AsyncNotifierProvider.autoDispose<EmailTemplatesNotifier, List<EmailTemplateModel>>(
   EmailTemplatesNotifier.new,

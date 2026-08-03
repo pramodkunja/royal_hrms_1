@@ -121,6 +121,7 @@ class LeaveBalanceEntity {
 class LeaveRequestEntity {
   final String id; // UUID string
   final String employee;
+  final String employeeCode; // employee_code — e.g. "RSS00138"
   final String branch;
   final String department;
   final String leaveType;
@@ -159,6 +160,7 @@ class LeaveRequestEntity {
   const LeaveRequestEntity({
     required this.id,
     required this.employee,
+    this.employeeCode = '',
     required this.branch,
     required this.department,
     required this.leaveType,

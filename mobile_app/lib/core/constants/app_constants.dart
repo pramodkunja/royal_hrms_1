@@ -8,6 +8,7 @@ class AppConstants {
   static const String keyUserData = 'royal_hrms_user_data';
   static const String keyIsLoggedIn = 'royal_hrms_logged_in';
   static const String keyAccessToken = 'royal_hrms_access_token';
+  static const String keyRefreshToken = 'royal_hrms_refresh_token';
 
   // OTP
   static const int otpLength = 6;

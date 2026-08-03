@@ -46,6 +46,30 @@ class PayrollCycleStatus {
   };
 }
 
+// One manager's sign-off row for a payroll cycle's attendance approval —
+// mirrors ManagerAttendanceApprovalSerializer. Multiple managers (one per
+// team) each have their own row; L1 as a whole is only "done" once every
+// row is approved.
+@immutable
+class ManagerApprovalRow {
+  final String id;
+  final String managerName;
+  final DateTime? approvedAt;
+
+  const ManagerApprovalRow({
+    required this.id,
+    required this.managerName,
+    this.approvedAt,
+  });
+
+  factory ManagerApprovalRow.fromJson(Map<String, dynamic> json) =>
+      ManagerApprovalRow(
+        id: json['id']?.toString() ?? '',
+        managerName: json['manager_name'] as String? ?? '',
+        approvedAt: _toDate(json['approved_at']),
+      );
+}
+
 @immutable
 class PayrollCycleModel {
   final String id;
@@ -54,6 +78,8 @@ class PayrollCycleModel {
   final DateTime payDate;
   final String status;
   final String createdByName;
+  // Legacy single-approver fields — only set once every manager (see
+  // managerApprovals below) has signed off for L1, or HR has for L2.
   final String? l1ApproverName;
   final String? l2ApproverName;
   final DateTime? l1ApprovedAt;
@@ -62,6 +88,16 @@ class PayrollCycleModel {
   final DateTime? paidAt;
   final String notes;
   final int payslipCount;
+  // Per-manager L1 sign-off breakdown (only populated by the
+  // attendance-summary endpoint, not the plain cycle list).
+  final List<ManagerApprovalRow> managerApprovals;
+  final int mgrApprovedCount;
+  final int mgrTotalCount;
+  final bool mgrAllApproved;
+  // True when the CURRENT viewer has their own pending manager-approval row
+  // for this cycle — this, not a role check, is what should gate whether
+  // the Approve L1 button shows for them.
+  final bool currentUserPending;
 
   const PayrollCycleModel({
     required this.id,
@@ -78,6 +114,11 @@ class PayrollCycleModel {
     this.paidAt,
     required this.notes,
     required this.payslipCount,
+    this.managerApprovals = const [],
+    this.mgrApprovedCount = 0,
+    this.mgrTotalCount = 0,
+    this.mgrAllApproved = false,
+    this.currentUserPending = false,
   });
 
   factory PayrollCycleModel.fromJson(Map<String, dynamic> json) => PayrollCycleModel(

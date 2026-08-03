@@ -40,6 +40,10 @@ class AttendanceApprovalRemoteDataSource {
     final res = await _dio.get(ApiConstants.payrollAttendanceSummary(cycleId));
     final data = _unwrap(res.data) as Map<String, dynamic>;
     final cycleJson = data['cycle'] as Map<String, dynamic>? ?? {};
+    final managerApprovals = (cycleJson['manager_approvals'] as List<dynamic>? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map(ManagerApprovalRow.fromJson)
+        .toList();
     final cycle = PayrollCycleModel(
       id: cycleJson['id']?.toString() ?? cycleId,
       cycleStart: DateTime.tryParse(cycleJson['cycle_start']?.toString() ?? '') ?? DateTime.now(),
@@ -53,6 +57,11 @@ class AttendanceApprovalRemoteDataSource {
       l2ApprovedAt: DateTime.tryParse(cycleJson['l2_approved_at']?.toString() ?? ''),
       notes: '',
       payslipCount: 0,
+      managerApprovals: managerApprovals,
+      mgrApprovedCount: (cycleJson['mgr_approved_count'] as num?)?.toInt() ?? 0,
+      mgrTotalCount: (cycleJson['mgr_total_count'] as num?)?.toInt() ?? 0,
+      mgrAllApproved: cycleJson['mgr_all_approved'] as bool? ?? false,
+      currentUserPending: cycleJson['current_user_pending'] as bool? ?? false,
     );
     return CycleAttendanceSummary.fromJson(data, cycle);
   }

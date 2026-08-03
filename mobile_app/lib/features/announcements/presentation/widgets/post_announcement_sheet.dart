@@ -16,8 +16,7 @@ class PostAnnouncementSheet extends ConsumerStatefulWidget {
       _PostAnnouncementSheetState();
 }
 
-class _PostAnnouncementSheetState
-    extends ConsumerState<PostAnnouncementSheet> {
+class _PostAnnouncementSheetState extends ConsumerState<PostAnnouncementSheet> {
   late final TextEditingController _titleCtrl;
   late final TextEditingController _bodyCtrl;
   late AnnouncementFormData _form;
@@ -33,7 +32,7 @@ class _PostAnnouncementSheetState
         ? AnnouncementFormData.fromModel(widget.editing!)
         : AnnouncementFormData();
     _titleCtrl = TextEditingController(text: _form.title);
-    _bodyCtrl  = TextEditingController(text: _form.body);
+    _bodyCtrl = TextEditingController(text: _form.body);
   }
 
   @override
@@ -54,106 +53,109 @@ class _PostAnnouncementSheetState
             isEdit: _isEdit,
             onClose: () => Navigator.pop(context),
           ),
-          Container(
-            color: AppColors.background,
-            padding: EdgeInsets.fromLTRB(
-                20, 20, 20, MediaQuery.viewInsetsOf(context).bottom + 24),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _field(
-                    controller: _titleCtrl,
-                    label: 'Title *',
-                    error: _errors['title'],
-                    onChanged: (_) => setState(() => _errors.remove('title')),
-                  ),
-                  const SizedBox(height: 12),
-                  _field(
-                    controller: _bodyCtrl,
-                    label: 'Body *',
-                    error: _errors['body'],
-                    maxLines: 4,
-                    onChanged: (_) => setState(() => _errors.remove('body')),
-                  ),
-                  const SizedBox(height: 12),
-                  _CategoryDropdown(
-                    value: _form.category,
-                    onChanged: (v) => setState(() => _form.category = v),
-                  ),
-                  const SizedBox(height: 12),
-                  _VisibilityDropdown(
-                    value: _form.visibility,
-                    onChanged: (v) => setState(() {
-                      _form.visibility        = v;
-                      _form.targetDepartment  = null;
-                      _form.targetBranch      = null;
-                      _errors.remove('department');
-                      _errors.remove('branch');
-                    }),
-                  ),
-                  if (_form.visibility == 'department') ...[
-                    const SizedBox(height: 12),
-                    _DepartmentDropdown(
-                      value: _form.targetDepartment,
-                      error: _errors['department'],
-                      onChanged: (v) => setState(() {
-                        _form.targetDepartment = v;
-                        _errors.remove('department');
-                      }),
+          Flexible(
+            child: Container(
+              color: AppColors.background,
+              padding: EdgeInsets.fromLTRB(
+                  20, 20, 20, MediaQuery.viewInsetsOf(context).bottom + 24),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _field(
+                      controller: _titleCtrl,
+                      label: 'Title *',
+                      error: _errors['title'],
+                      onChanged: (_) => setState(() => _errors.remove('title')),
                     ),
-                  ],
-                  if (_form.visibility == 'branch') ...[
                     const SizedBox(height: 12),
-                    _BranchDropdown(
-                      value: _form.targetBranch,
-                      error: _errors['branch'],
+                    _field(
+                      controller: _bodyCtrl,
+                      label: 'Body *',
+                      error: _errors['body'],
+                      maxLines: 4,
+                      onChanged: (_) => setState(() => _errors.remove('body')),
+                    ),
+                    const SizedBox(height: 12),
+                    _CategoryDropdown(
+                      value: _form.category,
+                      onChanged: (v) => setState(() => _form.category = v),
+                    ),
+                    const SizedBox(height: 12),
+                    _VisibilityDropdown(
+                      value: _form.visibility,
                       onChanged: (v) => setState(() {
-                        _form.targetBranch = v;
+                        _form.visibility = v;
+                        _form.targetDepartment = null;
+                        _form.targetBranch = null;
+                        _errors.remove('department');
                         _errors.remove('branch');
                       }),
                     ),
-                  ],
-                  const SizedBox(height: 14),
-                  _ToggleRow(
-                    icon: Icons.push_pin_outlined,
-                    label: 'Pin this announcement',
-                    value: _form.isPinned,
-                    onChanged: (v) => setState(() => _form.isPinned = v),
-                  ),
-                  const SizedBox(height: 8),
-                  _ToggleRow(
-                    icon: Icons.email_outlined,
-                    label: 'Send email notification',
-                    value: _form.sendEmail,
-                    onChanged: (v) => setState(() => _form.sendEmail = v),
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _saving ? null : _submit,
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 50),
-                      backgroundColor: AppColors.primary,
-                      disabledBackgroundColor:
-                          AppColors.primary.withValues(alpha: 0.55),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                    if (_form.visibility == 'department') ...[
+                      const SizedBox(height: 12),
+                      _DepartmentDropdown(
+                        value: _form.targetDepartment,
+                        error: _errors['department'],
+                        onChanged: (v) => setState(() {
+                          _form.targetDepartment = v;
+                          _errors.remove('department');
+                        }),
+                      ),
+                    ],
+                    if (_form.visibility == 'branch') ...[
+                      const SizedBox(height: 12),
+                      _BranchDropdown(
+                        value: _form.targetBranch,
+                        error: _errors['branch'],
+                        onChanged: (v) => setState(() {
+                          _form.targetBranch = v;
+                          _errors.remove('branch');
+                        }),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    _ToggleRow(
+                      icon: Icons.push_pin_outlined,
+                      label: 'Pin this announcement',
+                      value: _form.isPinned,
+                      onChanged: (v) => setState(() => _form.isPinned = v),
                     ),
-                    child: _saving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2),
-                          )
-                        : Text(
-                            _isEdit ? 'Save Changes' : 'Post Announcement',
-                            style: AppTextStyles.label
-                                .copyWith(color: Colors.white, fontWeight: FontWeight.w700),
-                          ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    _ToggleRow(
+                      icon: Icons.email_outlined,
+                      label: 'Send email notification',
+                      value: _form.sendEmail,
+                      onChanged: (v) => setState(() => _form.sendEmail = v),
+                    ),
+                    const SizedBox(height: 24),
+                    FilledButton(
+                      onPressed: _saving ? null : _submit,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 50),
+                        backgroundColor: AppColors.primary,
+                        disabledBackgroundColor:
+                            AppColors.primary.withValues(alpha: 0.55),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: _saving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2),
+                            )
+                          : Text(
+                              _isEdit ? 'Save Changes' : 'Post Announcement',
+                              style: AppTextStyles.label.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700),
+                            ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -198,7 +200,7 @@ class _PostAnnouncementSheetState
   Future<void> _submit() async {
     _form
       ..title = _titleCtrl.text
-      ..body  = _bodyCtrl.text;
+      ..body = _bodyCtrl.text;
 
     final errs = _form.validate();
     if (errs.isNotEmpty) {
@@ -246,12 +248,14 @@ class _SheetHeader extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 40, height: 40,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.campaign_outlined, color: Colors.white, size: 20),
+            child: const Icon(Icons.campaign_outlined,
+                color: Colors.white, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -261,7 +265,9 @@ class _SheetHeader extends StatelessWidget {
                 Text(
                   isEdit ? 'Edit Announcement' : 'Post Announcement',
                   style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15),
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15),
                 ),
                 const SizedBox(height: 2),
                 const Text(
@@ -310,15 +316,17 @@ class _CategoryDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const items = [
-      DropdownMenuItem(value: 'general',     child: Text('General')),
-      DropdownMenuItem(value: 'policy',      child: Text('Policy')),
-      DropdownMenuItem(value: 'event',       child: Text('Event')),
+      DropdownMenuItem(value: 'general', child: Text('General')),
+      DropdownMenuItem(value: 'policy', child: Text('Policy')),
+      DropdownMenuItem(value: 'event', child: Text('Event')),
       DropdownMenuItem(value: 'celebration', child: Text('Celebration')),
     ];
     return DropdownButtonFormField<String>(
       initialValue: value,
       items: items,
-      onChanged: (v) { if (v != null) onChanged(v); },
+      onChanged: (v) {
+        if (v != null) onChanged(v);
+      },
       decoration: _dropDec('Category'),
     );
   }
@@ -332,14 +340,16 @@ class _VisibilityDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const items = [
-      DropdownMenuItem(value: 'all',        child: Text('All Employees')),
+      DropdownMenuItem(value: 'all', child: Text('All Employees')),
       DropdownMenuItem(value: 'department', child: Text('Specific Department')),
-      DropdownMenuItem(value: 'branch',     child: Text('Specific Branch')),
+      DropdownMenuItem(value: 'branch', child: Text('Specific Branch')),
     ];
     return DropdownButtonFormField<String>(
       initialValue: value,
       items: items,
-      onChanged: (v) { if (v != null) onChanged(v); },
+      onChanged: (v) {
+        if (v != null) onChanged(v);
+      },
       decoration: _dropDec('Visibility'),
     );
   }
@@ -359,7 +369,9 @@ class _DepartmentDropdown extends ConsumerWidget {
       error: (_, __) => const SizedBox.shrink(),
       data: (depts) => DropdownButtonFormField<int>(
         initialValue: value,
-        items: depts.map((d) => DropdownMenuItem(value: d.id, child: Text(d.name))).toList(),
+        items: depts
+            .map((d) => DropdownMenuItem(value: d.id, child: Text(d.name)))
+            .toList(),
         onChanged: onChanged,
         decoration: _dropDec('Target Department *', error),
       ),
@@ -381,7 +393,9 @@ class _BranchDropdown extends ConsumerWidget {
       error: (_, __) => const SizedBox.shrink(),
       data: (branches) => DropdownButtonFormField<int>(
         initialValue: value,
-        items: branches.map((b) => DropdownMenuItem(value: b.id, child: Text(b.name))).toList(),
+        items: branches
+            .map((b) => DropdownMenuItem(value: b.id, child: Text(b.name)))
+            .toList(),
         onChanged: onChanged,
         decoration: _dropDec('Target Branch *', error),
       ),
@@ -396,27 +410,38 @@ class _ToggleRow extends StatelessWidget {
   final String label;
   final bool value;
   final ValueChanged<bool> onChanged;
-  const _ToggleRow({required this.icon, required this.label, required this.value, required this.onChanged});
+  const _ToggleRow(
+      {required this.icon,
+      required this.label,
+      required this.value,
+      required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
       decoration: BoxDecoration(
-        color: value ? AppColors.primary.withValues(alpha: 0.05) : AppColors.surface,
+        color: value
+            ? AppColors.primary.withValues(alpha: 0.05)
+            : AppColors.surface,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: value ? AppColors.primary.withValues(alpha: 0.30) : AppColors.border,
+          color: value
+              ? AppColors.primary.withValues(alpha: 0.30)
+              : AppColors.border,
         ),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: value ? AppColors.primary : AppColors.textHint),
+          Icon(icon,
+              size: 18, color: value ? AppColors.primary : AppColors.textHint),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(label, style: AppTextStyles.label.copyWith(
-              color: value ? AppColors.textPrimary : AppColors.textSecondary,
-            )),
+            child: Text(label,
+                style: AppTextStyles.label.copyWith(
+                  color:
+                      value ? AppColors.textPrimary : AppColors.textSecondary,
+                )),
           ),
           Switch.adaptive(
             value: value,

@@ -1,6 +1,9 @@
 import 'package:dio/dio.dart' show MultipartFile;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../attendance/domain/entities/attendance_entity.dart';
+import '../../../attendance/presentation/providers/attendance_providers.dart'
+    show attendanceRepositoryProvider, friendlyAttendanceError;
 import '../../../expenses/data/models/expense_model.dart';
 import '../../../expenses/presentation/providers/expense_providers.dart'
     show expenseDataSourceProvider;
@@ -16,7 +19,7 @@ import '../../../leave/presentation/providers/leave_providers.dart'
 // aggregates the two — this composes the existing /leave/requests/ and
 // /expenses/ endpoints client-side, same as the web page does.
 
-enum ApprovalsRequestType { leave, expense }
+enum ApprovalsRequestType { leave, expense, attendanceCorrection }
 
 // ── Filters (screen-local UI state) ────────────────────────────────────────────
 
@@ -136,7 +139,13 @@ class PendingLeaveApprovalsNotifier
   @override
   Future<List<LeaveRequestEntity>> build() => ref
       .read(leaveRepositoryProvider)
-      .getLeaveRequests(status: 'pending,l2_pending');
+      // scope: 'team' is required here — without it the backend returns the
+      // CALLER's own requests regardless of role (see
+      // LeaveRemoteDataSource.fetchLeaveRequests' doc comment), which made
+      // this "Team Approvals" queue show the manager/HR's own pending leave
+      // (usually none) instead of their team's, appearing empty/broken.
+      // Matches web's GET /leave/requests/?scope=team.
+      .getLeaveRequests(status: 'pending,l2_pending', scope: 'team');
 
   Future<void> refresh() async {
     state = const AsyncLoading();
@@ -191,6 +200,48 @@ class PendingExpenseApprovalsNotifier
       return null;
     } catch (e) {
       return friendlyApprovalsError(e);
+    }
+  }
+}
+
+// ── Team Approvals — pending attendance corrections ───────────────────────────
+// A separate provider (not attendance feature's own hrCorrectionsProvider)
+// so this list isn't affected by whatever branch/department filter the user
+// left set on the Attendance screen — mirrors why pendingLeaveApprovalsProvider
+// is distinct from leaveTeamPendingProvider above.
+
+final teamCorrectionsStatusFilterProvider =
+    StateProvider.autoDispose<String>((ref) => 'pending');
+
+final teamCorrectionsProvider = AsyncNotifierProvider.autoDispose<
+    TeamCorrectionsNotifier, List<HrCorrectionRowEntity>>(
+  TeamCorrectionsNotifier.new,
+);
+
+class TeamCorrectionsNotifier
+    extends AutoDisposeAsyncNotifier<List<HrCorrectionRowEntity>> {
+  @override
+  Future<List<HrCorrectionRowEntity>> build() {
+    final status = ref.watch(teamCorrectionsStatusFilterProvider);
+    return ref.read(attendanceRepositoryProvider).getHrCorrections(
+          status: status == 'all' ? null : status,
+        );
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(build);
+  }
+
+  Future<String?> reviewCorrection(String id, {required bool approve}) async {
+    try {
+      await ref
+          .read(attendanceRepositoryProvider)
+          .reviewCorrection(id, approve: approve);
+      await refresh();
+      return null;
+    } catch (e) {
+      return friendlyAttendanceError(e);
     }
   }
 }

@@ -14,6 +14,7 @@ class UserModel extends UserEntity {
     required super.mustChangePassword,
     required super.permissions,
     super.onboardingStatus,
+    super.canManageTeam,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -33,6 +34,7 @@ class UserModel extends UserEntity {
               .toList() ??
           [],
       onboardingStatus: json['onboarding_status'] as String?,
+      canManageTeam: json['can_manage_team'] as bool? ?? false,
     );
   }
 
@@ -49,5 +51,6 @@ class UserModel extends UserEntity {
         'must_change_password': mustChangePassword,
         'permissions': permissions,
         'onboarding_status': onboardingStatus,
+        'can_manage_team': canManageTeam,
       };
 }

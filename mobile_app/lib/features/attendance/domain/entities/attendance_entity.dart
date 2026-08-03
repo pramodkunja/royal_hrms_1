@@ -339,6 +339,17 @@ class HrCorrectionRowEntity {
   final String reason;
   final String? notes;
   final String status;
+  // Two-stage approval breakdown (L1 = reporting manager, L2 = HR) — matches
+  // web's CorrectionRow. `canAction` is server-computed: true only when the
+  // current user is the designated approver for whichever stage the request
+  // currently sits at (l1_pending -> manager, l2_pending -> HR).
+  final String? l1ApproverName;
+  final String? l1Status;
+  final String l1Remarks;
+  final String? l2ApproverName;
+  final String? l2Status;
+  final String l2Remarks;
+  final bool canAction;
   final String? reviewedBy;
   final String? reviewedAt;
   final String createdAt;
@@ -356,6 +367,13 @@ class HrCorrectionRowEntity {
     required this.reason,
     this.notes,
     required this.status,
+    this.l1ApproverName,
+    this.l1Status,
+    this.l1Remarks = '',
+    this.l2ApproverName,
+    this.l2Status,
+    this.l2Remarks = '',
+    this.canAction = false,
     this.reviewedBy,
     this.reviewedAt,
     required this.createdAt,

@@ -129,24 +129,33 @@ class AssessmentItemsNotifier
   }
 }
 
-// ── Candidates for the Assign dialog dropdown ─────────────────────────────────
+// ── Employees + email templates for the Assign dialog ─────────────────────────
 
-final reviewCandidatesProvider =
-    FutureProvider.autoDispose<List<ReviewCandidateModel>>((ref) {
-  return ref.read(assessmentsDataSourceProvider).fetchReviewCandidates();
+final assignableEmployeesProvider =
+    FutureProvider.autoDispose<List<AssignableEmployeeModel>>((ref) {
+  return ref.read(assessmentsDataSourceProvider).fetchAssignableEmployees();
+});
+
+final assignEmailTemplateOptionsProvider =
+    FutureProvider.autoDispose<List<EmailTemplateOptionModel>>((ref) {
+  return ref.read(assessmentsDataSourceProvider).fetchEmailTemplateOptions();
 });
 
 // ── Assign action (one-shot, no persisted state of its own) ──────────────────
+// Mirrors web's doAssign(): the caller loops this per selected employee and
+// aggregates successes/failures itself — this stays a single-target call.
 
 Future<String?> assignCandidateToAssessment(
   WidgetRef ref, {
-  required int candidateId,
+  required String candidateId,
   required String assessmentId,
+  required String templateName,
 }) async {
   try {
     await ref.read(assessmentsDataSourceProvider).assignAssessment(
           candidateId: candidateId,
           assessmentId: assessmentId,
+          templateName: templateName,
         );
     return null;
   } catch (e) {

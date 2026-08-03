@@ -70,6 +70,11 @@ const kAllNav = <NavEntry>[
 
   NavSection('My'),
   NavItem(id: 'my-attendance',    icon: Icons.fingerprint,                     label: 'My Attendance',    path: '/dashboard/my-attendance',    permission: null),
+  // permission: null, matching my-attendance above and web's navConfig.ts
+  // exactly — the backend's MyPayslipsView only requires being authenticated
+  // plus the 'payroll.view_own' permission it checks itself server-side
+  // (seeded for every role), not a client-side nav-visibility gate.
+  NavItem(id: 'my-payslip',       icon: Icons.receipt_long_outlined,           label: 'My Payslips',      path: '/dashboard/my-payslip',       permission: null),
   NavItem(id: 'referrals',        icon: Icons.person_add_alt_1_outlined,       label: 'My Referrals',     path: '/dashboard/referrals',        permission: null),
   NavItem(id: 'my-requests',      icon: Icons.inbox_outlined,                  label: 'My Requests',      path: '/dashboard/my-requests',      permission: null),
   NavItem(id: 'profile',          icon: Icons.account_circle_outlined,         label: 'My Profile',       path: '/dashboard/profile',          permission: null),
@@ -137,6 +142,7 @@ const kPageTitles = <String, String>{
   '/dashboard/separation':      'Separation & FnF',
   '/dashboard/documents':       'Document Center',
   '/dashboard/my-attendance':   'My Attendance',
+  '/dashboard/my-payslip':      'My Payslips',
   '/dashboard/referrals':       'My Referrals',
   '/dashboard/my-requests':     'My Requests',
   '/dashboard/profile':         'My Profile',

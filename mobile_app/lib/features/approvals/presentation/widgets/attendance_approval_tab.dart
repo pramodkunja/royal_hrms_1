@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/models/attendance_approval_models.dart';
 import '../providers/attendance_approval_providers.dart';
 
@@ -12,6 +11,12 @@ const _kMonthShort = [
 ];
 String _fmtMonthYear(DateTime d) => '${_kMonthShort[d.month]} ${d.year}';
 String _fmtDate(DateTime d) => '${d.day} ${_kMonthShort[d.month]} ${d.year}';
+String _fmtDateTime(DateTime d) {
+  final h = d.hour % 12 == 0 ? 12 : d.hour % 12;
+  final ampm = d.hour < 12 ? 'AM' : 'PM';
+  final mm = d.minute.toString().padLeft(2, '0');
+  return '${d.day} ${_kMonthShort[d.month]}, $h:$mm $ampm';
+}
 
 // Ports web's app/dashboard/approvals/_components/AttendanceApprovalTab.tsx —
 // a payroll-cycle attendance sign-off screen (L1 manager -> L2 HR), distinct
@@ -151,12 +156,6 @@ class _CycleAttendancePanelState extends ConsumerState<_CycleAttendancePanel> {
   @override
   Widget build(BuildContext context) {
     final summaryAsync = ref.watch(cycleAttendanceSummaryProvider(widget.cycleId));
-    final settingsAsync = ref.watch(payrollSettingsProvider);
-    final user = ref.watch(authStateProvider).valueOrNull?.user;
-    final role = user?.role ?? '';
-    final canL1 = ['system_admin', 'hr_admin', 'manager'].contains(role);
-    final canL2 = ['system_admin', 'hr_admin'].contains(role);
-    final isL1L2 = (settingsAsync.valueOrNull?.approvalLevels ?? ApprovalLevels.l1) == ApprovalLevels.l1l2;
 
     return summaryAsync.when(
       loading: () => const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator())),
@@ -165,9 +164,17 @@ class _CycleAttendancePanelState extends ConsumerState<_CycleAttendancePanel> {
         onRetry: () => ref.invalidate(cycleAttendanceSummaryProvider(widget.cycleId)),
       ),
       data: (summary) {
-        final l1Done = summary.cycle.l1ApproverName != null && summary.cycle.l1ApproverName!.isNotEmpty;
-        final l2Done = summary.cycle.l2ApproverName != null && summary.cycle.l2ApproverName!.isNotEmpty;
-        final canApproveNow = (!l1Done && canL1) || (l1Done && isL1L2 && !l2Done && canL2);
+        final cycle = summary.cycle;
+        final l1Done = cycle.l1ApproverName != null && cycle.l1ApproverName!.isNotEmpty;
+        final l2Done = cycle.l2ApproverName != null && cycle.l2ApproverName!.isNotEmpty;
+        final mgrTotalCount = cycle.mgrTotalCount;
+        final mgrApprovedCount = cycle.mgrApprovedCount;
+        // Matches web exactly: gated on the backend-computed per-user pending
+        // row, not a hardcoded role list — a manager only sees "Approve L1"
+        // for cycles where THEIR OWN sign-off is still outstanding.
+        final canDoL1 = cycle.currentUserPending && !l1Done;
+        final canDoL2 = l1Done && !l2Done;
+        final approvalLevel = canDoL1 ? 1 : (canDoL2 ? 2 : null);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -179,24 +186,66 @@ class _CycleAttendancePanelState extends ConsumerState<_CycleAttendancePanel> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(children: [
-                    Expanded(
-                      child: Text('${_fmtDate(summary.cycle.cycleStart)} — ${_fmtDate(summary.cycle.cycleEnd)}',
-                          style: AppTextStyles.h4, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                    _Badge(label: isL1L2 ? 'L1+L2 required' : 'L1 only', color: AppColors.info),
-                  ]),
+                  Text('Attendance — ${_fmtMonthYear(cycle.cycleStart)}',
+                      style: AppTextStyles.h4, maxLines: 1, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 2),
-                  Text('${summary.employees.length} employees · Pay date ${_fmtDate(summary.cycle.payDate)}',
+                  Text('${_fmtDate(cycle.cycleStart)} → ${_fmtDate(cycle.cycleEnd)} · Pay date ${_fmtDate(cycle.payDate)}',
                       style: AppTextStyles.caption.copyWith(fontSize: 11)),
                   const SizedBox(height: 12),
-                  _ApprovalStatusRow(label: 'L1 — Manager', done: l1Done, name: summary.cycle.l1ApproverName),
-                  if (isL1L2) ...[
-                    const SizedBox(height: 8),
-                    _ApprovalStatusRow(label: 'L2 — HR', done: l2Done, name: summary.cycle.l2ApproverName),
-                  ],
-                  if (canApproveNow) ...[
+                  Wrap(
+                    spacing: 8, runSpacing: 8,
+                    children: [
+                      _Badge(
+                        label: mgrTotalCount > 0
+                            ? (l1Done ? 'L1 ✓ All managers ($mgrTotalCount)' : 'L1 $mgrApprovedCount/$mgrTotalCount managers')
+                            : (l1Done ? 'L1 ✓ Approved' : 'L1 Pending'),
+                        color: l1Done ? AppColors.success : (mgrApprovedCount > 0 ? AppColors.warning : AppColors.textSecondary),
+                      ),
+                      _Badge(
+                        label: l2Done ? 'L2 ✓ ${cycle.l2ApproverName}' : 'L2 Waiting',
+                        color: l2Done ? AppColors.success : AppColors.textSecondary,
+                      ),
+                    ],
+                  ),
+                  if (mgrTotalCount > 0) ...[
+                    const SizedBox(height: 14),
+                    const Divider(height: 1),
                     const SizedBox(height: 12),
+                    Text('MANAGER SIGN-OFFS ($mgrApprovedCount/$mgrTotalCount APPROVED)',
+                        style: AppTextStyles.caption.copyWith(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 0.4)),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(99),
+                      child: LinearProgressIndicator(
+                        value: mgrApprovedCount / mgrTotalCount,
+                        minHeight: 4,
+                        backgroundColor: AppColors.border,
+                        color: cycle.mgrAllApproved ? AppColors.success : AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8, runSpacing: 8,
+                      children: cycle.managerApprovals.map((m) => _ManagerSignoffPill(row: m)).toList(),
+                    ),
+                  ],
+                  if (approvalLevel != null) ...[
+                    const SizedBox(height: 14),
+                    const Divider(height: 1),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Icon(Icons.how_to_reg_outlined, size: 16, color: AppColors.primary),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          approvalLevel == 1
+                              ? "Your sign-off is required — review your team's attendance and approve"
+                              : 'HR (L2) — Final sign-off on attendance',
+                          style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600, fontSize: 12.5),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 10),
                     TextField(
                       controller: _commentCtrl,
                       maxLines: 2,
@@ -206,13 +255,42 @@ class _CycleAttendancePanelState extends ConsumerState<_CycleAttendancePanel> {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
-                        onPressed: _submitting ? null : () => _approve(!l1Done ? 'L1' : 'L2'),
+                        onPressed: _submitting ? null : () => _approve('L$approvalLevel'),
                         icon: _submitting
                             ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                             : const Icon(Icons.check, size: 16),
-                        label: Text(_submitting ? 'Submitting…' : (!l1Done ? 'Approve L1 Attendance' : 'Approve L2 Attendance')),
+                        label: Text(_submitting ? 'Submitting…' : 'Approve L$approvalLevel Attendance'),
                         style: FilledButton.styleFrom(backgroundColor: AppColors.success, padding: const EdgeInsets.symmetric(vertical: 12)),
                       ),
+                    ),
+                  ] else if (!cycle.currentUserPending && !l1Done) ...[
+                    const SizedBox(height: 14),
+                    const Divider(height: 1),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Icon(Icons.hourglass_top_outlined, size: 14, color: AppColors.textSecondary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'You have approved. Waiting for ${mgrTotalCount - mgrApprovedCount} other manager(s) to sign off.',
+                          style: AppTextStyles.caption.copyWith(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                      ),
+                    ]),
+                  ] else if (l1Done && l2Done) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+                      child: Row(children: [
+                        Icon(Icons.check_circle, size: 16, color: AppColors.success),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text('Attendance fully approved — L1 and L2 sign-off complete.',
+                              style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w700, color: AppColors.success, fontSize: 12)),
+                        ),
+                      ]),
                     ),
                   ],
                 ],
@@ -284,9 +362,10 @@ class _EmployeeAttendanceRow extends ConsumerWidget {
                 children: [
                   _Badge(label: 'Present ${row.presentDays}', color: AppColors.success),
                   if (row.lateDays > 0) _Badge(label: 'Late ${row.lateDays}', color: AppColors.warning),
+                  if (row.halfDays > 0) _Badge(label: 'Half Day ${row.halfDays}', color: AppColors.info),
+                  if (row.onLeaveDays > 0) _Badge(label: 'On Leave ${row.onLeaveDays}', color: AppColors.info),
                   if (row.absentDays > 0) _Badge(label: 'Absent ${row.absentDays}', color: AppColors.error),
                   if (row.incompleteDays > 0) _Badge(label: 'Incomplete ${row.incompleteDays}', color: AppColors.error),
-                  if (row.onLeaveDays > 0) _Badge(label: 'Leave ${row.onLeaveDays}', color: AppColors.info),
                   if (row.lopDays > 0) _Badge(label: 'LOP ${row.lopDays}', color: AppColors.error),
                   _Badge(label: '${row.workingHours}h', color: AppColors.primary),
                 ],
@@ -355,28 +434,33 @@ class _Badge extends StatelessWidget {
   }
 }
 
-class _ApprovalStatusRow extends StatelessWidget {
-  final String label;
-  final bool done;
-  final String? name;
-  const _ApprovalStatusRow({required this.label, required this.done, this.name});
+class _ManagerSignoffPill extends StatelessWidget {
+  final ManagerApprovalRow row;
+  const _ManagerSignoffPill({required this.row});
 
   @override
   Widget build(BuildContext context) {
-    final color = done ? AppColors.success : AppColors.warning;
+    final approved = row.approvedAt != null;
+    final color = approved ? AppColors.success : AppColors.textSecondary;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10), border: Border.all(color: color.withValues(alpha: 0.25))),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: approved ? AppColors.success.withValues(alpha: 0.07) : AppColors.backgroundLow,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: approved ? AppColors.success : AppColors.border),
+      ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(done ? Icons.check_circle : Icons.hourglass_top_outlined, size: 16, color: color),
-          const SizedBox(width: 8),
-          Expanded(child: Text(label, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
-          Flexible(
-            child: Text(done ? (name ?? 'Approved') : 'Pending',
-                style: AppTextStyles.caption.copyWith(color: color, fontWeight: FontWeight.w700),
-                maxLines: 1, overflow: TextOverflow.ellipsis),
-          ),
+          Icon(approved ? Icons.check_circle_outline : Icons.access_time, size: 13, color: color),
+          const SizedBox(width: 6),
+          Text(row.managerName.isNotEmpty ? row.managerName : 'Manager',
+              style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600, fontSize: 11.5)),
+          if (approved) ...[
+            const SizedBox(width: 6),
+            Text(_fmtDateTime(row.approvedAt!),
+                style: AppTextStyles.caption.copyWith(fontSize: 10, color: AppColors.textHint)),
+          ],
         ],
       ),
     );

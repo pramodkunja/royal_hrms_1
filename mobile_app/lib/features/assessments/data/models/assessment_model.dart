@@ -221,25 +221,51 @@ class AssessmentItemModel {
   }
 }
 
-/// Candidate row shown in the Assign dialog's dropdown.
-/// Sourced from GET /recruitment/candidates/review/ ({id, name, email}).
+/// Employee row shown in the Assign dialog's checklist.
+/// Sourced from GET /employees/ ({id, employee_id, full_name, email, department}) —
+/// matches web's `AssignEmployee` interface exactly. `id` is the real User
+/// UUID, which the assign endpoint accepts as `candidate_id` and resolves to
+/// an employee (see AssignAssessmentView's UUID fallback path).
 @immutable
-class ReviewCandidateModel {
-  final int id;
-  final String name;
+class AssignableEmployeeModel {
+  final String id;
+  final String employeeId;
+  final String fullName;
   final String email;
+  final String department;
 
-  const ReviewCandidateModel({
+  const AssignableEmployeeModel({
     required this.id,
-    required this.name,
+    required this.employeeId,
+    required this.fullName,
     required this.email,
+    required this.department,
   });
 
-  factory ReviewCandidateModel.fromJson(Map<String, dynamic> json) {
-    return ReviewCandidateModel(
-      id: json['id'] as int? ?? 0,
-      name: json['name'] as String? ?? '',
+  factory AssignableEmployeeModel.fromJson(Map<String, dynamic> json) {
+    return AssignableEmployeeModel(
+      id: json['id']?.toString() ?? '',
+      employeeId: json['employee_id'] as String? ?? '',
+      fullName: json['full_name'] as String? ?? '',
       email: json['email'] as String? ?? '',
+      department: json['department'] as String? ?? '',
+    );
+  }
+}
+
+/// {name, display_name} option for the Assign dialog's notification email
+/// template dropdown. Sourced from GET /assessments/email-template-options/.
+@immutable
+class EmailTemplateOptionModel {
+  final String name;
+  final String displayName;
+
+  const EmailTemplateOptionModel({required this.name, required this.displayName});
+
+  factory EmailTemplateOptionModel.fromJson(Map<String, dynamic> json) {
+    return EmailTemplateOptionModel(
+      name: json['name'] as String? ?? '',
+      displayName: json['display_name'] as String? ?? '',
     );
   }
 }

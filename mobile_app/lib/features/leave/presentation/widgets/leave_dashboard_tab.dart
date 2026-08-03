@@ -22,9 +22,12 @@ final _kBalanceDisplay = [
 ];
 
 // Web's LeaveDashboard.tsx scopeLabel — subtitle on the approver's Pending card.
+// Role names: 'manager__team_lead' is this deployment's current value for
+// managers ('manager' was a legacy alias); 'hr' is current for HR ('hr_admin'
+// legacy) — mirrors the backend's own _is_hr_role() aliasing.
 String _scopeLabel(String role) => switch (role) {
-      'manager' => "Your team's requests",
-      'hr_admin' => 'Your branch requests',
+      'manager' || 'manager__team_lead' => "Your team's requests",
+      'hr' || 'hr_admin' => 'Your branch requests',
       _ => 'Organisation-wide requests',
     };
 
@@ -86,6 +89,12 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
   // instance (family arg changes), so there's no separate page to reset.
   String get _branchFilter =>
       widget.selectedBranches.isEmpty ? '' : widget.selectedBranches.first;
+
+  // Dashboard never filters by department — that's Approvals-tab-only
+  // (matches web's LeaveApprovals.tsx, where LeaveDashboard.tsx has no
+  // department filter either).
+  LeaveTeamFilter get _teamFilter =>
+      (branch: _branchFilter, department: '');
 
   void _showSnackError(String err) {
     if (!mounted) return;
@@ -157,7 +166,7 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
   Future<void> _approveTeam(String id) async {
     setState(() => _actionLoading = true);
     final err = await ref
-        .read(leaveTeamPendingProvider(_branchFilter).notifier)
+        .read(leaveTeamPendingProvider(_teamFilter).notifier)
         .approveRequest(id);
     if (!mounted) return;
     setState(() => _actionLoading = false);
@@ -169,7 +178,7 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
     if (reason == null || reason.isEmpty || !mounted) return;
     setState(() => _actionLoading = true);
     final err = await ref
-        .read(leaveTeamPendingProvider(_branchFilter).notifier)
+        .read(leaveTeamPendingProvider(_teamFilter).notifier)
         .rejectRequest(id, reason);
     if (!mounted) return;
     setState(() => _actionLoading = false);
@@ -192,7 +201,7 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
     // active) so the "Pending Approvals" count on the stat card and the tab
     // pill badge always reflect the live server-side count.
     final teamAsync =
-        isEmployee ? null : ref.watch(leaveTeamPendingProvider(_branchFilter));
+        isEmployee ? null : ref.watch(leaveTeamPendingProvider(_teamFilter));
     final teamPage = teamAsync?.valueOrNull;
 
     final pendingCount = isEmployee
@@ -586,7 +595,7 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
                   )
                 : _LoadMoreButton(
                     onTap: () => ref
-                        .read(leaveTeamPendingProvider(_branchFilter).notifier)
+                        .read(leaveTeamPendingProvider(_teamFilter).notifier)
                         .loadMore(),
                   ),
           ),

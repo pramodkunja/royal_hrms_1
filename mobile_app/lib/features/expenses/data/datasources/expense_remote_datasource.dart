@@ -42,6 +42,13 @@ class ExpenseRemoteDataSource {
     }
   }
 
+  // ── Fetch single expense (detail view popup) ────────────────────────────────
+
+  Future<ExpenseModel> fetchExpense(int expenseNumber) async {
+    final res = await _dio.get(ApiConstants.expenseDetail(expenseNumber));
+    return ExpenseModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
   // ── Approve / reject (PUT /expenses/{number}/ with a status field —
   // see apps/hrms/views/expenses.py ExpenseDetailView._handle_approval) ──────
 

@@ -80,6 +80,20 @@ class ApiConstants {
   static String employeeApprovalMatrix(String employeeId) =>
       '/employees/$employeeId/approval-matrix/';
 
+  // Employees — Approval Matrix tab's "Reporting Relationships" quick-edit
+  // (Reporting Manager + Branch HR), distinct from the full Edit Employee
+  // sheet's REPORTING & HR section.
+  static String employeeReportingManager(String employeeId) =>
+      '/employees/$employeeId/reporting-manager/';
+  static String employeeHrAssign(String employeeId) =>
+      '/employees/$employeeId/hr/';
+
+  // Employees — HR/admin document upload (matches backend
+  // EmployeeDocumentAdminView, distinct from the self-service onboarding
+  // upload endpoint since it isn't restricted to the onboarding window).
+  static String employeeDocuments(String employeeId) =>
+      '/employees/$employeeId/documents/';
+
   // My Profile (self-service) — matches backend MyProfileView
   static const String myProfile = '/employees/me/';
 
@@ -104,7 +118,6 @@ class ApiConstants {
       '/recruitment/candidates/$id/send-portal-login/';
   static String candidateResendLogin(int id) =>
       '/recruitment/candidates/$id/resend-portal-login/';
-  static const String candidatesReview = '/recruitment/candidates/review/';
   static const String candidateBulkImport = '/recruitment/candidates/bulk-import/';
   // Accepts either the numeric candidate pk or the human-readable employee
   // code (e.g. "EMP0001") — SendCandidateEmailView falls back to
@@ -130,20 +143,34 @@ class ApiConstants {
   static String assessmentItemDetail(String itemId) =>
       '/assessments/items/$itemId/';
   static const String assessmentAssign = '/assessments/assign/';
+  static const String assessmentEmailTemplateOptions =
+      '/assessments/email-template-options/';
 
   // Settings — Assessment Config (singleton) — matches backend /api/assessments/settings/
   static const String settingsAssessmentConfig =
       '/assessments/settings/'; // GET (assessments.view) / PUT (assessments.edit)
 
-  // Payroll cycle endpoints (apps/payroll) — the mobile Payroll module itself
-  // was removed, but the Attendance Approval tab still gates its L1/L2
-  // sign-off flow on the backend's payroll cycles, so these stay.
+  // Payroll cycle endpoints (apps/payroll) — the admin-facing Payroll module
+  // (run payroll, payroll rules) was removed from mobile, but the Attendance
+  // Approval tab still gates its L1/L2 sign-off flow on the backend's
+  // payroll cycles, so these stay.
   static const String payrollSettings = '/payroll/settings/';
   static String payrollApproveAttendance(String id) => '/payroll/cycles/$id/approve-attendance/';
   static const String payrollPendingApproval = '/payroll/cycles/pending-approval/';
   static String payrollAttendanceSummary(String cycleId) => '/payroll/cycles/$cycleId/attendance-summary/';
   static String payrollEmployeeDailyAttendance(String cycleId, String employeeId) =>
       '/payroll/cycles/$cycleId/attendance-daily/$employeeId/';
+
+  // Payroll — My Payslips (employee-facing only). Gated server-side on the
+  // 'payroll.view_own' permission (seeded for every role — see
+  // apps/accounts/migrations/0043_seed_payroll_view_own_permission.py), not
+  // on anything checked client-side. There is no PDF-generation endpoint
+  // anywhere in apps/payroll — EmployeePayslip.payslip_pdf is a FileField
+  // nothing ever populates, on web or here, so there's no "download" call to
+  // wire up; don't add one without new backend work first.
+  static const String myPayslips = '/payroll/my-payslips/';
+  static String acknowledgePayslip(String id) => '/payroll/my-payslips/$id/acknowledge/';
+  static String payslipDetail(String id) => '/payroll/payslips/$id/';
 
   // Holiday Calendar — matches backend /api/leave/holidays/
   static const String holidays = '/leave/holidays/';

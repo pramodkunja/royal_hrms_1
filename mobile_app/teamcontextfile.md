@@ -3245,3 +3245,317 @@ lib/features/settings/presentation/leave_policy/widgets/leave_carry_forward_tab.
 - [ ] Sweep the older `_friendly(e.toString())` error pattern to `parseDioException()`-style helpers across Leave/Expenses/Documents/Employees (carried over from Sessions 15–18 — still not done).
 - [ ] `/onboarding/assessments` candidate-taking portal — still not ported (carried over from Session 17).
 - [ ] Backend: `Holiday` model/API still doesn't exist for real — Holiday Calendar remains local-only mock state (carried over from Session 17).
+
+---
+
+## Session 22 — Payroll Removed & Rebuilt (Employee-Facing Only), Voice Commands (New), Attendance Approval Restructure, Bulk Import, Leave Preview/Balance Import, Employee Reporting Relationships & Documents, Email Branding
+
+**Date:** 2026-07-27 → 2026-08-03 (spans commit `e558822` "payroll removed" plus a large batch of changes still uncommitted in the working tree at time of writing)
+**Developer:** Pramod Kunja
+
+> Note on how this entry was reconstructed: no chat log for this stretch of work was available to read directly. This entry was written by diffing `HEAD` (`e558822`) against its parent and against the current uncommitted working tree, and reading the changed files in full — the same standard this journal has always held itself to (read the actual backend/model code, not just infer from screen behavior). Flag anything below that doesn't match your own memory of the work and it can be corrected.
+
+### Module Worked On
+- Payroll — old fully-mocked admin module (dashboard, Run Payroll wizard, Payroll Rules settings) deleted; a new, real-API "My Payslips" employee screen built in its place
+- Settings — Company — new Financial Year section (org-wide FY start month, feeds Leave/Attendance/Payroll/Reports year math)
+- Voice Commands — brand-new, app-wide voice assistant feature (speech-to-text → backend intent parsing → TTS/UI response), plus a typed-command fallback and a draggable mic bubble added on top
+- Approvals — Attendance Approval tab rebuilt (payroll-cycle sign-off, not per-punch corrections) and then reworked again from single L1/L2 approver to per-manager multi-signoff; Team Approvals gained a third request type (Attendance Corrections) and a real team-scope bug fix
+- Attendance — HR correction requests upgraded from single-stage to a two-stage Manager (L1) → HR (L2) approval chain, with the card extracted into a shared widget
+- Bulk Import — new Employees and Candidates CSV/XLSX bulk-create flows, sharing one result model/widget, entered via a new expandable FAB
+- Leave — server-side, holiday-aware Leave Preview wired into Apply Leave; new Leave Opening Balance & History bulk-import screen; department filter added to Team Approvals' leave queries; misc fixes
+- Employees — Reporting Relationships quick-edit, HR-side document upload, new personal-detail fields, permission-based (not role-hardcoded) edit gating
+- Settings — Email Templates — data-driven categories with inline creation, rich-text toolbar, pending-attachment support on create, live variable-chip detection, plus a new Email Branding card
+- Expenses — tap-to-open expense detail dialog
+- Misc — Employee dashboard "My Workspace" console compacted; `canManageTeam` field added to the user model (plumbing only, not yet consumed anywhere)
+
+---
+
+### Part 1: Payroll — Mock Admin Module Removed, Employee-Facing "My Payslips" Rebuilt
+
+Commit `e558822` deleted four screens that had never been wired to any backend: `payroll_screen.dart` (1957 lines, admin payroll-run dashboard), `run_payroll_screen.dart` (1995 lines, an 8-step Run Payroll wizard), `my_payslip_screen.dart` (1026 lines, the original mock payslip view), and `settings/presentation/payroll_rules/payroll_rules_screen.dart` (1163 lines, earning/deduction component settings). All four were built entirely from hardcoded in-memory sample data (`_PayrollRun`, `_EmpPayroll`, a fixed 5-employee list, etc.) with zero API calls — confirmed by reading the deleted code and by the new replacement screen's own doc comment, which explicitly contrasts itself with "the original mock this replaced (hardcoded demo months/amounts, zero API calls)".
+
+In its place, a narrower, real-API rebuild now exists at `mobile_app/lib/features/payroll/` — data + presentation layers only (no domain layer, following the same lighter pattern `expenses` uses rather than `leave`'s full Clean Architecture split):
+- `data/datasources/payroll_remote_datasource.dart` — `fetchMyPayslips()` (`GET /payroll/my-payslips/`, handles both a raw list and a paginated `{results: []}` envelope) and `acknowledgePayslip(id)` (`POST /payroll/my-payslips/{id}/acknowledge/`).
+- `data/models/payslip_model.dart` — `PayslipModel` mirroring the backend's `EmployeePayslipSerializer` (cycle dates, basic/HRA/special-allowance/other-earnings/reimbursements/bonus/gross, working/LOP days, PF/ESI/PT/LWF/total deductions, net pay, status, a payslip-PDF URL that's always null today since no backend view populates that field yet), with defensive Decimal-as-string parsing and a hand-copied status-label map (`draft/sent/acknowledged/queried/resolved/paid`, since no endpoint returns display labels).
+- `presentation/providers/payroll_providers.dart` — `myPayslipsProvider` (`AsyncNotifierProvider.autoDispose`) with `refresh()` and an optimistic `acknowledge(id)`.
+- `presentation/screens/my_payslip_screen.dart` (659 lines) — month-selector strip + detail card: company name/CIN, employee meta (name/ID/department/masked bank account/IFSC), working/paid/LOP-day stats, earnings/deductions breakdowns, a reimbursements line when nonzero, a gradient Net Pay banner with an earnings-vs-deductions ratio bar, an "Open PDF" button (dead today, gated on the always-null PDF URL), and an "Acknowledge Payslip" button shown only when status is `sent`. The screen's own doc comment lists three things deliberately left out because the backend doesn't support them yet: PAN/UAN, a TDS/Loan-EMI deduction line, and per-category reimbursement breakdown.
+
+Fully wired, not orphaned: `app_router.dart` adds `AppRoutes.myPayslips = '/dashboard/my-payslip'` and a `GoRoute` to `MyPayslipScreen`; `nav_config.dart` adds a "My Payslips" nav item under the "My" section, gated on `permission: null` (visibility left purely to the backend's `payroll.view_own` permission, matching the existing My Attendance pattern and web's `navConfig.ts`). One loose end: `ApiConstants.payslipDetail(id)` (`/payroll/payslips/{id}/`) was added but is never called anywhere — likely staged for a future per-payslip deep-link view. The old admin-facing Run Payroll wizard and Payroll Rules settings have **not** been rebuilt at all as of this entry.
+
+**Financial Year section (Company settings), added in the same commit.** `mobile_app/lib/features/settings/presentation/company/widgets/financial_year_section.dart` is a new card wired into `company_screen.dart` right after the logo block. It reads/writes `GET`/`PUT` `/settings/company/financial-year/` via a new `financialYearProvider`, shows an editable "Financial Year Starts In" month dropdown (edit gated to `system_admin`, both client- and server-side) plus three read-only chips (Previous/Current/Next Financial Year computed server-side from the start month). Its own intro text spells out why this exists: one shared setting that Leave Allocation, Carry Forward, Attendance, Payroll, and Reports all key their year math off, replacing an assumed Jan–Dec calendar year.
+
+#### Files deleted
+```
+lib/features/payroll/presentation/screens/payroll_screen.dart
+lib/features/payroll/presentation/screens/run_payroll_screen.dart
+lib/features/payroll/presentation/screens/my_payslip_screen.dart (original mock version)
+lib/features/settings/presentation/payroll_rules/payroll_rules_screen.dart
+```
+
+#### Files created
+```
+lib/features/payroll/data/datasources/payroll_remote_datasource.dart
+lib/features/payroll/data/models/payslip_model.dart
+lib/features/payroll/presentation/providers/payroll_providers.dart
+lib/features/payroll/presentation/screens/my_payslip_screen.dart (rebuilt, real API)
+lib/features/settings/presentation/company/widgets/financial_year_section.dart
+```
+
+#### Files modified
+```
+lib/core/router/app_router.dart                 AppRoutes.myPayslips + GoRoute
+lib/features/dashboard/presentation/navigation/nav_config.dart   "My Payslips" nav item
+lib/features/dashboard/presentation/widgets/quick_access.dart    "My Payslips" quick-access tile
+lib/core/constants/api_constants.dart            myPayslips, acknowledgePayslip(id), payslipDetail(id) — unused
+lib/features/settings/presentation/company/company_screen.dart  + FinancialYearSection
+lib/features/settings/presentation/providers/settings_providers.dart  + financialYearProvider
+```
+
+---
+
+### Part 2: Voice Commands — New App-Wide Voice Assistant
+
+An entirely new feature, `mobile_app/lib/features/voice_commands/`. A user taps a floating mic bubble, speaks a command in natural language, and the backend (`POST /voice/parse/`, `apps/voice_commands` — a single endpoint, intent list lives server-side in `registry/intents_en.yaml`) parses it into an intent, executes it, and returns a message that's spoken back via TTS and shown in a floating conversation panel. All intent understanding happens server-side, one HTTP round trip per turn — the client only does speech-to-text (`speech_to_text: ^7.0.0`) and text-to-speech (`flutter_tts: ^4.2.2`, both added to `pubspec.yaml` in this same commit; `geolocator` was already present and is reused, not new).
+
+**Clean-architecture layering:** `domain/entities/voice_result_entity.dart` (`VoiceResultEntity`: intent, confidence, result payload, message, conversational, awaitingInput, success — deliberately mirrors `backend/apps/voice_commands/conversation.py::_payload()` and the web app's own `VoiceParseResult` type) → `domain/repositories/voice_repository.dart` → `data/models/voice_result_model.dart` / `data/datasources/voice_remote_datasource.dart` / `data/repositories/voice_repository_impl.dart` (thin Dio passthrough) → `presentation/providers/voice_providers.dart`. `presentation/providers/voice_mute_provider.dart` persists a TTS mute toggle to secure storage.
+
+**Conversation orchestration — `presentation/controllers/voice_command_controller.dart`** (a `Notifier<VoiceConversationState?>`, null = idle): `startListening()` initializes `speech_to_text`, stops any playing TTS first (so the mic doesn't hear its own confirmation), and listens for up to 60s with a 5s silence auto-stop. On stop, `submitTranscript()` calls the backend; if the result is a `clock_in`/`clock_out` rejected by the exact geofencing-rejection message the backend uses (voice never collects GPS up front), the controller silently fetches the device location and resubmits the identical transcript once with lat/long attached, sparing the user a repeat. `conversational` (a property of the intent itself — true for apply/approve/reject-leave on every turn) and `success` (did *this* turn's action work) are tracked as independent flags, matching the backend's own multi-turn design (conversation state lives server-side in Redis with a 120s TTL; the client just tracks a boolean `awaitingInput`).
+
+**UI:** `presentation/widgets/voice_conversation_panel.dart` (phase-driven: listening → transcript → result, explicitly mirroring `frontend/hooks/useVoiceCommand.ts` / `VoiceConversationPanel.tsx`) and `presentation/widgets/voice_mic_overlay.dart`, mounted once in `app.dart`'s `MaterialApp.router` builder (inside its own nested `Overlay`, since tooltips need an `Overlay.of(context)` ancestor and this Stack sits outside the Navigator's own overlay) — so the mic is available on every authenticated screen, not one shell route. It hides itself when logged out, mid-onboarding, awaiting HR approval, or while any screen's own expandable FAB is open.
+
+**Uncommitted follow-up work on top of the original commit** added two more things:
+1. **A typed-command entry point.** A small keyboard-icon badge next to the mic bubble opens a new `VoicePanelPhase.typing` state (a plain text field + send button) — same backend call as speaking, just a different way to compose the transcript. Not to be confused with `submitTypedAnswer`, which answers a follow-up question mid-conversation.
+2. **A draggable mic bubble.** `voice_mic_overlay.dart` was reworked so the idle bubble still *starts* in its default corner (above a screen's own FAB when one exists, via `AppRoutes.screensWithFab`), but is now user-draggable anywhere on screen via a new `_DraggableMicBubble` widget that owns the drag gesture and clamped position entirely on its own (so a drag only rebuilds that small subtree, not the parent's provider watches — keeps dragging smooth). The dragged position persists across every screen (the widget is never rebuilt on route change) until dragged again.
+3. **`PayslipSummaryCard`** (`presentation/widgets/payslip_summary_card.dart`, new, untracked) — when a voice response's `result` payload matches a recognized payslip shape (`check_my_payslip` returns the payslip dict directly; `check_employee_payslip` nests it under `result.payslip` with the target name under `result.matched.employee_name`), the conversation panel now renders a compact card underneath the spoken message: subject name, status chip, period-ending date, gross/deductions/net-pay rows. `VoiceConversationState` gained a `dynamic result` field to carry the raw payload through for this without the controller needing to know about any specific intent.
+
+#### Files created
+```
+lib/features/voice_commands/domain/entities/voice_result_entity.dart
+lib/features/voice_commands/domain/repositories/voice_repository.dart
+lib/features/voice_commands/data/models/voice_result_model.dart
+lib/features/voice_commands/data/datasources/voice_remote_datasource.dart
+lib/features/voice_commands/data/repositories/voice_repository_impl.dart
+lib/features/voice_commands/presentation/providers/voice_providers.dart
+lib/features/voice_commands/presentation/providers/voice_mute_provider.dart
+lib/features/voice_commands/presentation/state/voice_conversation_state.dart
+lib/features/voice_commands/presentation/controllers/voice_command_controller.dart
+lib/features/voice_commands/presentation/widgets/voice_conversation_panel.dart
+lib/features/voice_commands/presentation/widgets/voice_mic_overlay.dart
+lib/features/voice_commands/presentation/widgets/payslip_summary_card.dart   (new, uncommitted)
+```
+
+#### Files modified
+```
+lib/app/app.dart                       mounts VoiceMicOverlay above the Navigator
+lib/core/constants/api_constants.dart  voiceParse
+mobile_app/pubspec.yaml                + speech_to_text, flutter_tts
+```
+
+---
+
+### Part 3: Attendance Approval — Rebuilt Twice Over (Payroll-Cycle Sign-off, Then Per-Manager Multi-Signoff)
+
+**What it is, concretely:** a payroll-cycle attendance sign-off — once a payroll cycle closes, its aggregate attendance (present/late/absent/half-day/LOP counts per employee) needs manager (L1) then HR (L2) sign-off before payroll can run. This is a distinct flow from "Attendance Correction" (an individual employee disputing one day's clock-in/out — see Part 3b).
+
+**Why `my_requests_tab.dart` (529 lines) was deleted:** per a doc comment in `approvals_screen.dart`, this ports web's own 2026-07-21 change — web dropped its "My Requests" tab from Approvals because a standalone `/dashboard/my-requests` page already covers self-service leave/expense creation, making the duplicate tab redundant; mobile's equivalent self-service already lives in the Leave and Expenses modules.
+
+**First rebuild (committed):** a new `attendance_approval_tab.dart` (409 lines) plus `attendance_approval_remote_datasource.dart`, `attendance_approval_models.dart` (`PayrollCycleModel`, `CycleAttendanceSummary`, `AttendanceSummaryRow`, `EmployeeDailyAttendance`), and `attendance_approval_providers.dart`, hitting `/payroll/cycles/pending-approval/`, `/payroll/cycles/{id}/attendance-summary/`, `/payroll/cycles/{id}/approve-attendance/`, and a per-employee daily-attendance endpoint — the same payroll-cycle endpoints the now-deleted admin Payroll module used, since attendance sign-off is gated on payroll cycles server-side regardless of whether mobile has an admin payroll UI. `approvals_screen.dart` was reduced to two tabs (Team Approvals, Attendance Approval).
+
+**Second rework (uncommitted, on top):** the model shifted from a single L1/L2 approver to **per-manager multi-signoff** — `PayrollCycleModel` gained `managerApprovals` (a list of `ManagerApprovalRow`: id, name, approved-at), `mgrApprovedCount`/`mgrTotalCount`/`mgrAllApproved`, and `currentUserPending`; the old `l1ApproverName`/`l2ApprovedAt` fields are now documented as legacy fields only populated once *every* manager has signed off. `attendance_approval_tab.dart` now shows a progress bar and a `Wrap` of per-manager pill chips instead of a single approval-status row, and the "can I approve L1" gate changed from a hardcoded role check to a backend-computed `cycle.currentUserPending && !l1Done` flag — a manager sees the Approve button only if their own row says they're pending, not because their role matches a static list. Also fixed a missing "Half Day" stat badge and reordered "On Leave" before Absent/Incomplete.
+
+**Team Approvals — a real bug fix and a new request type, same uncommitted pass:**
+- Bug fix in `approvals_providers.dart`: `pendingLeaveApprovalsProvider` now passes `scope: 'team'` to `getLeaveRequests()`. Without it, the backend silently returned the *caller's own* leave requests regardless of role — the Team Approvals leave queue looked broken/empty for any manager/HR whose own request list happened to be empty.
+- New: `ApprovalsRequestType.attendanceCorrection`, `teamCorrectionsStatusFilterProvider`, `teamCorrectionsProvider` — a third toggle in `team_approvals_tab.dart` (alongside Leave/Expense) for reviewing individual clock-in/out correction requests, hitting `/attendance/corrections/` and `/attendance/corrections/{id}/review/`. `approvals_screen.dart`'s tab-visibility logic now also checks `canApproveCorrections` (gated on `attendance.view`) and `canApproveAttendance` now reads a new `user.canManageTeam` flag OR (payroll permission AND not HR) — a comment notes HR's own attendance sign-off moved specifically to Leave Management.
+- `team_approvals_tab.dart`'s leave-request card gained an employee-code line, an "Applied {date}" timestamp, and a status badge distinguishing "Pending Manager Approval" vs "Pending HR Approval" (the underlying provider mixes both stages in one list).
+
+**Note:** this pass depends on two adjacent, also-uncommitted files outside `approvals/`: `auth/domain/entities/user_entity.dart` / `data/models/user_model.dart` (new `canManageTeam` field — see Part 8, this is plumbing-only elsewhere) and a brand-new `attendance/presentation/widgets/hr_correction_card.dart` (see Part 3b).
+
+### Part 3b: Attendance — HR Corrections Become a Two-Stage (Manager → HR) Approval Chain
+
+`HrCorrectionRowEntity`/`HrCorrectionModel` (in `attendance_entity.dart`/`attendance_models.dart`) gained `l1ApproverName`/`l1Status`/`l1Remarks`, `l2ApproverName`/`l2Status`/`l2Remarks`, and a server-computed `canAction` bool, turning a single-stage pending/approved/rejected correction request into a Manager (L1) → HR (L2) chain. A real JSON-key bug was fixed alongside it: `requestedInTime`/`requestedOutTime` were reading the wrong keys (`requested_in_time`/`requested_out_time` instead of the backend's actual `requested_in`/`requested_out`). The correction card itself was extracted out of `attendance_screen.dart` into a new standalone `presentation/widgets/hr_correction_card.dart` — its own doc comment explains it's now shared between the Attendance screen's own "Correction Requests" inbox and the Approvals screen's Team Approvals tab (Part 3), so it takes a plain `onReview` callback instead of reading a provider directly. It now renders per-stage status lines and an "Awaiting {name}" hint when the current viewer isn't the actor for the current stage. The attendance screen's status filter was updated from Pending/Approved/Rejected to Pending–Manager / Pending–HR / Approved/Rejected.
+
+#### Files created
+```
+lib/features/approvals/data/datasources/attendance_approval_remote_datasource.dart
+lib/features/approvals/data/models/attendance_approval_models.dart
+lib/features/approvals/presentation/providers/attendance_approval_providers.dart
+lib/features/approvals/presentation/widgets/attendance_approval_tab.dart
+lib/features/attendance/presentation/widgets/hr_correction_card.dart
+```
+
+#### Files deleted
+```
+lib/features/approvals/presentation/widgets/my_requests_tab.dart
+```
+
+#### Files modified
+```
+lib/features/approvals/presentation/screens/approvals_screen.dart
+lib/features/approvals/presentation/providers/approvals_providers.dart
+lib/features/approvals/presentation/widgets/team_approvals_tab.dart
+lib/features/attendance/data/models/attendance_models.dart
+lib/features/attendance/domain/entities/attendance_entity.dart
+lib/features/attendance/presentation/screens/attendance_screen.dart
+lib/features/auth/data/models/user_model.dart              + canManageTeam (unconsumed elsewhere)
+lib/features/auth/domain/entities/user_entity.dart          + canManageTeam
+```
+
+---
+
+### Part 4: Bulk Import — Employees & Candidates
+
+New CSV/XLSX bulk-create flows for both Employees and Interview List candidates, replacing one-by-one entry via the Add sheet for large batches:
+- **Employees** — required columns: `first_name, last_name, email, role, department, designation, branch, date_of_joining`; optional: `phone, employee_type, gender, date_of_birth, blood_group, address`. Existing emails are skipped, not failed, so a corrected file can be safely re-uploaded.
+- **Candidates** — required: `name, email, position_applied, branch_name`; optional: `phone, interview_date, interview_mode, notes`. `branch_name` must exactly match an existing branch name or code — branches are never auto-created.
+
+Both share one result contract: `mobile_app/lib/shared/models/bulk_import_result.dart` (`BulkImportResult`: totalRows/created/skipped/failed plus per-row detail lists), deliberately shaped to match both Django views (`EmployeeBulkImportView`/`CandidateBulkImportView`) so one model parses both, and one shared `mobile_app/lib/shared/widgets/bulk_import_result_view.dart` (four stat chips + three collapsible per-row-detail sections). `EmployeeBulkImportScreen` and `CandidateBulkImportScreen` are structurally near-identical: file-picker card → required/optional-columns info card → Import button → the shared result view.
+
+Both screens are entered via a new reusable `mobile_app/lib/shared/widgets/expandable_fab.dart` — a FAB that expands into a small labeled action stack (rotating its `+` icon 45°), wired as the `floatingActionButton` on both `employees_screen.dart` and `interview_list_screen.dart` with an "Add single" and a "Bulk import" action each. It exposes a shared `expandableFabOpenProvider` so the global Voice Commands mic overlay (Part 2) can step aside while any screen's FAB is expanded.
+
+#### Files created
+```
+lib/features/employees/presentation/screens/employee_bulk_import_screen.dart
+lib/features/interview_list/presentation/screens/candidate_bulk_import_screen.dart
+lib/shared/models/bulk_import_result.dart
+lib/shared/widgets/bulk_import_result_view.dart
+lib/shared/widgets/expandable_fab.dart
+```
+
+#### Files modified
+```
+lib/features/employees/presentation/employees_screen.dart          + expandable FAB
+lib/features/interview_list/presentation/screens/interview_list_screen.dart   + expandable FAB
+lib/core/router/app_router.dart     AppRoutes.employeeBulkImport, candidateBulkImport
+```
+
+---
+
+### Part 5: Leave — Server-Side Preview, Opening Balance & History Bulk Import, Team Department Filter
+
+**Leave Preview (Apply Leave tab).** `apply_leave_tab.dart` now calls a `leavePreviewProvider` (server-side, holiday-aware day-count/LOP calculation) once a leave type and full date range are selected, and prefers its result over the pre-existing local `_workingDays()` estimate whenever it has loaded — because the local calculation excludes weekends but not company holidays, which the server-side preview does account for. The form still falls back to the local estimate while the request is in flight or on error, so it never blocks on this endpoint's availability. A new `_PreviewBreakdownNote` surfaces the preview's holiday/week-off exclusion counts and any policy warning (e.g. a max-consecutive-days-with-LOP rule) so the day count shown isn't a mystery.
+
+**Leave Opening Balance & History bulk import (new).** A one-time historical-migration tool at `mobile_app/lib/features/settings/presentation/leave_policy/leave_balance_import_screen.dart` (662 lines, reached via an "Import Opening Balances" icon button on the Leave Policy screen's app bar, routed at `/settings/leave-policy/import-balances`). Backed by new `mobile_app/lib/features/settings/data/models/leave_import_model.dart`: a two-step validate-then-import flow against `LeaveOpeningBalanceValidateView`/`LeaveOpeningBalanceImportView` — each uploaded row is either a "balance" row (annual totals per employee/leave-type/financial-year) or a "history" row (individual leave dates), with per-row validity/error reporting in the preview step and a downloadable error-report CSV if the final import has failures. This is a distinct feature from Part 4's Employee/Candidate bulk import (different backend, different purpose — migrating in historical leave data, not creating new employee/candidate records).
+
+**Team Approvals — department filter.** `fetchLeaveRequestsPage()` gained an optional `department` param (branch filtering is `system_admin`-only server-side; department only needs `leave.approve`), threaded through the repository and a new `LeaveTeamFilter` typedef (`({String branch, String department})`) replacing the old plain `String branch` provider key. `leave_approvals_tab.dart` adds a department dropdown gated to `system_admin`/`hr`/`hr_admin` (matching web's `canFilterDept`); `leave_dashboard_tab.dart` deliberately never applies one, per a comment noting web's own Dashboard has no such filter either, but still had to adopt the new `LeaveTeamFilter` record shape. Role-alias handling in `_scopeLabel()` was also tightened to treat `manager`/`manager__team_lead` and `hr`/`hr_admin` as equivalent.
+
+**Smaller fixes, same pass:**
+- `LeaveRequestModel`/`LeaveRequestEntity` gained an `employeeCode` field.
+- `leave_screen.dart`'s `_BranchSheet` was converted from a plain `StatefulWidget` reading a one-time `ref.read()` snapshot of `branchListProvider` to a `ConsumerStatefulWidget` that watches it live — previously, opening the sheet while the (autoDispose) branch fetch was still in flight could permanently show "No branches loaded" since nothing else kept that provider warm.
+- `FormValidators` (shared) gained candidate name/position/phone validators + an interview-date-not-in-the-past check (mirroring `backend/apps/recruitment/serializers.py`'s regexes exactly, for Add/Edit Candidate) and a leave-type-name validator (mirroring `apps/hrms/serializers.py`).
+
+#### Files created
+```
+lib/features/settings/data/models/leave_import_model.dart
+lib/features/settings/presentation/leave_policy/leave_balance_import_screen.dart
+```
+
+#### Files modified
+```
+lib/features/leave/presentation/widgets/apply_leave_tab.dart
+lib/features/leave/presentation/widgets/leave_approvals_tab.dart
+lib/features/leave/presentation/widgets/leave_dashboard_tab.dart
+lib/features/leave/presentation/screens/leave_screen.dart
+lib/features/leave/data/datasources/leave_remote_datasource.dart
+lib/features/leave/data/models/leave_models.dart
+lib/features/leave/data/repositories/leave_repository_impl.dart
+lib/features/leave/domain/entities/leave_entity.dart
+lib/features/leave/domain/repositories/leave_repository.dart
+lib/features/leave/presentation/providers/leave_providers.dart
+lib/features/settings/presentation/leave_policy/leave_policy_screen.dart   + Import Opening Balances button
+lib/shared/validators/form_validators.dart
+lib/core/router/app_router.dart    AppRoutes.settingsLeaveBalanceImport
+```
+
+---
+
+### Part 6: Employees — Reporting Relationships, Document Upload, New Personal Fields, Permission-Based Gating
+
+Three coherent additions to `employee_profile_screen.dart` / `add_employee_sheet.dart` / the employees data layer:
+1. **New personal fields** — `gender`, `maritalStatus`, `fatherName`, `bloodGroup`, `currentAddress`, `permanentAddress` added to `EmployeeModel`/`EmployeeUpdateFormData`, with matching dropdowns/multiline fields in `add_employee_sheet.dart`.
+2. **Reporting Relationships quick-edit** — a new `_ReportingRelationshipsCard`/`_RelationshipEditDialog` on the Approval Matrix tab, backed by new `patchReportingManager()`/`patchHr()` datasource calls against new endpoints `employeeReportingManager(id)`/`employeeHrAssign(id)`.
+3. **Document upload** — a full flow on the Documents tab: `uploadEmployeeDocument()` (multipart POST, 5MB cap, PDF/JPG/PNG) against a new `employeeDocuments(id)` endpoint (distinct from the self-service onboarding upload endpoint), a document-type picker sheet, and a "Replace" action on each existing document card.
+
+Also, the edit-permission gate for both the Reporting Relationships card and the Approval Matrix Override action was changed from a hardcoded role check (`role == 'hr_admin' || 'system_admin'`) to `hasPermission('settings.edit')` — a comment notes role slugs aren't a stable contract but permission codenames are. Profile tab read-only fields (Employee ID, Phone, Reporting Manager, HR Contact, Work Email) now render with a visually "locked" tint.
+
+#### Files modified
+```
+lib/features/employees/data/datasources/employees_remote_datasource.dart
+lib/features/employees/data/models/employee_model.dart
+lib/features/employees/presentation/providers/employee_providers.dart
+lib/features/employees/presentation/screens/employee_profile_screen.dart
+lib/features/employees/presentation/widgets/add_employee_sheet.dart
+lib/core/constants/api_constants.dart   employeeReportingManager(id), employeeHrAssign(id), employeeDocuments(id)
+```
+
+---
+
+### Part 7: Settings — Email Templates: Data-Driven Categories, Rich-Text Toolbar, Email Branding Card
+
+`template_editor_sheet.dart` gained: a data-driven category dropdown (`emailTemplateCategoriesProvider`-backed, with an inline "create new category" option via a new `createEmailTemplateCategory()` call) replacing a hardcoded type list (kept only as a loading/error fallback); a live `{VARIABLE}` tag auto-detector scanning subject+body so variable chips populate in both add and edit mode (previously edit-only); a basic rich-text toolbar (Bold/Italic/Underline/Bullet-list/Link, wraps selected text in HTML tags); and support for attaching files before a new template exists (queued locally, uploaded one-by-one right after creation, since the create endpoint itself doesn't accept files). `EmailTemplateFormData` gained an `availableVariables` list and slug validation.
+
+A new, separate `email_branding_card.dart` now renders at the top of the Email Templates screen — shows the company logo/name/website/address wrapped around outgoing emails, with a full edit sheet reusing the existing `companyProvider` for logo upload and company-info fields.
+
+#### Files created
+```
+lib/features/settings/presentation/email_templates/widgets/email_branding_card.dart
+```
+
+#### Files modified
+```
+lib/features/settings/data/datasources/settings_remote_datasource.dart
+lib/features/settings/data/models/email_template_model.dart
+lib/features/settings/presentation/email_templates/email_templates_screen.dart
+lib/features/settings/presentation/email_templates/widgets/template_editor_sheet.dart
+lib/features/settings/presentation/providers/settings_providers.dart
+```
+
+---
+
+### Part 8: Misc — Expense Detail Dialog, Employee Dashboard Console Compaction, Announcement Sheet Fix
+
+**Expense detail dialog (new).** `expense_list_item.dart` was wrapped in `Material`/`InkWell` so tapping an expense row now opens a new `expense_detail_dialog.dart` — full detail view (status badge, amount/category, employee/branch, description, tappable receipts via `url_launcher`) that shows already-known row data immediately, then refreshes via a new `expenseDetailProvider(expenseNumber)` (`GET /expenses/{expense_number}/`).
+
+**Employee dashboard console compaction.** `employee_dashboard_view.dart`'s "My Workspace" card was reworked per an inline comment noting the old version stacked a header, clock button, a separate correction-request line, a two-row KPI grid, and a third section repeating the same clock in/out times. Merged into one `_ConsoleClockRow` + a single-row `_ConsoleKpiRow`; wrapped the clock button in `IntrinsicWidth` to fix a `Row`-gives-unbounded-width crash; bumped the leave-balance grid's `mainAxisExtent` 96→104 to stop a 6px overflow when a balance shows a "used" line.
+
+**Announcement sheet.** `post_announcement_sheet.dart`'s scrollable body was wrapped in `Flexible` (previously unwrapped directly in the outer `Column`) — a small overflow-safety fix, not a feature change.
+
+**`canManageTeam` on the user model.** A new boolean field (`can_manage_team`) was added to `UserModel`/`UserEntity` (see Part 3) but is not yet read anywhere else in the app — plumbing only, consumed so far only by the Attendance Approval tab-visibility gate.
+
+#### Files created
+```
+lib/features/expenses/presentation/widgets/expense_detail_dialog.dart
+```
+
+#### Files modified
+```
+lib/features/expenses/presentation/widgets/expense_list_item.dart
+lib/features/expenses/presentation/providers/expense_providers.dart
+lib/features/expenses/data/datasources/expense_remote_datasource.dart
+lib/features/dashboard/presentation/screens/employee_dashboard_view.dart
+lib/features/announcements/presentation/widgets/post_announcement_sheet.dart
+```
+
+---
+
+### Verification
+- `dart analyze lib` (run against the current working tree while writing this entry): **0 errors, 0 warnings** — 84 info-level lints, all pre-existing `prefer_const_constructors`/`deprecated_member_use` style suggestions, none newly introduced.
+- No on-device/APK build verification was performed while writing this entry — it's a documentation-only pass reconstructing what changed; the actual coding work should already have been verified at the time it was written (see the caveat at the top of this session).
+
+### Architecture Notes
+- **A journal entry reconstructed from diffs instead of chat history is still worth writing carefully** — reading full deleted/added files (not just diff stats) surfaced real distinctions a stat-only summary would have flattened: e.g. Attendance Approval (payroll-cycle sign-off) vs Attendance Correction (per-punch dispute) vs Leave team approvals are three different approval flows that all happen to converge on the same "Team Approvals" screen.
+- **This app now has two independent bulk-import subsystems** that look superficially similar (both: pick file → validate/preview → import → shared result reporting) but serve different purposes and hit different backends: Employee/Candidate bulk-CREATE (`shared/models/bulk_import_result.dart`) vs Leave Opening-Balance/History bulk-MIGRATE (`leave_import_model.dart`, its own two-step validate/import pair). Don't assume one's result contract fits the other if either grows further.
+- **The old mock Payroll module's removal is a net scope reduction, not yet a full replacement** — only the employee-facing "view my payslip" slice was rebuilt against a real API; an admin Run Payroll wizard and Payroll Rules settings screen do not exist in the app at all right now, unlike before this session's changes.
+- **Voice Commands intentionally keeps zero intent-parsing logic on the client** — every "what can I say" question is answered server-side (`registry/intents_en.yaml`), and the client's only job is turning speech into text, forwarding it, and rendering whatever comes back. This means adding a new voice-capable action never requires a mobile release on its own, unless the response needs a new bespoke result-card renderer like `PayslipSummaryCard`.
+
+### Pending Tasks (updated)
+- [ ] Confirm with whoever committed this batch of work whether the uncommitted working-tree changes described in this entry (everything not part of `e558822`) are ready to commit, or still mid-edit — this entry was written directly against the live working tree, which may keep changing after this was written.
+- [ ] Payroll: no admin-facing Run Payroll wizard or Payroll Rules settings screen exists yet — only "My Payslips" was rebuilt (new gap, this session).
+- [ ] Payroll: `ApiConstants.payslipDetail(id)` is defined but never called — either wire it to a per-payslip detail view or remove it (new, this session).
+- [ ] `canManageTeam` on the user model is unused outside the Attendance Approval gate — confirm this is intentional scope, not a half-finished wiring pass (new, this session).
+- [ ] No manual on-device pass of Voice Commands, the reworked Attendance Approval multi-signoff UI, Bulk Import, or the Leave Balance Import screen — all verified via `dart analyze` and code reading only in this entry (new, this session).
+- [ ] Manual on-device pass of all three role dashboards (Employee/Admin/HR) (carried over from Session 20 — still not done).
+- [ ] No dedicated onboarding-review screen exists in the app (carried over from Session 20).
+- [ ] Manual on-device dark-mode pass across every screen (carried over from Session 19 — still not done).
+- [ ] Sweep the older `_friendly(e.toString())` error pattern to `parseDioException()`-style helpers across Leave/Expenses/Documents/Employees (carried over from Sessions 15–18 — still not done).
+- [ ] `/onboarding/assessments` candidate-taking portal — still not ported (carried over from Session 17).
+- [ ] Backend: `Holiday` model/API still doesn't exist for real — Holiday Calendar remains local-only mock state (carried over from Session 17).

@@ -109,6 +109,16 @@ class VoiceCommandController extends Notifier<VoiceConversationState?> {
     _speech.stop();
   }
 
+  /// Opens the typed-command entry point (the keyboard badge next to the mic
+  /// bubble) — a fresh command composed by text instead of speech, not to be
+  /// confused with submitTypedAnswer, which answers a follow-up question
+  /// mid-conversation. Same backend call either way (transcript is
+  /// transcript); this only changes how the panel looks while composing it.
+  void openTypedCommand() {
+    _autoCloseTimer?.cancel();
+    state = const VoiceConversationState(phase: VoicePanelPhase.typing);
+  }
+
   void _onSpeechStatus(String status) {
     // 'done'/'notListening' fires once the engine itself stops — pauseFor
     // elapsed, listenFor elapsed, or a manual stopListening() — same trigger
@@ -172,6 +182,7 @@ class VoiceCommandController extends Notifier<VoiceConversationState?> {
         conversational: outcome.conversational,
         awaitingInput: outcome.awaitingInput,
         resultStatus: outcome.success ? VoiceResultStatus.success : VoiceResultStatus.error,
+        result: outcome.result,
       );
 
       await _speakThenMaybeClose(outcome.message, outcome.conversational, outcome.awaitingInput);

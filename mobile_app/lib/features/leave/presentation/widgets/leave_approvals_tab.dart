@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../settings/data/models/departments_model.dart';
+import '../../../settings/presentation/providers/settings_providers.dart';
 import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
 import 'leave_request_detail_sheet.dart';
@@ -50,16 +53,22 @@ class LeaveApprovalsTab extends ConsumerStatefulWidget {
 class _LeaveApprovalsTabState extends ConsumerState<LeaveApprovalsTab> {
   bool _showPending = true;
   bool _actionLoading = false;
+  // Matches web's LeaveApprovals.tsx department filter — system_admin/hr
+  // only (see canFilterDept there); other roles never see this control.
+  String _departmentFilter = '';
 
   // Switching branches keys a fresh provider instance for each family
   // (see leave_providers.dart) — no separate page state to reset here.
   String get _branchFilter =>
       widget.selectedBranches.isEmpty ? '' : widget.selectedBranches.first;
 
+  LeaveTeamFilter get _teamFilter =>
+      (branch: _branchFilter, department: _departmentFilter);
+
   Future<void> _approve(String id) async {
     setState(() => _actionLoading = true);
     final err = await ref
-        .read(leaveTeamPendingProvider(_branchFilter).notifier)
+        .read(leaveTeamPendingProvider(_teamFilter).notifier)
         .approveRequest(id);
     if (!mounted) return;
     setState(() => _actionLoading = false);
@@ -123,7 +132,7 @@ class _LeaveApprovalsTabState extends ConsumerState<LeaveApprovalsTab> {
     if (reason == null || reason.isEmpty || !mounted) return;
     setState(() => _actionLoading = true);
     final err = await ref
-        .read(leaveTeamPendingProvider(_branchFilter).notifier)
+        .read(leaveTeamPendingProvider(_teamFilter).notifier)
         .rejectRequest(id, reason);
     if (!mounted) return;
     setState(() => _actionLoading = false);
@@ -143,15 +152,26 @@ class _LeaveApprovalsTabState extends ConsumerState<LeaveApprovalsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final pendingAsync = ref.watch(leaveTeamPendingProvider(_branchFilter));
-    final historyAsync = ref.watch(leaveTeamHistoryProvider(_branchFilter));
+    final pendingAsync = ref.watch(leaveTeamPendingProvider(_teamFilter));
+    final historyAsync = ref.watch(leaveTeamHistoryProvider(_teamFilter));
     final activeAsync = _showPending ? pendingAsync : historyAsync;
     final activePage = activeAsync.valueOrNull;
     final rows = activePage?.items ?? const <LeaveRequestEntity>[];
     final pendingCount = pendingAsync.valueOrNull?.count ?? 0;
     final hasBranchFilter = _branchFilter.isNotEmpty;
+    final hasFilter = hasBranchFilter || _departmentFilter.isNotEmpty;
     final hasMore = activePage?.hasMore ?? false;
     final loadingMore = activePage?.loadingMore ?? false;
+
+    // Matches web's LeaveApprovals.tsx canFilterDept — 'manager__team_lead'
+    // never gets this filter (their queue is already narrow); 'hr'/'hr_admin'
+    // are aliases for the same role (see backend's _is_hr_role).
+    final role = ref.watch(authStateProvider).valueOrNull?.user?.role ?? '';
+    final canFilterDept =
+        role == 'system_admin' || role == 'hr' || role == 'hr_admin';
+    final departments = canFilterDept
+        ? ref.watch(departmentsProvider).valueOrNull ?? const []
+        : const <DepartmentModel>[];
 
     return RefreshIndicator(
       color: AppColors.primary,
@@ -162,23 +182,41 @@ class _LeaveApprovalsTabState extends ConsumerState<LeaveApprovalsTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Sub-tab pills ─────────────────────────────────────────────────
+          // ── Sub-tab pills (+ department filter, on its own row so a long
+          // department name / narrow screen can never overflow the pills) ──
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _SubTabPill(
-                  label: 'Pending',
-                  count: pendingCount,
-                  selected: _showPending,
-                  onTap: () => setState(() => _showPending = true),
+                Row(
+                  children: [
+                    _SubTabPill(
+                      label: 'Pending',
+                      count: pendingCount,
+                      selected: _showPending,
+                      onTap: () => setState(() => _showPending = true),
+                    ),
+                    const SizedBox(width: 8),
+                    _SubTabPill(
+                      label: 'History',
+                      selected: !_showPending,
+                      onTap: () => setState(() => _showPending = false),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                _SubTabPill(
-                  label: 'History',
-                  selected: !_showPending,
-                  onTap: () => setState(() => _showPending = false),
-                ),
+                if (canFilterDept) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: _DepartmentFilterDropdown(
+                      selected: _departmentFilter,
+                      departments: departments,
+                      onChanged: (v) =>
+                          setState(() => _departmentFilter = v ?? ''),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -248,8 +286,8 @@ class _LeaveApprovalsTabState extends ConsumerState<LeaveApprovalsTab> {
                                 const SizedBox(height: 10),
                                 Text(
                                   _showPending
-                                      ? (hasBranchFilter
-                                          ? 'No requests for the selected branch.'
+                                      ? (hasFilter
+                                          ? 'No requests match the selected filters.'
                                           : 'No pending leave requests.')
                                       : 'No leave history yet.',
                                   style: AppTextStyles.bodySecondary,
@@ -281,12 +319,12 @@ class _LeaveApprovalsTabState extends ConsumerState<LeaveApprovalsTab> {
                                         onTap: () => _showPending
                                             ? ref
                                                 .read(leaveTeamPendingProvider(
-                                                        _branchFilter)
+                                                        _teamFilter)
                                                     .notifier)
                                                 .loadMore()
                                             : ref
                                                 .read(leaveTeamHistoryProvider(
-                                                        _branchFilter)
+                                                        _teamFilter)
                                                     .notifier)
                                                 .loadMore(),
                                       );
@@ -315,6 +353,62 @@ class _LeaveApprovalsTabState extends ConsumerState<LeaveApprovalsTab> {
                           ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Department filter dropdown (system_admin/hr only) ─────────────────────────
+
+class _DepartmentFilterDropdown extends StatelessWidget {
+  final String selected;
+  final List<DepartmentModel> departments;
+  final ValueChanged<String?> onChanged;
+
+  const _DepartmentFilterDropdown({
+    required this.selected,
+    required this.departments,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 160),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: selected.isEmpty ? null : selected,
+          isDense: true,
+          isExpanded: true,
+          icon: Icon(Icons.expand_more, size: 16, color: AppColors.textHint),
+          hint: Text('All Departments',
+              style: AppTextStyles.caption.copyWith(
+                  fontSize: 12, color: AppColors.textSecondary)),
+          style: AppTextStyles.caption.copyWith(
+              fontSize: 12,
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600),
+          items: [
+            DropdownMenuItem<String>(
+              value: null,
+              child: Text('All Departments',
+                  style: AppTextStyles.caption.copyWith(fontSize: 12)),
+            ),
+            ...departments.map((d) => DropdownMenuItem<String>(
+                  value: d.name,
+                  child: Text(d.name,
+                      style: AppTextStyles.caption.copyWith(fontSize: 12),
+                      overflow: TextOverflow.ellipsis),
+                )),
+          ],
+          onChanged: onChanged,
+        ),
       ),
     );
   }

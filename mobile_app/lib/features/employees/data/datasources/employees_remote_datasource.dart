@@ -112,8 +112,8 @@ class EmployeesRemoteDataSource {
 
   // ── Update (edit) ─────────────────────────────────────────────────────────
   //
-  // PUT only reads/persists 8 fields server-side (see EmployeeUpdateFormData
-  // doc comment) — the response body is the full, refreshed employee dict.
+  // See EmployeeUpdateFormData.toJson() for the exact field set the backend
+  // PUT persists — the response body is the full, refreshed employee dict.
 
   Future<EmployeeModel> updateEmployee(
     String employeeId,
@@ -256,6 +256,47 @@ class EmployeesRemoteDataSource {
         .map((e) => e['name'] as String? ?? '')
         .where((n) => n.isNotEmpty)
         .toList();
+  }
+
+  // ── Reporting Relationships quick-edit (Approval Matrix tab) ────────────────
+  // Pass null to clear the assignment.
+
+  Future<void> patchReportingManager(String employeeId, String? managerId) async {
+    await _dio.patch(
+      ApiConstants.employeeReportingManager(employeeId),
+      data: {'reporting_manager_id': managerId},
+    );
+  }
+
+  Future<void> patchHr(String employeeId, String? hrId) async {
+    await _dio.patch(
+      ApiConstants.employeeHrAssign(employeeId),
+      data: {'hr_id': hrId},
+    );
+  }
+
+  // ── Document upload (HR/admin, Documents tab) ───────────────────────────────
+  // Max 5MB, PDF/JPG/PNG only — matches EmployeeDocument.MAX_FILE_SIZE /
+  // ALLOWED_MIME_TYPES server-side (also enforced there; not just here).
+  // Returns nothing — the response's file URL key doesn't match
+  // EmployeeDocumentEntity's shape (see its fromJson comment), so callers
+  // should re-fetch the employee (fetchEmployee) to pick up the new document.
+
+  Future<void> uploadEmployeeDocument(
+    String employeeId, {
+    required String documentType,
+    required Uint8List bytes,
+    required String filename,
+  }) async {
+    final formData = FormData.fromMap({
+      'document_type': documentType,
+      'file': MultipartFile.fromBytes(bytes, filename: filename),
+    });
+    await _dio.post(
+      ApiConstants.employeeDocuments(employeeId),
+      data: formData,
+      options: Options(contentType: 'multipart/form-data'),
+    );
   }
 
   // ── Bulk Import (CSV/XLSX, max 1000 rows / 5MB — system_admin/hr_admin only) ─

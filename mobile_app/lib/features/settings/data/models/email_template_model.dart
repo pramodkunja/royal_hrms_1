@@ -145,6 +145,7 @@ class EmailTemplateFormData {
   String body;
   String? templateType;
   bool isActive;
+  List<String> availableVariables;
 
   EmailTemplateFormData({
     this.displayName = '',
@@ -153,16 +154,18 @@ class EmailTemplateFormData {
     this.body = '',
     this.templateType,
     this.isActive = true,
+    this.availableVariables = const [],
   });
 
   factory EmailTemplateFormData.fromModel(EmailTemplateModel model) =>
       EmailTemplateFormData(
-        displayName:  model.displayName,
-        name:         model.name,
-        subject:      model.subject,
-        body:         model.body,
-        templateType: model.templateType,
-        isActive:     model.isActive,
+        displayName:        model.displayName,
+        name:               model.name,
+        subject:            model.subject,
+        body:               model.body,
+        templateType:       model.templateType,
+        isActive:           model.isActive,
+        availableVariables: List.of(model.availableVariables),
       );
 
   static String toSlug(String text) => text
@@ -171,6 +174,8 @@ class EmailTemplateFormData {
       .trim()
       .replaceAll(RegExp(r'\s+'), '_');
 
+  static final RegExp slugPattern = RegExp(r'^[a-z][a-z0-9_]*$');
+
   Map<String, dynamic> toJson({required bool isAdd}) => {
     'display_name': displayName,
     if (isAdd) 'name': name,
@@ -178,12 +183,20 @@ class EmailTemplateFormData {
     'body':         body,
     if (templateType != null) 'template_type': templateType,
     'is_active':    isActive,
+    'available_variables': availableVariables,
   };
 
   Map<String, String?> validate({required bool isAdd}) {
     final errors = <String, String?>{};
     if (displayName.trim().isEmpty) errors['displayName'] = 'Display name is required';
-    if (isAdd && name.trim().isEmpty) errors['name'] = 'Slug is required';
+    if (isAdd) {
+      final slug = name.trim();
+      if (slug.isEmpty) {
+        errors['name'] = 'Slug is required';
+      } else if (!slugPattern.hasMatch(slug)) {
+        errors['name'] = 'Lowercase letters, numbers, underscores only — must start with a letter';
+      }
+    }
     if (isAdd && templateType == null) errors['templateType'] = 'Category is required';
     if (subject.trim().isEmpty) errors['subject'] = 'Subject is required';
     if (body.trim().isEmpty) errors['body'] = 'Body is required';

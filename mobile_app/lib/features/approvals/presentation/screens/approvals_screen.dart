@@ -54,10 +54,17 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
     final canApproveLeave = user?.hasPermission('leave.approve') ?? false;
     final canApproveExpense = user?.hasPermission('expenses.approve') ?? false;
     final canApproveTeam = canApproveLeave || canApproveExpense;
-    final canApproveAttendance = user?.hasPermission('payroll.view') == true || user?.hasPermission('payroll.approve') == true;
+    // Matches web: managers always get this tab (role.can_manage_team);
+    // everyone else needs a payroll permission, but HR is excluded since
+    // attendance sign-off moved to Leave Management for HR specifically.
+    final role = user?.role ?? '';
+    final isHR = role == 'hr' || role == 'hr_admin';
+    final hasPayrollPerm = user?.hasPermission('payroll.view') == true || user?.hasPermission('payroll.approve') == true;
+    final canApproveAttendance = (user?.canManageTeam ?? false) || (hasPayrollPerm && !isHR);
+    final canApproveCorrections = user?.hasPermission('attendance.view') ?? false;
 
     final keys = <String>[
-      if (canApproveTeam) 'team',
+      if (canApproveTeam || canApproveCorrections) 'team',
       if (canApproveAttendance) 'attendance',
     ];
     _syncTabs(keys);
@@ -102,7 +109,11 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
                   controller: tabCtrl,
                   children: keys
                       .map((k) => k == 'team'
-                          ? TeamApprovalsTab(canApproveLeave: canApproveLeave, canApproveExpense: canApproveExpense)
+                          ? TeamApprovalsTab(
+                              canApproveLeave: canApproveLeave,
+                              canApproveExpense: canApproveExpense,
+                              canApproveCorrections: canApproveCorrections,
+                            )
                           : const AttendanceApprovalTab())
                       .toList(),
                 ),

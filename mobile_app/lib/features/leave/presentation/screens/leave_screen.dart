@@ -54,12 +54,12 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
   }
 
   Future<void> _openBranchSheet() async {
-    final branches = ref
-            .read(branchListProvider)
-            .valueOrNull
-            ?.map((b) => b.branchName)
-            .toList() ??
-        [];
+    // _BranchSheet watches branchListProvider itself (see below) instead of
+    // this reading a snapshot up front — a plain `ref.read()` here would
+    // capture the provider mid-AsyncLoading on its very first use (it's
+    // autoDispose and nothing else in this screen keeps it warm), showing
+    // "No branches loaded" forever even though the fetch was actually still
+    // in flight and would have resolved moments later.
     final result = await showModalBottomSheet<List<String>>(
       context: context,
       isScrollControlled: true,
@@ -68,7 +68,6 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => _BranchSheet(
-        branches: branches,
         initial: List.from(_selectedBranches),
       ),
     );
@@ -273,16 +272,15 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
 
 // ── Branch selector bottom sheet ──────────────────────────────────────────────
 
-class _BranchSheet extends StatefulWidget {
-  final List<String> branches;
+class _BranchSheet extends ConsumerStatefulWidget {
   final List<String> initial;
-  const _BranchSheet({required this.branches, required this.initial});
+  const _BranchSheet({required this.initial});
 
   @override
-  State<_BranchSheet> createState() => _BranchSheetState();
+  ConsumerState<_BranchSheet> createState() => _BranchSheetState();
 }
 
-class _BranchSheetState extends State<_BranchSheet> {
+class _BranchSheetState extends ConsumerState<_BranchSheet> {
   late List<String> _selected;
 
   @override
@@ -304,6 +302,10 @@ class _BranchSheetState extends State<_BranchSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomPad = MediaQuery.of(context).padding.bottom;
+    final branchesAsync = ref.watch(branchListProvider);
+    final branches =
+        branchesAsync.valueOrNull?.map((b) => b.branchName).toList() ??
+            const <String>[];
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -347,14 +349,33 @@ class _BranchSheetState extends State<_BranchSheet> {
         Divider(height: 1, color: AppColors.border),
 
         // Branch list
-        if (widget.branches.isEmpty)
+        if (branchesAsync.isLoading && branches.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: AppColors.primary),
+              ),
+            ),
+          )
+        else if (branchesAsync.hasError && branches.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-            child: Text('No branches loaded.',
+            child: Text('Could not load branches. Pull down to retry.',
+                style:
+                    AppTextStyles.caption.copyWith(color: AppColors.error)),
+          )
+        else if (branches.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            child: Text('No branches found.',
                 style:
                     AppTextStyles.caption.copyWith(color: AppColors.textHint)),
           ),
-        for (final branch in widget.branches)
+        for (final branch in branches)
           InkWell(
             onTap: () => _toggle(branch),
             child: AnimatedContainer(

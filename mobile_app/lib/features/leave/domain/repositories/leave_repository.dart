@@ -11,6 +11,7 @@ abstract class LeaveRepository {
     String? status,
     String? scope,
     String? branch,
+    String? department,
     int page = 1,
   });
   Future<LeaveRequestEntity> getLeaveRequestById(String id);

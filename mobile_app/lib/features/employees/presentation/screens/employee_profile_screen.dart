@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -198,7 +199,7 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
         body: TabBarView(
           controller: _tabCtrl,
           children: [
-            _ProfileTab(employee: emp),
+            _ProfileTab(employee: emp, onEdit: _onSave),
             EmployeeLeaveTab(employee: emp),
             EmployeeAttendanceTab(employee: emp),
             _ApprovalMatrixTab(employee: emp),
@@ -549,7 +550,8 @@ class _InfoCell extends StatelessWidget {
 
 class _ProfileTab extends StatefulWidget {
   final EmployeeModel employee;
-  const _ProfileTab({required this.employee});
+  final VoidCallback onEdit;
+  const _ProfileTab({required this.employee, required this.onEdit});
 
   @override
   State<_ProfileTab> createState() => _ProfileTabState();
@@ -684,11 +686,27 @@ class _ProfileTabState extends State<_ProfileTab> {
                         ),
                       ),
                       const Spacer(),
-                      Icon(Icons.upload_outlined,
-                          size: 18, color: AppColors.textHint),
-                      const SizedBox(width: 12),
-                      Icon(Icons.download_outlined,
-                          size: 18, color: AppColors.textHint),
+                      if (_sub == 0)
+                        InkWell(
+                          onTap: widget.onEdit,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 4),
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined,
+                                    size: 16, color: AppColors.primary),
+                                const SizedBox(width: 4),
+                                Text('Edit',
+                                    style: AppTextStyles.labelSmall.copyWith(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w700,
+                                    )),
+                              ],
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -724,6 +742,10 @@ class _PersonalContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _FieldRow(
+          label1: 'Employee ID', value1: _s(emp.employeeId), locked1: true,
+          label2: 'Role',        value2: _s(emp.roleDisplay),
+        ),
+        _FieldRow(
           label1: 'Department',  value1: _s(emp.department),
           label2: 'Designation', value2: _s(emp.designation),
         ),
@@ -737,19 +759,21 @@ class _PersonalContent extends StatelessWidget {
         ),
         _FieldRow(
           label1: 'Blood Group', value1: _s(emp.bloodGroup),
-          label2: 'Phone',       value2: _s(emp.phone),
+          label2: 'Phone',       value2: _s(emp.phone), locked2: true,
         ),
         _FieldRow(
           label1: 'Reporting Manager',
           value1: emp.reportingManagerName == null || emp.reportingManagerName!.isEmpty
               ? 'Not assigned'
               : emp.reportingManagerName!,
+          locked1: true,
           label2: 'HR Contact',
           value2: emp.hrName == null || emp.hrName!.isEmpty
               ? 'Not assigned'
               : emp.hrName!,
+          locked2: true,
         ),
-        _DisplayField(label: 'Work Email', value: _s(emp.email)),
+        _DisplayField(label: 'Work Email', value: _s(emp.email), locked: true),
         _DisplayField(
           label: 'Current Address',
           value: _s(emp.currentAddress),
@@ -870,30 +894,140 @@ class _EmergencyContent extends StatelessWidget {
 // experience_letter, other exist server-side, so there is no fixed slot list
 // to show as "Not uploaded" placeholders; just render whatever came back.
 
-class _DocumentsContent extends StatelessWidget {
+// Matches EmployeeDocument.TYPE_CHOICES server-side.
+const List<Map<String, String>> _kEmployeeDocTypes = [
+  {'value': 'pan_card', 'label': 'PAN Card'},
+  {'value': 'aadhaar_card', 'label': 'Aadhaar Card'},
+  {'value': 'degree_certificate', 'label': 'Degree Certificate'},
+  {'value': 'experience_letter', 'label': 'Experience Letter'},
+  {'value': 'other', 'label': 'Other'},
+];
+
+class _DocumentsContent extends ConsumerStatefulWidget {
   final EmployeeModel emp;
   const _DocumentsContent({required this.emp});
 
   @override
+  ConsumerState<_DocumentsContent> createState() => _DocumentsContentState();
+}
+
+class _DocumentsContentState extends ConsumerState<_DocumentsContent> {
+  bool _uploading = false;
+
+  Future<void> _pickAndUpload(String documentType) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.bytes == null) return;
+    if (file.size > 5 * 1024 * 1024) {
+      _showMessage('File must be under 5 MB.', isError: true);
+      return;
+    }
+
+    setState(() => _uploading = true);
+    final err = await ref.read(employeesProvider.notifier).uploadDocument(
+          widget.emp.employeeId,
+          documentType: documentType,
+          bytes: file.bytes!,
+          filename: file.name,
+        );
+    if (!mounted) return;
+    setState(() => _uploading = false);
+    if (err != null) {
+      _showMessage(err, isError: true);
+    } else {
+      _showMessage('Document uploaded.');
+    }
+  }
+
+  void _showMessage(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      backgroundColor: isError ? AppColors.error : AppColors.success,
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+
+  Future<void> _showDocTypePicker() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('Select Document Type',
+                  style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
+            ),
+            ..._kEmployeeDocTypes.map((t) => ListTile(
+                  title: Text(t['label']!, style: AppTextStyles.body),
+                  onTap: () => Navigator.pop(context, t['value']),
+                )),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (selected != null) await _pickAndUpload(selected);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (emp.documents.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        child: Center(
-          child: Column(
-            children: [
-              Icon(Icons.folder_off_outlined,
-                  size: 28, color: AppColors.textHint),
-              const SizedBox(height: 10),
-              Text('No documents uploaded yet.',
-                  style: AppTextStyles.bodySecondary),
-            ],
+    final emp = widget.emp;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: OutlinedButton.icon(
+            onPressed: _uploading ? null : _showDocTypePicker,
+            icon: _uploading
+                ? SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: AppColors.primary),
+                  )
+                : Icon(Icons.upload_outlined, size: 16, color: AppColors.primary),
+            label: Text(_uploading ? 'Uploading…' : 'Upload Document'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: BorderSide(color: AppColors.border),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
           ),
         ),
-      );
-    }
-    return Column(
-      children: emp.documents.map((doc) => _DocCard(doc: doc)).toList(),
+        const SizedBox(height: 14),
+        if (emp.documents.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(Icons.folder_off_outlined,
+                      size: 28, color: AppColors.textHint),
+                  const SizedBox(height: 10),
+                  Text('No documents uploaded yet.',
+                      style: AppTextStyles.bodySecondary),
+                ],
+              ),
+            ),
+          )
+        else
+          ...emp.documents.map((doc) => _DocCard(
+                doc: doc,
+                onReplace: () => _pickAndUpload(doc.documentType),
+              )),
+      ],
     );
   }
 }
@@ -909,7 +1043,8 @@ String _fmtFileSize(int bytes) {
 
 class _DocCard extends StatelessWidget {
   final EmployeeDocumentEntity doc;
-  const _DocCard({required this.doc});
+  final VoidCallback onReplace;
+  const _DocCard({required this.doc, required this.onReplace});
 
   Future<void> _open() async {
     final uri = Uri.tryParse(doc.fileUrl);
@@ -966,6 +1101,13 @@ class _DocCard extends StatelessWidget {
             ),
           ),
           IconButton(
+            icon: Icon(Icons.refresh_outlined,
+                size: 18, color: AppColors.textSecondary),
+            tooltip: 'Replace',
+            onPressed: onReplace,
+            visualDensity: VisualDensity.compact,
+          ),
+          IconButton(
             icon: Icon(Icons.visibility_outlined,
                 size: 18, color: AppColors.primary),
             tooltip: 'View',
@@ -986,6 +1128,11 @@ class _FieldRow extends StatelessWidget {
   final String label2;
   final String value2;
   final bool padBottom;
+  // Matches web's Personal card: identity fields the employee/admin can
+  // never edit here (Employee ID, Phone, Reporting Manager, HR Contact,
+  // Work Email) render with a tinted "locked" style instead of the plain one.
+  final bool locked1;
+  final bool locked2;
 
   const _FieldRow({
     required this.label1,
@@ -993,6 +1140,8 @@ class _FieldRow extends StatelessWidget {
     required this.label2,
     required this.value2,
     this.padBottom = true,
+    this.locked1 = false,
+    this.locked2 = false,
   });
 
   @override
@@ -1007,6 +1156,7 @@ class _FieldRow extends StatelessWidget {
               label: label1,
               value: value1,
               padBottom: false,
+              locked: locked1,
             ),
           ),
           const SizedBox(width: 12),
@@ -1015,6 +1165,7 @@ class _FieldRow extends StatelessWidget {
               label: label2,
               value: value2,
               padBottom: false,
+              locked: locked2,
             ),
           ),
         ],
@@ -1030,12 +1181,14 @@ class _DisplayField extends StatelessWidget {
   final String value;
   final bool padBottom;
   final int maxLines;
+  final bool locked;
 
   const _DisplayField({
     required this.label,
     required this.value,
     this.padBottom = true,
     this.maxLines = 1,
+    this.locked = false,
   });
 
   @override
@@ -1049,7 +1202,7 @@ class _DisplayField extends StatelessWidget {
           Text(
             label,
             style: AppTextStyles.caption.copyWith(
-              color: AppColors.textSecondary,
+              color: locked ? AppColors.primary : AppColors.textSecondary,
               fontWeight: FontWeight.w600,
               fontSize: 11,
             ),
@@ -1059,15 +1212,17 @@ class _DisplayField extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
             decoration: BoxDecoration(
-              color: AppColors.background,
+              color: locked ? AppColors.backgroundLow : AppColors.background,
               border: Border.all(color: AppColors.border),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               isEmpty ? '—' : value,
               style: AppTextStyles.body.copyWith(
-                color: isEmpty ? AppColors.textHint : AppColors.textPrimary,
-                fontWeight: FontWeight.w500,
+                color: isEmpty
+                    ? AppColors.textHint
+                    : (locked ? AppColors.primary : AppColors.textPrimary),
+                fontWeight: locked ? FontWeight.w700 : FontWeight.w500,
                 fontSize: 13,
               ),
               maxLines: maxLines,
@@ -1205,46 +1360,379 @@ class _ApprovalMatrixTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final matrixAsync =
         ref.watch(employeeApprovalMatrixProvider(employee.employeeId));
-    // Web only shows the Override action to hr_admin/system_admin — everyone
-    // who can reach this screen at all can already VIEW the matrix (it's
-    // gated server-side by the same `employees.view` permission as the
-    // profile itself).
-    final role = ref.watch(authStateProvider).valueOrNull?.user?.role ?? '';
-    final canEdit = role == 'hr_admin' || role == 'system_admin';
+    // Matches web's ApprovalMatrixTab exactly — it gates the Override action
+    // on usePermission("settings.edit"), not a hardcoded role list (role
+    // slugs like 'hr_admin' vs the current 'hr' aren't stable across
+    // deployments, but permission grants are). Everyone who can reach this
+    // screen at all can already VIEW the matrix (gated server-side by the
+    // same `employees.view` permission as the profile itself).
+    final canEdit =
+        ref.watch(authStateProvider).valueOrNull?.user?.hasPermission('settings.edit') ??
+            false;
 
-    return matrixAsync.when(
-      data: (rows) {
-        if (rows.isEmpty) {
-          return Center(
-            child: Text('No approval workflows configured.',
-                style: AppTextStyles.bodySecondary),
-          );
-        }
-        return ListView.builder(
-          primary: false,
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-          itemCount: rows.length,
-          itemBuilder: (context, i) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _ApprovalMatrixCard(
-              employee: employee,
-              row: rows[i],
-              canEdit: canEdit,
+    return ListView(
+      primary: false,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      children: [
+        _ReportingRelationshipsCard(employee: employee, canEdit: canEdit),
+        const SizedBox(height: 12),
+        matrixAsync.when(
+          data: (rows) {
+            if (rows.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Text('No approval workflows configured.',
+                      style: AppTextStyles.bodySecondary),
+                ),
+              );
+            }
+            return Column(
+              children: rows
+                  .map((row) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _ApprovalMatrixCard(
+                          employee: employee,
+                          row: row,
+                          canEdit: canEdit,
+                        ),
+                      ))
+                  .toList(),
+            );
+          },
+          loading: () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Failed to load approval matrix.',
+              style: AppTextStyles.bodySecondary,
+              textAlign: TextAlign.center,
             ),
           ),
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            'Failed to load approval matrix.',
-            style: AppTextStyles.bodySecondary,
-            textAlign: TextAlign.center,
-          ),
         ),
+      ],
+    );
+  }
+}
+
+// ── Reporting Relationships card (Reporting Manager + Branch HR) ──────────────
+
+class _ReportingRelationshipsCard extends StatelessWidget {
+  final EmployeeModel employee;
+  final bool canEdit;
+  const _ReportingRelationshipsCard({required this.employee, required this.canEdit});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Reporting Relationships',
+              style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 2),
+          Text(
+            'Reporting manager and branch HR assigned to this employee',
+            style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _RelationshipCell(
+                  icon: Icons.verified_user_outlined,
+                  label: 'Reporting Manager',
+                  name: employee.reportingManagerName,
+                  canEdit: canEdit,
+                  onEdit: () async {
+                    final ok = await _RelationshipEditDialog.show(
+                      context,
+                      title: 'Edit Reporting Manager',
+                      employee: employee,
+                      currentId: employee.reportingManagerId,
+                      optionsProvider: employeeManagerOptionsProvider,
+                      onSave: (ref, employeeId, selectedId) => ref
+                          .read(employeesProvider.notifier)
+                          .updateReportingManager(employeeId, selectedId),
+                    );
+                    if (ok && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: const Text('Reporting manager updated.'),
+                        backgroundColor: AppColors.success,
+                        behavior: SnackBarBehavior.floating,
+                      ));
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _RelationshipCell(
+                  icon: Icons.groups_outlined,
+                  label: 'Branch HR',
+                  name: employee.hrName,
+                  canEdit: canEdit,
+                  onEdit: () async {
+                    final ok = await _RelationshipEditDialog.show(
+                      context,
+                      title: 'Edit Branch HR',
+                      employee: employee,
+                      currentId: employee.hrId,
+                      optionsProvider: employeeHrOptionsProvider,
+                      onSave: (ref, employeeId, selectedId) => ref
+                          .read(employeesProvider.notifier)
+                          .updateHr(employeeId, selectedId),
+                    );
+                    if (ok && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: const Text('Branch HR updated.'),
+                        backgroundColor: AppColors.success,
+                        behavior: SnackBarBehavior.floating,
+                      ));
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RelationshipCell extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String? name;
+  final bool canEdit;
+  final VoidCallback onEdit;
+
+  const _RelationshipCell({
+    required this.icon,
+    required this.label,
+    required this.name,
+    required this.canEdit,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isEmpty = name == null || name!.isEmpty;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundLow,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 13, color: AppColors.primary),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  label.toUpperCase(),
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 10,
+                    letterSpacing: 0.4,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  isEmpty ? 'Not assigned' : name!,
+                  style: AppTextStyles.body.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: isEmpty ? AppColors.textHint : AppColors.textPrimary,
+                    fontStyle: isEmpty ? FontStyle.italic : FontStyle.normal,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (canEdit)
+                InkWell(
+                  onTap: onEdit,
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.all(2),
+                    child: Icon(Icons.edit_outlined,
+                        size: 15, color: AppColors.textSecondary),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Reporting Relationships edit dialog (shared by Manager + HR) ──────────────
+
+class _RelationshipEditDialog extends ConsumerStatefulWidget {
+  final String title;
+  final EmployeeModel employee;
+  final String? currentId;
+  final AutoDisposeFutureProviderFamily<List<EmployeePickerOption>, String>
+      optionsProvider;
+  final Future<String?> Function(
+      WidgetRef ref, String employeeId, String? selectedId) onSave;
+
+  const _RelationshipEditDialog({
+    required this.title,
+    required this.employee,
+    required this.currentId,
+    required this.optionsProvider,
+    required this.onSave,
+  });
+
+  static Future<bool> show(
+    BuildContext context, {
+    required String title,
+    required EmployeeModel employee,
+    required String? currentId,
+    required AutoDisposeFutureProviderFamily<List<EmployeePickerOption>, String>
+        optionsProvider,
+    required Future<String?> Function(
+            WidgetRef ref, String employeeId, String? selectedId)
+        onSave,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (_) => _RelationshipEditDialog(
+        title: title,
+        employee: employee,
+        currentId: currentId,
+        optionsProvider: optionsProvider,
+        onSave: onSave,
+      ),
+    );
+    return result ?? false;
+  }
+
+  @override
+  ConsumerState<_RelationshipEditDialog> createState() =>
+      _RelationshipEditDialogState();
+}
+
+class _RelationshipEditDialogState
+    extends ConsumerState<_RelationshipEditDialog> {
+  String? _selectedId;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedId = widget.currentId;
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final err = await widget.onSave(
+        ref, widget.employee.employeeId, _selectedId);
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (err != null) {
+      setState(() => _error = err);
+    } else {
+      Navigator.pop(context, true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final optionsAsync =
+        ref.watch(widget.optionsProvider(widget.employee.branch));
+    final options = optionsAsync.valueOrNull ?? [];
+    final loading = optionsAsync.isLoading;
+
+    return AlertDialog(
+      title: Text(widget.title, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_error != null) ...[
+            Text(_error!, style: TextStyle(color: AppColors.error, fontSize: 12)),
+            const SizedBox(height: 10),
+          ],
+          Text('Select a specific person, or leave as "— Global default —" to revert.',
+              style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String?>(
+            initialValue: _selectedId,
+            isExpanded: true,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: AppColors.surface,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: AppColors.border),
+              ),
+            ),
+            hint: Text(loading ? 'Loading…' : '— Global default —'),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('— Global default —'),
+              ),
+              ...options.map((o) => DropdownMenuItem<String?>(
+                    value: o.id,
+                    child: Text('${o.fullName} (${o.employeeId})',
+                        overflow: TextOverflow.ellipsis),
+                  )),
+            ],
+            onChanged: loading ? null : (v) => setState(() => _selectedId = v),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('Save'),
+        ),
+      ],
     );
   }
 }

@@ -43,6 +43,7 @@ import '../../features/expenses/presentation/screens/expense_screen.dart';
 import '../../features/approvals/presentation/screens/approvals_screen.dart';
 import '../../features/attendance/presentation/screens/attendance_screen.dart';
 import '../../features/attendance/presentation/screens/my_attendance_screen.dart';
+import '../../features/payroll/presentation/screens/my_payslip_screen.dart';
 import '../../features/referrals/presentation/screens/referrals_screen.dart';
 
 // ─── Route path constants ─────────────────────────────────────────────────────
@@ -76,6 +77,7 @@ class AppRoutes {
   static const String separation = '/dashboard/separation';
   static const String documents = '/dashboard/documents';
   static const String myAttendance = '/dashboard/my-attendance';
+  static const String myPayslips = '/dashboard/my-payslip';
   static const String referrals = '/dashboard/referrals';
   static const String myRequests = '/dashboard/my-requests';
   static const String profile = '/dashboard/profile';
@@ -102,16 +104,16 @@ class AppRoutes {
   static const String settingsApprovalRules = '/settings/approval-rules';
   static const String settingsLeaveBalanceImport = '/settings/leave-policy/import-balances';
 
-  // Routes whose screen renders its own floatingActionButton. Used by
-  // VoiceMicOverlay (mounted globally, above every route) to decide whether
-  // to sit in the standard bottom-right corner (no FAB on screen) or bumped
-  // up above one (this set) — keep in sync with each screen's own
-  // `floatingActionButton:`. A few of these (leave, settingsLeavePolicy,
-  // settingsReferralRules) only show their FAB conditionally (a tab index,
-  // a permission check) — they're still listed here since the unconditional
-  // "bumped up" position is harmless empty space on the rare screen-state
-  // where their FAB happens to be hidden, and not worth a second per-screen
-  // signal on top of this route-based one.
+  // Routes whose screen renders its own bottom-right floatingActionButton.
+  // Used by VoiceMicOverlay (mounted globally, above every route) to decide
+  // whether its default (never-dragged) position should sit in the standard
+  // bottom-right corner, or bumped up above one — keep in sync with each
+  // screen's own `floatingActionButton:`. A few of these (leave,
+  // settingsLeavePolicy, settingsReferralRules) only show their FAB
+  // conditionally (a tab index, a permission check) — they're still listed
+  // here since the unconditional "bumped up" position is harmless empty
+  // space on the rare screen-state where their FAB happens to be hidden, and
+  // not worth a second per-screen signal on top of this route-based one.
   static const Set<String> screensWithFab = {
     employees, interviewList, attendance, leave, announcements, assessments,
     branches, documents, expenses, referrals, settingsDepartments,
@@ -380,6 +382,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.myAttendance,
             pageBuilder: (_, __) =>
                 const NoTransitionPage(child: MyAttendanceScreen()),
+          ),
+          GoRoute(
+            path: AppRoutes.myPayslips,
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: MyPayslipScreen()),
           ),
           GoRoute(
             path: AppRoutes.referrals,

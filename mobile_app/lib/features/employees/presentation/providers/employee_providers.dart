@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
@@ -78,6 +79,52 @@ class EmployeesNotifier extends AutoDisposeAsyncNotifier<List<EmployeeModel>> {
           .toList());
       // The profile screen reads `employeeDetailProvider(employeeId)`
       // independently of this list — invalidate it so it refetches.
+      ref.invalidate(employeeDetailProvider(employeeId));
+      return null;
+    } catch (e) {
+      return _friendlyError(e);
+    }
+  }
+
+  // ── Reporting Relationships quick-edit (Approval Matrix tab) ─────────────
+
+  Future<String?> updateReportingManager(String employeeId, String? managerId) async {
+    try {
+      await _ds.patchReportingManager(employeeId, managerId);
+      ref.invalidate(employeeDetailProvider(employeeId));
+      return null;
+    } catch (e) {
+      return _friendlyError(e);
+    }
+  }
+
+  Future<String?> updateHr(String employeeId, String? hrId) async {
+    try {
+      await _ds.patchHr(employeeId, hrId);
+      ref.invalidate(employeeDetailProvider(employeeId));
+      return null;
+    } catch (e) {
+      return _friendlyError(e);
+    }
+  }
+
+  // ── Document upload (Documents tab, HR/admin) ────────────────────────────
+
+  Future<String?> uploadDocument(
+    String employeeId, {
+    required String documentType,
+    required Uint8List bytes,
+    required String filename,
+  }) async {
+    try {
+      await _ds.uploadEmployeeDocument(
+        employeeId,
+        documentType: documentType,
+        bytes: bytes,
+        filename: filename,
+      );
+      // The upload response's file-URL key doesn't match EmployeeDocumentEntity
+      // (see uploadEmployeeDocument doc comment) — refetch instead of merging.
       ref.invalidate(employeeDetailProvider(employeeId));
       return null;
     } catch (e) {

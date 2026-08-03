@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../constants/api_constants.dart';
 import '../constants/app_constants.dart';
@@ -10,14 +9,18 @@ import 'api_client.dart';
 /// Handles all authentication concerns for every Dio request:
 ///
 /// onRequest — reads the stored access token and injects it as
-///   `Authorization: Bearer <token>` so the backend can authenticate
-///   the request even when the cookie jar is empty (native only;
-///   on web the browser sends httpOnly cookies automatically).
+///   `Authorization: Bearer <token>` so the backend can authenticate the
+///   request even when cookies don't reach the server — on native the
+///   cookie jar may be empty after reinstall/session expiry, and on web
+///   the httpOnly cookie is dropped by the browser whenever the app isn't
+///   served from the exact same origin as the API (SameSite=Lax).
 ///
 /// onError  — intercepts 401 responses, attempts a silent token
-///   refresh, retries the original request with the new token, and
-///   signals `sessionExpiredProvider` when the refresh also fails so
-///   that [AuthNotifier] can auto-logout and redirect to login.
+///   refresh (sending the stored refresh token in the body, since the
+///   same cross-origin cookie problem applies to the refresh cookie),
+///   retries the original request with the new token, and signals
+///   `sessionExpiredProvider` when the refresh also fails so that
+///   [AuthNotifier] can auto-logout and redirect to login.
 class AuthInterceptor extends Interceptor {
   final Dio _dio;
   final Ref _ref;
@@ -35,21 +38,19 @@ class AuthInterceptor extends Interceptor {
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
-    // On native platforms we send the access token as a Bearer header because
-    // the PersistCookieJar may be empty after reinstall or session expiry.
-    // The Django backend accepts both Cookie and Authorization: Bearer.
-    // On web, the browser attaches httpOnly cookies automatically via CORS
-    // withCredentials, so no extra header is needed.
-    if (!kIsWeb) {
-      try {
-        final token = await _storage.read(AppConstants.keyAccessToken);
-        if (token != null && token.isNotEmpty) {
-          options.headers['Authorization'] = 'Bearer $token';
-        }
-      } catch (_) {
-        // If secure storage read fails, proceed without the header.
-        // The server will return 401 and the error handler will refresh.
+    // Always send the access token as a Bearer header — the Django backend
+    // checks the cookie first and falls back to this header, so it's a safe
+    // no-op wherever the cookie already works, and the only thing that makes
+    // auth work at all wherever it doesn't (native cookie jar empty, or web
+    // served from a different origin than the API).
+    try {
+      final token = await _storage.read(AppConstants.keyAccessToken);
+      if (token != null && token.isNotEmpty) {
+        options.headers['Authorization'] = 'Bearer $token';
       }
+    } catch (_) {
+      // If secure storage read fails, proceed without the header.
+      // The server will return 401 and the error handler will refresh.
     }
     handler.next(options);
   }
@@ -95,13 +96,27 @@ class AuthInterceptor extends Interceptor {
 
     _isRefreshing = true;
     try {
-      final refreshResp = await _dio.post(ApiConstants.tokenRefresh);
+      // Send the stored refresh token in the body as a fallback for whenever
+      // the httpOnly refresh cookie doesn't reach the server (see onRequest).
+      // The backend prefers the cookie and only falls back to this field.
+      final storedRefreshToken = await _storage.read(AppConstants.keyRefreshToken);
+      final refreshResp = await _dio.post(
+        ApiConstants.tokenRefresh,
+        data: (storedRefreshToken != null && storedRefreshToken.isNotEmpty)
+            ? {'refresh': storedRefreshToken}
+            : null,
+      );
 
-      // Persist the new access token so subsequent requests pick it up
-      // via onRequest above (and the cookie jar is also updated by CookieManager).
-      final newToken = _extractToken(refreshResp.data);
-      if (newToken != null) {
-        await _storage.write(AppConstants.keyAccessToken, newToken);
+      // Persist the new tokens so subsequent requests pick them up via
+      // onRequest above (and the cookie jar is also updated by CookieManager
+      // on native, or Set-Cookie directly wherever the cookie does reach us).
+      final newAccessToken = _extractToken(refreshResp.data, 'access');
+      if (newAccessToken != null) {
+        await _storage.write(AppConstants.keyAccessToken, newAccessToken);
+      }
+      final newRefreshToken = _extractToken(refreshResp.data, 'refresh');
+      if (newRefreshToken != null) {
+        await _storage.write(AppConstants.keyRefreshToken, newRefreshToken);
       }
 
       // Retry the original request — onRequest will add the new Bearer header.
@@ -125,11 +140,11 @@ class AuthInterceptor extends Interceptor {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  // Backend envelope: { success, message, data: { access: "..." } }
-  String? _extractToken(dynamic responseData) {
+  // Backend envelope: { success, message, data: { access: "...", refresh: "..." } }
+  String? _extractToken(dynamic responseData, String key) {
     try {
       return ((responseData as Map<String, dynamic>)['data']
-          as Map<String, dynamic>)['access'] as String?;
+          as Map<String, dynamic>)[key] as String?;
     } catch (_) {
       return null;
     }
