@@ -15,34 +15,38 @@ import '../widgets/hr_correction_card.dart';
 
 // ─── Colour helpers ───────────────────────────────────────────────────────────
 
+// Reads through AppColors (not `const` hex literals) so status badges flip
+// to the dark palette instead of staying pinned to their light-mode hues.
+const _kHalfDayAccent = Color(0xFF9333EA); // no AppColors token for purple
+
 Color _statusColor(String s) => switch (s) {
-  'Present'    => const Color(0xFF1B8A6B),
-  'Late'       => const Color(0xFFB45309),
-  'Absent'     => const Color(0xFFC0392B),
-  'On Leave'   => const Color(0xFF1E4E8C),
-  'Half Day'   => const Color(0xFF6B21A8),
-  'Weekly Off' => const Color(0xFF6B7280),
-  'Holiday'    => const Color(0xFFB5651D),
-  'Incomplete' => const Color(0xFF9333EA),
-  'approved' || 'Approved'   => const Color(0xFF1B8A6B),
-  'pending' || 'Pending'    => const Color(0xFFB45309),
-  'rejected' || 'Rejected'   => const Color(0xFFC0392B),
-  _            => const Color(0xFF6B7280),
+  'Present'    => AppColors.success,
+  'Late'       => AppColors.warning,
+  'Absent'     => AppColors.error,
+  'On Leave'   => AppColors.info,
+  'Half Day'   => _kHalfDayAccent,
+  'Weekly Off' => AppColors.textSecondary,
+  'Holiday'    => AppColors.warning,
+  'Incomplete' => _kHalfDayAccent,
+  'approved' || 'Approved'   => AppColors.success,
+  'pending' || 'Pending'    => AppColors.warning,
+  'rejected' || 'Rejected'   => AppColors.error,
+  _            => AppColors.textSecondary,
 };
 
 Color _statusBg(String s) => switch (s) {
-  'Present'    => const Color(0xFFD8F3DC),
-  'Late'       => const Color(0xFFFEF3C7),
-  'Absent'     => const Color(0xFFFFDAD6),
-  'On Leave'   => const Color(0xFFDDEAFB),
-  'Half Day'   => const Color(0xFFF3E8FF),
-  'Weekly Off' => const Color(0xFFF3F4F6),
-  'Holiday'    => const Color(0xFFFDEBD3),
-  'Incomplete' => const Color(0xFFF3E8FF),
-  'approved' || 'Approved'   => const Color(0xFFD8F3DC),
-  'pending' || 'Pending'    => const Color(0xFFFEF3C7),
-  'rejected' || 'Rejected'   => const Color(0xFFFFDAD6),
-  _            => const Color(0xFFF3F4F6),
+  'Present'    => AppColors.successContainer,
+  'Late'       => AppColors.warningContainer,
+  'Absent'     => AppColors.errorContainer,
+  'On Leave'   => AppColors.infoContainer,
+  'Half Day'   => _kHalfDayAccent.withValues(alpha: 0.12),
+  'Weekly Off' => AppColors.backgroundLow,
+  'Holiday'    => AppColors.warningContainer,
+  'Incomplete' => _kHalfDayAccent.withValues(alpha: 0.12),
+  'approved' || 'Approved'   => AppColors.successContainer,
+  'pending' || 'Pending'    => AppColors.warningContainer,
+  'rejected' || 'Rejected'   => AppColors.errorContainer,
+  _            => AppColors.backgroundLow,
 };
 
 const _kAttendanceStatusFilterOptions = <MapEntry<String, String>>[
@@ -83,17 +87,17 @@ const _kAttendanceSortByOptions = <MapEntry<String, String>>[
 ];
 
 Color _issueColor(String issueType) => switch (issueType) {
-  'no-match'  => const Color(0xFFC0392B),
-  'duplicate' => const Color(0xFFB45309),
-  'future'    => const Color(0xFF6B21A8),
-  _           => const Color(0xFF6B7280),
+  'no-match'  => AppColors.error,
+  'duplicate' => AppColors.warning,
+  'future'    => _kHalfDayAccent,
+  _           => AppColors.textSecondary,
 };
 
 Color _issueBg(String issueType) => switch (issueType) {
-  'no-match'  => const Color(0xFFFFDAD6),
-  'duplicate' => const Color(0xFFFEF3C7),
-  'future'    => const Color(0xFFF3E8FF),
-  _           => const Color(0xFFF3F4F6),
+  'no-match'  => AppColors.errorContainer,
+  'duplicate' => AppColors.warningContainer,
+  'future'    => _kHalfDayAccent.withValues(alpha: 0.12),
+  _           => AppColors.backgroundLow,
 };
 
 String _initials(String name) {
@@ -155,12 +159,12 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
               isScrollable: true,
               tabAlignment: TabAlignment.start,
               labelColor: AppColors.primary,
-              unselectedLabelColor: const Color(0xFF6B7280),
+              unselectedLabelColor: AppColors.textSecondary,
               labelStyle: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600),
               unselectedLabelStyle: AppTextStyles.label,
               indicatorColor: AppColors.primary,
               indicatorWeight: 2.5,
-              dividerColor: const Color(0xFFE5E7EB),
+              dividerColor: AppColors.border,
               tabs: [
                 const Tab(text: 'Attendance'),
                 const Tab(text: 'OT Entry'),
@@ -197,7 +201,7 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(_, __, ___) => Container(
-    color: Colors.white,
+    color: AppColors.surface,
     child: tabBar,
   );
 
@@ -237,7 +241,7 @@ class _StatsBar extends ConsumerWidget {
     final dashboardAsync = ref.watch(attendanceDashboardProvider);
 
     return Container(
-      color: Colors.white,
+      color: AppColors.surface,
       padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -246,29 +250,29 @@ class _StatsBar extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Attendance & Time', style: AppTextStyles.h3),
-              Text(_todayDisplay(), style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280))),
+              Text(_todayDisplay(), style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
             ],
           ),
           const SizedBox(height: 2),
           Text('Monitor daily attendance, overtime, and correction requests',
-            style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF6B7280))),
+            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
           const SizedBox(height: 14),
           dashboardAsync.when(
             data: (d) {
               final total = d.totalEmployees > 0 ? d.totalEmployees : 1;
               final stats = [
                 _Stat('Present Today', '${d.presentToday}', 'of ${d.totalEmployees} employees',
-                    Icons.people_alt_outlined, const Color(0xFF1B8A6B), const Color(0xFFD8F3DC),
-                    const Color(0xFF1B8A6B), (d.presentToday / total).clamp(0.0, 1.0)),
+                    Icons.people_alt_outlined, AppColors.success, AppColors.successContainer,
+                    AppColors.success, (d.presentToday / total).clamp(0.0, 1.0)),
                 _Stat('Absent', '${d.absent}', 'No check-in recorded',
-                    Icons.person_off_outlined, const Color(0xFFC0392B), const Color(0xFFFFDAD6),
-                    const Color(0xFFC0392B), (d.absent / total).clamp(0.0, 1.0)),
+                    Icons.person_off_outlined, AppColors.error, AppColors.errorContainer,
+                    AppColors.error, (d.absent / total).clamp(0.0, 1.0)),
                 _Stat('Late Arrivals', '${d.lateArrivals}', 'Arrived late',
-                    Icons.schedule_outlined, const Color(0xFFB45309), const Color(0xFFFEF3C7),
-                    const Color(0xFFB45309), (d.lateArrivals / total).clamp(0.0, 1.0)),
+                    Icons.schedule_outlined, AppColors.warning, AppColors.warningContainer,
+                    AppColors.warning, (d.lateArrivals / total).clamp(0.0, 1.0)),
                 _Stat('On Leave', '${d.onLeave}', 'Approved leave',
-                    Icons.event_available_outlined, const Color(0xFF1E4E8C), const Color(0xFFDDEAFB),
-                    const Color(0xFF1B8A6B), (d.onLeave / total).clamp(0.0, 1.0)),
+                    Icons.event_available_outlined, AppColors.primary, AppColors.infoContainer,
+                    AppColors.success, (d.onLeave / total).clamp(0.0, 1.0)),
               ];
               // A fixed-width horizontally-scrolling strip (not an Expanded
               // Row) — matching EmployeeAttendanceTab's stat-card pattern —
@@ -318,10 +322,10 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(10),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: AppColors.surface,
       borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: const Color(0xFFE5E7EB)),
-      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 2))],
+      border: Border.all(color: AppColors.border),
+      boxShadow: AppColors.cardShadow,
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -329,7 +333,7 @@ class _StatCard extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Flexible(child: Text(stat.label, style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280)), maxLines: 1, overflow: TextOverflow.ellipsis)),
+            Flexible(child: Text(stat.label, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis)),
             Container(
               width: 26, height: 26,
               decoration: BoxDecoration(color: stat.iconBg, borderRadius: BorderRadius.circular(6)),
@@ -338,15 +342,15 @@ class _StatCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        Text(stat.value, style: AppTextStyles.h3.copyWith(color: const Color(0xFF1A2433), height: 1)),
+        Text(stat.value, style: AppTextStyles.h3.copyWith(color: AppColors.textPrimary, height: 1)),
         const SizedBox(height: 2),
-        Text(stat.sub, style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280), fontSize: 9), maxLines: 1, overflow: TextOverflow.ellipsis),
+        Text(stat.sub, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary, fontSize: 9), maxLines: 1, overflow: TextOverflow.ellipsis),
         const SizedBox(height: 6),
         ClipRRect(
           borderRadius: BorderRadius.circular(2),
           child: LinearProgressIndicator(
             value: stat.barFraction,
-            backgroundColor: const Color(0xFFE5E7EB),
+            backgroundColor: AppColors.border,
             valueColor: AlwaysStoppedAnimation(stat.barColor),
             minHeight: 3,
           ),
@@ -541,16 +545,16 @@ class _SpeedDialAction extends StatelessWidget {
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(8),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 6, offset: const Offset(0, 2))],
+          boxShadow: AppColors.elevatedShadow,
         ),
         child: Text(label, style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w600)),
       ),
       const SizedBox(width: 10),
       FloatingActionButton.small(
         heroTag: heroTag,
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         foregroundColor: AppColors.primary,
         onPressed: onTap,
         child: Icon(icon, size: 18),
@@ -577,21 +581,21 @@ class _ViewModeButton extends StatelessWidget {
     child: Container(
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
-        color: selected ? AppColors.primary : Colors.white,
+        color: selected ? AppColors.primary : AppColors.surface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: selected ? AppColors.primary : const Color(0xFFD1D5DB)),
+        border: Border.all(color: selected ? AppColors.primary : AppColors.border),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 15, color: selected ? Colors.white : const Color(0xFF6B7280)),
+          Icon(icon, size: 15, color: selected ? Colors.white : AppColors.textSecondary),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
               label,
               style: AppTextStyles.labelSmall.copyWith(
                 fontWeight: FontWeight.w700,
-                color: selected ? Colors.white : const Color(0xFF374151),
+                color: selected ? Colors.white : AppColors.textPrimary,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -643,8 +647,8 @@ class _EmployeeMonthViewState extends ConsumerState<_EmployeeMonthView> {
                   hintText: 'Search employee by name or ID…',
                   prefixIcon: const Icon(Icons.search, size: 16),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB))),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB))),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
                 ),
               ),
             ),
@@ -795,20 +799,20 @@ class _TeamDayView extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.surface,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                  border: Border.all(color: AppColors.border),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.filter_list, size: 16, color: Color(0xFF6B7280)),
+                        Icon(Icons.filter_list, size: 16, color: AppColors.textSecondary),
                         const SizedBox(width: 6),
                         Text('Filters',
                           style: AppTextStyles.label.copyWith(
-                            fontWeight: FontWeight.w700, color: const Color(0xFF374151))),
+                            fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -852,8 +856,8 @@ class _TeamDayView extends ConsumerWidget {
                             hintText: 'Search employee…',
                             prefixIcon: const Icon(Icons.search, size: 16),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB))),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB))),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
                           ),
                         ),
                       ),
@@ -889,7 +893,7 @@ class _TeamDayView extends ConsumerWidget {
                             ref.read(hrAttendanceDateFilterProvider.notifier).state = null;
                             _resetPages(ref);
                           },
-                          icon: const Icon(Icons.close, size: 18, color: Color(0xFF6B7280)),
+                          icon: Icon(Icons.close, size: 18, color: AppColors.textSecondary),
                         ),
                       const SizedBox(width: 4),
                       OutlinedButton.icon(
@@ -933,7 +937,7 @@ class _TeamDayView extends ConsumerWidget {
                         tooltip: selectedSortDir == 'asc' ? 'Ascending' : 'Descending',
                         visualDensity: VisualDensity.compact,
                         style: IconButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFFD1D5DB)),
+                          side: BorderSide(color: AppColors.border),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                         onPressed: () {
@@ -964,7 +968,7 @@ class _TeamDayView extends ConsumerWidget {
                       );
                     }),
                     Text('Total: $totalEmployees employees',
-                      style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280))),
+                      style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
                   ],
                 ),
               ),
@@ -1022,7 +1026,7 @@ class _PaginationBar extends StatelessWidget {
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14),
         child: Text('Page $page of $totalPages',
-          style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280))),
+          style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
       ),
       OutlinedButton(
         onPressed: onNext,
@@ -1144,28 +1148,28 @@ class _ImportAttendanceDialogState extends ConsumerState<_ImportAttendanceDialog
     mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const _InfoBanner(
+      _InfoBanner(
         icon: Icons.info_outline,
-        color: Color(0xFF1E4E8C),
-        bg: Color(0xFFEFF6FF),
-        border: Color(0xFFBFDBFE),
+        color: AppColors.info,
+        bg: AppColors.infoContainer,
+        border: AppColors.info.withValues(alpha: 0.3),
         message: 'Required columns: employee_id, date, punch_in, punch_out — CSV only, max 5 MB.',
       ),
       const SizedBox(height: 6),
       Text('Example: EMP001,2026-07-02,09:05,18:15',
-        style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF9CA3AF))),
+        style: AppTextStyles.labelSmall.copyWith(color: AppColors.textHint)),
       const SizedBox(height: 8),
       Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Download sample:', style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280))),
+          Text('Download sample:', style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
           const SizedBox(width: 4),
           TextButton(
             onPressed: _downloadingSample ? null : () => _downloadSample('csv'),
             style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
             child: const Text('CSV', style: TextStyle(fontSize: 12)),
           ),
-          const Text('·', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+          Text('·', style: TextStyle(fontSize: 12, color: AppColors.textHint)),
           TextButton(
             onPressed: _downloadingSample ? null : () => _downloadSample('xlsx'),
             style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
@@ -1254,7 +1258,7 @@ class _AttendanceCard extends ConsumerWidget {
                             style: const TextStyle(fontSize: 12))),
                       ],
                       const SizedBox(height: 12),
-                      const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                      Divider(height: 1, color: AppColors.backgroundLow),
                       const SizedBox(height: 10),
                       const Text('Correction Requests', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
                       const SizedBox(height: 6),
@@ -1265,7 +1269,7 @@ class _AttendanceCard extends ConsumerWidget {
                         return correctionsAsync.when(
                           data: (rows) => rows.isEmpty
                               ? Text('No correction requests for this day.',
-                                  style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280)))
+                                  style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary))
                               : Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: rows.map((c) => Padding(
@@ -1284,7 +1288,7 @@ class _AttendanceCard extends ConsumerWidget {
                         );
                       }),
                       const SizedBox(height: 12),
-                      const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                      Divider(height: 1, color: AppColors.backgroundLow),
                       const SizedBox(height: 10),
                       const Text('Audit History', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
                       const SizedBox(height: 6),
@@ -1292,13 +1296,13 @@ class _AttendanceCard extends ConsumerWidget {
                         final recordId = d.recordId;
                         if (recordId == null) {
                           return Text('No audit history for this record yet.',
-                              style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280)));
+                              style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary));
                         }
                         final auditAsync = ref.watch(attendanceRecordAuditProvider(recordId));
                         return auditAsync.when(
                           data: (entries) => entries.isEmpty
                               ? Text('No audit history for this record yet.',
-                                  style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280)))
+                                  style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary))
                               : Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: entries.map((a) => Padding(
@@ -1308,7 +1312,7 @@ class _AttendanceCard extends ConsumerWidget {
                                       children: [
                                         Text(a.action, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                                         Text('${a.performedBy} · ${a.performedAt}',
-                                            style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280))),
+                                            style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
                                         if (a.oldValue != null || a.newValue != null)
                                           Text('${a.oldValue ?? '—'} → ${a.newValue ?? '—'}',
                                               style: const TextStyle(fontSize: 11)),
@@ -1375,10 +1379,10 @@ class _AttendanceCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) => Container(
     margin: const EdgeInsets.only(bottom: 10),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: AppColors.surface,
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: const Color(0xFFE5E7EB)),
-      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 2))],
+      border: Border.all(color: AppColors.border),
+      boxShadow: AppColors.cardShadow,
     ),
     child: Padding(
       padding: const EdgeInsets.all(12),
@@ -1395,7 +1399,7 @@ class _AttendanceCard extends ConsumerWidget {
                   children: [
                     Text(record.name, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
                     Text('${record.employeeId} · ${record.department}',
-                      style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280))),
+                      style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
                   ],
                 ),
               ),
@@ -1415,9 +1419,9 @@ class _AttendanceCard extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(children: [
-                const Icon(Icons.business_outlined, size: 12, color: Color(0xFF6B7280)),
+                Icon(Icons.business_outlined, size: 12, color: AppColors.textSecondary),
                 const SizedBox(width: 4),
-                Text(record.branch, style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280))),
+                Text(record.branch, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
               ]),
               if (record.recordId != null)
                 OutlinedButton(
@@ -1433,7 +1437,7 @@ class _AttendanceCard extends ConsumerWidget {
                   child: Text('View', style: AppTextStyles.labelSmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
                 )
               else
-                Text('No record', style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF9CA3AF))),
+                Text('No record', style: AppTextStyles.labelSmall.copyWith(color: AppColors.textHint)),
             ],
           ),
         ],
@@ -1772,12 +1776,12 @@ class _TimeCell extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(label, style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF9CA3AF), fontSize: 10)),
+      Text(label, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textHint, fontSize: 10)),
       const SizedBox(height: 2),
       Text(
         value,
         style: AppTextStyles.label.copyWith(
-          color: isLate ? const Color(0xFFC0392B) : isOt ? const Color(0xFF1B8A6B) : const Color(0xFF1A2433),
+          color: isLate ? AppColors.error : isOt ? AppColors.success : AppColors.textPrimary,
           fontWeight: FontWeight.w600,
           fontSize: 12,
         ),
@@ -1904,10 +1908,10 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
         children: [
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.surface,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 2))],
+              border: Border.all(color: AppColors.border),
+              boxShadow: AppColors.cardShadow,
             ),
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -1999,7 +2003,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                   controller: _approvedByCtrl,
                   decoration: InputDecoration(
                     hintText: 'e.g. E001 or Jane Doe',
-                    hintStyle: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF9CA3AF)),
+                    hintStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     contentPadding: const EdgeInsets.all(10),
                   ),
@@ -2013,7 +2017,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                   maxLength: 500,
                   decoration: InputDecoration(
                     hintText: 'Describe the overtime work…',
-                    hintStyle: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF9CA3AF)),
+                    hintStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     contentPadding: const EdgeInsets.all(10),
                   ),
@@ -2093,10 +2097,10 @@ class _OtCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     margin: const EdgeInsets.only(bottom: 10),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: AppColors.surface,
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: const Color(0xFFE5E7EB)),
-      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 2))],
+      border: Border.all(color: AppColors.border),
+      boxShadow: AppColors.cardShadow,
     ),
     child: Padding(
       padding: const EdgeInsets.all(12),
@@ -2106,24 +2110,24 @@ class _OtCard extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(record.name, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
-            Text(record.employeeId, style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280))),
+            Text(record.employeeId, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
           ])),
           _StatusBadge(status: record.status),
         ]),
         const SizedBox(height: 10),
-        const Divider(height: 1, color: Color(0xFFF3F4F6)),
+        Divider(height: 1, color: AppColors.backgroundLow),
         const SizedBox(height: 10),
         Row(children: [
           Expanded(child: _KV(k: 'Date',    v: record.date)),
           Expanded(child: _KV(k: 'OT Hrs',  v: record.otHours, vColor: AppColors.primary)),
           Expanded(child: _KV(k: 'Type',    v: record.otType)),
-          Expanded(child: _KV(k: 'Amount',  v: '₹ ${record.otAmount}', vColor: const Color(0xFF1B8A6B))),
+          Expanded(child: _KV(k: 'Amount',  v: '₹ ${record.otAmount}', vColor: AppColors.success)),
         ]),
         const SizedBox(height: 8),
         Row(children: [
-          const Icon(Icons.person_outline, size: 12, color: Color(0xFF6B7280)),
+          Icon(Icons.person_outline, size: 12, color: AppColors.textSecondary),
           const SizedBox(width: 4),
-          Text('Approved by: ${record.approvedBy}', style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280))),
+          Text('Approved by: ${record.approvedBy}', style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
         ]),
       ]),
     ),
@@ -2145,11 +2149,11 @@ class _InvalidPunchesTab extends ConsumerWidget {
         primary: false,
         padding: const EdgeInsets.all(12),
         children: [
-          const _InfoBanner(
+          _InfoBanner(
             icon: Icons.info_outline,
-            color: Color(0xFF1E4E8C),
-            bg: Color(0xFFEFF6FF),
-            border: Color(0xFFBFDBFE),
+            color: AppColors.info,
+            bg: AppColors.infoContainer,
+            border: AppColors.info.withValues(alpha: 0.3),
             message: 'These punches could not be matched to an employee or contain data errors. Assign for investigation, convert to a valid punch, or discard.',
           ),
           const SizedBox(height: 12),
@@ -2233,10 +2237,10 @@ class _InvalidPunchCardState extends ConsumerState<_InvalidPunchCard> {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 2))],
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -2244,11 +2248,11 @@ class _InvalidPunchCardState extends ConsumerState<_InvalidPunchCard> {
           Row(children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(6)),
+              decoration: BoxDecoration(color: AppColors.backgroundLow, borderRadius: BorderRadius.circular(6)),
               child: Row(children: [
-                const Icon(Icons.devices_outlined, size: 13, color: Color(0xFF6B7280)),
+                Icon(Icons.devices_outlined, size: 13, color: AppColors.textSecondary),
                 const SizedBox(width: 4),
-                Text(punch.deviceId, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, color: const Color(0xFF1A2433))),
+                Text(punch.deviceId, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
               ]),
             ),
             const Spacer(),
@@ -2259,7 +2263,7 @@ class _InvalidPunchCardState extends ConsumerState<_InvalidPunchCard> {
             ),
           ]),
           const SizedBox(height: 10),
-          const Divider(height: 1, color: Color(0xFFF3F4F6)),
+          Divider(height: 1, color: AppColors.backgroundLow),
           const SizedBox(height: 10),
           Row(children: [
             Expanded(child: _KV(k: 'Raw Time', v: punch.rawTime, small: true)),
@@ -2493,7 +2497,7 @@ class _DiscardPunchDialogState extends State<_DiscardPunchDialog> {
               maxLength: 500,
               decoration: InputDecoration(
                 hintText: 'Why is this punch being discarded?',
-                hintStyle: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF9CA3AF)),
+                hintStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 contentPadding: const EdgeInsets.all(10),
               ),
@@ -2534,11 +2538,11 @@ class _UnpunchesTab extends ConsumerWidget {
         primary: false,
         padding: const EdgeInsets.all(12),
         children: [
-          const _InfoBanner(
+          _InfoBanner(
             icon: Icons.warning_amber_outlined,
-            color: Color(0xFFB45309),
-            bg: Color(0xFFFFFBEB),
-            border: Color(0xFFFDE68A),
+            color: AppColors.warning,
+            bg: AppColors.warningContainer,
+            border: AppColors.warning.withValues(alpha: 0.3),
             message: 'These employees have a Clock In but no matching Clock Out for that day. Approve their pending correction request to resolve it, or wait for them to submit one.',
           ),
           const SizedBox(height: 12),
@@ -2556,7 +2560,7 @@ class _UnpunchesTab extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 20),
-          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          Divider(height: 1, color: AppColors.border),
           const SizedBox(height: 16),
           Row(children: [
             Icon(Icons.fact_check_outlined, size: 16, color: AppColors.primary),
@@ -2653,10 +2657,10 @@ class _UnpunchCardState extends ConsumerState<_UnpunchCard> {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 2))],
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -2666,12 +2670,12 @@ class _UnpunchCardState extends ConsumerState<_UnpunchCard> {
             const SizedBox(width: 10),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(record.name, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
-              Text(record.employeeId, style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280))),
+              Text(record.employeeId, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
             ])),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: const Color(0xFFFFDAD6), borderRadius: BorderRadius.circular(20)),
-              child: Text('OUT missing', style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFFC0392B), fontWeight: FontWeight.w600)),
+              decoration: BoxDecoration(color: AppColors.errorContainer, borderRadius: BorderRadius.circular(20)),
+              child: Text('OUT missing', style: AppTextStyles.labelSmall.copyWith(color: AppColors.error, fontWeight: FontWeight.w600)),
             ),
           ]),
           const SizedBox(height: 10),
@@ -2721,13 +2725,13 @@ class _UnpunchCardState extends ConsumerState<_UnpunchCard> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
+                color: AppColors.backgroundLow,
                 borderRadius: BorderRadius.circular(8),
               ),
               alignment: Alignment.center,
               child: Text(
                 'Awaiting employee correction request',
-                style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF6B7280)),
+                style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary),
               ),
             ),
         ]),
@@ -2779,11 +2783,11 @@ class _KV extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(k, style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF9CA3AF), fontSize: 10)),
+      Text(k, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textHint, fontSize: 10)),
       const SizedBox(height: 2),
       Text(v,
         style: AppTextStyles.label.copyWith(
-          color: vColor ?? const Color(0xFF1A2433),
+          color: vColor ?? AppColors.textPrimary,
           fontWeight: FontWeight.w500,
           fontSize: small ? 11 : 12,
         ),
@@ -2823,13 +2827,13 @@ class _Dropdown extends StatelessWidget {
     return DropdownButtonFormField<String>(
       initialValue: value,
       decoration: InputDecoration(
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB))),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1D5DB))),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.primary)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         isDense: true,
       ),
-      style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF1A2433)),
+      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
       isExpanded: true,
       items: safeItems.map((s) => DropdownMenuItem(value: s, child: Text(s, overflow: TextOverflow.ellipsis))).toList(),
       onChanged: onChanged,
@@ -2846,12 +2850,12 @@ class _FakeInput extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
     decoration: BoxDecoration(
-      border: Border.all(color: const Color(0xFFD1D5DB)),
+      border: Border.all(color: AppColors.border),
       borderRadius: BorderRadius.circular(8),
     ),
     child: Row(children: [
-      Expanded(child: Text(value, style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF1A2433)))),
-      Icon(icon, size: 15, color: const Color(0xFF6B7280)),
+      Expanded(child: Text(value, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary))),
+      Icon(icon, size: 15, color: AppColors.textSecondary),
     ]),
   );
 }
@@ -2863,7 +2867,7 @@ class _FormLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 5),
-    child: Text(text, style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF374151), fontWeight: FontWeight.w600)),
+    child: Text(text, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
   );
 }
 
@@ -2893,7 +2897,7 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 40),
     child: Center(
-      child: Text(message, style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF6B7280))),
+      child: Text(message, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
     ),
   );
 }

@@ -321,13 +321,25 @@ Future<String?> sendEmployeeWishEmail(
 // ── Error helper ───────────────────────────────────────────────────────────────
 
 String _friendlyError(Object e) {
+  // Dio errors carry a real backend `message` (see parseDioException) — use
+  // that instead of falling through to e.toString(), which for a
+  // DioException is the raw "DioException [bad response]: ..." dump and
+  // must never reach the UI (e.g. the Reporting Manager / Branch HR
+  // quick-edit dialogs render this string directly).
+  if (e is DioException) {
+    if (e.type == DioExceptionType.connectionError ||
+        e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.receiveTimeout) {
+      return 'Cannot reach server. Check your connection.';
+    }
+    if (e.response?.statusCode == 409) {
+      return 'An employee with this email already exists.';
+    }
+    return parseDioException(e).message;
+  }
   final msg = e.toString();
   if (msg.contains('SocketException') || msg.contains('connection')) {
     return 'Cannot reach server. Check your connection.';
   }
-  if (msg.contains('401')) return 'Session expired. Please log in again.';
-  if (msg.contains('403')) return 'You do not have permission to do this.';
-  if (msg.contains('409')) return 'An employee with this email already exists.';
-  if (msg.contains('500')) return 'Server error. Please try again later.';
   return msg.replaceAll('Exception:', '').trim();
 }

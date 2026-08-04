@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 
@@ -33,7 +34,9 @@ class SettingsAppBar extends StatelessWidget implements PreferredSizeWidget {
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
         color: AppColors.textSecondary,
-        onPressed: () => context.pop(),
+        onPressed: () => context.canPop()
+            ? context.pop()
+            : context.go(AppRoutes.settings),
       ),
       title: Text(
         title,

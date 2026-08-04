@@ -49,16 +49,20 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
   // Keys are the backend's display labels (AttendanceRecord.STATUS_DISPLAY_MAP
   // values, e.g. "On Leave") — the calendar/history APIs return status as a
   // human label, not the raw lowercase status key.
-  static const _dayStatusColors = <String, Color>{
-    'Present': Color(0xFF1B8A6B),
-    'Late': Color(0xFFD97706),
-    'Absent': Color(0xFFC0392B),
-    'On Leave': Color(0xFF0E7C86),
-    'Half Day': Color(0xFF1E4E8C),
-    'Weekly Off': Color(0xFF7C8AA3),
-    'Holiday': Color(0xFFB5651D),
-    'Incomplete': Color(0xFF9333EA),
-  };
+  //
+  // Reads through AppColors (not `const` hex literals) so the calendar dots
+  // and history badges flip to the dark palette instead of staying pinned to
+  // their light-mode hues.
+  static Map<String, Color> get _dayStatusColors => {
+        'Present': AppColors.success,
+        'Late': AppColors.warning,
+        'Absent': AppColors.error,
+        'On Leave': AppColors.info,
+        'Half Day': AppColors.primary,
+        'Weekly Off': AppColors.textHint,
+        'Holiday': AppColors.warning,
+        'Incomplete': const Color(0xFF9333EA),
+      };
 
   static const _monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -654,15 +658,15 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
               child: Wrap(
                 spacing: 10,
                 runSpacing: 6,
-                children: const [
-                  _LegendDot('Present', Color(0xFF1B8A6B)),
-                  _LegendDot('Late', Color(0xFFD97706)),
-                  _LegendDot('Absent', Color(0xFFC0392B)),
-                  _LegendDot('On Leave', Color(0xFF0E7C86)),
-                  _LegendDot('Half Day', Color(0xFF1E4E8C)),
-                  _LegendDot('Weekly Off', Color(0xFF7C8AA3)),
-                  _LegendDot('Holiday', Color(0xFFB5651D)),
-                  _LegendDot('Incomplete', Color(0xFF9333EA)),
+                children: [
+                  _LegendDot('Present', _dayStatusColors['Present']!),
+                  _LegendDot('Late', _dayStatusColors['Late']!),
+                  _LegendDot('Absent', _dayStatusColors['Absent']!),
+                  _LegendDot('On Leave', _dayStatusColors['On Leave']!),
+                  _LegendDot('Half Day', _dayStatusColors['Half Day']!),
+                  _LegendDot('Weekly Off', _dayStatusColors['Weekly Off']!),
+                  _LegendDot('Holiday', _dayStatusColors['Holiday']!),
+                  _LegendDot('Incomplete', _dayStatusColors['Incomplete']!),
                 ],
               ),
             ),
@@ -1664,12 +1668,12 @@ class _FakeInput extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFFD1D5DB)),
+          border: Border.all(color: AppColors.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(children: [
           Expanded(child: Text(value, style: TextStyle(fontSize: 13, color: AppColors.textPrimary))),
-          Icon(icon, size: 15, color: const Color(0xFF6B7280)),
+          Icon(icon, size: 15, color: AppColors.textSecondary),
         ]),
       );
 }

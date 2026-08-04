@@ -233,63 +233,77 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
                 ),
                 SizedBox(
                   height: 116,
-                  child: balancesAsync.when(
-                    loading: () => Center(
-                      child:
-                          CircularProgressIndicator(color: AppColors.primary),
-                    ),
-                    error: (_, __) => Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text('Could not load balances',
-                          style: AppTextStyles.caption
-                              .copyWith(color: AppColors.error)),
-                    ),
-                    data: (items) {
-                      final byType = {
-                        for (final b in items) b.typeCode.toLowerCase(): b
-                      };
-                      // Always render all 3 cards, defaulting to 0/0 when the
-                      // backend has no balance record yet — matches web's
-                      // BALANCE_DISPLAY.map(), which never hides a card for
-                      // missing data (see LeaveDashboard.tsx).
-                      final balanceCards = _kBalanceDisplay.map((d) {
-                        final b = byType[d.code];
-                        return _BalanceCard(
-                          label: isEmployee
-                              ? (b?.typeName ??
-                                  LeaveTypeColors.labelForCode(d.code))
-                              : 'My ${LeaveTypeColors.shortLabelForCode(d.code)}',
-                          available: b?.available ?? 0,
-                          total: b?.total ?? 0,
-                          icon: d.icon,
-                          color: d.color,
-                        );
-                      }).toList();
-
-                      return ListView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(right: 10),
-                            child: _PendingCountCard(
-                              count: pendingCount,
-                              label: isEmployee
-                                  ? 'My Pending'
-                                  : 'Pending Approvals',
-                              subtitle: isEmployee
-                                  ? 'Awaiting approval'
-                                  : _scopeLabel(role),
-                              onTap: isEmployee ? null : widget.onApprovals,
+                  // The Pending Approvals/My Pending card must always render
+                  // regardless of how leaveBalancesProvider is doing — it has
+                  // its own independent data source (leaveTeamPendingProvider
+                  // / myRequests) and previously sat entirely inside
+                  // balancesAsync.when()'s `data` branch, so a slow or failed
+                  // balances fetch (an unrelated dataset) silently hid the
+                  // pending count/card too. Build it unconditionally, and
+                  // only the balance cards themselves vary with
+                  // balancesAsync's state.
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: _PendingCountCard(
+                          count: pendingCount,
+                          label: isEmployee ? 'My Pending' : 'Pending Approvals',
+                          subtitle: isEmployee
+                              ? 'Awaiting approval'
+                              : _scopeLabel(role),
+                          onTap: isEmployee ? null : widget.onApprovals,
+                        ),
+                      ),
+                      ...balancesAsync.when(
+                        loading: () => [
+                          SizedBox(
+                            width: 260,
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                  color: AppColors.primary),
                             ),
                           ),
-                          ...balanceCards.map((c) => Padding(
-                                padding: const EdgeInsets.only(right: 10),
-                                child: c,
-                              )),
                         ],
-                      );
-                    },
+                        error: (_, __) => [
+                          SizedBox(
+                            width: 220,
+                            child: Center(
+                              child: Text('Could not load balances',
+                                  style: AppTextStyles.caption
+                                      .copyWith(color: AppColors.error)),
+                            ),
+                          ),
+                        ],
+                        data: (items) {
+                          final byType = {
+                            for (final b in items) b.typeCode.toLowerCase(): b
+                          };
+                          // Always render all 3 cards, defaulting to 0/0 when
+                          // the backend has no balance record yet — matches
+                          // web's BALANCE_DISPLAY.map(), which never hides a
+                          // card for missing data (see LeaveDashboard.tsx).
+                          return _kBalanceDisplay.map((d) {
+                            final b = byType[d.code];
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 10),
+                              child: _BalanceCard(
+                                label: isEmployee
+                                    ? (b?.typeName ??
+                                        LeaveTypeColors.labelForCode(d.code))
+                                    : 'My ${LeaveTypeColors.shortLabelForCode(d.code)}',
+                                available: b?.available ?? 0,
+                                total: b?.total ?? 0,
+                                icon: d.icon,
+                                color: d.color,
+                              ),
+                            );
+                          }).toList();
+                        },
+                      ),
+                    ],
                   ),
                 ),
               ],

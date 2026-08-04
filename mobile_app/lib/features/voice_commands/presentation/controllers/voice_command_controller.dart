@@ -25,7 +25,12 @@ const _kImmediateAutoClose = Duration(milliseconds: 2500);
 const _kConversationAutoClose = Duration(milliseconds: 4000);
 
 const _kVoiceLang = 'en';
-const _kVoiceLocale = 'en_US';
+// en_IN, not en_US — the app's users are Indian-English speakers (seeded
+// branches like Hyderabad, +91 phone formats throughout). Both Android's
+// and iOS's speech engines ship a dedicated en-IN acoustic model that
+// recognizes Indian-accented English far more accurately than en-US does;
+// en_US was mis-transcribing common words/names as a result.
+const _kVoiceLocale = 'en_IN';
 
 // The two intents that ever hit PunchService.record_punch() server-side —
 // only these can come back with the geofencing rejection below.

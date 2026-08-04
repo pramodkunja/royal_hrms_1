@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
@@ -212,6 +213,10 @@ class _AddCandidateDialogState
           .addCandidate(data);
       return null;
     } catch (e) {
+      // Surface the backend's real {status, message, data} envelope instead
+      // of DioException's own unhelpful "DioException [bad response]: ..."
+      // toString() — same fix as interview_providers.dart.
+      if (e is DioException) return parseDioException(e).message;
       return e.toString();
     }
   }

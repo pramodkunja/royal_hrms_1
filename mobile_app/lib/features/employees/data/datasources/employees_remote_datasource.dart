@@ -138,7 +138,14 @@ class EmployeesRemoteDataSource {
   // ── Branches for form dropdown ─────────────────────────────────────────────
 
   Future<List<EmployeeBranch>> fetchBranches() async {
-    final res = await _dio.get(ApiConstants.branches);
+    // The backend defaults to page_size=10 when unspecified (and caps at 50
+    // regardless), which silently truncates the list for any org with more
+    // branches than that — the Department equivalent (fetchDepartments)
+    // already asks for a larger page_size for the same reason. Without this,
+    // the Branch dropdown in the employee edit form can be missing the
+    // employee's actual branch, making the field look unselectable.
+    final res = await _dio
+        .get(ApiConstants.branches, queryParameters: {'page_size': 50});
     final raw = _unwrap(res.data);
     final list = raw is List
         ? raw
@@ -250,7 +257,11 @@ class EmployeesRemoteDataSource {
       queryParameters: {'department': deptId},
     );
     final raw = _unwrap(res.data);
-    final list = raw is List ? raw : <dynamic>[];
+    final list = raw is List
+        ? raw
+        : (raw is Map<String, dynamic>
+            ? raw['results'] as List<dynamic>? ?? []
+            : <dynamic>[]);
     return list
         .whereType<Map<String, dynamic>>()
         .map((e) => e['name'] as String? ?? '')

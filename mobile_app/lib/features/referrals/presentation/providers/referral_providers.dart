@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/error/exceptions.dart';
 import '../../../../core/network/api_client.dart';
 import '../../data/datasources/referral_remote_datasource.dart';
 import '../../domain/entities/referral_entity.dart';
@@ -169,6 +170,23 @@ class ReferralRulesAdminNotifier
 // ── Error helper ──────────────────────────────────────────────────────────────
 
 String friendlyReferralError(Object e) {
+  // AppException.toString() returns only its `message` field — never the
+  // numeric status code — so the string-matching below on '400'/'401'/etc.
+  // almost never matched a real AppException (e.g. a clean backend message
+  // like "phone: Enter a valid phone number." contains none of those
+  // substrings) and fell through to the generic "Something went wrong",
+  // discarding the actual, actionable server message. Check the typed
+  // statusCode first; only fall back to string-sniffing for non-AppException
+  // errors (e.g. a raw parsing exception).
+  if (e is AppException) {
+    if (e.statusCode == 401) return 'Session expired. Please log in again.';
+    if (e.statusCode == 403) return 'You do not have permission to do this.';
+    if (e.statusCode != null && e.statusCode! >= 500) {
+      return 'Server error. Please try again later.';
+    }
+    if (e.message.isNotEmpty) return e.message;
+  }
+
   final msg = e.toString();
   if (msg.contains('SocketException') || msg.contains('connection')) {
     return 'Cannot reach server. Check your connection.';

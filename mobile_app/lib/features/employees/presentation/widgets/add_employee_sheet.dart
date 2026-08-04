@@ -967,6 +967,15 @@ class _BranchDropdown extends ConsumerWidget {
     final branchesAsync = ref.watch(employeeBranchesProvider);
     final branches = branchesAsync.valueOrNull ?? [];
 
+    // Mirrors _DeptDropdown's matching: only pass a value the menu actually
+    // contains. DropdownButtonFormField requires its value to match exactly
+    // one item (or be null) — feeding it the employee's raw stored branch
+    // name when that branch isn't in the fetched list (e.g. renamed,
+    // deactivated, or paginated out) makes the field disable itself
+    // entirely, which reads as "not accessible".
+    final selected =
+        branches.any((b) => b.name == selectedBranch) ? selectedBranch : null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -983,7 +992,7 @@ class _BranchDropdown extends ConsumerWidget {
           child: Opacity(
             opacity: locked ? 0.6 : 1,
             child: DropdownButtonFormField<String>(
-              initialValue: selectedBranch,
+              initialValue: selected,
               style: AppTextStyles.body,
               isExpanded: true,
               decoration: _inputDec('— Select Branch —', error: error),

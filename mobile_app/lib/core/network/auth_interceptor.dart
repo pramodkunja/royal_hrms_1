@@ -123,16 +123,28 @@ class AuthInterceptor extends Interceptor {
       final retryResponse = await _dio.fetch(err.requestOptions);
       _resolvePending();
       handler.resolve(retryResponse);
-    } on DioException {
+    } on DioException catch (refreshErr) {
       _rejectPending();
-      _signalSessionExpired();
-      handler.next(
-        DioException(
-          requestOptions: err.requestOptions,
-          error: const UnauthorizedException(),
-          type: DioExceptionType.badResponse,
-        ),
-      );
+      // Only a definitive rejection *from the server* (it responded, saying
+      // the refresh token itself is invalid/expired) means the session has
+      // truly ended. A network-level failure — timeout, no connectivity,
+      // the app being backgrounded mid-request — has no response at all and
+      // proves nothing about the session; treating it the same forced a
+      // full logout over a transient connectivity blip on whatever unlucky
+      // request happened to hit the expired-access-token window first (e.g.
+      // submitting a form after leaving it open for a while).
+      if (refreshErr.response != null) {
+        _signalSessionExpired();
+        handler.next(
+          DioException(
+            requestOptions: err.requestOptions,
+            error: const UnauthorizedException(),
+            type: DioExceptionType.badResponse,
+          ),
+        );
+      } else {
+        handler.next(err);
+      }
     } finally {
       _isRefreshing = false;
     }

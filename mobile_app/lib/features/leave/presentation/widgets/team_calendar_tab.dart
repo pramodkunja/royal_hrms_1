@@ -124,9 +124,20 @@ class _TeamCalendarTabState extends ConsumerState<TeamCalendarTab> {
         ),
       ),
       data: (events) {
-        final legendCodes = _kTypeOrder
-            .where((code) => events.any((e) => e.leaveTypeCode == code))
-            .toList();
+        // _kTypeOrder only lists the 6 built-in codes, but LeavePolicy
+        // supports custom leave types (see leave-type CRUD) whose code won't
+        // be in that list — filtering strictly by _kTypeOrder silently
+        // dropped those from the legend even though their calendar-cell
+        // badges still render fine (colorValueForCode falls back to a
+        // default color for unknown codes). Web's TeamCalendar.tsx has no
+        // such fixed allowlist — it lists whatever codes actually appear in
+        // the fetched events — so mirror that: known codes keep the stable
+        // order, then append any other codes present in this month's data.
+        final eventCodes = events.map((e) => e.leaveTypeCode).toSet();
+        final legendCodes = [
+          ..._kTypeOrder.where(eventCodes.contains),
+          ...eventCodes.where((c) => !_kTypeOrder.contains(c)),
+        ];
 
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 96),

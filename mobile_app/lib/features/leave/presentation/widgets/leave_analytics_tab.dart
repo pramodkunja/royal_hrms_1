@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../providers/leave_providers.dart';
 
 // ── Widget — mirrors web's LeaveAnalytics.tsx: KPI cards, real leave balance
@@ -15,6 +16,15 @@ class LeaveAnalyticsTab extends ConsumerWidget {
     final statsAsync = ref.watch(leaveStatsProvider);
     final stats = statsAsync.valueOrNull;
     final currentYear = stats?.year ?? DateTime.now().year;
+    // AsyncValue.isLoading/valueOrNull alone can't distinguish "still
+    // loading" from "failed" — without this check, a failed fetch (network
+    // error, transient 5xx, etc.) fell through to the same zero-filled KPI
+    // cards and "No leave balance data" empty state as a genuinely empty
+    // account, so the tab looked blank/broken with no way to tell why or
+    // retry (unlike TeamCalendarTab, which already has a dedicated error
+    // view for leaveCalendarProvider). Only treat it as a hard error when
+    // there's no previously-loaded data to keep showing.
+    final hasError = statsAsync.hasError && stats == null;
 
     final totalLabel = statsAsync.isLoading ? '…' : '${stats?.total ?? 0}';
     final pendingLabel = statsAsync.isLoading ? '…' : '${stats?.pending ?? 0}';
@@ -25,6 +35,17 @@ class LeaveAnalyticsTab extends ConsumerWidget {
 
     final totalAll = stats?.total ?? 0;
     final balances = stats?.balances ?? [];
+    // Backend's LeaveStatsView only ever populates `balances` for own-scope
+    // requests (see LeaveStatsView.get — `own_scope` gates `balance_data`);
+    // for an approver (manager/hr_admin/system_admin) hitting this same
+    // endpoint with no `?scope=own`/`?employee_id=`, balances is *always*
+    // empty by design (mirrors web's LeaveAnalytics.tsx, which gates its
+    // identical empty-state card on `isEmployee`). Showing "Contact HR to
+    // credit your annual leave" to an HR/manager/admin about their own
+    // approver-scope view is nonsensical — only employees should see it.
+    final role =
+        ref.watch(authStateProvider).valueOrNull?.user?.role ?? 'employee';
+    final isEmployee = role == 'employee';
 
     return RefreshIndicator(
       color: AppColors.primary,
@@ -32,7 +53,39 @@ class LeaveAnalyticsTab extends ConsumerWidget {
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 96),
-        child: Column(
+        child: hasError
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 80),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.error_outline,
+                          size: 32, color: AppColors.error),
+                      const SizedBox(height: 8),
+                      Text('Failed to load leave analytics.',
+                          style: AppTextStyles.bodySecondary),
+                      const SizedBox(height: 4),
+                      Padding(
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(
+                          friendlyLeaveError(statsAsync.error!),
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.caption
+                              .copyWith(color: AppColors.textHint),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      OutlinedButton(
+                        onPressed: () => ref.invalidate(leaveStatsProvider),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -137,7 +190,7 @@ class LeaveAnalyticsTab extends ConsumerWidget {
                     }).toList(),
                   ),
                 )
-              else
+              else if (isEmployee)
                 _EmptyCard(
                   icon: Icons.bar_chart_outlined,
                   message:

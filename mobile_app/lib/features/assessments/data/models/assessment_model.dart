@@ -27,6 +27,18 @@ DateTime? _parseDate(dynamic v) {
   return DateTime.tryParse(v as String);
 }
 
+// The backend stores video_url as a Django URLField, which rejects any
+// value without a URI scheme (e.g. "youtu.be/xyz" or "www.youtube.com/...")
+// with a 400 "Enter a valid URL." error. Users very commonly paste a link
+// copied without the "https://" prefix, so normalize it here before it's
+// ever sent — mirrors what a browser address bar does automatically.
+String _normalizeVideoUrl(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return trimmed;
+  if (RegExp(r'^[a-zA-Z][a-zA-Z0-9+.-]*://').hasMatch(trimmed)) return trimmed;
+  return 'https://$trimmed';
+}
+
 // Who an assessment is assigned to — matches backend
 // CandidateAssignment.assignee_type exactly. `assignee_id` is a UUID string
 // for employees but a plain integer for recruitment candidates, so it's kept
@@ -358,7 +370,7 @@ class AssessmentItemFormData {
       'title': title.trim(),
       'order': order < 1 ? 1 : order,
       if (isVideo) ...{
-        'video_url': videoUrl.trim(),
+        'video_url': _normalizeVideoUrl(videoUrl),
         'duration_secs': durationSecs,
       } else ...{
         'video_url': '',
