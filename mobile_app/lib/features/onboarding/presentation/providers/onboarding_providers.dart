@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/datasources/onboarding_datasource.dart';
 import '../../domain/entities/onboarding_entity.dart';
 
@@ -27,8 +28,10 @@ class OnboardingProfileNotifier
   @override
   Future<OnboardingProfileEntity> build() async {
     final ds = ref.watch(onboardingDatasourceProvider);
+    final authUser = ref.watch(authStateProvider).valueOrNull?.user;
     try {
-      final profile = await ds.fetchProfile();
+      final profile =
+          await ds.fetchProfile(status: authUser?.onboardingStatus ?? 'pending');
       if (!_stepInitialized) {
         _stepInitialized = true;
         ref.read(onboardingStepProvider.notifier).state = profile.currentStep;
@@ -49,7 +52,8 @@ class OnboardingProfileNotifier
       ref.invalidateSelf();
       return null;
     } catch (e) {
-      return e.toString();
+      final raw = e.toString();
+      return raw.startsWith('Exception: ') ? raw.substring(11) : raw;
     }
   }
 

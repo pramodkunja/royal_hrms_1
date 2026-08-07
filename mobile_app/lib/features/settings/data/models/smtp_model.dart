@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../../shared/validators/form_validators.dart';
+
 enum SmtpPriority { high, normal, low, none }
 enum ReceiverEmailType { emailId, personalEmailId }
 
@@ -150,7 +152,20 @@ class SmtpFormData {
     final errors = <String, String?>{};
     if (name.trim().isEmpty)      errors['name']      = 'Configuration name is required';
     if (host.trim().isEmpty)      errors['host']      = 'Host is required';
-    if (fromEmail.trim().isEmpty) errors['fromEmail'] = 'From email is required';
+    // Backend declares both as EmailField (from_email required, bcc_email
+    // optional) — SMTPSettingsSerializer/SMTPTestSerializer, so a malformed
+    // value 400s even though `username` next to it deliberately accepts
+    // plain (non-email) usernames too.
+    if (fromEmail.trim().isEmpty) {
+      errors['fromEmail'] = 'From email is required';
+    } else {
+      final err = FormValidators.email(fromEmail);
+      if (err != null) errors['fromEmail'] = err;
+    }
+    if (bccEmail.trim().isNotEmpty) {
+      final err = FormValidators.email(bccEmail);
+      if (err != null) errors['bccEmail'] = err;
+    }
     if (username.trim().isEmpty)  errors['username']  = 'Username is required';
     if (isAdd && password.trim().isEmpty) errors['password'] = 'Password is required';
     return errors;

@@ -7,6 +7,17 @@ import '../providers/voice_mute_provider.dart';
 import '../state/voice_conversation_state.dart';
 import 'payslip_summary_card.dart';
 
+/// Sampled straight from assets/images/Assistant.gif so this panel's chrome
+/// (borders, icons, spinner, buttons) reads as the same character talking,
+/// rather than the app's unrelated navy theme color. Success/error stay on
+/// AppColors.success/error below — those are meaningful status colors, not
+/// branding, so they're left alone.
+class _BotColors {
+  static const Color blue = Color(0xFF1CA0C8);
+  static const Color blueDark = Color(0xFF0F5D78);
+  static const Color blueTint = Color(0xFFEAF7FB);
+}
+
 /// Mirrors frontend/components/VoiceConversationPanel.tsx's phase-driven
 /// layout: listening -> transcript (in flight) -> result. A conversational
 /// result that's still `awaitingInput` offers a mic button and a typed
@@ -48,9 +59,16 @@ class _VoiceConversationPanelState extends ConsumerState<VoiceConversationPanel>
         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width - 40),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: AppColors.elevatedShadow,
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [_BotColors.blueTint, AppColors.surface],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _BotColors.blue.withValues(alpha: 0.25)),
+          boxShadow: [
+            BoxShadow(color: _BotColors.blue.withValues(alpha: 0.18), blurRadius: 20, offset: const Offset(0, 6)),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -61,20 +79,21 @@ class _VoiceConversationPanelState extends ConsumerState<VoiceConversationPanel>
               children: [
                 Text(
                   'VOICE ASSISTANT',
-                  style: AppTextStyles.labelSmall.copyWith(color: AppColors.textHint, letterSpacing: 0.6),
+                  style: AppTextStyles.labelSmall.copyWith(color: _BotColors.blueDark, letterSpacing: 0.6),
                 ),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon: Icon(muted ? Icons.volume_off : Icons.volume_up, size: 18, color: AppColors.textHint),
+                      icon: Icon(muted ? Icons.volume_off : Icons.volume_up,
+                          size: 18, color: _BotColors.blueDark.withValues(alpha: 0.7)),
                       onPressed: () => ref.read(voiceMutedProvider.notifier).toggle(),
                       tooltip: muted ? 'Unmute spoken responses' : 'Mute spoken responses',
                       visualDensity: VisualDensity.compact,
                       splashRadius: 18,
                     ),
                     IconButton(
-                      icon: Icon(Icons.close, size: 18, color: AppColors.textHint),
+                      icon: Icon(Icons.close, size: 18, color: _BotColors.blueDark.withValues(alpha: 0.7)),
                       onPressed: controller.close,
                       tooltip: 'Close',
                       visualDensity: VisualDensity.compact,
@@ -97,7 +116,12 @@ class _VoiceConversationPanelState extends ConsumerState<VoiceConversationPanel>
       case VoicePanelPhase.listening:
         return Row(
           children: [
-            const Icon(Icons.mic, color: Colors.red, size: 20),
+            Container(
+              width: 24,
+              height: 24,
+              decoration: const BoxDecoration(color: _BotColors.blue, shape: BoxShape.circle),
+              child: const Icon(Icons.mic, color: Colors.white, size: 14),
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -129,7 +153,7 @@ class _VoiceConversationPanelState extends ConsumerState<VoiceConversationPanel>
             IconButton(
               icon: const Icon(Icons.send, size: 18),
               onPressed: () => _submitTyped(controller),
-              color: AppColors.primary,
+              color: _BotColors.blue,
             ),
           ],
         );
@@ -148,7 +172,11 @@ class _VoiceConversationPanelState extends ConsumerState<VoiceConversationPanel>
             const SizedBox(height: 10),
             Row(
               children: [
-                const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2)),
+                const SizedBox(
+                  width: 15,
+                  height: 15,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: _BotColors.blue),
+                ),
                 const SizedBox(width: 8),
                 Text('Processing…', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint)),
               ],
@@ -173,7 +201,7 @@ class _VoiceConversationPanelState extends ConsumerState<VoiceConversationPanel>
                     icon: const Icon(Icons.mic, size: 18),
                     label: const Text('Answer by voice'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: _BotColors.blue,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
@@ -199,7 +227,7 @@ class _VoiceConversationPanelState extends ConsumerState<VoiceConversationPanel>
                     IconButton(
                       icon: const Icon(Icons.send, size: 18),
                       onPressed: () => _submitTyped(controller),
-                      color: AppColors.primary,
+                      color: _BotColors.blue,
                     ),
                   ],
                 ),

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/validators/form_validators.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/models/my_profile_model.dart';
 import '../providers/profile_providers.dart';
@@ -73,8 +74,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     ));
   }
 
+  // Mirrors backend's lenient phone/email rules for these fields
+  // (accounts/serializers.py _PHONE_RE_PROFILE for phone/emergency_phone,
+  // Django's EmailField for emergency_email) so a bad value is caught here
+  // instead of round-tripping to the API for a 400.
+  String? _validateBeforeSave() {
+    final phoneError = FormValidators.lenientPhone(_phoneCtrl.text);
+    if (phoneError != null) return phoneError;
+    final emergencyPhoneError = FormValidators.lenientPhone(_emergencyPhoneCtrl.text);
+    if (emergencyPhoneError != null) return 'Emergency contact: $emergencyPhoneError';
+    final emergencyEmailText = _emergencyEmailCtrl.text.trim();
+    if (emergencyEmailText.isNotEmpty && FormValidators.email(emergencyEmailText) != null) {
+      return 'Enter a valid emergency contact email address.';
+    }
+    return null;
+  }
+
   Future<void> _onSave() async {
     if (_saving) return;
+    final validationError = _validateBeforeSave();
+    if (validationError != null) {
+      _showSnack(validationError, isError: true);
+      return;
+    }
     setState(() => _saving = true);
     final data = MyProfileUpdateData(
       phone: _phoneCtrl.text,

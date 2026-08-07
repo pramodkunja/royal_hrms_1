@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../shared/validators/form_validators.dart';
+
 // ── Employee ──────────────────────────────────────────────────────────────────
 
 @immutable
@@ -421,6 +423,11 @@ class EmployeeFormData {
     } else if (!_emailRe.hasMatch(email.trim())) {
       errors['email'] = 'Enter a valid email address.';
     }
+    // Mirrors EmployeeListCreateView.post's _is_valid_phone: optional field,
+    // but if provided it must be exactly 10 digits (spaces/-/()/./ stripped
+    // first) with an optional leading 91 or +91.
+    final phoneError = FormValidators.employeeCreatePhone(phone);
+    if (phoneError != null) errors['phone'] = phoneError;
     if (roleId == null)           errors['role'] = 'Role is required.';
     if (department.isEmpty)       errors['department'] = 'Department is required.';
     if (designation.isEmpty)      errors['designation'] = 'Designation is required.';
@@ -475,6 +482,11 @@ class EmployeeUpdateFormData {
   String? hrName;
   String? reportingManagerId;
   String? reportingManagerName;
+  // Whether the currently-selected `role` is a manager-type role
+  // (Role.can_manage_team on the backend) — null until resolved against the
+  // loaded roles list. See `isManagerRole` doc comment below for why this
+  // can't be derived from `role` itself.
+  bool? canManageTeam;
 
   EmployeeUpdateFormData({
     this.fullName = '',
@@ -496,6 +508,7 @@ class EmployeeUpdateFormData {
     this.hrName,
     this.reportingManagerId,
     this.reportingManagerName,
+    this.canManageTeam,
   });
 
   factory EmployeeUpdateFormData.fromModel(EmployeeModel model) =>
@@ -521,9 +534,20 @@ class EmployeeUpdateFormData {
       );
 
   // Managers don't have a reporting manager — the backend rejects
-  // `reporting_manager_id` outright when the (possibly just-changed) role is
-  // "manager", so the field is hidden and omitted from the payload in that case.
-  bool get isManagerRole => role == 'manager';
+  // `reporting_manager_id` outright when the (possibly just-changed) role
+  // has `can_manage_team=True`, so the field is hidden and omitted from the
+  // payload in that case.
+  //
+  // IMPORTANT: this must NOT be `role == 'manager'`. Role *names* drift in
+  // this system (e.g. the originally-seeded 'manager' role was renamed to
+  // 'manager__team_lead' via Settings -> Roles, per the backend migration
+  // 0045's docstring) — a literal-string check silently stops matching after
+  // such a rename, so `reporting_manager_id` gets sent for an employee whose
+  // role IS manager-type, and the backend's PUT rejects the whole request
+  // with 400 "Managers do not have a reporting manager." `canManageTeam` is
+  // resolved from the real Role.can_manage_team flag (see the caller in
+  // add_employee_sheet.dart) instead.
+  bool get isManagerRole => canManageTeam ?? false;
 
   Map<String, String> validate() {
     final errors = <String, String>{};

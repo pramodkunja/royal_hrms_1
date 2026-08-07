@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/router/app_router.dart';
@@ -5,7 +7,18 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/expandable_fab.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../controllers/voice_command_controller.dart';
+import '../state/voice_conversation_state.dart';
+import 'animated_voice_assistant.dart';
 import 'voice_conversation_panel.dart';
+
+/// Vertical clearance reserved above a screen's own FAB, shared by
+/// VoiceMicOverlay's default-position calc and _DraggableMicBubble's clamp.
+/// The character asset's arm/wave graphic overflows slightly past its
+/// nominal bounding box (see AnimatedVoiceAssistant's `Clip.none` comment),
+/// so this is bigger than a bare FAB-height-plus-margin figure would need —
+/// tuned against a real FloatingActionButton.extended on-device rather than
+/// derived analytically.
+const double _fabExclusion = 130;
 
 /// Global, persistent voice-command entry point. Mounted once above the
 /// entire app (see lib/app/app.dart's MaterialApp.router `builder`) so it's
@@ -13,14 +26,14 @@ import 'voice_conversation_panel.dart';
 /// shell — mirroring how the web app's floating voice button persists
 /// across its whole authenticated layout.
 ///
-/// The idle bubble always starts on the right side of the screen — bottom
-/// corner on screens with no FAB of their own, or bumped up to sit above one
-/// on screens that do (see AppRoutes.screensWithFab) so it never starts out
-/// overlapping a screen's own "Add" button — and is user-draggable to any
-/// point on screen from there (see `_DraggableMicBubble`). Because this whole
-/// widget lives above the Navigator and is never rebuilt on route change, a
-/// dragged position sticks across every screen in the app until dragged
-/// again — not just the current one.
+/// The idle bubble always stays on the right edge of the screen — resting
+/// above a screen's own FAB (see AppRoutes.screensWithFab) so it never starts
+/// out overlapping it, and only ever draggable vertically along that edge
+/// (see `_DraggableMicBubble`). A dragged vertical position persists across
+/// every screen in the app until dragged again, but is re-clamped above the
+/// FAB zone fresh on every navigation — via `currentVisiblePathProvider` (see
+/// app_router.dart) — so a position that was fine on one screen can never
+/// stay stuck overlapping a different screen's FAB.
 ///
 /// Hides itself for any caller the backend wouldn't accept a voice command
 /// from anyway: logged out, still mid-onboarding, or awaiting HR approval
@@ -33,28 +46,12 @@ class VoiceMicOverlay extends ConsumerStatefulWidget {
   ConsumerState<VoiceMicOverlay> createState() => _VoiceMicOverlayState();
 }
 
-class _VoiceMicOverlayState extends ConsumerState<VoiceMicOverlay>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulseController;
-
-  static const double _bubbleSize = 56;
-
-  @override
-  void initState() {
-    super.initState();
-    // A slow, continuous loop — just enough motion to catch the eye without
-    // being distracting on screens the user is trying to read.
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
-  }
+class _VoiceMicOverlayState extends ConsumerState<VoiceMicOverlay> {
+  // Kept in lockstep with AnimatedVoiceAssistant's own default `size` —
+  // this value drives the default-position/clamp math below, so if the
+  // character's rendered size changes, this must move with it or drags and
+  // the default resting spot will disagree with what's actually on screen.
+  static const double _bubbleSize = 96;
 
   @override
   Widget build(BuildContext context) {
@@ -81,51 +78,70 @@ class _VoiceMicOverlayState extends ConsumerState<VoiceMicOverlay>
 
     // Reactively read the current route so the bubble's DEFAULT position
     // (before any drag) can sit above a screen's own FAB instead of starting
-    // out overlapping it. router.routerDelegate is a ChangeNotifier that
-    // fires on every navigation (see go_router's GoRouterDelegate), so this
-    // rebuilds on every route change without any per-screen opt-in.
-    final router = ref.watch(appRouterProvider);
-    return ListenableBuilder(
-      listenable: router.routerDelegate,
-      builder: (context, _) {
-        final path = router.routerDelegate.currentConfiguration.uri.path;
-        final hasFab = AppRoutes.screensWithFab.contains(path);
+    // out overlapping it. currentVisiblePathProvider is updated by
+    // _PathTrackingObserver on every push/pop/replace — including routes
+    // reached via context.push(), which go_router's own
+    // `currentConfiguration.uri` deliberately does not track (see that
+    // provider's doc comment in app_router.dart) — so this stays correct
+    // for every screen in the app, not just ones reached via context.go().
+    final path = ref.watch(currentVisiblePathProvider);
+    final hasFab = AppRoutes.screensWithFab.contains(path);
 
-        // This Stack sits above MaterialApp.router's Navigator (see
-        // app.dart), outside any Scaffold — so unlike a screen's own FAB
-        // (which Scaffold auto-shifts above the bottom safe-area inset),
-        // positions here are measured from the literal screen edge and must
-        // add the inset explicitly.
-        final screenSize = MediaQuery.sizeOf(context);
-        final safeArea = MediaQuery.paddingOf(context);
-        final bottomOffset = (hasFab ? 100.0 : 16.0) + safeArea.bottom;
-        final defaultPosition = Offset(
-          screenSize.width - _bubbleSize - 16,
-          screenSize.height - bottomOffset - _bubbleSize,
-        );
+    // This Stack sits above MaterialApp.router's Navigator (see
+    // app.dart), outside any Scaffold — so unlike a screen's own FAB
+    // (which Scaffold auto-shifts above the bottom safe-area inset),
+    // positions here are measured from the literal screen edge and must
+    // add the inset explicitly.
+    final screenSize = MediaQuery.sizeOf(context);
+    final safeArea = MediaQuery.paddingOf(context);
+    final bottomOffset = (hasFab ? _fabExclusion : 16.0) + safeArea.bottom;
+    final defaultPosition = Offset(
+      screenSize.width - _bubbleSize - 16,
+      screenSize.height - bottomOffset - _bubbleSize,
+    );
+    if (conversation != null) {
+      // The expanded conversation panel has a dynamic size (unlike the
+      // fixed-size bubble), so it isn't part of the free-drag system —
+      // it just anchors bottom-right, the same safe way as the bubble's
+      // own default (above the FAB when there is one). The character
+      // stays visible right below it — no longer swapped out — now
+      // reacting to the real listening/thinking/speaking phase instead
+      // of always sitting idle; it isn't draggable here (dragging only
+      // matters for the idle bubble) and its tap is a no-op since the
+      // panel's own mic/close controls already own every action while a
+      // conversation is open.
+      final isListening = conversation.phase == VoicePanelPhase.listening;
+      final isThinking = conversation.phase == VoicePanelPhase.transcript;
+      final isSpeaking = conversation.phase == VoicePanelPhase.result;
+      return Positioned(
+        right: 16,
+        bottom: bottomOffset,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            VoiceConversationPanel(conversation: conversation),
+            const SizedBox(height: 10),
+            AnimatedVoiceAssistant(
+              onTap: () {},
+              isListening: isListening,
+              isThinking: isThinking,
+              isSpeaking: isSpeaking,
+              size: _bubbleSize,
+            ),
+          ],
+        ),
+      );
+    }
 
-        if (conversation != null) {
-          // The expanded conversation panel has a dynamic size (unlike the
-          // fixed 56x56 bubble), so it isn't part of the free-drag system —
-          // it just anchors bottom-right, the same safe way as the bubble's
-          // own default (above the FAB when there is one).
-          return Positioned(
-            right: 16,
-            bottom: bottomOffset,
-            child: VoiceConversationPanel(conversation: conversation),
-          );
-        }
-
-        return _DraggableMicBubble(
-          key: const ValueKey('voice-mic-bubble'),
-          defaultPosition: defaultPosition,
-          screenSize: screenSize,
-          safeArea: safeArea,
-          pulse: _pulseController,
-          onTap: controller.startListening,
-          onTypeTap: controller.openTypedCommand,
-        );
-      },
+    return _DraggableMicBubble(
+      key: const ValueKey('voice-mic-bubble'),
+      defaultPosition: defaultPosition,
+      screenSize: screenSize,
+      safeArea: safeArea,
+      hasFab: hasFab,
+      onTap: controller.startListening,
+      onTypeTap: controller.openTypedCommand,
     );
   }
 }
@@ -140,7 +156,11 @@ class _DraggableMicBubble extends StatefulWidget {
   final Offset defaultPosition;
   final Size screenSize;
   final EdgeInsets safeArea;
-  final Animation<double> pulse;
+  // Whether the CURRENT route has its own FAB — read fresh on every build
+  // (via VoiceMicOverlay's route listener) so the exclusion zone below
+  // always matches whatever screen is on screen right now, not whatever
+  // screen was active the last time the bubble was dragged.
+  final bool hasFab;
   final VoidCallback onTap;
   final VoidCallback onTypeTap;
 
@@ -149,7 +169,7 @@ class _DraggableMicBubble extends StatefulWidget {
     required this.defaultPosition,
     required this.screenSize,
     required this.safeArea,
-    required this.pulse,
+    required this.hasFab,
     required this.onTap,
     required this.onTypeTap,
   });
@@ -159,30 +179,67 @@ class _DraggableMicBubble extends StatefulWidget {
 }
 
 class _DraggableMicBubbleState extends State<_DraggableMicBubble> {
-  static const double _bubbleSize = 56;
+  // Kept in lockstep with AnimatedVoiceAssistant's own default `size` (see
+  // the matching constant/comment in _VoiceMicOverlayState above).
+  static const double _bubbleSize = 96;
   static const double _edgeMargin = 8;
+  // How much of the bubble hangs off the screen edge while "peeking" (idle,
+  // undragged) — enough to read as a character poking in rather than a
+  // button, without covering more of the screen than a normal FAB would.
+  static const double _peekFraction = 0.4;
 
   // Null until the user drags the bubble at least once. Once set, this is
   // the exact top-left the bubble is pinned to (in the overlay's own
-  // coordinate space, i.e. full-screen), overriding the default position —
-  // "anywhere on screen" means the user's placement always wins once
-  // they've expressed one.
+  // coordinate space, i.e. full-screen) — but only its Y is actually
+  // honored; X always snaps back to the right edge (see onPanEnd) so the
+  // bubble stays where the user asked for it — "on the right side" — and
+  // never drifts onto the left half of the screen where it could sit over
+  // unrelated left-aligned controls.
   Offset? _draggedPosition;
   bool _dragging = false;
+  // True once idle long enough to recede toward the edge; false right after
+  // any drag, so the character reads as fully present again immediately
+  // after being touched.
+  bool _peeking = true;
+  Timer? _idleTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _armIdleTimer();
+  }
+
+  @override
+  void dispose() {
+    _idleTimer?.cancel();
+    super.dispose();
+  }
+
+  void _armIdleTimer() {
+    _idleTimer?.cancel();
+    _idleTimer = Timer(const Duration(seconds: 30), () {
+      if (mounted) setState(() => _peeking = true);
+    });
+  }
 
   // Keeps the bubble fully on-screen (clear of the status bar / home
-  // indicator too) regardless of how it got here — a manual drag, or a
-  // device rotation changing the available size out from under a
-  // previously-valid position.
+  // indicator, AND clear of the current screen's own FAB) regardless of how
+  // it got here — a manual drag, a device rotation, or simply navigating to
+  // a different screen. widget.hasFab is read fresh on every rebuild (it
+  // comes from the current route), so a position that was fine on a
+  // no-FAB screen gets pushed back above the FAB the moment the user lands
+  // on a screen that has one — a stale drag can never leave it stuck
+  // overlapping a button.
   Offset _clampToScreen(Offset pos) {
     const minX = _edgeMargin;
     final maxX = (widget.screenSize.width - _bubbleSize - _edgeMargin)
         .clamp(minX, double.infinity);
     final minY = widget.safeArea.top + _edgeMargin;
+    final fabExclusion = widget.hasFab ? _fabExclusion : _edgeMargin;
     final maxY = (widget.screenSize.height -
             widget.safeArea.bottom -
             _bubbleSize -
-            _edgeMargin)
+            fabExclusion)
         .clamp(minY, double.infinity);
     return Offset(pos.dx.clamp(minX, maxX), pos.dy.clamp(minY, maxY));
   }
@@ -190,16 +247,36 @@ class _DraggableMicBubbleState extends State<_DraggableMicBubble> {
   @override
   Widget build(BuildContext context) {
     final target = _clampToScreen(_draggedPosition ?? widget.defaultPosition);
+    // Always peeks toward the right — the bubble only ever docks on the
+    // right edge (see onPanEnd), so "peeking" always means hanging off that
+    // same edge.
+    final peekOffset = _peeking && !_dragging ? _bubbleSize * _peekFraction : 0.0;
 
     final bubble = GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: widget.onTap,
-      onPanStart: (_) => setState(() => _dragging = true),
+      onPanStart: (_) {
+        _armIdleTimer();
+        setState(() {
+          _dragging = true;
+          _peeking = false;
+        });
+      },
       onPanUpdate: (details) => setState(() {
         final current = _draggedPosition ?? widget.defaultPosition;
         _draggedPosition = _clampToScreen(current + details.delta);
       }),
-      onPanEnd: (_) => setState(() => _dragging = false),
+      onPanEnd: (_) {
+        // X always snaps back to the right edge — only the vertical drop
+        // position is kept, so the bubble can never end up resting over
+        // left-aligned content and stays exactly where the product ask is:
+        // always on the right.
+        final snappedX = widget.screenSize.width - _bubbleSize - _edgeMargin;
+        setState(() {
+          _dragging = false;
+          _draggedPosition = _clampToScreen(Offset(snappedX, target.dy));
+        });
+        _armIdleTimer();
+      },
       child: AnimatedScale(
         scale: _dragging ? 1.12 : 1.0,
         duration: const Duration(milliseconds: 120),
@@ -209,7 +286,7 @@ class _DraggableMicBubbleState extends State<_DraggableMicBubble> {
           children: [
             Tooltip(
               message: 'Voice command — drag to move',
-              child: _PulsingMicButton(pulse: widget.pulse),
+              child: AnimatedVoiceAssistant(onTap: widget.onTap, size: _bubbleSize),
             ),
             // Typed-command entry point — an alternative to speaking, same
             // idea as the web app's keyboard-icon toggle (left as this app's
@@ -247,73 +324,16 @@ class _DraggableMicBubbleState extends State<_DraggableMicBubble> {
 
     // Zero-lag tracking while actively dragging (a plain Positioned, no
     // animation, follows the finger exactly); a smooth eased transition for
-    // every other move — the settle after a drag ends, or a clamp kicking in
-    // after a rotation.
+    // every other move — the settle after a drag ends, a clamp kicking in
+    // after a rotation, or the slow recede into the edge once idle.
     return _dragging
         ? Positioned(left: target.dx, top: target.dy, child: bubble)
         : AnimatedPositioned(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-            left: target.dx,
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOut,
+            left: target.dx + peekOffset,
             top: target.dy,
             child: bubble,
           );
-  }
-}
-
-/// The idle mic FAB with a soft, looping pulse ring behind it — a subtle
-/// "tap me" cue rather than a static icon easy to overlook among everything
-/// else on screen. Purely visual — all tap/drag handling lives in the
-/// GestureDetector that wraps this in _DraggableMicBubble, so this stays a
-/// simple StatelessWidget.
-class _PulsingMicButton extends StatelessWidget {
-  final Animation<double> pulse;
-  const _PulsingMicButton({required this.pulse});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 56,
-      height: 56,
-      child: Stack(
-        alignment: Alignment.center,
-        clipBehavior: Clip.none,
-        children: [
-          AnimatedBuilder(
-            animation: pulse,
-            builder: (context, child) {
-              // One ring, continuously growing and fading — restarts the
-              // instant it fully fades (AnimationController.repeat()).
-              final t = pulse.value;
-              return Opacity(
-                opacity: (1 - t) * 0.45,
-                child: Transform.scale(
-                  scale: 1.0 + t * 0.9,
-                  child: child,
-                ),
-              );
-            },
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.primary,
-              ),
-            ),
-          ),
-          Material(
-            color: AppColors.primary,
-            shape: const CircleBorder(),
-            elevation: 4,
-            child: const SizedBox(
-              width: 40,
-              height: 40,
-              child: Icon(Icons.mic, color: Colors.white, size: 20),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

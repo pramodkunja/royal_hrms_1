@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/validators/form_validators.dart';
 import '../../data/models/smtp_model.dart';
 import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
@@ -316,7 +317,15 @@ class _TestDialogState extends State<_TestDialog> {
   }
 
   Future<void> _runTest() async {
-    if (_emailCtrl.text.trim().isEmpty) return;
+    final recipient = _emailCtrl.text.trim();
+    if (recipient.isEmpty) return;
+    // Backend's SMTPTestSerializer declares test_recipient as an EmailField,
+    // so a malformed address 400s server-side — catch it here instead.
+    final emailError = FormValidators.email(recipient);
+    if (emailError != null) {
+      setState(() { _success = false; _result = emailError; });
+      return;
+    }
     setState(() { _loading = true; _result = null; _success = null; });
     final error = await widget.ref
         .read(smtpListProvider.notifier)

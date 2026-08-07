@@ -32,6 +32,12 @@ class RoleModel {
   final int userCount;
   final bool isActive;
   final bool isSystem;
+  // Whether this role is a "manager"-type role for reporting-manager
+  // purposes. Backend field is a stored Role.can_manage_team boolean, NOT
+  // derivable from `name` — role names drift (e.g. the seeded 'manager' role
+  // was later renamed to 'manager__team_lead' via Settings -> Roles), so
+  // callers must use this flag instead of comparing `name == 'manager'`.
+  final bool canManageTeam;
 
   const RoleModel({
     required this.id,
@@ -42,6 +48,7 @@ class RoleModel {
     required this.userCount,
     required this.isActive,
     required this.isSystem,
+    this.canManageTeam = false,
   });
 
   String get idStr => id?.toString() ?? '';
@@ -55,6 +62,7 @@ class RoleModel {
     userCount:   userCount,
     isActive:    isActive ?? this.isActive,
     isSystem:    isSystem,
+    canManageTeam: canManageTeam,
   );
 
   factory RoleModel.fromJson(Map<String, dynamic> json) => RoleModel(
@@ -69,6 +77,7 @@ class RoleModel {
     userCount: json['user_count'] as int? ?? 0,
     isActive:  json['is_active'] as bool? ?? true,
     isSystem:  json['is_system'] as bool? ?? false,
+    canManageTeam: json['can_manage_team'] as bool? ?? false,
   );
 }
 

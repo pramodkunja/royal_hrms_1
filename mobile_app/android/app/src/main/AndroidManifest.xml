@@ -7,10 +7,20 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <!-- Required for voice command speech recognition -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- enableOnBackInvokedCallback explicit false, not just omitted: with
+         go_router's ShellRoute (which wraps its own nested Navigator),
+         Android's predictive-back callback registration can flap to the OS's
+         own default "finish the Activity" callback right after the nested
+         Navigator pops down to one page — silently bypassing every PopScope
+         (verified against Flutter 3.44.8 / go_router 17.3.0 on an Android 15
+         emulator). Forcing the legacy back dispatch (onBackPressed) avoids
+         that callback-stealing bug and makes DashboardShell's
+         exit-confirmation PopScope fire reliably every time. -->
     <application
         android:label="ROYAL HRMS"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:enableOnBackInvokedCallback="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"

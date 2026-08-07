@@ -33,6 +33,7 @@ class UserEntity {
       onboardingStatus == 'pending' || onboardingStatus == 'draft';
   bool get awaitingApproval => onboardingStatus == 'submitted';
   bool get onboardingComplete => onboardingStatus == 'complete';
+  bool get onboardingRejected => onboardingStatus == 'rejected';
 
   bool hasPermission(String permission) => permissions.contains(permission);
 

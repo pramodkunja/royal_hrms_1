@@ -36,13 +36,12 @@ class _AwaitingApprovalScreenState
   Future<void> _pollStatus() async {
     try {
       final dio = ref.read(dioProvider);
-      final response =
-          await dio.get(ApiConstants.onboardingProfile);
+      final response = await dio.get(ApiConstants.myProfile);
       final raw = response.data;
       final data = raw is Map && raw.containsKey('data')
           ? raw['data'] as Map<String, dynamic>
           : raw as Map<String, dynamic>;
-      final status = data['status'] as String?;
+      final status = data['onboarding_status'] as String?;
       if (status == 'complete' && mounted) {
         setState(() => _approved = true);
       }

@@ -7,14 +7,39 @@ class OnboardingDatasource {
 
   final Dio _dio;
 
-  Future<OnboardingProfileModel> fetchProfile() async {
-    final response = await _dio.get(ApiConstants.onboardingProfile);
+  Future<OnboardingProfileModel> fetchProfile({String status = 'pending'}) async {
+    final results = await Future.wait([
+      _dio.get(ApiConstants.onboardingProfile),
+      fetchDocuments(),
+    ]);
+    final response = results[0] as Response;
+    final documents = results[1] as List<OnboardingDocModel>;
     return OnboardingProfileModel.fromJson(
-        response.data as Map<String, dynamic>);
+      response.data as Map<String, dynamic>,
+      status: status,
+      documents: documents,
+    );
   }
 
   Future<void> saveStep(int step, Map<String, dynamic> data) async {
-    await _dio.patch(ApiConstants.onboardingStep(step), data: data);
+    try {
+      await _dio.patch(ApiConstants.onboardingStep(step), data: data);
+    } on DioException catch (e) {
+      final responseData = e.response?.data;
+      if (responseData is Map && responseData['message'] is String) {
+        throw Exception(responseData['message'] as String);
+      }
+      rethrow;
+    }
+  }
+
+  Future<List<OnboardingDocModel>> fetchDocuments() async {
+    final response = await _dio.get(ApiConstants.onboardingDocuments);
+    final body = response.data;
+    final data = body is Map && body.containsKey('data') ? body['data'] : body;
+    return (data as List<dynamic>? ?? [])
+        .map((d) => OnboardingDocModel.fromJson(d as Map<String, dynamic>))
+        .toList();
   }
 
   Future<OnboardingDocModel> uploadDocument(
@@ -48,7 +73,7 @@ class OnboardingDatasource {
 
   Future<void> submitProfile() async {
     try {
-      await _dio.post(ApiConstants.onboardingSubmit);
+      await _dio.post(ApiConstants.onboardingProfile);
     } on DioException catch (e) {
       final data = e.response?.data;
       if (data is Map && data['message'] is String) {

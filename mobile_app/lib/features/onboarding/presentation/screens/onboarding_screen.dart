@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/validators/form_validators.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/onboarding_entity.dart';
 import '../providers/onboarding_providers.dart';
@@ -29,104 +30,167 @@ class OnboardingScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      body: SafeArea(
+        child: Column(
           children: [
-            Text(
-              'Complete Your Profile',
-              style: AppTextStyles.label
-                  .copyWith(fontWeight: FontWeight.w700, fontSize: 15),
+            _OnboardingHeader(
+              currentStep: currentStep,
+              onLogout: () async {
+                await ref.read(authStateProvider.notifier).logout();
+              },
             ),
-            Text(
-              'Step ${currentStep + 1} of $kTotalSteps — ${kStepLabels[currentStep]}',
-              style: AppTextStyles.caption
-                  .copyWith(color: AppColors.textSecondary),
+            Expanded(
+              child: profileAsync.when(
+                loading: () => Center(
+                    child: CircularProgressIndicator(color: AppColors.primary)),
+                error: (e, _) => _ErrorView(
+                  message: e.toString(),
+                  onRetry: () => ref.invalidate(onboardingProfileProvider),
+                ),
+                data: (profile) => _StepContent(
+                  profile: profile,
+                  currentStep: currentStep,
+                  onPrevious: currentStep > 0 ? goBack : null,
+                  onStepSaved: (step, data) async {
+                    final err = await ref
+                        .read(onboardingProfileProvider.notifier)
+                        .saveStep(step, data);
+                    if (err == null && context.mounted) {
+                      if (step < kTotalSteps - 1) {
+                        ref.read(onboardingStepProvider.notifier).state =
+                            step + 1;
+                      }
+                    }
+                    return err;
+                  },
+                  onUpload: (docType, file) async {
+                    final multipart = MultipartFile.fromBytes(
+                      file.bytes!,
+                      filename: file.name,
+                    );
+                    return await ref
+                        .read(onboardingProfileProvider.notifier)
+                        .uploadDocument(docType, multipart);
+                  },
+                  onDelete: (id) async {
+                    return await ref
+                        .read(onboardingProfileProvider.notifier)
+                        .deleteDocument(id);
+                  },
+                  onSaveDraft: () async {
+                    // Save draft calls step 4 with empty data (no submit)
+                    await ref
+                        .read(onboardingProfileProvider.notifier)
+                        .saveStep(4, {});
+                  },
+                  onSubmit: () async {
+                    final err = await ref
+                        .read(onboardingProfileProvider.notifier)
+                        .submitProfile();
+                    if (err == null && context.mounted) {
+                      context.go(AppRoutes.onboardingAwaiting);
+                    } else if (err != null && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(err),
+                          backgroundColor: AppColors.error));
+                    }
+                  },
+                ),
+              ),
             ),
           ],
         ),
-        actions: [
-          TextButton.icon(
-            onPressed: () async {
-              await ref.read(authStateProvider.notifier).logout();
-            },
-            icon: const Icon(Icons.logout, size: 16),
-            label: const Text('Logout'),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.textSecondary,
-            ),
-          ),
-        ],
       ),
-      body: Column(
-        children: [
-          const SizedBox(height: 16),
-          OnboardingStepIndicator(currentStep: currentStep),
-          const SizedBox(height: 8),
-          Expanded(
-            child: profileAsync.when(
-              loading: () => Center(
-                  child:
-                      CircularProgressIndicator(color: AppColors.primary)),
-              error: (e, _) => _ErrorView(
-                message: e.toString(),
-                onRetry: () => ref.invalidate(onboardingProfileProvider),
-              ),
-              data: (profile) => _StepContent(
-                profile: profile,
-                currentStep: currentStep,
-                onPrevious: currentStep > 0 ? goBack : null,
-                onStepSaved: (step, data) async {
-                  final err = await ref
-                      .read(onboardingProfileProvider.notifier)
-                      .saveStep(step, data);
-                  if (err == null && context.mounted) {
-                    if (step < kTotalSteps - 1) {
-                      ref.read(onboardingStepProvider.notifier).state =
-                          step + 1;
-                    }
-                  }
-                  return err;
-                },
-                onUpload: (docType, file) async {
-                  final multipart = MultipartFile.fromBytes(
-                    file.bytes!,
-                    filename: file.name,
-                  );
-                  return await ref
-                      .read(onboardingProfileProvider.notifier)
-                      .uploadDocument(docType, multipart);
-                },
-                onDelete: (id) async {
-                  return await ref
-                      .read(onboardingProfileProvider.notifier)
-                      .deleteDocument(id);
-                },
-                onSaveDraft: () async {
-                  // Save draft calls step 4 with empty data (no submit)
-                  await ref
-                      .read(onboardingProfileProvider.notifier)
-                      .saveStep(4, {});
-                },
-                onSubmit: () async {
-                  final err = await ref
-                      .read(onboardingProfileProvider.notifier)
-                      .submitProfile();
-                  if (err == null && context.mounted) {
-                    context.go(AppRoutes.onboardingAwaiting);
-                  } else if (err != null && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(err),
-                        backgroundColor: AppColors.error));
-                  }
-                },
-              ),
+    );
+  }
+}
+
+/// Custom header replacing a flat AppBar: an icon badge + title/subtitle
+/// row, a compact logout action, and the connected step wizard — all
+/// grouped into one visually distinct panel above the scrollable form.
+class _OnboardingHeader extends StatelessWidget {
+  const _OnboardingHeader({
+    required this.currentStep,
+    required this.onLogout,
+  });
+
+  final int currentStep;
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 18, 16, 20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [AppColors.primary, AppColors.primaryLight],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(28),
+              bottomRight: Radius.circular(28),
+            ),
+            boxShadow: AppColors.elevatedShadow,
           ),
-        ],
-      ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.badge_outlined,
+                    color: Colors.white, size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Complete Your Profile',
+                      style: AppTextStyles.h3.copyWith(
+                          color: Colors.white, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      kStepLabels[currentStep],
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: Colors.white.withValues(alpha: 0.82)),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: onLogout,
+                tooltip: 'Logout',
+                icon: const Icon(Icons.logout_rounded,
+                    color: Colors.white, size: 20),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: AppColors.cardShadow,
+          ),
+          child: OnboardingStepIndicator(currentStep: currentStep),
+        ),
+      ],
     );
   }
 }
@@ -211,8 +275,8 @@ class _ErrorView extends StatelessWidget {
             Icon(Icons.error_outline, size: 48, color: AppColors.error),
             const SizedBox(height: 16),
             Text(message,
-                style: AppTextStyles.body
-                    .copyWith(color: AppColors.textSecondary),
+                style:
+                    AppTextStyles.body.copyWith(color: AppColors.textSecondary),
                 textAlign: TextAlign.center),
             const SizedBox(height: 24),
             FilledButton(onPressed: onRetry, child: const Text('Retry')),

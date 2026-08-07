@@ -250,12 +250,19 @@ class _SearchFilter extends ConsumerWidget {
             final isActive = statusFilter == key;
             return GestureDetector(
               onTap: () {
+                // Status filtering is purely client-side (see
+                // filteredCandidatesProvider), same as the search box just
+                // above. Previously this also called
+                // candidateListProvider.notifier.refresh(), which re-fetches
+                // the *unfiltered* full list from the network on every tab
+                // tap: it forces AsyncLoading() (wiping the already-correct
+                // filtered result behind a spinner) and, on any transient
+                // network hiccup, replaces the list with an error view —
+                // making the tabs look broken/unresponsive instead of the
+                // instant client-side filter switch they're meant to be.
                 ref
                     .read(candidateStatusFilterProvider.notifier)
                     .state = key;
-                ref
-                    .read(candidateListProvider.notifier)
-                    .refresh();
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),

@@ -351,7 +351,7 @@ class _PendingApprovalsCard extends ConsumerWidget {
                     iconColor: AppColors.success,
                     title: 'Leave Requests',
                     count: approvals.leaveRequests,
-                    onTap: () => context.go(AppRoutes.leave),
+                    onTap: () => goToDashboardSection(context, AppRoutes.leave),
                   ),
                   const Divider(height: 24),
                   _ApprovalRow(
@@ -359,7 +359,7 @@ class _PendingApprovalsCard extends ConsumerWidget {
                     iconColor: AppColors.warning,
                     title: 'Expense Claims',
                     count: approvals.expenseClaims,
-                    onTap: () => context.go(AppRoutes.expenses),
+                    onTap: () => goToDashboardSection(context, AppRoutes.expenses),
                   ),
                   const Divider(height: 24),
                   _ApprovalRow(
@@ -375,7 +375,7 @@ class _PendingApprovalsCard extends ConsumerWidget {
                     onTap: () {
                       ref.read(employeeFiltersProvider.notifier).state =
                           const EmployeeFilters(status: 'onboarding');
-                      context.go(AppRoutes.employees);
+                      goToDashboardSection(context, AppRoutes.employees);
                     },
                   ),
                   const Divider(height: 24),
@@ -384,7 +384,7 @@ class _PendingApprovalsCard extends ConsumerWidget {
                     iconColor: AppColors.error,
                     title: 'Separation Requests',
                     count: approvals.separationRequests,
-                    onTap: () => context.go(AppRoutes.separation),
+                    onTap: () => goToDashboardSection(context, AppRoutes.separation),
                   ),
                 ],
               ),
@@ -400,7 +400,7 @@ class _PendingApprovalsCard extends ConsumerWidget {
           ),
           approvalsAsync.maybeWhen(
             data: (_) => GestureDetector(
-              onTap: () => context.go(AppRoutes.approvals),
+              onTap: () => goToDashboardSection(context, AppRoutes.approvals),
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -685,7 +685,7 @@ class _EmployeeLifecycleCardState extends ConsumerState<_EmployeeLifecycleCard> 
       icon: Icons.sync_alt_outlined,
       accentColor: AppColors.success,
       trailing: OutlinedButton(
-        onPressed: () => context.go(AppRoutes.employees),
+        onPressed: () => goToDashboardSection(context, AppRoutes.employees),
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           minimumSize: const Size(0, 0),
@@ -852,7 +852,8 @@ class _LifecycleRow extends StatelessWidget {
     return GestureDetector(
       onTap: employee.employeeId.isEmpty
           ? null
-          : () => context.go('${AppRoutes.employees}/${employee.employeeId}'),
+          : () => goToDashboardSection(
+              context, '${AppRoutes.employees}/${employee.employeeId}'),
       child: Row(
         children: [
           CircleAvatar(
@@ -1122,7 +1123,7 @@ class _AuditLogsCardState extends ConsumerState<_AuditLogsCard> {
           // summary widget, so "View all" opens that real screen rather
           // than duplicating its filters here.
           GestureDetector(
-            onTap: () => context.go(AppRoutes.settingsAuditLog),
+            onTap: () => context.push(AppRoutes.settingsAuditLog),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1245,19 +1246,23 @@ class _AuditLogRow extends StatelessWidget {
       children: [
         Row(
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: AppColors.info.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                entry.action.toUpperCase(),
-                style: AppTextStyles.labelSmall
-                    .copyWith(color: AppColors.info, fontWeight: FontWeight.w700),
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.info.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  entry.action.toUpperCase(),
+                  style: AppTextStyles.labelSmall
+                      .copyWith(color: AppColors.info, fontWeight: FontWeight.w700),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
               ),
             ),
-            const Spacer(),
+            const SizedBox(width: 8),
             Text(
               _formatDateTime(entry.createdAt),
               style: AppTextStyles.caption.copyWith(color: AppColors.textHint),

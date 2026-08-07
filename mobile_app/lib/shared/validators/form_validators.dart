@@ -81,6 +81,35 @@ class FormValidators {
     return null;
   }
 
+  // Mirrors backend/apps/accounts/serializers.py _PHONE_RE / _PHONE_RE_PROFILE /
+  // _EMP_PHONE_RE — the lenient phone rule shared by Company.official_phone,
+  // Profile phone/emergency_phone, and Employee emergency_phone: optional
+  // leading +, then 7-20 chars of digits/spaces/-/()/./ combined.
+  static final RegExp lenientPhoneRe = RegExp(r'^\+?[\d\s\-()./]{7,20}$');
+
+  static String? lenientPhone(String? value, {bool required = false}) {
+    final v = (value ?? '').trim();
+    if (v.isEmpty) return required ? 'Phone number is required.' : null;
+    if (!lenientPhoneRe.hasMatch(v)) return 'Enter a valid phone number.';
+    return null;
+  }
+
+  // Mirrors backend/apps/accounts/views.py PHONE_RE + _is_valid_phone, used by
+  // EmployeeListCreateView.post (Add Employee): exactly 10 digits once
+  // spaces/-/()/./ are stripped, with an optional leading 91 or +91.
+  static final RegExp _tenDigitPhoneRe = RegExp(r'^(?:\+?91)?\d{10}$');
+  static final RegExp _phoneFormatCharsRe = RegExp(r'[\s\-()./]');
+
+  static String? employeeCreatePhone(String? value) {
+    final v = (value ?? '').trim();
+    if (v.isEmpty) return null; // optional
+    final stripped = v.replaceAll(_phoneFormatCharsRe, '');
+    if (!_tenDigitPhoneRe.hasMatch(stripped)) {
+      return 'Enter a valid 10-digit phone number (optionally prefixed with +91).';
+    }
+    return null;
+  }
+
   /// [original] is the previously-saved date (edit flow only) — a past date
   /// that hasn't changed is allowed through (the interview already happened).
   static String? interviewDate(DateTime? value, {DateTime? original}) {

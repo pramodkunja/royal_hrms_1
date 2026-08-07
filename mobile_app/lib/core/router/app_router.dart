@@ -102,7 +102,8 @@ class AppRoutes {
   static const String settingsReferralRules = '/settings/referral-rules';
   static const String settingsAssessmentConfig = '/settings/assessment-config';
   static const String settingsApprovalRules = '/settings/approval-rules';
-  static const String settingsLeaveBalanceImport = '/settings/leave-policy/import-balances';
+  static const String settingsLeaveBalanceImport =
+      '/settings/leave-policy/import-balances';
 
   // Routes whose screen renders its own bottom-right floatingActionButton.
   // Used by VoiceMicOverlay (mounted globally, above every route) to decide
@@ -115,12 +116,68 @@ class AppRoutes {
   // space on the rare screen-state where their FAB happens to be hidden, and
   // not worth a second per-screen signal on top of this route-based one.
   static const Set<String> screensWithFab = {
-    employees, interviewList, attendance, leave, announcements, assessments,
-    branches, documents, expenses, referrals, settingsDepartments,
-    settingsEmailTemplates, settingsHolidayCalendar, settingsLeavePolicy,
-    settingsReferralRules, settingsRoles, settingsSmtp,
+    employees,
+    interviewList,
+    attendance,
+    leave,
+    announcements,
+    assessments,
+    branches,
+    documents,
+    expenses,
+    referrals,
+    settingsDepartments,
+    settingsEmailTemplates,
+    settingsHolidayCalendar,
+    settingsLeavePolicy,
+    settingsReferralRules,
+    settingsRoles,
+    settingsSmtp,
   };
 }
+
+// ─── Navigation helpers ───────────────────────────────────────────────────────
+
+/// Navigates to a top-level dashboard section (sidebar item, quick-access
+/// tile, dashboard card, notification tap). Collapses any existing back
+/// stack down to the Dashboard root first, then pushes the destination —
+/// so repeatedly jumping between sections from these fixed entry points
+/// never piles up unboundedly, while still leaving a normal "back returns
+/// to Dashboard" history entry instead of erasing it (the previous
+/// `context.go()` behavior, which is what let the Android back button
+/// close the app straight from any dashboard section).
+void goToDashboardSection(BuildContext context, String path) {
+  while (context.canPop()) {
+    context.pop();
+  }
+  if (path != AppRoutes.dashboard) {
+    context.push(path);
+  }
+}
+
+// ─── Current visible path (for overlays that live outside the Navigator) ──────
+
+/// The path of whatever route is actually on screen right now.
+///
+/// GoRouter's own `currentConfiguration.uri` can't be used for this: it
+/// deliberately excludes any route reached via `context.push()` (go_router's
+/// `RouteMatchList.uri` docs: "This uri only reflects RouteMatches that are
+/// not ImperativeRouteMatch"), and a `NavigatorObserver` attached via
+/// `GoRouter(observers:)` was tried and found not to reliably observe pushes
+/// happening inside a ShellRoute's own nested Navigator either. Since
+/// [goToDashboardSection] and every settings sub-screen navigate via push,
+/// both of those left this stuck on whatever path was last reached via
+/// `context.go()` — which is exactly why VoiceMicOverlay's FAB-avoidance
+/// (keyed off this path) needs a source that updates on push too.
+///
+/// Instead, this is published directly by widgets *inside* the routed tree,
+/// where `GoRouterState.of(context).uri.path` is always correct for
+/// whatever route it's called from regardless of how it was reached — see
+/// DashboardShell (every /dashboard/* route) and SettingsAppBar (every
+/// settings sub-screen, pushed outside the shell).
+final currentVisiblePathProvider = StateProvider<String>(
+  (ref) => AppRoutes.dashboard,
+);
 
 // ─── Router provider ──────────────────────────────────────────────────────────
 
@@ -159,9 +216,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // Logged in — check onboarding status
       if (user != null) {
-        if (user.needsOnboarding) {
-          // pending/draft: must complete onboarding wizard
-          if (!path.startsWith('/onboarding')) {
+        if (user.needsOnboarding || user.onboardingRejected) {
+          // pending/draft/rejected: must complete (or revise) the onboarding wizard
+          if (!path.startsWith('/onboarding') ||
+              path == AppRoutes.onboardingAwaiting) {
             return AppRoutes.onboarding;
           }
           return null;
@@ -186,11 +244,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // ── Auth routes ────────────────────────────────────────────────────
       GoRoute(
         path: AppRoutes.splash,
-        pageBuilder: (_, __) => const NoTransitionPage(child: SplashScreen()),
+        pageBuilder: (_, state) =>
+            NoTransitionPage(key: state.pageKey, child: SplashScreen()),
       ),
       GoRoute(
         path: AppRoutes.login,
-        pageBuilder: (_, __) => const NoTransitionPage(child: LoginScreen()),
+        pageBuilder: (_, state) =>
+            NoTransitionPage(key: state.pageKey, child: LoginScreen()),
       ),
       GoRoute(
         path: AppRoutes.forgotPassword,
@@ -200,13 +260,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // ── Onboarding (outside dashboard shell) ───────────────────────────
       GoRoute(
         path: AppRoutes.onboarding,
-        pageBuilder: (_, __) =>
-            const NoTransitionPage(child: OnboardingScreen()),
+        pageBuilder: (_, state) =>
+            NoTransitionPage(key: state.pageKey, child: OnboardingScreen()),
       ),
       GoRoute(
         path: AppRoutes.onboardingAwaiting,
-        pageBuilder: (_, __) =>
-            const NoTransitionPage(child: AwaitingApprovalScreen()),
+        pageBuilder: (_, state) => NoTransitionPage(
+            key: state.pageKey, child: AwaitingApprovalScreen()),
       ),
 
       // ── Settings sub-screens (outside shell — own AppBar + back button) ──
@@ -281,35 +341,37 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: AppRoutes.dashboard,
-            pageBuilder: (_, __) => const NoTransitionPage(child: HomeScreen()),
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: HomeScreen()),
           ),
 
           // Announcements
           GoRoute(
             path: AppRoutes.announcements,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: AnnouncementsScreen()),
+            pageBuilder: (_, state) => NoTransitionPage(
+                key: state.pageKey, child: AnnouncementsScreen()),
           ),
 
           // Recruitment
           GoRoute(
             path: AppRoutes.interviewList,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: InterviewListScreen()),
+            pageBuilder: (_, state) => NoTransitionPage(
+                key: state.pageKey, child: InterviewListScreen()),
           ),
           GoRoute(
             path: AppRoutes.candidateReview,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: CandidateReviewScreen()),
+            pageBuilder: (_, state) => NoTransitionPage(
+                key: state.pageKey, child: CandidateReviewScreen()),
           ),
           GoRoute(
             path: AppRoutes.assessments,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: AssessmentsScreen()),
+            pageBuilder: (_, state) => NoTransitionPage(
+                key: state.pageKey, child: AssessmentsScreen()),
           ),
           GoRoute(
             path: AppRoutes.emailLogs,
-            pageBuilder: (_, __) => const NoTransitionPage(
+            pageBuilder: (_, state) => NoTransitionPage(
+              key: state.pageKey,
               child: PlaceholderScreen(
                   title: 'Email Logs', icon: Icons.mail_outline),
             ),
@@ -318,8 +380,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           // Workforce
           GoRoute(
             path: AppRoutes.employees,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: EmployeesScreen()),
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: EmployeesScreen()),
             routes: [
               GoRoute(
                 path: ':employeeId',
@@ -332,92 +394,95 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.orgChart,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: OrgChartScreen()),
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: OrgChartScreen()),
           ),
           GoRoute(
             path: AppRoutes.branches,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: BranchesScreen()),
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: BranchesScreen()),
           ),
 
           // Time & Pay
           GoRoute(
             path: AppRoutes.attendance,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: AttendanceScreen()),
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: AttendanceScreen()),
           ),
           GoRoute(
             path: AppRoutes.leave,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: LeaveScreen()),
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: LeaveScreen()),
           ),
           GoRoute(
             path: AppRoutes.expenses,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: ExpenseScreen()),
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: ExpenseScreen()),
           ),
 
           // HR Ops
           GoRoute(
             path: AppRoutes.approvals,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: ApprovalsScreen()),
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: ApprovalsScreen()),
           ),
           GoRoute(
             path: AppRoutes.separation,
-            pageBuilder: (_, __) => const NoTransitionPage(
+            pageBuilder: (_, state) => NoTransitionPage(
+              key: state.pageKey,
               child: PlaceholderScreen(
                   title: 'Separation & FnF', icon: Icons.exit_to_app_outlined),
             ),
           ),
           GoRoute(
             path: AppRoutes.documents,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: DocumentsScreen()),
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: DocumentsScreen()),
           ),
 
           // My
           GoRoute(
             path: AppRoutes.myAttendance,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: MyAttendanceScreen()),
+            pageBuilder: (_, state) => NoTransitionPage(
+                key: state.pageKey, child: MyAttendanceScreen()),
           ),
           GoRoute(
             path: AppRoutes.myPayslips,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: MyPayslipScreen()),
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: MyPayslipScreen()),
           ),
           GoRoute(
             path: AppRoutes.referrals,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: ReferralsScreen()),
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: ReferralsScreen()),
           ),
           GoRoute(
             path: AppRoutes.myRequests,
-            pageBuilder: (_, __) => const NoTransitionPage(
+            pageBuilder: (_, state) => NoTransitionPage(
+              key: state.pageKey,
               child: PlaceholderScreen(
                   title: 'My Requests', icon: Icons.inbox_outlined),
             ),
           ),
           GoRoute(
             path: AppRoutes.profile,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: ProfileScreen()),
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: ProfileScreen()),
           ),
 
           // System
           GoRoute(
             path: AppRoutes.reports,
-            pageBuilder: (_, __) => const NoTransitionPage(
+            pageBuilder: (_, state) => NoTransitionPage(
+              key: state.pageKey,
               child: PlaceholderScreen(
                   title: 'Reports', icon: Icons.bar_chart_outlined),
             ),
           ),
           GoRoute(
             path: AppRoutes.settings,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: SettingsScreen()),
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: SettingsScreen()),
           ),
         ],
       ),

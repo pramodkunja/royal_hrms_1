@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
 import 'dashboard_section.dart';
@@ -258,7 +259,7 @@ class QuickTile extends StatelessWidget {
       // nothing on the stack for that back button to pop.
       onTap: () => item.path.startsWith('/settings/')
           ? context.push(item.path)
-          : context.go(item.path),
+          : goToDashboardSection(context, item.path),
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(

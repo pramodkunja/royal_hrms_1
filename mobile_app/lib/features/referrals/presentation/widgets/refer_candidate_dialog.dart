@@ -20,9 +20,6 @@ const _kRelationshipOptions = [
   'Other',
 ];
 
-// Matches backend CandidateCreateSerializer.validate_phone exactly.
-final _kPhoneRegex = RegExp(r'^\+?[\d\s\-()\./]{7,20}$');
-
 /// Shows the "Refer Someone" form as a centered dialog (matches the app's
 /// existing dialog-form convention, e.g. BranchFormDialog). Returns true if
 /// a referral was submitted successfully.
@@ -80,15 +77,12 @@ class _ReferCandidateDialogState extends ConsumerState<ReferCandidateDialog> {
     return null;
   }
 
-  String? _validatePhone(String? v) {
-    if (v == null || v.trim().isEmpty) return null; // optional
-    final trimmed = v.trim();
-    if (trimmed.length > 20) return 'Phone number must be 20 characters or fewer.';
-    if (!_kPhoneRegex.hasMatch(trimmed)) {
-      return 'Enter a valid phone number.';
-    }
-    return null;
-  }
+  // Backend's ReferralSubmitSerializer extends CandidateCreateSerializer
+  // without overriding validate_phone, so it enforces the same strict
+  // digits-only rule as Add/Edit Candidate — not the lenient one this used
+  // to check client-side (which let 7-9 digit or dash/space-formatted
+  // numbers through only to be rejected by the API).
+  String? _validatePhone(String? v) => FormValidators.candidatePhone(v);
 
   String? _validatePosition(String? v) {
     final required = FormValidators.required(v, fieldName: 'Position applied for');

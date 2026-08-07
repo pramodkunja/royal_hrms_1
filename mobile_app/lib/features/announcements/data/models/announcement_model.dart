@@ -22,6 +22,7 @@ class AnnouncementModel {
   final int reactionsCount;
   final bool hasReacted;
   final bool canEdit;
+  final bool canDelete;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -44,6 +45,7 @@ class AnnouncementModel {
     required this.reactionsCount,
     required this.hasReacted,
     required this.canEdit,
+    required this.canDelete,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -75,6 +77,7 @@ class AnnouncementModel {
       reactionsCount:       json['reactions_count'] as int? ?? 0,
       hasReacted:           json['has_reacted'] as bool? ?? false,
       canEdit:              json['can_edit'] as bool? ?? false,
+      canDelete:            json['can_delete'] as bool? ?? false,
       createdAt:            parseDate(json['created_at']),
       updatedAt:            parseDate(json['updated_at']),
     );
@@ -104,6 +107,7 @@ class AnnouncementModel {
         reactionsCount:       reactionsCount ?? this.reactionsCount,
         hasReacted:           hasReacted ?? this.hasReacted,
         canEdit:              canEdit,
+        canDelete:            canDelete,
         createdAt:            createdAt,
         updatedAt:            updatedAt,
       );

@@ -85,7 +85,8 @@ class _AddCandidateFormContent extends StatelessWidget {
                 hint: 'anjali@gmail.com',
                 keyboardType: TextInputType.emailAddress,
                 required: true,
-                enabled: !isEdit),
+                enabled: !isEdit,
+                validator: FormValidators.email),
           ),
           const SizedBox(height: 14),
           _row(

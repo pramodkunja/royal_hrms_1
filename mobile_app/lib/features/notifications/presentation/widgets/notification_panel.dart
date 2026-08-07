@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -101,7 +100,8 @@ class NotificationPanel extends ConsumerWidget {
                         onTap: () {
                           ref.read(notificationsProvider.notifier).markRead(n.id);
                           Navigator.of(context).pop();
-                          context.go(_kModuleRoutes[n.module] ?? AppRoutes.dashboard);
+                          goToDashboardSection(
+                              context, _kModuleRoutes[n.module] ?? AppRoutes.dashboard);
                         },
                       );
                     },

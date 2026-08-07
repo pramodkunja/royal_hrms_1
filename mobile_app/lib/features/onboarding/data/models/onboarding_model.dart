@@ -160,34 +160,33 @@ class OnboardingProfileModel extends OnboardingProfileEntity {
     required super.documents,
   });
 
-  factory OnboardingProfileModel.fromJson(Map<String, dynamic> json) {
+  /// Backend `GET /onboarding/` returns the [EmployeeProfileSerializer]
+  /// fields flat (not grouped by step) plus a `completed_steps` list of
+  /// step indices (0-4) whose required fields are already filled — there
+  /// is no `status`/`current_step`/nested `personal`/`documents` keys, so
+  /// those are derived here or supplied by the caller.
+  factory OnboardingProfileModel.fromJson(
+    Map<String, dynamic> json, {
+    String status = 'pending',
+    List<OnboardingDocModel> documents = const [],
+  }) {
     final data = json['data'] is Map
         ? json['data'] as Map<String, dynamic>
         : json;
+    final completedSteps = (data['completed_steps'] as List<dynamic>?)
+            ?.map((e) => e as int)
+            .toSet() ??
+        <int>{};
+    final currentStep = List.generate(5, (i) => i)
+        .firstWhere((s) => !completedSteps.contains(s), orElse: () => 4);
     return OnboardingProfileModel(
-      status: data['status'] as String? ?? 'pending',
-      currentStep: data['current_step'] as int? ?? 0,
-      personal: data['personal'] != null
-          ? OnboardingPersonalModel.fromJson(
-              data['personal'] as Map<String, dynamic>)
-          : const OnboardingPersonalModel(),
-      education: data['education'] != null
-          ? OnboardingEducationModel.fromJson(
-              data['education'] as Map<String, dynamic>)
-          : const OnboardingEducationModel(),
-      bank: data['bank'] != null
-          ? OnboardingBankModel.fromJson(
-              data['bank'] as Map<String, dynamic>)
-          : const OnboardingBankModel(),
-      emergency: data['emergency'] != null
-          ? OnboardingEmergencyModel.fromJson(
-              data['emergency'] as Map<String, dynamic>)
-          : const OnboardingEmergencyModel(),
-      documents: (data['documents'] as List<dynamic>?)
-              ?.map((d) =>
-                  OnboardingDocModel.fromJson(d as Map<String, dynamic>))
-              .toList() ??
-          [],
+      status: status,
+      currentStep: currentStep,
+      personal: OnboardingPersonalModel.fromJson(data),
+      education: OnboardingEducationModel.fromJson(data),
+      bank: OnboardingBankModel.fromJson(data),
+      emergency: OnboardingEmergencyModel.fromJson(data),
+      documents: documents,
     );
   }
 }

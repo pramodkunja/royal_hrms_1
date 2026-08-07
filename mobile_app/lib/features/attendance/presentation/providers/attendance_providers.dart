@@ -305,18 +305,18 @@ final overtimeListProvider = AsyncNotifierProvider.autoDispose<OvertimeListNotif
 class OvertimeListNotifier extends AutoDisposeAsyncNotifier<PaginatedListEntity<OvertimeRowEntity>> {
   AttendanceRepository get _repo => ref.read(attendanceRepositoryProvider);
 
+  // Deliberately does NOT watch hrAttendanceBranchFilterProvider /
+  // hrAttendanceDepartmentFilterProvider / hrAttendanceDateFilterProvider.
+  // Those filters are only exposed in the "Attendance" tab's UI — the OT
+  // Entry tab has no filter controls of its own, so silently inheriting
+  // whatever branch/department/date happened to be selected on a different
+  // tab caused freshly-added OT entries to appear "missing" whenever they
+  // fell outside that stale, invisible filter. The OT Entry tab always
+  // shows the unfiltered list instead.
   @override
   Future<PaginatedListEntity<OvertimeRowEntity>> build() {
-    final branch = ref.watch(hrAttendanceBranchFilterProvider);
-    final department = ref.watch(hrAttendanceDepartmentFilterProvider);
-    final date = ref.watch(hrAttendanceDateFilterProvider);
     final page = ref.watch(overtimePageProvider);
-    return _repo.getOvertimeList(
-      branch: branch,
-      department: department,
-      date: _fmtDate(date),
-      page: page,
-    );
+    return _repo.getOvertimeList(page: page);
   }
 
   Future<void> refresh() async {
@@ -344,6 +344,10 @@ class OvertimeListNotifier extends AutoDisposeAsyncNotifier<PaginatedListEntity<
         approvedBy: approvedBy,
         reason: reason,
       );
+      // Jump back to page 1 — the list is sorted newest-first, so the entry
+      // just created would otherwise be invisible if the user was sitting
+      // on a later page.
+      ref.read(overtimePageProvider.notifier).state = 1;
       await refresh();
       return null;
     } catch (e) {

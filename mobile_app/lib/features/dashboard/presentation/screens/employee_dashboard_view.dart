@@ -2,7 +2,6 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:mobile_app/core/location/location_service.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
@@ -384,7 +383,7 @@ class _ConsoleClockRowState extends ConsumerState<_ConsoleClockRow> {
               message: 'Request Attendance Correction',
               child: InkWell(
                 borderRadius: BorderRadius.circular(20),
-                onTap: () => context.go(AppRoutes.myAttendance),
+                onTap: () => goToDashboardSection(context, AppRoutes.myAttendance),
                 child: Padding(
                   padding: const EdgeInsets.all(6),
                   child: Icon(Icons.flag_outlined, size: 16, color: Colors.white.withValues(alpha: 0.65)),
@@ -504,7 +503,7 @@ class _EmpLeaveBalancesCard extends ConsumerWidget {
       icon: Icons.beach_access_outlined,
       accentColor: const Color(0xFFB5651D),
       trailing: TextButton(
-        onPressed: () => context.go(AppRoutes.leave),
+        onPressed: () => goToDashboardSection(context, AppRoutes.leave),
         style: TextButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           minimumSize: const Size(0, 0),
@@ -1035,7 +1034,7 @@ class _ActionItemRow extends StatelessWidget {
     return Opacity(
       opacity: done ? 0.6 : 1,
       child: GestureDetector(
-        onTap: route == null ? null : () => context.go(route!),
+        onTap: route == null ? null : () => goToDashboardSection(context, route!),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1146,7 +1145,7 @@ class _EmpRecentRequestsCard extends ConsumerWidget {
         data: (response) {
           if (response.requests.isEmpty) {
             return GestureDetector(
-              onTap: () => context.go(AppRoutes.leave),
+              onTap: () => goToDashboardSection(context, AppRoutes.leave),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Center(
@@ -1397,7 +1396,7 @@ class _EmpAnnouncementBannerState extends ConsumerState<_EmpAnnouncementBanner> 
               Column(
                 children: [
                   GestureDetector(
-                    onTap: () => context.go(AppRoutes.announcements),
+                    onTap: () => goToDashboardSection(context, AppRoutes.announcements),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -1586,7 +1585,7 @@ class _QuickLinksCard extends StatelessWidget {
         itemBuilder: (context, index) {
           final link = _kQuickLinksEmployee[index];
           return GestureDetector(
-            onTap: () => context.go(link.path),
+            onTap: () => goToDashboardSection(context, link.path),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(

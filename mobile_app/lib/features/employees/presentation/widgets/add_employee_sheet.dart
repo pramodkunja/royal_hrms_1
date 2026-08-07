@@ -156,6 +156,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
             child: _Field(
               label: 'Phone',
               initialValue: form.phone,
+              error: _errors['phone'],
               onChanged: (v) => form.phone = v,
               hint: '+91 98765 43210',
               keyboardType: TextInputType.phone,
@@ -276,6 +277,17 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
       final depts = ref.watch(employeeFormDepartmentsProvider).valueOrNull ?? [];
       final match = depts.where((d) => d.name == form.department).firstOrNull;
       if (match != null) form.departmentId = match.id;
+    }
+    // Resolve whether the employee's current role is manager-type from the
+    // real Role.can_manage_team flag (not the role name — see
+    // EmployeeUpdateFormData.isManagerRole doc comment) as soon as the roles
+    // list loads. Without this, form.canManageTeam stays null and
+    // isManagerRole defaults to false, which would wrongly show the
+    // Reporting Manager field (and send reporting_manager_id) for a manager.
+    if (form.canManageTeam == null && form.role.isNotEmpty) {
+      final roles = ref.watch(employeeFormRolesProvider).valueOrNull ?? [];
+      final match = roles.where((r) => r.name == form.role).firstOrNull;
+      if (match != null) form.canManageTeam = match.canManageTeam;
     }
     return [
       const _SectionHeader(
@@ -400,7 +412,16 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
             child: _RoleSlugDropdown(
               selectedName: form.role,
               error: _errors['role'],
-              onSelected: (name) => setState(() => form.role = name),
+              onSelected: (name) => setState(() {
+                form.role = name;
+                // Re-resolve immediately (rather than waiting for the
+                // `_editFields()` build-time lookup above) so a role change
+                // that flips manager-ness takes effect in the same frame —
+                // e.g. hiding the Reporting Manager field right away.
+                final roles = ref.read(employeeFormRolesProvider).valueOrNull ?? [];
+                form.canManageTeam =
+                    roles.where((r) => r.name == name).firstOrNull?.canManageTeam ?? false;
+              }),
             ),
           ),
           const SizedBox(width: 12),

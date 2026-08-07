@@ -115,7 +115,7 @@ class _AnnouncementCardState extends ConsumerState<AnnouncementCard> {
           _CardFooter(
             announcement: widget.announcement,
             onEdit:   widget.announcement.canEdit ? widget.onEdit : null,
-            onDelete: widget.announcement.canEdit ? widget.onDelete : null,
+            onDelete: widget.announcement.canDelete ? widget.onDelete : null,
             onReact:  () => ref
                 .read(announcementsProvider.notifier)
                 .toggleReaction(widget.announcement.id),

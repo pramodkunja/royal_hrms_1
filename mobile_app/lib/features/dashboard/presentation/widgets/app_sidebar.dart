@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
 import 'package:mobile_app/features/auth/presentation/providers/auth_providers.dart';
@@ -98,11 +99,10 @@ class AppSidebar extends ConsumerWidget {
   }
 
   void _navigate(BuildContext context, String path) {
-    // Close drawer first, then navigate. Order matters: closing the drawer
-    // pops a route from the Navigator; going to the new path replaces the
-    // current route. Doing both in the same frame is safe.
+    // Close drawer first, then navigate to the section (collapsing any
+    // existing back stack to Dashboard first — see goToDashboardSection).
     Scaffold.of(context).closeDrawer();
-    context.go(path);
+    goToDashboardSection(context, path);
   }
 }
 

@@ -121,9 +121,10 @@ class _SmtpFormSheetState extends State<SmtpFormSheet> {
                         child: _field(
                           label: 'BCC Email',
                           initial: _form.bccEmail,
+                          error: _errors['bccEmail'],
                           hint: 'bcc@company.com',
                           keyboardType: TextInputType.emailAddress,
-                          onChanged: (v) => _form.bccEmail = v,
+                          onChanged: (v) { _form.bccEmail = v; _clearErr('bccEmail'); },
                         ),
                       ),
                       const SizedBox(width: 10),

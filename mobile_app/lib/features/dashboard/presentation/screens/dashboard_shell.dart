@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemNavigator;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_app/core/router/app_router.dart';
@@ -37,19 +38,76 @@ class _DashboardShellState extends ConsumerState<DashboardShell> {
     final title = pageTitle(currentPath);
     final isDarkMode = ref.watch(themeModeProvider);
 
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: AppColors.background,
-      drawer: const AppSidebar(),
-      appBar: AppTopBar(
-        title: title,
-        onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
-        onThemeToggleTap: () => ref.read(themeModeProvider.notifier).toggle(),
-        isDarkMode: isDarkMode,
-        onLogoutTap: _handleLogout,
+    // Publish so VoiceMicOverlay (mounted above the whole Router, with no
+    // GoRouterState of its own) can tell whether the current screen has a
+    // FAB — see currentVisiblePathProvider's doc comment in app_router.dart
+    // for why this can't just be read off GoRouter itself. Deferred to next
+    // frame: this runs during build, and a provider write during build
+    // throws.
+    if (ref.read(currentVisiblePathProvider) != currentPath) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(currentVisiblePathProvider.notifier).state = currentPath;
+        }
+      });
+    }
+
+    return PopScope(
+      // Always intercept: every /dashboard/* route lives inside this shell,
+      // so this is the choke point for "nothing left to pop" — decide
+      // ourselves whether that means go home, or ask before exiting.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _handleBackPress(currentPath);
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
+        backgroundColor: AppColors.background,
+        drawer: const AppSidebar(),
+        appBar: AppTopBar(
+          title: title,
+          onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+          onThemeToggleTap: () => ref.read(themeModeProvider.notifier).toggle(),
+          isDarkMode: isDarkMode,
+          onLogoutTap: _handleLogout,
+        ),
+        body: widget.child,
       ),
-      body: widget.child,
     );
+  }
+
+  Future<void> _handleBackPress(String currentPath) async {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    // Reached with no back stack from a non-dashboard shell route (e.g. a
+    // direct deep link) — go home instead of falling through to exit.
+    if (currentPath != AppRoutes.dashboard) {
+      context.go(AppRoutes.dashboard);
+      return;
+    }
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Exit Application?'),
+        content: const Text('Are you sure you want to exit?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Exit'),
+          ),
+        ],
+      ),
+    );
+    if (shouldExit == true) {
+      SystemNavigator.pop();
+    }
   }
 
   Future<void> _handleLogout() async {
