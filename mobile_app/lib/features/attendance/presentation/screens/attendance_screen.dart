@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/app_error_state.dart';
 import '../../../../shared/widgets/expandable_fab.dart' show expandableFabOpenProvider;
 import '../../../employees/data/models/employee_model.dart';
 import '../../../employees/presentation/providers/employee_providers.dart';
@@ -15,19 +18,15 @@ import '../widgets/hr_correction_card.dart';
 
 // ─── Colour helpers ───────────────────────────────────────────────────────────
 
-// Reads through AppColors (not `const` hex literals) so status badges flip
-// to the dark palette instead of staying pinned to their light-mode hues.
-const _kHalfDayAccent = Color(0xFF9333EA); // no AppColors token for purple
-
 Color _statusColor(String s) => switch (s) {
   'Present'    => AppColors.success,
   'Late'       => AppColors.warning,
   'Absent'     => AppColors.error,
   'On Leave'   => AppColors.info,
-  'Half Day'   => _kHalfDayAccent,
+  'Half Day'   => AppColors.accentPurple,
   'Weekly Off' => AppColors.textSecondary,
   'Holiday'    => AppColors.warning,
-  'Incomplete' => _kHalfDayAccent,
+  'Incomplete' => AppColors.accentPurple,
   'approved' || 'Approved'   => AppColors.success,
   'pending' || 'Pending'    => AppColors.warning,
   'rejected' || 'Rejected'   => AppColors.error,
@@ -39,10 +38,10 @@ Color _statusBg(String s) => switch (s) {
   'Late'       => AppColors.warningContainer,
   'Absent'     => AppColors.errorContainer,
   'On Leave'   => AppColors.infoContainer,
-  'Half Day'   => _kHalfDayAccent.withValues(alpha: 0.12),
+  'Half Day'   => AppColors.accentPurpleContainer,
   'Weekly Off' => AppColors.backgroundLow,
   'Holiday'    => AppColors.warningContainer,
-  'Incomplete' => _kHalfDayAccent.withValues(alpha: 0.12),
+  'Incomplete' => AppColors.accentPurpleContainer,
   'approved' || 'Approved'   => AppColors.successContainer,
   'pending' || 'Pending'    => AppColors.warningContainer,
   'rejected' || 'Rejected'   => AppColors.errorContainer,
@@ -89,14 +88,14 @@ const _kAttendanceSortByOptions = <MapEntry<String, String>>[
 Color _issueColor(String issueType) => switch (issueType) {
   'no-match'  => AppColors.error,
   'duplicate' => AppColors.warning,
-  'future'    => _kHalfDayAccent,
+  'future'    => AppColors.accentPurple,
   _           => AppColors.textSecondary,
 };
 
 Color _issueBg(String issueType) => switch (issueType) {
   'no-match'  => AppColors.errorContainer,
   'duplicate' => AppColors.warningContainer,
-  'future'    => _kHalfDayAccent.withValues(alpha: 0.12),
+  'future'    => AppColors.accentPurpleContainer,
   _           => AppColors.backgroundLow,
 };
 
@@ -323,7 +322,9 @@ class _StatCard extends StatelessWidget {
     padding: const EdgeInsets.all(10),
     decoration: BoxDecoration(
       color: AppColors.surface,
-      borderRadius: BorderRadius.circular(10),
+      // Matches the app's other card radius (12) rather than this card's
+      // previous one-off 10.
+      borderRadius: BorderRadius.circular(12),
       border: Border.all(color: AppColors.border),
       boxShadow: AppColors.cardShadow,
     ),
@@ -620,26 +621,78 @@ class _EmployeeMonthView extends ConsumerStatefulWidget {
 class _EmployeeMonthViewState extends ConsumerState<_EmployeeMonthView> {
   EmployeeModel? _selected;
 
+  // Debounce + stale-result protection for the server-side search below.
+  // `_searchGeneration` is bumped on every new query; a pending debounce or
+  // in-flight request that finds its generation superseded when it wakes up
+  // bails out without touching state or hitting the network — matching the
+  // generation-counter pattern already used for pagination in
+  // employee_providers.dart. Flutter's own Autocomplete/RawAutocomplete adds
+  // a second, independent layer of the same protection on top of this (see
+  // `_onChangedCallId` in framework source), so a result can never render
+  // out of order even if this logic had a bug.
+  int _searchGeneration = 0;
+  bool _searching = false;
+  String? _searchError;
+  bool _noResults = false;
+  String _lastQuery = '';
+  // Captured from fieldViewBuilder purely so Retry (below) can force a real
+  // re-search — TextEditingController's setter is a no-op when assigned the
+  // value it already holds, so Autocomplete's own change listener (which is
+  // what actually re-invokes optionsBuilder and refreshes its results
+  // overlay) wouldn't fire from re-calling _searchEmployees directly.
+  TextEditingController? _fieldController;
+
+  Future<Iterable<EmployeeModel>> _searchEmployees(TextEditingValue value) async {
+    final query = value.text.trim();
+    if (query.isEmpty) {
+      _searchGeneration++;
+      if (mounted) setState(() { _searching = false; _searchError = null; _noResults = false; });
+      return const Iterable<EmployeeModel>.empty();
+    }
+    _lastQuery = query;
+
+    final generation = ++_searchGeneration;
+    if (mounted) {
+      setState(() { _searching = true; _searchError = null; _noResults = false; });
+    }
+
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (generation != _searchGeneration) return const Iterable<EmployeeModel>.empty();
+
+    try {
+      final result = await ref.read(employeesDataSourceProvider).fetchEmployeesPage(
+            page: 1,
+            pageSize: 20,
+            filters: EmployeeFilters(search: query),
+          );
+      if (generation != _searchGeneration) return const Iterable<EmployeeModel>.empty();
+      if (mounted) {
+        setState(() { _searching = false; _noResults = result.items.isEmpty; });
+      }
+      return result.items;
+    } catch (e) {
+      if (generation != _searchGeneration) return const Iterable<EmployeeModel>.empty();
+      if (mounted) {
+        setState(() { _searching = false; _searchError = userFriendlyMessage(e); });
+      }
+      return const Iterable<EmployeeModel>.empty();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final employeesAsync = ref.watch(employeesProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-          child: employeesAsync.when(
-            data: (employees) => Autocomplete<EmployeeModel>(
-              displayStringForOption: (e) => '${e.fullName} (${e.employeeId})',
-              optionsBuilder: (v) {
-                if (v.text.isEmpty) return const Iterable<EmployeeModel>.empty();
-                final q = v.text.toLowerCase();
-                return employees.where((e) =>
-                    e.fullName.toLowerCase().contains(q) ||
-                    e.employeeId.toLowerCase().contains(q));
-              },
-              onSelected: (e) => setState(() => _selected = e),
-              fieldViewBuilder: (context, controller, focusNode, onSubmit) => TextField(
+          child: Autocomplete<EmployeeModel>(
+            displayStringForOption: (e) => '${e.fullName} (${e.employeeId})',
+            optionsBuilder: _searchEmployees,
+            onSelected: (e) => setState(() => _selected = e),
+            fieldViewBuilder: (context, controller, focusNode, onSubmit) {
+              _fieldController = controller;
+              return TextField(
                 controller: controller,
                 focusNode: focusNode,
                 decoration: InputDecoration(
@@ -650,12 +703,53 @@ class _EmployeeMonthViewState extends ConsumerState<_EmployeeMonthView> {
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
                 ),
-              ),
-            ),
-            loading: () => const LinearProgressIndicator(),
-            error: (e, _) => Text(friendlyAttendanceError(e), style: TextStyle(color: AppColors.error, fontSize: 12)),
+              );
+            },
           ),
         ),
+        // Small, inline status line below the search field — never a
+        // full-screen loader, and never blocks the already-selected
+        // employee's attendance view below it.
+        if (_searching)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(12, 6, 12, 0),
+            child: LinearProgressIndicator(minHeight: 2),
+          )
+        else if (_searchError != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(_searchError!,
+                      style: TextStyle(color: AppColors.error, fontSize: 12)),
+                ),
+                TextButton(
+                  onPressed: () {
+                    // Round-trip the controller's text through empty and
+                    // back to force Autocomplete's own listener to fire
+                    // twice; the second call is what actually re-invokes
+                    // _searchEmployees through the framework's normal path
+                    // and refreshes the real results overlay (a fresh
+                    // assignment of the *same* text value alone would be a
+                    // no-op — see the field's doc comment above).
+                    final controller = _fieldController;
+                    if (controller == null) return;
+                    final text = _lastQuery;
+                    controller.text = '';
+                    controller.text = text;
+                  },
+                  child: const Text('Retry', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+          )
+        else if (_noResults)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+            child: Text('No employees match your search.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+          ),
         const SizedBox(height: 8),
         Expanded(
           child: _selected == null
@@ -705,12 +799,44 @@ Future<void> _reprocessAttendance(BuildContext context, WidgetRef ref) async {
   ));
 }
 
-class _TeamDayView extends ConsumerWidget {
+class _TeamDayView extends ConsumerStatefulWidget {
   const _TeamDayView();
+
+  @override
+  ConsumerState<_TeamDayView> createState() => _TeamDayViewState();
+}
+
+class _TeamDayViewState extends ConsumerState<_TeamDayView> {
+  late final _searchCtrl =
+      TextEditingController(text: ref.read(attendanceRecordsSearchProvider));
+  Timer? _searchDebounce;
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   void _resetPages(WidgetRef ref) {
     ref.read(attendanceRecordsPageProvider.notifier).state = 1;
     ref.read(overtimePageProvider.notifier).state = 1;
+  }
+
+  // The search field previously wrote to attendanceRecordsSearchProvider on
+  // every keystroke, which — since AttendanceRecordsNotifier.build() watches
+  // that provider — triggered an immediate, non-seamless reload (see the
+  // restructuring below for why that used to blank the whole filter panel
+  // including this very field, destroying its own focus/cursor mid-type).
+  // Debouncing here means a fast typist no longer fires a request-per-
+  // character even now that the reload no longer visually disrupts anything.
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      ref.read(attendanceRecordsSearchProvider.notifier).state = value;
+      _resetPages(ref);
+    });
   }
 
   Future<void> _pickDate(BuildContext context, WidgetRef ref) async {
@@ -758,9 +884,27 @@ class _TeamDayView extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final recordsAsync = ref.watch(attendanceRecordsProvider);
-    final dashboardAsync = ref.watch(attendanceDashboardProvider);
+    // AttendanceDashboardEntity carries 8 fields (presentToday/absent/
+    // lateArrivals/onLeave/totalEmployees/summaryChips/invalidPunchesCount/
+    // unPunchesCount) — this view only ever reads summaryChips and
+    // totalEmployees (see below); the other 6 belong to _StatsBar and the
+    // root screen's tab badges, which watch this same provider
+    // independently. Selecting just this pair means a dashboard refetch
+    // that leaves totalEmployees unchanged (an int, so this comparison is
+    // exact) doesn't force the whole filter panel + records list below to
+    // rebuild for fields this view never displays. Note: summaryChips is a
+    // Map, which compares by identity, not content — a refetch that
+    // produces an equal-content-but-new-instance map will still be treated
+    // as "changed" here, so the practical benefit is guaranteed for
+    // totalEmployees and partial for summaryChips.
+    final dashboardSlice = ref.watch(attendanceDashboardProvider.select(
+      (async) => (
+        chips: async.valueOrNull?.summaryChips,
+        total: async.valueOrNull?.totalEmployees,
+      ),
+    ));
     final branchList = ref.watch(employeeBranchNameListProvider);
     final deptList = ref.watch(employeeDepartmentListProvider);
     final selectedBranch = ref.watch(hrAttendanceBranchFilterProvider);
@@ -775,233 +919,246 @@ class _TeamDayView extends ConsumerWidget {
         .firstWhere((e) => e.key == selectedSortBy, orElse: () => _kAttendanceSortByOptions.first)
         .value;
     final selectedSortDir = ref.watch(attendanceRecordsSortDirProvider);
+    final chips = dashboardSlice.chips ?? const <String, int>{};
+    final totalEmployees = dashboardSlice.total ?? recordsAsync.valueOrNull?.results.length ?? 0;
 
+    // The filter panel (including the search field) and the status-chips
+    // row used to live INSIDE recordsAsync.when()'s `data:` branch — so
+    // every keystroke in the search field, every branch/department/status/
+    // sort/date change, and every Prev/Next tap (all of which make
+    // AttendanceRecordsNotifier.build() re-run via a *watched* provider,
+    // not an invalidate/refresh — see the copyWithPrevious fix above for
+    // why that distinction matters) replaced the whole panel with a bare
+    // spinner and rebuilt it from scratch once the new page arrived. That
+    // destroyed the search field's focus/cursor on every character typed.
+    // Moving the panel out here means only the rows below it (still
+    // wrapped in `.when()`) show a transient loading state; the filter
+    // controls — including whatever the user is mid-typing — are never
+    // torn down by a filter/page change.
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(attendanceDashboardProvider);
         await ref.read(attendanceRecordsProvider.notifier).refresh();
       },
-      child: recordsAsync.when(
-        data: (page) {
-          final rows = page.results;
-          final chips = dashboardAsync.valueOrNull?.summaryChips ?? const <String, int>{};
-          final totalEmployees = dashboardAsync.valueOrNull?.totalEmployees ?? rows.length;
-
-          return ListView(
-            // Each TabBarView child would otherwise inherit the same
-            // PrimaryScrollController from the enclosing NestedScrollView —
-            // fine on mobile (no Scrollbar rendered), but on web/desktop the
-            // Scrollbar requires exactly one attached ScrollPosition and
-            // throws when multiple tabs' ListViews share the controller.
-            primary: false,
+      child: ListView(
+        // Each TabBarView child would otherwise inherit the same
+        // PrimaryScrollController from the enclosing NestedScrollView —
+        // fine on mobile (no Scrollbar rendered), but on web/desktop the
+        // Scrollbar requires exactly one attached ScrollPosition and
+        // throws when multiple tabs' ListViews share the controller.
+        primary: false,
+        padding: const EdgeInsets.all(12),
+        children: [
+          Container(
             padding: const EdgeInsets.all(12),
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Icon(Icons.filter_list, size: 16, color: AppColors.textSecondary),
-                        const SizedBox(width: 6),
-                        Text('Filters',
-                          style: AppTextStyles.label.copyWith(
-                            fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                      ],
+                    Icon(Icons.filter_list, size: 16, color: AppColors.textSecondary),
+                    const SizedBox(width: 6),
+                    Text('Filters',
+                      style: AppTextStyles.label.copyWith(
+                        fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(
+                    child: _Dropdown(
+                      value: selectedBranch.isEmpty ? 'All Branches' : selectedBranch,
+                      items: ['All Branches', ...branchList],
+                      onChanged: (v) {
+                        ref.read(hrAttendanceBranchFilterProvider.notifier).state =
+                            (v == 'All Branches') ? '' : v!;
+                        _resetPages(ref);
+                      },
                     ),
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      Expanded(
-                        child: _Dropdown(
-                          value: selectedBranch.isEmpty ? 'All Branches' : selectedBranch,
-                          items: ['All Branches', ...branchList],
-                          onChanged: (v) {
-                            ref.read(hrAttendanceBranchFilterProvider.notifier).state =
-                                (v == 'All Branches') ? '' : v!;
-                            _resetPages(ref);
-                          },
-                        ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _Dropdown(
+                      value: selectedDept.isEmpty ? 'All Departments' : selectedDept,
+                      items: ['All Departments', ...deptList],
+                      onChanged: (v) {
+                        ref.read(hrAttendanceDepartmentFilterProvider.notifier).state =
+                            (v == 'All Departments') ? '' : v!;
+                        _resetPages(ref);
+                      },
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextFormField(
+                      controller: _searchCtrl,
+                      onChanged: _onSearchChanged,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: 'Search employee…',
+                        prefixIcon: const Icon(Icons.search, size: 16),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _Dropdown(
-                          value: selectedDept.isEmpty ? 'All Departments' : selectedDept,
-                          items: ['All Departments', ...deptList],
-                          onChanged: (v) {
-                            ref.read(hrAttendanceDepartmentFilterProvider.notifier).state =
-                                (v == 'All Departments') ? '' : v!;
-                            _resetPages(ref);
-                          },
-                        ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _Dropdown(
+                      value: statusLabel,
+                      items: _kAttendanceStatusFilterOptions.map((e) => e.value).toList(),
+                      onChanged: (v) {
+                        final entry = _kAttendanceStatusFilterOptions.firstWhere((e) => e.value == v);
+                        ref.read(attendanceRecordsStatusFilterProvider.notifier).state = entry.key;
+                        _resetPages(ref);
+                      },
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _pickDate(context, ref),
+                      child: _FakeInput(
+                        value: selectedDate == null ? 'Today' : _shortDate(selectedDate),
+                        icon: Icons.calendar_today_outlined,
                       ),
-                    ]),
-                    const SizedBox(height: 8),
-                    Row(children: [
-                      Expanded(
-                        flex: 2,
-                        child: TextFormField(
-                          initialValue: ref.read(attendanceRecordsSearchProvider),
-                          onChanged: (v) {
-                            ref.read(attendanceRecordsSearchProvider.notifier).state = v;
-                            _resetPages(ref);
-                          },
-                          decoration: InputDecoration(
-                            isDense: true,
-                            hintText: 'Search employee…',
-                            prefixIcon: const Icon(Icons.search, size: 16),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _Dropdown(
-                          value: statusLabel,
-                          items: _kAttendanceStatusFilterOptions.map((e) => e.value).toList(),
-                          onChanged: (v) {
-                            final entry = _kAttendanceStatusFilterOptions.firstWhere((e) => e.value == v);
-                            ref.read(attendanceRecordsStatusFilterProvider.notifier).state = entry.key;
-                            _resetPages(ref);
-                          },
-                        ),
-                      ),
-                    ]),
-                    const SizedBox(height: 8),
-                    Row(children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => _pickDate(context, ref),
-                          child: _FakeInput(
-                            value: selectedDate == null ? 'Today' : _shortDate(selectedDate),
-                            icon: Icons.calendar_today_outlined,
-                          ),
-                        ),
-                      ),
-                      if (selectedDate != null)
-                        IconButton(
-                          tooltip: 'Reset to today',
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () {
-                            ref.read(hrAttendanceDateFilterProvider.notifier).state = null;
-                            _resetPages(ref);
-                          },
-                          icon: Icon(Icons.close, size: 18, color: AppColors.textSecondary),
-                        ),
-                      const SizedBox(width: 4),
-                      OutlinedButton.icon(
-                        onPressed: () => _exportCsv(context, ref),
-                        icon: const Icon(Icons.download_outlined, size: 15),
-                        label: const Text('Export'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          textStyle: AppTextStyles.labelSmall,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      OutlinedButton.icon(
-                        onPressed: () => showDialog(
-                          context: context,
-                          builder: (_) => const _ImportAttendanceDialog(),
-                        ),
-                        icon: const Icon(Icons.upload_outlined, size: 15),
-                        label: const Text('Import'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          textStyle: AppTextStyles.labelSmall,
-                        ),
-                      ),
-                    ]),
-                    const SizedBox(height: 8),
-                    Row(children: [
-                      Expanded(
-                        child: _Dropdown(
-                          value: sortByLabel,
-                          items: _kAttendanceSortByOptions.map((e) => e.value).toList(),
-                          onChanged: (v) {
-                            final entry = _kAttendanceSortByOptions.firstWhere((e) => e.value == v);
-                            ref.read(attendanceRecordsSortByProvider.notifier).state = entry.key;
-                            _resetPages(ref);
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        tooltip: selectedSortDir == 'asc' ? 'Ascending' : 'Descending',
-                        visualDensity: VisualDensity.compact,
-                        style: IconButton.styleFrom(
-                          side: BorderSide(color: AppColors.border),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: () {
-                          ref.read(attendanceRecordsSortDirProvider.notifier).state =
-                              selectedSortDir == 'asc' ? 'desc' : 'asc';
-                          _resetPages(ref);
-                        },
-                        icon: Icon(
-                          selectedSortDir == 'asc' ? Icons.arrow_upward : Icons.arrow_downward,
-                          size: 16,
-                        ),
-                      ),
-                    ]),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    ...chips.entries.map((e) {
-                      final label = _titleCaseStatus(e.key);
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: _Chip(label: '${e.value} $label', color: _statusColor(label), bg: _statusBg(label)),
-                      );
-                    }),
-                    Text('Total: $totalEmployees employees',
-                      style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              if (rows.isEmpty)
-                const _EmptyState(message: 'No attendance records for this day.'),
-              ...rows.map((r) => _AttendanceCard(record: r)),
-
-              if (page.totalPages > 1) ...[
-                const SizedBox(height: 4),
-                _PaginationBar(
-                  page: page.page,
-                  totalPages: page.totalPages,
-                  onPrev: page.page > 1
-                      ? () => ref.read(attendanceRecordsPageProvider.notifier).state = page.page - 1
-                      : null,
-                  onNext: page.page < page.totalPages
-                      ? () => ref.read(attendanceRecordsPageProvider.notifier).state = page.page + 1
-                      : null,
-                ),
+                    ),
+                  ),
+                  if (selectedDate != null)
+                    IconButton(
+                      tooltip: 'Reset to today',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () {
+                        ref.read(hrAttendanceDateFilterProvider.notifier).state = null;
+                        _resetPages(ref);
+                      },
+                      icon: Icon(Icons.close, size: 18, color: AppColors.textSecondary),
+                    ),
+                  const SizedBox(width: 4),
+                  OutlinedButton.icon(
+                    onPressed: () => _exportCsv(context, ref),
+                    icon: const Icon(Icons.download_outlined, size: 15),
+                    label: const Text('Export'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      textStyle: AppTextStyles.labelSmall,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  OutlinedButton.icon(
+                    onPressed: () => showDialog(
+                      context: context,
+                      builder: (_) => const _ImportAttendanceDialog(),
+                    ),
+                    icon: const Icon(Icons.upload_outlined, size: 15),
+                    label: const Text('Import'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      textStyle: AppTextStyles.labelSmall,
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(
+                    child: _Dropdown(
+                      value: sortByLabel,
+                      items: _kAttendanceSortByOptions.map((e) => e.value).toList(),
+                      onChanged: (v) {
+                        final entry = _kAttendanceSortByOptions.firstWhere((e) => e.value == v);
+                        ref.read(attendanceRecordsSortByProvider.notifier).state = entry.key;
+                        _resetPages(ref);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: selectedSortDir == 'asc' ? 'Ascending' : 'Descending',
+                    visualDensity: VisualDensity.compact,
+                    style: IconButton.styleFrom(
+                      side: BorderSide(color: AppColors.border),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () {
+                      ref.read(attendanceRecordsSortDirProvider.notifier).state =
+                          selectedSortDir == 'asc' ? 'desc' : 'asc';
+                      _resetPages(ref);
+                    },
+                    icon: Icon(
+                      selectedSortDir == 'asc' ? Icons.arrow_upward : Icons.arrow_downward,
+                      size: 16,
+                    ),
+                  ),
+                ]),
               ],
-            ],
-          );
-        },
-        loading: () => const Center(child: Padding(
-          padding: EdgeInsets.all(40),
-          child: CircularProgressIndicator(),
-        )),
-        error: (e, _) => _ErrorState(
-          message: friendlyAttendanceError(e),
-          onRetry: () => ref.read(attendanceRecordsProvider.notifier).refresh(),
-        ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                ...chips.entries.map((e) {
+                  final label = _titleCaseStatus(e.key);
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: _Chip(label: '${e.value} $label', color: _statusColor(label), bg: _statusBg(label)),
+                  );
+                }),
+                Text('Total: $totalEmployees employees',
+                  style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          recordsAsync.when(
+            data: (page) {
+              final rows = page.results;
+              return Column(
+                children: [
+                  if (rows.isEmpty)
+                    const _EmptyState(message: 'No attendance records for this day.'),
+                  ...rows.map((r) => _AttendanceCard(record: r)),
+                  if (page.totalPages > 1) ...[
+                    const SizedBox(height: 4),
+                    _PaginationBar(
+                      page: page.page,
+                      totalPages: page.totalPages,
+                      onPrev: page.page > 1
+                          ? () => ref.read(attendanceRecordsPageProvider.notifier).state = page.page - 1
+                          : null,
+                      onNext: page.page < page.totalPages
+                          ? () => ref.read(attendanceRecordsPageProvider.notifier).state = page.page + 1
+                          : null,
+                    ),
+                  ],
+                ],
+              );
+            },
+            loading: () => const Padding(
+              padding: EdgeInsets.all(40),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => AppErrorState(
+              message: friendlyAttendanceError(e),
+              padding: const EdgeInsets.all(24),
+              onRetry: () => ref.read(attendanceRecordsProvider.notifier).refresh(),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1110,7 +1267,7 @@ class _ImportAttendanceDialogState extends ConsumerState<_ImportAttendanceDialog
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = friendlyAttendanceError(e);
         _uploading = false;
       });
     }
@@ -1637,7 +1794,7 @@ class _AttendanceRecordFormDialogState extends ConsumerState<_AttendanceRecordFo
                 const SizedBox(height: 10),
               ],
               if (!widget.isEdit) ...[
-                _FormLabel('Employee'),
+                const _FormLabel('Employee'),
                 employeesAsync.when(
                   data: (employees) => DropdownButtonFormField<String>(
                     initialValue: _employeeId,
@@ -1661,7 +1818,7 @@ class _AttendanceRecordFormDialogState extends ConsumerState<_AttendanceRecordFo
                       style: TextStyle(color: AppColors.error, fontSize: 12)),
                 ),
                 const SizedBox(height: 12),
-                _FormLabel('Date'),
+                const _FormLabel('Date'),
                 GestureDetector(
                   onTap: _pickDate,
                   child: _FakeInput(value: _fmtDate(_date), icon: Icons.calendar_today_outlined),
@@ -1672,7 +1829,7 @@ class _AttendanceRecordFormDialogState extends ConsumerState<_AttendanceRecordFo
                 _KVRow('Date', _fmtDate(widget.date!)),
                 const SizedBox(height: 8),
               ],
-              _FormLabel('Status'),
+              const _FormLabel('Status'),
               DropdownButtonFormField<String>(
                 initialValue: _status,
                 decoration: InputDecoration(
@@ -1689,7 +1846,7 @@ class _AttendanceRecordFormDialogState extends ConsumerState<_AttendanceRecordFo
               const SizedBox(height: 12),
               Row(children: [
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _FormLabel('Clock In'),
+                  const _FormLabel('Clock In'),
                   GestureDetector(
                     onTap: () => _pickTime(true),
                     child: _FakeInput(
@@ -1700,7 +1857,7 @@ class _AttendanceRecordFormDialogState extends ConsumerState<_AttendanceRecordFo
                 ])),
                 const SizedBox(width: 10),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _FormLabel('Clock Out'),
+                  const _FormLabel('Clock Out'),
                   GestureDetector(
                     onTap: () => _pickTime(false),
                     child: _FakeInput(
@@ -1711,7 +1868,7 @@ class _AttendanceRecordFormDialogState extends ConsumerState<_AttendanceRecordFo
                 ])),
               ]),
               const SizedBox(height: 12),
-              _FormLabel('Note'),
+              const _FormLabel('Note'),
               TextField(
                 controller: _noteCtrl,
                 maxLength: 200,
@@ -1722,7 +1879,7 @@ class _AttendanceRecordFormDialogState extends ConsumerState<_AttendanceRecordFo
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 ),
               ),
-              _FormLabel('Reason *'),
+              const _FormLabel('Reason *'),
               TextField(
                 controller: _reasonCtrl,
                 maxLength: 500,
@@ -1923,7 +2080,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                   Text('Add OT Entry', style: AppTextStyles.h4),
                 ]),
                 const SizedBox(height: 16),
-                _FormLabel('Employee'),
+                const _FormLabel('Employee'),
                 employeesAsync.when(
                   data: (employees) => DropdownButtonFormField<String>(
                     initialValue: _employeeId,
@@ -1949,7 +2106,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                 const SizedBox(height: 12),
                 Row(children: [
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    _FormLabel('Date'),
+                    const _FormLabel('Date'),
                     GestureDetector(
                       onTap: _pickDate,
                       child: _FakeInput(value: _fmtDate(_date), icon: Icons.calendar_today_outlined),
@@ -1957,7 +2114,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                   ])),
                   const SizedBox(width: 10),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    _FormLabel('OT Type'),
+                    const _FormLabel('OT Type'),
                     DropdownButtonFormField<String>(
                       initialValue: _otType,
                       decoration: InputDecoration(
@@ -1976,7 +2133,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                 const SizedBox(height: 12),
                 Row(children: [
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    _FormLabel('OT Start'),
+                    const _FormLabel('OT Start'),
                     GestureDetector(
                       onTap: () => _pickTime(true),
                       child: _FakeInput(
@@ -1987,7 +2144,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                   ])),
                   const SizedBox(width: 10),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    _FormLabel('OT End'),
+                    const _FormLabel('OT End'),
                     GestureDetector(
                       onTap: () => _pickTime(false),
                       child: _FakeInput(
@@ -1998,7 +2155,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                   ])),
                 ]),
                 const SizedBox(height: 12),
-                _FormLabel('Approved By (optional — employee ID or name)'),
+                const _FormLabel('Approved By (optional — employee ID or name)'),
                 TextField(
                   controller: _approvedByCtrl,
                   decoration: InputDecoration(
@@ -2010,7 +2167,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                   style: AppTextStyles.bodySmall,
                 ),
                 const SizedBox(height: 12),
-                _FormLabel('Reason / Work Done'),
+                const _FormLabel('Reason / Work Done'),
                 TextField(
                   controller: _reasonCtrl,
                   maxLines: 3,
@@ -2080,8 +2237,15 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
               padding: EdgeInsets.symmetric(vertical: 20),
               child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
             ),
-            error: (e, _) => Text(friendlyAttendanceError(e),
-                style: TextStyle(color: AppColors.error, fontSize: 12)),
+            // Was plain error text with no way to recover short of an
+            // undiscoverable pull-to-refresh — every sibling HR tab
+            // (Team Day View, Invalid Punches, Un-punches) already uses
+            // this same _ErrorState-with-Retry pattern for its list.
+            error: (e, _) => AppErrorState(
+              message: friendlyAttendanceError(e),
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              onRetry: () => ref.read(overtimeListProvider.notifier).refresh(),
+            ),
           ),
         ],
       ),
@@ -2165,8 +2329,9 @@ class _InvalidPunchesTab extends ConsumerWidget {
               padding: EdgeInsets.symmetric(vertical: 40),
               child: Center(child: CircularProgressIndicator()),
             ),
-            error: (e, _) => _ErrorState(
+            error: (e, _) => AppErrorState(
               message: friendlyAttendanceError(e),
+              padding: const EdgeInsets.symmetric(vertical: 24),
               onRetry: () => ref.read(invalidPunchesProvider.notifier).refresh(),
             ),
           ),
@@ -2342,7 +2507,7 @@ class _AssignPunchDialogState extends ConsumerState<_AssignPunchDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _FormLabel('HR User'),
+            const _FormLabel('HR User'),
             hrUsersAsync.when(
               data: (users) => DropdownButtonFormField<String>(
                 initialValue: _selectedId,
@@ -2411,7 +2576,7 @@ class _ConvertPunchDialogState extends State<_ConvertPunchDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _FormLabel('Punch Type'),
+            const _FormLabel('Punch Type'),
             DropdownButtonFormField<String>(
               initialValue: _punchType,
               decoration: InputDecoration(
@@ -2427,7 +2592,7 @@ class _ConvertPunchDialogState extends State<_ConvertPunchDialog> {
               onChanged: (v) => setState(() => _punchType = v!),
             ),
             const SizedBox(height: 12),
-            _FormLabel('Target Time'),
+            const _FormLabel('Target Time'),
             GestureDetector(
               onTap: () async {
                 final picked = await showTimePicker(context: context, initialTime: _time ?? TimeOfDay.now());
@@ -2490,7 +2655,7 @@ class _DiscardPunchDialogState extends State<_DiscardPunchDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _FormLabel('Remarks (optional)'),
+            const _FormLabel('Remarks (optional)'),
             TextField(
               controller: _remarksCtrl,
               maxLines: 3,
@@ -2526,13 +2691,16 @@ class _UnpunchesTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final unpunchesAsync = ref.watch(unpunchesProvider);
-    final correctionsAsync = ref.watch(hrCorrectionsProvider);
     final statusFilter = ref.watch(hrCorrectionsStatusFilterProvider);
+    final branchFilter = ref.watch(hrAttendanceBranchFilterProvider);
+    final departmentFilter = ref.watch(hrAttendanceDepartmentFilterProvider);
+    final correctionsFilter = (status: statusFilter, branch: branchFilter, department: departmentFilter);
+    final correctionsAsync = ref.watch(hrCorrectionsProvider(correctionsFilter));
 
     return RefreshIndicator(
       onRefresh: () async {
         await ref.read(unpunchesProvider.notifier).refresh();
-        await ref.read(hrCorrectionsProvider.notifier).refresh();
+        await ref.read(hrCorrectionsProvider(correctionsFilter).notifier).refresh();
       },
       child: ListView(
         primary: false,
@@ -2554,8 +2722,9 @@ class _UnpunchesTab extends ConsumerWidget {
               padding: EdgeInsets.symmetric(vertical: 40),
               child: Center(child: CircularProgressIndicator()),
             ),
-            error: (e, _) => _ErrorState(
+            error: (e, _) => AppErrorState(
               message: friendlyAttendanceError(e),
+              padding: const EdgeInsets.symmetric(vertical: 24),
               onRetry: () => ref.read(unpunchesProvider.notifier).refresh(),
             ),
           ),
@@ -2598,16 +2767,17 @@ class _UnpunchesTab extends ConsumerWidget {
                 : Column(children: rows.map((r) => HrCorrectionCard(
                     record: r,
                     onReview: (approve) => ref
-                        .read(hrCorrectionsProvider.notifier)
+                        .read(hrCorrectionsProvider(correctionsFilter).notifier)
                         .reviewCorrection(r.id, approve: approve),
                   )).toList()),
             loading: () => const Padding(
               padding: EdgeInsets.symmetric(vertical: 40),
               child: Center(child: CircularProgressIndicator()),
             ),
-            error: (e, _) => _ErrorState(
+            error: (e, _) => AppErrorState(
               message: friendlyAttendanceError(e),
-              onRetry: () => ref.read(hrCorrectionsProvider.notifier).refresh(),
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              onRetry: () => ref.read(hrCorrectionsProvider(correctionsFilter).notifier).refresh(),
             ),
           ),
         ],
@@ -2902,23 +3072,5 @@ class _EmptyState extends StatelessWidget {
   );
 }
 
-class _ErrorState extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-  const _ErrorState({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(40),
-    child: Column(
-      children: [
-        Icon(Icons.error_outline, color: AppColors.error, size: 32),
-        const SizedBox(height: 10),
-        Text(message, textAlign: TextAlign.center,
-            style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
-        const SizedBox(height: 10),
-        OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
-      ],
-    ),
-  );
-}
+// Error states now use the shared AppErrorState widget (lib/shared/widgets/)
+// directly at their call sites above.

@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../notifications/presentation/widgets/notification_bell_button.dart';
+import '../../../../shared/widgets/app_button.dart';
 import '../../data/datasources/employees_remote_datasource.dart';
 import '../../data/models/employee_model.dart';
 import '../providers/employee_providers.dart';
@@ -13,6 +14,7 @@ import '../widgets/add_employee_sheet.dart';
 import '../widgets/approval_override_sheet.dart';
 import '../widgets/employee_attendance_tab.dart';
 import '../widgets/employee_leave_tab.dart';
+import '../widgets/promotion_tab.dart';
 import '../widgets/wishes_tab.dart';
 
 // ignore_for_file: use_build_context_synchronously
@@ -76,7 +78,7 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 6, vsync: this);
+    _tabCtrl = TabController(length: 7, vsync: this);
     _tabCtrl.addListener(_onTabChange);
   }
 
@@ -96,19 +98,24 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
   Future<void> _onToggle(bool value) async {
     if (_toggling) return;
     setState(() { _isActiveOverride = value; _toggling = true; });
-    final err = await ref
-        .read(employeesProvider.notifier)
-        .updateStatus(widget.employee.id, value);
+    final err = await updateEmployeeStatusAction(ref, widget.employee.id, value);
     if (!mounted) return;
     if (err != null) {
       setState(() => _isActiveOverride = !value);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(err),
-        backgroundColor: Colors.red.shade700,
+        backgroundColor: AppColors.error,
         behavior: SnackBarBehavior.floating,
       ));
     } else {
       ref.invalidate(employeeDetailProvider(widget.employeeId));
+      // The Employees list screen (if still mounted underneath this pushed
+      // route) otherwise wouldn't notice this status change until the user
+      // manually pulls to refresh — see employee_providers.dart's doc
+      // comment on employeeListProvider for why it's a separate provider
+      // from `employeesProvider` here.
+      ref.invalidate(employeeListProvider);
+      ref.invalidate(employeeStatsProvider);
     }
     if (mounted) setState(() => _toggling = false);
   }
@@ -118,6 +125,15 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
     if (ok) {
       ref.invalidate(employeeDetailProvider(widget.employeeId));
       ref.invalidate(employeesProvider);
+      ref.invalidate(employeeListProvider);
+      ref.invalidate(employeeStatsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('Employee updated successfully.'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
     }
   }
 
@@ -189,6 +205,7 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
                   Tab(text: 'Leave'),
                   Tab(text: 'Attendance'),
                   Tab(text: 'Approval Matrix'),
+                  Tab(text: 'Promotion'),
                   Tab(text: 'Benefit'),
                   Tab(text: 'Send Wishes'),
                 ],
@@ -203,6 +220,7 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
             EmployeeLeaveTab(employee: emp),
             EmployeeAttendanceTab(employee: emp),
             _ApprovalMatrixTab(employee: emp),
+            PromotionTab(employee: emp),
             const _ComingSoon(
               label: 'Benefit',
               icon: Icons.card_giftcard_outlined,
@@ -266,7 +284,7 @@ class _ProfileCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [AppColors.primary, Color(0xFF2A6ACC)],
+                colors: [AppColors.primary, const Color(0xFF2A6ACC)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -643,7 +661,9 @@ class _ProfileTabState extends State<_ProfileTab> {
           child: Container(
             decoration: BoxDecoration(
               color: AppColors.surface,
-              borderRadius: BorderRadius.circular(14),
+              // Matches the app's other card radius (12) rather than this
+        // section's previous one-off 14.
+        borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.border),
               boxShadow: AppColors.cardShadow,
             ),
@@ -915,6 +935,13 @@ class _DocumentsContentState extends ConsumerState<_DocumentsContent> {
   bool _uploading = false;
 
   Future<void> _pickAndUpload(String documentType) async {
+    // The top-level "Upload Document" button already disabled itself via
+    // `_uploading`, but each existing document's "Replace" icon button
+    // (_DocCard.onReplace) called straight into this method with no guard
+    // of its own — a user could tap Upload, then immediately tap Replace
+    // on a different document, firing two concurrent uploads. Both entry
+    // points now share this one guard.
+    if (_uploading) return;
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
@@ -1025,7 +1052,7 @@ class _DocumentsContentState extends ConsumerState<_DocumentsContent> {
         else
           ...emp.documents.map((doc) => _DocCard(
                 doc: doc,
-                onReplace: () => _pickAndUpload(doc.documentType),
+                onReplace: _uploading ? null : () => _pickAndUpload(doc.documentType),
               )),
       ],
     );
@@ -1043,7 +1070,11 @@ String _fmtFileSize(int bytes) {
 
 class _DocCard extends StatelessWidget {
   final EmployeeDocumentEntity doc;
-  final VoidCallback onReplace;
+  // Null while an upload/replace is already in flight elsewhere on this
+  // screen — disables the button rather than leaving it silently ignoring
+  // taps, so the user sees the same "can't act right now" feedback the
+  // top-level Upload Document button already gives.
+  final VoidCallback? onReplace;
   const _DocCard({required this.doc, required this.onReplace});
 
   Future<void> _open() async {
@@ -1277,23 +1308,7 @@ class _BottomBar extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             flex: 2,
-            child: ElevatedButton(
-              onPressed: onSave,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-              ),
-              child: Text(
-                'Save',
-                style: AppTextStyles.label.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
+            child: AppButton(label: 'Save', onPressed: onSave),
           ),
         ],
       ),
@@ -1431,7 +1446,9 @@ class _ReportingRelationshipsCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
+        // Matches the app's other card radius (12) rather than this
+        // section's previous one-off 14.
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
         boxShadow: AppColors.cardShadow,
       ),
@@ -1768,7 +1785,9 @@ class _ApprovalMatrixCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
+        // Matches the app's other card radius (12) rather than this
+        // section's previous one-off 14.
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
         boxShadow: AppColors.cardShadow,
       ),

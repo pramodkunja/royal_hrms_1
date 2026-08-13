@@ -7,6 +7,7 @@ import '../../../../core/location/location_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/device_identifier.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/app_error_state.dart';
 import '../../domain/entities/attendance_entity.dart';
 import '../providers/attendance_providers.dart';
 
@@ -20,31 +21,8 @@ class MyAttendanceScreen extends ConsumerStatefulWidget {
 }
 
 class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
-  Timer? _timer;
-  late DateTime _now;
   DateTime _calMonth = DateTime.now();
-  int _localSessionSeconds = 0;
-  bool _punching = false;
-  String _attendanceMode = 'office';
   int _calendarTab = 0; // 0 = Calendar, 1 = History — mirrors web's tab switcher
-
-  // Matches backend AttendancePunch.attendance_mode choices exactly
-  // (apps/attendance/models.py) and web's ClockWidget mode <select>.
-  static const _attendanceModeLabels = {
-    'office': 'Office',
-    'wfh': 'Work from Home',
-    'field': 'Field Work',
-    'client_location': 'Client Location',
-    'remote_office': 'Remote Office',
-  };
-
-  static const _attendanceModeIcons = {
-    'office': Icons.business_outlined,
-    'wfh': Icons.home_outlined,
-    'field': Icons.terrain_outlined,
-    'client_location': Icons.location_on_outlined,
-    'remote_office': Icons.wifi_outlined,
-  };
 
   // Keys are the backend's display labels (AttendanceRecord.STATUS_DISPLAY_MAP
   // values, e.g. "On Leave") — the calendar/history APIs return status as a
@@ -61,7 +39,7 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
         'Half Day': AppColors.primary,
         'Weekly Off': AppColors.textHint,
         'Holiday': AppColors.warning,
-        'Incomplete': const Color(0xFF9333EA),
+        'Incomplete': AppColors.accentPurple,
       };
 
   static const _monthNames = [
@@ -69,114 +47,12 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
     'July', 'August', 'September', 'October', 'November', 'December',
   ];
 
-  static const _fullWeekdays = [
-    'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-    'Friday', 'Saturday', 'Sunday',
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _now = DateTime.now();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      setState(() {
-        _now = DateTime.now();
-        final today = ref.read(todayAttendanceProvider).valueOrNull;
-        if (today?.isClockedIn ?? false) _localSessionSeconds++;
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  String _pad(int n) => n.toString().padLeft(2, '0');
-
-  String get _clockStr =>
-      '${_pad(_now.hour)}:${_pad(_now.minute)}:${_pad(_now.second)}';
-
-  String _sessionStr(int seconds) {
-    final h = seconds ~/ 3600;
-    final m = (seconds % 3600) ~/ 60;
-    final s = seconds % 60;
-    return '${_pad(h)}:${_pad(m)}:${_pad(s)}';
-  }
-
-  String get _dateStr {
-    final wd = _fullWeekdays[_now.weekday - 1];
-    final m = _monthNames[_now.month - 1];
-    return '$wd, ${_now.day} $m ${_now.year}';
-  }
-
   MonthYearKey get _calKey => (year: _calMonth.year, month: _calMonth.month);
-
-  Future<void> _toggleClock(TodayAttendanceEntity today) async {
-    if (_punching) return;
-    setState(() => _punching = true);
-
-    // Location is captured best-effort for every mode, not just 'office' —
-    // only 'office' punches are geofence-checked server-side, but wfh/field/
-    // client_location/remote_office still record GPS for the audit trail
-    // when it's available. getCurrentPosition() never throws and resolves to
-    // null on any permission/timeout/service failure, so this never blocks
-    // the punch.
-    final position = await ref.read(locationServiceProvider).getCurrentPosition();
-
-    if (!mounted) return;
-    final error = await ref.read(todayAttendanceProvider.notifier).punch(
-          isCurrentlyClockedIn: today.isClockedIn,
-          attendanceMode: _attendanceMode,
-          latitude: position?.latitude,
-          longitude: position?.longitude,
-          accuracy: position?.accuracy,
-          // dart:io's Platform throws on web ("Unsupported operation:
-          // _operatingSystem") — must guard with kIsWeb, same convention as
-          // core/network/api_client.dart.
-          deviceName: kIsWeb
-              ? 'Web'
-              : Platform.isAndroid
-                  ? 'Android'
-                  : Platform.isIOS
-                      ? 'iOS'
-                      : null,
-          operatingSystem: kIsWeb ? 'web' : Platform.operatingSystem,
-          deviceId: await ref.read(deviceIdProvider.future),
-        );
-
-    if (!mounted) return;
-    setState(() {
-      _punching = false;
-      _localSessionSeconds = 0;
-    });
-
-    if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error), backgroundColor: AppColors.error),
-      );
-    }
-  }
-
-  void _showCorrectionDialog(DateTime date) {
-    showDialog(
-      context: context,
-      builder: (_) => _CorrectionDialog(lockedDate: date),
-    );
-  }
 
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final todayAsync = ref.watch(todayAttendanceProvider);
-
-    ref.listen(todayAttendanceProvider, (previous, next) {
-      next.whenData((today) => _localSessionSeconds = today.sessionSeconds);
-    });
-
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(todayAttendanceProvider);
@@ -200,14 +76,17 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
             const SizedBox(height: 16),
             _buildStatCards(),
             const SizedBox(height: 14),
-            todayAsync.when(
-              data: (today) => _buildClockPanel(today),
-              loading: () => const _ClockPanelSkeleton(),
-              error: (e, _) => _ErrorCard(
-                message: friendlyAttendanceError(e),
-                onRetry: () => ref.invalidate(todayAttendanceProvider),
-              ),
-            ),
+            // Owns its own todayAttendanceProvider watch, per-second clock
+            // tick, punch state, and attendance-mode selection entirely
+            // independently of this screen. Previously all of that lived
+            // here as plain fields/methods, so the once-a-second Timer
+            // driving the live clock display forced this whole screen's
+            // build() — stat cards, monthly summary, calendar included — to
+            // rerun every second even though none of those sections'
+            // underlying data was actually changing. `const` means this
+            // screen rebuilding for an unrelated reason (e.g. the month
+            // navigation below) can't touch this widget either.
+            const _ClockPanel(),
             const SizedBox(height: 14),
             _buildMonthlySummary(),
             const SizedBox(height: 14),
@@ -281,278 +160,6 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
           child: Text(friendlyAttendanceError(e),
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
         ),
-      ),
-    );
-  }
-
-  // ── Clock Panel ────────────────────────────────────────────────────────────
-
-  Widget _buildClockPanel(TodayAttendanceEntity today) {
-    final sessionSeconds = today.isClockedIn ? _localSessionSeconds : today.sessionSeconds;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF17355F), Color(0xFF1E4E8C)],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF1E4E8C).withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Text(
-              _clockStr,
-              style: const TextStyle(
-                fontSize: 46,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                letterSpacing: 3,
-                fontFamily: 'monospace',
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Center(
-            child: Text(
-              today.dateDisplay.isNotEmpty ? today.dateDisplay : _dateStr,
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.white.withOpacity(0.75),
-                letterSpacing: 0.2,
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Divider(color: Colors.white.withOpacity(0.15), height: 1),
-          const SizedBox(height: 14),
-
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    today.isClockedIn ? 'SESSION ACTIVE' : 'SESSION ENDED',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withOpacity(0.55),
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    _sessionStr(sessionSeconds),
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      color: today.isClockedIn
-                          ? const Color(0xFF4ADE80)
-                          : Colors.white60,
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              _StatusBadge(clockedIn: today.isClockedIn),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          Text(
-            'ATTENDANCE MODE',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: Colors.white.withOpacity(0.55),
-              letterSpacing: 1.0,
-            ),
-          ),
-          const SizedBox(height: 6),
-          PopupMenuButton<String>(
-            enabled: !_punching,
-            offset: const Offset(0, 44),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            constraints: const BoxConstraints(minWidth: 200),
-            onSelected: (v) => setState(() => _attendanceMode = v),
-            itemBuilder: (_) => _attendanceModeLabels.entries.map((e) {
-              final selected = e.key == _attendanceMode;
-              return PopupMenuItem<String>(
-                value: e.key,
-                child: Row(
-                  children: [
-                    Icon(
-                      _attendanceModeIcons[e.key],
-                      size: 18,
-                      color: selected ? AppColors.primary : AppColors.textSecondary,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        e.value,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                          color: selected ? AppColors.primary : AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                    if (selected) Icon(Icons.check, size: 16, color: AppColors.primary),
-                  ],
-                ),
-              );
-            }).toList(),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.10),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.white.withOpacity(0.25)),
-              ),
-              child: Row(
-                children: [
-                  Icon(_attendanceModeIcons[_attendanceMode], color: Colors.white, size: 17),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _attendanceModeLabels[_attendanceMode] ?? 'Office',
-                      style: const TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Icon(Icons.expand_more, color: Colors.white.withOpacity(0.8), size: 20),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _punching ? null : () => _toggleClock(today),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: today.isClockedIn
-                    ? const Color(0xFFB91C1C)
-                    : const Color(0xFF15803D),
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: (today.isClockedIn
-                        ? const Color(0xFFB91C1C)
-                        : const Color(0xFF15803D))
-                    .withOpacity(0.6),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                elevation: 0,
-              ),
-              child: _punching
-                  ? const SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : Text(
-                      today.isClockedIn ? 'Clock Out' : 'Clock In',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          if (today.punches.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Text(
-                'No punches recorded today.',
-                style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.6)),
-              ),
-            )
-          else
-            ...today.punches.map((p) => Padding(
-                  padding: const EdgeInsets.only(bottom: 7),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 32,
-                        child: Text(
-                          p.type,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: p.type == 'IN'
-                                ? const Color(0xFF4ADE80)
-                                : const Color(0xFFFC8181),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        p.time,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          // Backend's `location` already includes the source label
-                          // (e.g. "Chennai HQ · Mobile") — do not append attendanceMode again.
-                          p.location.isNotEmpty ? p.location : '—',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withOpacity(0.65),
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                )),
-          const SizedBox(height: 10),
-          Divider(color: Colors.white.withOpacity(0.15), height: 1),
-          const SizedBox(height: 12),
-
-          GestureDetector(
-            onTap: () => _showCorrectionDialog(DateTime.now()),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.flag_outlined,
-                    size: 15, color: Colors.white.withOpacity(0.75)),
-                const SizedBox(width: 6),
-                Text(
-                  'Request Attendance Correction',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.white.withOpacity(0.85),
-                    decoration: TextDecoration.underline,
-                    decorationColor: Colors.white38,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -700,7 +307,7 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
                       : () => setState(() {
                             _calMonth = DateTime(_calMonth.year, _calMonth.month + 1, 1);
                           }),
-                  color: _isCurrentCalendarMonth ? AppColors.textHint.withOpacity(0.4) : AppColors.textSecondary,
+                  color: _isCurrentCalendarMonth ? AppColors.textHint.withValues(alpha: 0.4) : AppColors.textSecondary,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
@@ -858,7 +465,7 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
               onRegularize: () {
                 final day = int.tryParse(history[i].date.split(' ').first);
                 if (day == null) return;
-                _showCorrectionDialog(DateTime(_calMonth.year, _calMonth.month, day));
+                _showCorrectionDialog(context, DateTime(_calMonth.year, _calMonth.month, day));
               },
             ),
           ],
@@ -897,7 +504,7 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
             TextButton.icon(
               onPressed: () {
                 Navigator.pop(dialogContext);
-                _showCorrectionDialog(DateTime(_calMonth.year, _calMonth.month, day));
+                _showCorrectionDialog(context, DateTime(_calMonth.year, _calMonth.month, day));
               },
               icon: const Icon(Icons.flag_outlined, size: 16),
               label: const Text('Regularize'),
@@ -910,6 +517,440 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen> {
       ),
     );
   }
+}
+
+// ─── Clock panel ────────────────────────────────────────────────────────────
+//
+// Fully self-contained: owns its own todayAttendanceProvider watch, the
+// once-a-second clock/session-timer tick, punch-in-flight state, and
+// attendance-mode selection. Extracted out of _MyAttendanceScreenState so
+// that ticking the clock display doesn't force the stat cards / monthly
+// summary / calendar sections to rebuild every second — see the `const
+// _ClockPanel()` call site in _MyAttendanceScreenState.build() for the
+// rationale.
+class _ClockPanel extends ConsumerStatefulWidget {
+  const _ClockPanel();
+
+  @override
+  ConsumerState<_ClockPanel> createState() => _ClockPanelState();
+}
+
+class _ClockPanelState extends ConsumerState<_ClockPanel> {
+  Timer? _timer;
+  late DateTime _now;
+  int _localSessionSeconds = 0;
+  bool _punching = false;
+  String _attendanceMode = 'office';
+
+  // Matches backend AttendancePunch.attendance_mode choices exactly
+  // (apps/attendance/models.py) and web's ClockWidget mode <select>.
+  static const _attendanceModeLabels = {
+    'office': 'Office',
+    'wfh': 'Work from Home',
+    'field': 'Field Work',
+    'client_location': 'Client Location',
+    'remote_office': 'Remote Office',
+  };
+
+  static const _attendanceModeIcons = {
+    'office': Icons.business_outlined,
+    'wfh': Icons.home_outlined,
+    'field': Icons.terrain_outlined,
+    'client_location': Icons.location_on_outlined,
+    'remote_office': Icons.wifi_outlined,
+  };
+
+  static const _monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+
+  static const _fullWeekdays = [
+    'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+    'Friday', 'Saturday', 'Sunday',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _now = DateTime.now();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {
+        _now = DateTime.now();
+        final today = ref.read(todayAttendanceProvider).valueOrNull;
+        if (today?.isClockedIn ?? false) _localSessionSeconds++;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  String _pad(int n) => n.toString().padLeft(2, '0');
+
+  String get _clockStr =>
+      '${_pad(_now.hour)}:${_pad(_now.minute)}:${_pad(_now.second)}';
+
+  String _sessionStr(int seconds) {
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    final s = seconds % 60;
+    return '${_pad(h)}:${_pad(m)}:${_pad(s)}';
+  }
+
+  String get _dateStr {
+    final wd = _fullWeekdays[_now.weekday - 1];
+    final m = _monthNames[_now.month - 1];
+    return '$wd, ${_now.day} $m ${_now.year}';
+  }
+
+  Future<void> _toggleClock(TodayAttendanceEntity today) async {
+    if (_punching) return;
+    setState(() => _punching = true);
+
+    // Location is captured best-effort for every mode, not just 'office' —
+    // only 'office' punches are geofence-checked server-side, but wfh/field/
+    // client_location/remote_office still record GPS for the audit trail
+    // when it's available. getCurrentPosition() never throws and resolves to
+    // null on any permission/timeout/service failure, so this never blocks
+    // the punch.
+    final position = await ref.read(locationServiceProvider).getCurrentPosition();
+
+    if (!mounted) return;
+    final error = await ref.read(todayAttendanceProvider.notifier).punch(
+          isCurrentlyClockedIn: today.isClockedIn,
+          attendanceMode: _attendanceMode,
+          latitude: position?.latitude,
+          longitude: position?.longitude,
+          accuracy: position?.accuracy,
+          // dart:io's Platform throws on web ("Unsupported operation:
+          // _operatingSystem") — must guard with kIsWeb, same convention as
+          // core/network/api_client.dart.
+          deviceName: kIsWeb
+              ? 'Web'
+              : Platform.isAndroid
+                  ? 'Android'
+                  : Platform.isIOS
+                      ? 'iOS'
+                      : null,
+          operatingSystem: kIsWeb ? 'web' : Platform.operatingSystem,
+          deviceId: await ref.read(deviceIdProvider.future),
+        );
+
+    if (!mounted) return;
+    setState(() {
+      _punching = false;
+      _localSessionSeconds = 0;
+    });
+
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error), backgroundColor: AppColors.error),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final todayAsync = ref.watch(todayAttendanceProvider);
+
+    ref.listen(todayAttendanceProvider, (previous, next) {
+      next.whenData((today) => _localSessionSeconds = today.sessionSeconds);
+    });
+
+    return todayAsync.when(
+      data: _buildPanel,
+      loading: () => const _ClockPanelSkeleton(),
+      error: (e, _) => _ErrorCard(
+        message: friendlyAttendanceError(e),
+        onRetry: () => ref.invalidate(todayAttendanceProvider),
+      ),
+    );
+  }
+
+  Widget _buildPanel(TodayAttendanceEntity today) {
+    final sessionSeconds = today.isClockedIn ? _localSessionSeconds : today.sessionSeconds;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF17355F), Color(0xFF1E4E8C)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1E4E8C).withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Text(
+              _clockStr,
+              style: const TextStyle(
+                fontSize: 46,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: 3,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Center(
+            child: Text(
+              today.dateDisplay.isNotEmpty ? today.dateDisplay : _dateStr,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.white.withValues(alpha: 0.75),
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Divider(color: Colors.white.withValues(alpha: 0.15), height: 1),
+          const SizedBox(height: 14),
+
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    today.isClockedIn ? 'SESSION ACTIVE' : 'SESSION ENDED',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: 0.55),
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    _sessionStr(sessionSeconds),
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: today.isClockedIn
+                          ? const Color(0xFF4ADE80)
+                          : Colors.white60,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              _StatusBadge(clockedIn: today.isClockedIn),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          Text(
+            'ATTENDANCE MODE',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Colors.white.withValues(alpha: 0.55),
+              letterSpacing: 1.0,
+            ),
+          ),
+          const SizedBox(height: 6),
+          PopupMenuButton<String>(
+            enabled: !_punching,
+            offset: const Offset(0, 44),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            constraints: const BoxConstraints(minWidth: 200),
+            onSelected: (v) => setState(() => _attendanceMode = v),
+            itemBuilder: (_) => _attendanceModeLabels.entries.map((e) {
+              final selected = e.key == _attendanceMode;
+              return PopupMenuItem<String>(
+                value: e.key,
+                child: Row(
+                  children: [
+                    Icon(
+                      _attendanceModeIcons[e.key],
+                      size: 18,
+                      color: selected ? AppColors.primary : AppColors.textSecondary,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        e.value,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                          color: selected ? AppColors.primary : AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                    if (selected) Icon(Icons.check, size: 16, color: AppColors.primary),
+                  ],
+                ),
+              );
+            }).toList(),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                children: [
+                  Icon(_attendanceModeIcons[_attendanceMode], color: Colors.white, size: 17),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _attendanceModeLabels[_attendanceMode] ?? 'Office',
+                      style: const TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Icon(Icons.expand_more, color: Colors.white.withValues(alpha: 0.8), size: 20),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _punching ? null : () => _toggleClock(today),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: today.isClockedIn
+                    ? const Color(0xFFB91C1C)
+                    : const Color(0xFF15803D),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: (today.isClockedIn
+                        ? const Color(0xFFB91C1C)
+                        : const Color(0xFF15803D))
+                    .withValues(alpha: 0.6),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                elevation: 0,
+              ),
+              child: _punching
+                  ? const SizedBox(
+                      width: 20, height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : Text(
+                      today.isClockedIn ? 'Clock Out' : 'Clock In',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          if (today.punches.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                'No punches recorded today.',
+                style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.6)),
+              ),
+            )
+          else
+            ...today.punches.map((p) => Padding(
+                  padding: const EdgeInsets.only(bottom: 7),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 32,
+                        child: Text(
+                          p.type,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: p.type == 'IN'
+                                ? const Color(0xFF4ADE80)
+                                : const Color(0xFFFC8181),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        p.time,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          // Backend's `location` already includes the source label
+                          // (e.g. "Chennai HQ · Mobile") — do not append attendanceMode again.
+                          p.location.isNotEmpty ? p.location : '—',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withValues(alpha: 0.65),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+          const SizedBox(height: 10),
+          Divider(color: Colors.white.withValues(alpha: 0.15), height: 1),
+          const SizedBox(height: 12),
+
+          GestureDetector(
+            onTap: () => _showCorrectionDialog(context, DateTime.now()),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.flag_outlined,
+                    size: 15, color: Colors.white.withValues(alpha: 0.75)),
+                const SizedBox(width: 6),
+                Text(
+                  'Request Attendance Correction',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.white.withValues(alpha: 0.85),
+                    decoration: TextDecoration.underline,
+                    decorationColor: Colors.white38,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Shared by both the clock panel ("Request Attendance Correction" link) and
+// the calendar section (tapping a past day) — a top-level function taking
+// `context` explicitly so it doesn't tie either caller to the other's state.
+void _showCorrectionDialog(BuildContext context, DateTime date) {
+  showDialog(
+    context: context,
+    builder: (_) => _CorrectionDialog(lockedDate: date),
+  );
 }
 
 // ─── Reusable widgets ─────────────────────────────────────────────────────────
@@ -948,6 +989,9 @@ class _StatCard extends StatelessWidget {
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
+        // The sibling `_StatCard` in attendance_screen.dart (same concept,
+        // same name) already has this — this one was missing it.
+        boxShadow: AppColors.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1030,21 +1074,15 @@ class _ErrorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.border),
         ),
-        child: Column(
-          children: [
-            Icon(Icons.error_outline, color: AppColors.error, size: 32),
-            const SizedBox(height: 10),
-            Text(message, textAlign: TextAlign.center,
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
-            const SizedBox(height: 10),
-            OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
-          ],
+        child: AppErrorState(
+          message: message,
+          onRetry: onRetry,
+          padding: const EdgeInsets.all(20),
         ),
       );
 }
@@ -1084,12 +1122,12 @@ class _StatusBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: clockedIn
-            ? const Color(0xFF166534).withOpacity(0.25)
-            : Colors.white.withOpacity(0.12),
+            ? const Color(0xFF166534).withValues(alpha: 0.25)
+            : Colors.white.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: clockedIn
-              ? const Color(0xFF4ADE80).withOpacity(0.45)
+              ? const Color(0xFF4ADE80).withValues(alpha: 0.45)
               : Colors.white24,
         ),
       ),
@@ -1225,7 +1263,7 @@ class _CalTabButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 9),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primary.withOpacity(0.10) : Colors.transparent,
+          color: selected ? AppColors.primary.withValues(alpha: 0.10) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: selected ? AppColors.primary : AppColors.border),
         ),
@@ -1317,7 +1355,7 @@ class _HistoryRow extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.12),
+                    color: color.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -1475,7 +1513,7 @@ class _CorrectionDialogState extends ConsumerState<_CorrectionDialog> {
               decoration: BoxDecoration(
                 color: AppColors.warningContainer,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+                border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,

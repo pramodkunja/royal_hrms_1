@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../../shared/widgets/app_error_state.dart';
 import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
 import 'leave_request_detail_sheet.dart';
@@ -393,11 +394,10 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
         )
       else if (myRequestsAsync.hasError)
         SliverToBoxAdapter(
-          child: Padding(
+          child: AppErrorState(
+            message: friendlyLeaveError(myRequestsAsync.error!),
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-            child: Text(
-                'Could not load requests: ${friendlyLeaveError(myRequestsAsync.error!)}',
-                style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+            onRetry: () => ref.invalidate(leaveRequestsProvider),
           ),
         )
       else if (myRequests.isEmpty)
@@ -532,11 +532,11 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
     if (teamAsync.hasError) {
       return [
         SliverToBoxAdapter(
-          child: Padding(
+          child: AppErrorState(
+            message: friendlyLeaveError(teamAsync.error!),
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-            child: Text(
-                'Could not load requests: ${friendlyLeaveError(teamAsync.error!)}',
-                style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+            onRetry: () =>
+                ref.invalidate(leaveTeamPendingProvider(_teamFilter)),
           ),
         ),
       ];
@@ -637,11 +637,10 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
     if (myRequestsAsync.hasError) {
       return [
         SliverToBoxAdapter(
-          child: Padding(
+          child: AppErrorState(
+            message: friendlyLeaveError(myRequestsAsync.error!),
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-            child: Text(
-                'Could not load requests: ${friendlyLeaveError(myRequestsAsync.error!)}',
-                style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+            onRetry: () => ref.invalidate(leaveRequestsProvider),
           ),
         ),
       ];
@@ -1120,7 +1119,12 @@ class _RequestCard extends StatelessWidget {
                               style: TextStyle(
                                   fontSize: 11, fontWeight: FontWeight.w600)),
                           style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.success,
+                            // See the identical note in leave_approvals_tab's
+                            // Approve button — AppColors.success is also the
+                            // "already approved" status-pill fill, and
+                            // Attendance's equivalent action already uses
+                            // primary, so this aligns Leave with that.
+                            backgroundColor: AppColors.primary,
                             padding: const EdgeInsets.symmetric(vertical: 8),
                           ),
                         ),

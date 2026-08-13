@@ -45,6 +45,8 @@ class _AttendanceRulesScreenState extends ConsumerState<AttendanceRulesScreen> {
         return local.copyWith(lateMarkRules: server.lateMarkRules);
       case 'absence_alert':
         return local.copyWith(absenceAlert: server.absenceAlert);
+      case 'face_verification':
+        return local.copyWith(faceVerification: server.faceVerification);
       default:
         return local;
     }
@@ -162,6 +164,15 @@ class _AttendanceRulesScreenState extends ConsumerState<AttendanceRulesScreen> {
                         busy: busy,
                         onChanged: (s) => setState(() => _edited = current.copyWith(absenceAlert: s)),
                         onSave: () => _saveSection(current, 'absence_alert', current.absenceAlert.toJson()),
+                      ),
+                      const SizedBox(height: 12),
+                      _FaceVerificationCard(
+                        section: current.faceVerification,
+                        canEdit: canEdit,
+                        saving: _savingSection == 'face_verification',
+                        busy: busy,
+                        onChanged: (s) => setState(() => _edited = current.copyWith(faceVerification: s)),
+                        onSave: () => _saveSection(current, 'face_verification', current.faceVerification.toJson()),
                       ),
                     ],
                   ),
@@ -835,6 +846,53 @@ class _AbsenceAlertCard extends StatelessWidget {
             onChanged: (v) => v != null ? onChanged(section.copyWith(notifyWhom: v)) : null,
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Face ID Verification ─────────────────────────────────────────────────────────
+
+class _FaceVerificationCard extends StatelessWidget {
+  final FaceVerificationSectionModel section;
+  final bool canEdit;
+  final bool saving;
+  final bool busy;
+  final ValueChanged<FaceVerificationSectionModel> onChanged;
+  final VoidCallback onSave;
+
+  const _FaceVerificationCard({
+    required this.section,
+    required this.canEdit,
+    required this.saving,
+    required this.busy,
+    required this.onChanged,
+    required this.onSave,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      icon: Icons.face_outlined,
+      title: 'Face ID Verification',
+      accentColor: AppColors.error,
+      headerTrailing: Switch(
+        value: section.isMandatory,
+        onChanged: canEdit ? (v) => onChanged(section.copyWith(isMandatory: v)) : null,
+      ),
+      canEdit: canEdit,
+      saving: saving,
+      busy: busy,
+      onSave: onSave,
+      child: Text(
+        section.isMandatory
+            ? 'Face ID registration is mandatory for every employee. Clock-in/out '
+                '(web and mobile) is blocked until an employee registers and is '
+                'approved, and every punch after that requires a live face match.'
+            : 'Face ID verification is off. Employees cannot register a face ID or '
+                'be asked to verify — their Profile page shows "Contact admin to use '
+                'this feature", and no punch requires a face match.',
+        style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
       ),
     );
   }

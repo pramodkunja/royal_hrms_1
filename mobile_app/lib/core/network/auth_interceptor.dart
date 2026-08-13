@@ -124,7 +124,6 @@ class AuthInterceptor extends Interceptor {
       _resolvePending();
       handler.resolve(retryResponse);
     } on DioException catch (refreshErr) {
-      _rejectPending();
       // Only a definitive rejection *from the server* (it responded, saying
       // the refresh token itself is invalid/expired) means the session has
       // truly ended. A network-level failure — timeout, no connectivity,
@@ -135,16 +134,39 @@ class AuthInterceptor extends Interceptor {
       // submitting a form after leaving it open for a while).
       if (refreshErr.response != null) {
         _signalSessionExpired();
-        handler.next(
-          DioException(
-            requestOptions: err.requestOptions,
-            error: const UnauthorizedException(),
-            type: DioExceptionType.badResponse,
-          ),
+        final authError = DioException(
+          requestOptions: err.requestOptions,
+          error: const UnauthorizedException(),
+          type: DioExceptionType.badResponse,
         );
+        // Every request queued behind this refresh gets the same verdict as
+        // the one that triggered it — previously queued requests were always
+        // force-rejected as "unauthorized" even on a mere network blip,
+        // while the triggering request got the real (non-auth) error; that
+        // mismatch is what this shared helper fixes.
+        _rejectPending(authError);
+        handler.next(authError);
       } else {
+        _rejectPending(err);
         handler.next(err);
       }
+    } catch (e) {
+      // A non-DioException failure during refresh (e.g. a secure-storage
+      // platform exception from a locked/corrupted Keychain/Keystore) used
+      // to fall through uncaught: `_isRefreshing` still reset via `finally`,
+      // but neither the triggering request nor anything in `_pending` ever
+      // got resolved/rejected, so every queued request hung forever. Treat
+      // it like a network-level failure — nothing proves the session is
+      // invalid, but every queued request must still be settled, not left
+      // hanging — while still surfacing it as a real (non-fake-success)
+      // failure to the caller.
+      final fallbackError = DioException(
+        requestOptions: err.requestOptions,
+        error: e,
+        type: DioExceptionType.unknown,
+      );
+      _rejectPending(fallbackError);
+      handler.next(fallbackError);
     } finally {
       _isRefreshing = false;
     }
@@ -174,13 +196,19 @@ class AuthInterceptor extends Interceptor {
     _pending.clear();
   }
 
-  void _rejectPending() {
+  // Settles every queued request with the same verdict [error] carries —
+  // the caller decides whether that's a genuine auth failure (session
+  // truly expired) or a network-level failure (nothing proven), so queued
+  // requests are never misreported differently than the request that
+  // triggered the refresh in the first place.
+  void _rejectPending(DioException error) {
     for (final p in _pending) {
       p.handler.next(
         DioException(
           requestOptions: p.options,
-          error: const UnauthorizedException(),
-          type: DioExceptionType.badResponse,
+          error: error.error,
+          type: error.type,
+          response: error.response,
         ),
       );
     }

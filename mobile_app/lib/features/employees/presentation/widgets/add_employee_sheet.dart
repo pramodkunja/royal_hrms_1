@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/app_button.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../settings/data/models/departments_model.dart';
 import '../../../settings/data/models/roles_model.dart';
@@ -519,7 +520,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
     if (_errors.isNotEmpty) return;
 
     setState(() => _submitting = true);
-    final error = await ref.read(employeesProvider.notifier).create(form);
+    final error = await createEmployeeAction(ref, form);
     if (!mounted) return;
     setState(() => _submitting = false);
 
@@ -539,9 +540,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
     if (_errors.isNotEmpty) return;
 
     setState(() => _submitting = true);
-    final error = await ref
-        .read(employeesProvider.notifier)
-        .updateEmployee(widget.editing!.employeeId, form);
+    final error = await updateEmployeeAction(ref, widget.editing!.employeeId, form);
     if (!mounted) return;
     setState(() => _submitting = false);
 
@@ -1325,25 +1324,11 @@ class _Footer extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             flex: 2,
-            child: FilledButton.icon(
+            child: AppButton(
+              label: isEditing ? 'Save Changes' : 'Add Employee',
               onPressed: submitting ? null : onSubmit,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              icon: submitting
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.person_add_outlined, size: 18),
-              label: Text(isEditing ? 'Save Changes' : 'Add Employee'),
+              isLoading: submitting,
+              leadingIcon: Icons.person_add_outlined,
             ),
           ),
         ],

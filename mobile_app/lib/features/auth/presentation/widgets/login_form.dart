@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_app/core/error/exceptions.dart';
+import 'package:mobile_app/core/network/api_client.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
@@ -70,7 +71,12 @@ class _LoginFormState extends ConsumerState<LoginForm> {
       return msg;
     }
     if (error is AppException) return error.message;
-    return error.toString();
+    // Only reachable for a truly unexpected/untyped exception — every real
+    // failure path from the auth repository already surfaces as one of the
+    // typed AppException subtypes above. Routes through the same
+    // centralized helper the rest of the app uses rather than a raw
+    // `error.toString()` dump.
+    return userFriendlyMessage(error);
   }
 
   @override

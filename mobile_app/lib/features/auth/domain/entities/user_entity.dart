@@ -12,6 +12,14 @@ class UserEntity {
   final List<String> permissions;
   final String? onboardingStatus;
   final bool canManageTeam;
+  // is_superuser — backend computes this as `user.is_superuser or
+  // 'settings.edit' in permissions` (apps/accounts/views.py login response)
+  // and it's the same signal web's permission gates check directly
+  // (e.g. AttendanceApprovalTab's `can_manage_team || is_superuser ||
+  // payroll.view`). Only present on the login response, so this is populated
+  // once at login and cached — an account promoted to superuser after their
+  // last login won't see it until they log out and back in.
+  final bool isSuperuser;
 
   const UserEntity({
     required this.id,
@@ -27,6 +35,7 @@ class UserEntity {
     required this.permissions,
     this.onboardingStatus,
     this.canManageTeam = false,
+    this.isSuperuser = false,
   });
 
   bool get needsOnboarding =>
@@ -51,6 +60,7 @@ class UserEntity {
         permissions: permissions,
         onboardingStatus: onboardingStatus ?? this.onboardingStatus,
         canManageTeam: canManageTeam,
+        isSuperuser: isSuperuser,
       );
 
   @override

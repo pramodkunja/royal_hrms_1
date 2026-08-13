@@ -20,6 +20,17 @@ final employeeFiltersProvider =
     StateProvider.autoDispose<EmployeeFilters>((ref) => const EmployeeFilters());
 
 // ── Full list ──────────────────────────────────────────────────────────────────
+//
+// Kept only for consumers that genuinely need the complete roster in memory
+// (e.g. Attendance's employee-search autocomplete) and for the three
+// mutation methods below it that are still reached from the Employee
+// Profile screen's Approval Matrix / HR quick-edit / Document upload flows.
+// Create/Edit/Status-toggle used to live here too, but calling them forced
+// Riverpod to build (and therefore eagerly full-fetch) this provider just to
+// reach the method — see createEmployeeAction/updateEmployeeAction/
+// updateEmployeeStatusAction further below, which call
+// EmployeesRemoteDataSource directly instead and are what the Add/Edit
+// Employee sheet and the Profile screen's status toggle use now.
 
 final employeesProvider =
     AsyncNotifierProvider.autoDispose<EmployeesNotifier, List<EmployeeModel>>(
@@ -35,55 +46,6 @@ class EmployeesNotifier extends AutoDisposeAsyncNotifier<List<EmployeeModel>> {
   Future<void> refresh() async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(_ds.fetchEmployees);
-  }
-
-  Future<String?> create(EmployeeFormData form) async {
-    try {
-      final created = await _ds.createEmployee(form);
-      final current = state.valueOrNull ?? [];
-      state = AsyncData([created, ...current]);
-      return null;
-    } catch (e) {
-      return _friendlyError(e);
-    }
-  }
-
-  Future<String?> updateStatus(String employeeId, bool isActive) async {
-    try {
-      await _ds.patchEmployeeStatus(employeeId, isActive);
-      final current = state.valueOrNull ?? [];
-      state = AsyncData(current.map((e) {
-        if (e.id != employeeId) return e;
-        return e.copyWith(
-          isActive: isActive,
-          status: isActive ? 'active' : 'inactive',
-        );
-      }).toList());
-      return null;
-    } catch (e) {
-      return _friendlyError(e);
-    }
-  }
-
-  // ── Update (edit) ────────────────────────────────────────────────────────
-
-  Future<String?> updateEmployee(
-    String employeeId,
-    EmployeeUpdateFormData form,
-  ) async {
-    try {
-      final updated = await _ds.updateEmployee(employeeId, form);
-      final current = state.valueOrNull ?? [];
-      state = AsyncData(current
-          .map((e) => e.id == employeeId ? updated : e)
-          .toList());
-      // The profile screen reads `employeeDetailProvider(employeeId)`
-      // independently of this list — invalidate it so it refetches.
-      ref.invalidate(employeeDetailProvider(employeeId));
-      return null;
-    } catch (e) {
-      return _friendlyError(e);
-    }
   }
 
   // ── Reporting Relationships quick-edit (Approval Matrix tab) ─────────────
@@ -133,47 +95,183 @@ class EmployeesNotifier extends AutoDisposeAsyncNotifier<List<EmployeeModel>> {
   }
 }
 
-// ── Filtered list (client-side) ────────────────────────────────────────────────
+// ── Paginated list (server-side search/filter/pagination) ──────────────────────
+//
+// Backs the Employees list screen specifically. Unlike `employeesProvider`
+// above (kept as-is for the other screens/pickers that genuinely need the
+// complete roster — see the doc comment on EmployeesNotifier), this fetches
+// one page at a time from the same endpoint and sends search/department/
+// branch/status as real query params instead of downloading everything and
+// filtering client-side.
 
-final filteredEmployeesProvider =
-    Provider.autoDispose<AsyncValue<List<EmployeeModel>>>((ref) {
-  final all     = ref.watch(employeesProvider);
-  final filters = ref.watch(employeeFiltersProvider);
+class EmployeeListState {
+  final List<EmployeeModel> items;
+  final int page;
+  final int totalPages;
+  final int count; // total matching the current filters, per the backend
+  final bool isLoadingMore;
+  final String? loadMoreError;
 
-  return all.whenData((employees) {
-    var list = employees;
-    if (filters.search.isNotEmpty) {
-      final query = filters.search.toLowerCase();
-      list = list
-          .where((e) =>
-              e.fullName.toLowerCase().contains(query) ||
-              e.email.toLowerCase().contains(query) ||
-              e.employeeId.toLowerCase().contains(query) ||
-              e.department.toLowerCase().contains(query) ||
-              e.designation.toLowerCase().contains(query))
-          .toList();
-    }
-    if (filters.status.isNotEmpty) {
-      list = list.where((e) => e.status == filters.status).toList();
-    }
-    if (filters.department.isNotEmpty) {
-      list = list.where((e) => e.department == filters.department).toList();
-    }
-    if (filters.designation.isNotEmpty) {
-      list = list.where((e) => e.designation == filters.designation).toList();
-    }
-    if (filters.branch.isNotEmpty) {
-      list = list.where((e) => e.branch == filters.branch).toList();
-    }
-    return list;
+  const EmployeeListState({
+    required this.items,
+    required this.page,
+    required this.totalPages,
+    required this.count,
+    this.isLoadingMore = false,
+    this.loadMoreError,
   });
-});
+
+  bool get hasMore => page < totalPages;
+}
+
+final employeeListProvider =
+    AsyncNotifierProvider.autoDispose<EmployeeListNotifier, EmployeeListState>(
+  EmployeeListNotifier.new,
+);
+
+class EmployeeListNotifier extends AutoDisposeAsyncNotifier<EmployeeListState> {
+  EmployeesRemoteDataSource get _ds => ref.read(employeesDataSourceProvider);
+  static const _pageSize = 20;
+
+  // Bumped by build() (i.e. every filter change) and refresh(). A
+  // loadNextPage() call that was already in flight when either happens
+  // checks this on return and discards its result instead of appending a
+  // stale page onto a list that's since moved on — otherwise a fast filter
+  // change or pull-to-refresh right after triggering "load more" could
+  // corrupt list order or resurrect filtered-out rows.
+  int _generation = 0;
+
+  @override
+  Future<EmployeeListState> build() async {
+    // Watched (not read) deliberately: changing any filter — including the
+    // search box, once the screen debounces keystrokes before writing here —
+    // re-runs this build from scratch, which is exactly "reset pagination to
+    // page 1 and load only the filtered page 1."
+    final filters = ref.watch(employeeFiltersProvider);
+    _generation++;
+    final result =
+        await _ds.fetchEmployeesPage(page: 1, pageSize: _pageSize, filters: filters);
+    return EmployeeListState(
+      items: result.items,
+      page: result.page,
+      totalPages: result.totalPages,
+      count: result.count,
+    );
+  }
+
+  Future<void> loadNextPage() async {
+    final current = state.valueOrNull;
+    // No data yet (still on the initial load or a hard error), a load is
+    // already in flight, or there simply isn't a next page — ignore. There
+    // is no `await` between this check and the `isLoadingMore: true` write
+    // below, so a rapid burst of scroll-triggered calls can't race past it:
+    // whichever call runs first synchronously claims the flag before a
+    // second call's check can observe the old value.
+    if (current == null || current.isLoadingMore || !current.hasMore) return;
+
+    final generation = _generation;
+    final filters = ref.read(employeeFiltersProvider);
+    state = AsyncData(EmployeeListState(
+      items: current.items,
+      page: current.page,
+      totalPages: current.totalPages,
+      count: current.count,
+      isLoadingMore: true,
+    ));
+    try {
+      final result = await _ds.fetchEmployeesPage(
+        page: current.page + 1,
+        pageSize: _pageSize,
+        filters: filters,
+      );
+      if (generation != _generation) return; // superseded — drop this page
+      final latest = state.valueOrNull ?? current;
+      state = AsyncData(EmployeeListState(
+        items: [...latest.items, ...result.items],
+        page: result.page,
+        totalPages: result.totalPages,
+        count: result.count,
+        isLoadingMore: false,
+      ));
+    } catch (e) {
+      if (generation != _generation) return;
+      final latest = state.valueOrNull ?? current;
+      // Deliberately keeps `latest.items` untouched — a failed next-page
+      // load must never clear what's already visible.
+      state = AsyncData(EmployeeListState(
+        items: latest.items,
+        page: latest.page,
+        totalPages: latest.totalPages,
+        count: latest.count,
+        isLoadingMore: false,
+        loadMoreError: userFriendlyMessage(e),
+      ));
+    }
+  }
+
+  // Pull-to-refresh: reloads page 1 with the current filters and replaces
+  // the list, but keeps the previous page visible (via copyWithPrevious)
+  // while that request is in flight instead of blanking the screen — see
+  // the Phase 1 note on why a bare `AsyncLoading()` here would be wrong.
+  Future<void> refresh() async {
+    _generation++;
+    final filters = ref.read(employeeFiltersProvider);
+    state = const AsyncLoading<EmployeeListState>().copyWithPrevious(state);
+    state = await AsyncValue.guard(() async {
+      final result =
+          await _ds.fetchEmployeesPage(page: 1, pageSize: _pageSize, filters: filters);
+      return EmployeeListState(
+        items: result.items,
+        page: result.page,
+        totalPages: result.totalPages,
+        count: result.count,
+      );
+    });
+  }
+}
 
 // ── Stats ──────────────────────────────────────────────────────────────────────
+//
+// Previously derived from the complete employee list (`employeesProvider`),
+// which meant simply opening the Employees screen forced a full-roster
+// download just to compute these four numbers. Total/Active/Onboarding now
+// come from three lightweight `count`-only requests (same endpoint, same
+// `status` param, page_size=1), and Departments reuses the org's master
+// department list (already fetched elsewhere in the app for the Add/Edit
+// Employee form) rather than deriving "distinct departments seen so far"
+// from a partially-loaded roster.
 
-final employeeStatsProvider =
-    Provider.autoDispose<AsyncValue<EmployeeStats>>((ref) {
-  return ref.watch(employeesProvider).whenData(EmployeeStats.fromList);
+final employeeStatsProvider = FutureProvider.autoDispose<EmployeeStats>((ref) async {
+  final departments = await ref.watch(departmentsProvider.future);
+  final counts = await ref.watch(employeesDataSourceProvider).fetchEmployeeStatusCounts();
+  return EmployeeStats(
+    total: counts.total,
+    active: counts.active,
+    onboarding: counts.onboarding,
+    departments: departments.where((d) => d.employeeCount > 0).length,
+  );
+});
+
+// ── Filter dropdown options for the Employees list screen ──────────────────────
+//
+// Deliberately separate from employeeDepartmentListProvider/
+// employeeBranchNameListProvider below (which other screens, e.g.
+// Attendance's HR filters, still read from the complete employee roster) —
+// these instead reuse the org's master department/branch lists so the
+// Employees screen's own filter chips never need that roster fetched at
+// all. Returns a plain (not AsyncValue-wrapped) `List<String>`, same as the
+// providers they're replacing here, so the screen's existing
+// `if (list.isNotEmpty)` checks keep working unchanged — it's just empty
+// until the underlying master-data fetch resolves.
+
+final employeeListDepartmentOptionsProvider = Provider.autoDispose<List<String>>((ref) {
+  final departments = ref.watch(departmentsProvider).valueOrNull ?? [];
+  return (departments.map((d) => d.name).where((n) => n.isNotEmpty).toSet().toList())..sort();
+});
+
+final employeeListBranchOptionsProvider = Provider.autoDispose<List<String>>((ref) {
+  final branches = ref.watch(employeeBranchesProvider).valueOrNull ?? [];
+  return (branches.map((b) => b.name).where((n) => n.isNotEmpty).toSet().toList())..sort();
 });
 
 // ── Unique value lists for filter dropdowns ────────────────────────────────────
@@ -280,6 +378,64 @@ final employeeManagerOptionsProvider =
     FutureProvider.autoDispose.family<List<EmployeePickerOption>, String>((ref, branch) {
   return ref.read(employeesDataSourceProvider).fetchManagers(branch);
 });
+
+// ── Create / Update / Status mutations (Add/Edit Employee sheet, Profile) ──────
+//
+// One-off actions, not tied to any list/notifier state — same top-level-
+// function convention as sendEmployeeWishEmail below, and deliberately NOT
+// methods on EmployeesNotifier: calling `ref.read(employeesProvider.notifier)`
+// forces Riverpod to build that provider first, which eagerly downloads the
+// entire employee roster (see EmployeesNotifier's doc comment above) just to
+// reach the method. These call EmployeesRemoteDataSource directly instead,
+// so opening Add/Edit Employee or toggling an employee's status never
+// triggers that full fetch. Callers are responsible for invalidating
+// `employeeListProvider`/`employeeStatsProvider` on success, same as they
+// already do after any other list-affecting action.
+
+Future<String?> createEmployeeAction(WidgetRef ref, EmployeeFormData form) async {
+  try {
+    await ref.read(employeesDataSourceProvider).createEmployee(form);
+    return null;
+  } catch (e) {
+    // The one case worth preserving verbatim from the old `_friendlyError`:
+    // a 409 here specifically means the email is already in use, which is
+    // more actionable than the generic message `userFriendlyMessage` would
+    // otherwise produce for an unmapped status code.
+    if (e is DioException && e.response?.statusCode == 409) {
+      return 'An employee with this email already exists.';
+    }
+    return userFriendlyMessage(e);
+  }
+}
+
+Future<String?> updateEmployeeAction(
+  WidgetRef ref,
+  String employeeId,
+  EmployeeUpdateFormData form,
+) async {
+  try {
+    await ref.read(employeesDataSourceProvider).updateEmployee(employeeId, form);
+    // The profile screen reads `employeeDetailProvider(employeeId)`
+    // independently of the list — invalidate it so it refetches.
+    ref.invalidate(employeeDetailProvider(employeeId));
+    return null;
+  } catch (e) {
+    return userFriendlyMessage(e);
+  }
+}
+
+Future<String?> updateEmployeeStatusAction(
+  WidgetRef ref,
+  String employeeId,
+  bool isActive,
+) async {
+  try {
+    await ref.read(employeesDataSourceProvider).patchEmployeeStatus(employeeId, isActive);
+    return null;
+  } catch (e) {
+    return userFriendlyMessage(e);
+  }
+}
 
 // ── Send wish email (Wishes tab) ────────────────────────────────────────────
 //

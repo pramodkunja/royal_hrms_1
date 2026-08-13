@@ -24,9 +24,29 @@ class MyProfileNotifier extends AutoDisposeAsyncNotifier<MyProfileModel> {
   @override
   Future<MyProfileModel> build() => _ds.fetchMyProfile();
 
+  // Pull-to-refresh was replacing the whole profile screen (all sections,
+  // scroll position) with a blank spinner while refetching. `.when()`'s
+  // default `skipLoadingOnRefresh: true` renders the `data:` branch instead
+  // of `loading:` whenever the AsyncLoading carries a previous value via
+  // copyWithPrevious, so this fix is entirely provider-side — no screen
+  // change needed. Same pattern already established for
+  // employeeListProvider's refresh() in the Employees feature.
+  //
+  // Deliberately a try/catch, not `AsyncValue.guard()`: guard()'s own
+  // AsyncError carries no previous value, so a failed refresh (e.g. a
+  // connectivity blip) would still blank the whole screen despite the line
+  // above — verified against the framework's own asyncTransition() in
+  // package:riverpod/src/common.dart, which is what makes ref.invalidate()
+  // preserve previous data on failure automatically; a hand-rolled
+  // refresh() has to do the equivalent itself.
   Future<void> refresh() async {
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(_ds.fetchMyProfile);
+    final previous = state;
+    state = const AsyncLoading<MyProfileModel>().copyWithPrevious(state);
+    try {
+      state = AsyncData(await _ds.fetchMyProfile());
+    } catch (e, st) {
+      state = AsyncError<MyProfileModel>(e, st).copyWithPrevious(previous);
+    }
   }
 
   /// Returns null on success, a user-facing error message on failure.

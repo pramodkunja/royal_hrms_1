@@ -67,6 +67,11 @@ const kAllNav = <NavEntry>[
   NavItem(id: 'approvals',        icon: Icons.checklist_outlined,              label: 'Approvals',        path: '/dashboard/approvals',        anyOfPermissions: ['leave.approve', 'expenses.approve'], excludeRoles: ['hr', 'hr_admin']),
   NavItem(id: 'separation',       icon: Icons.exit_to_app_outlined,            label: 'Separation & FnF', path: '/dashboard/separation',       permission: 'employees.view'),
   NavItem(id: 'documents',        icon: Icons.folder_outlined,                 label: 'Document Center',  path: '/dashboard/documents',        permission: 'documents.view'),
+  // Backend also accepts settings.edit as a superset of this permission
+  // (see apps/attendance/views/face_registration.py::_has_perm) — settings.edit
+  // holders already see everything via the 'settings' item below, so this
+  // nav entry only needs its own specific permission.
+  NavItem(id: 'face-id-registrations', icon: Icons.face_outlined,             label: 'Face ID Registrations', path: '/dashboard/face-id-registrations', permission: 'facial_recognition.approve'),
 
   NavSection('My'),
   NavItem(id: 'my-attendance',    icon: Icons.fingerprint,                     label: 'My Attendance',    path: '/dashboard/my-attendance',    permission: null),
@@ -141,6 +146,7 @@ const kPageTitles = <String, String>{
   '/dashboard/approvals':       'Team Approvals',
   '/dashboard/separation':      'Separation & FnF',
   '/dashboard/documents':       'Document Center',
+  '/dashboard/face-id-registrations': 'Face ID Registrations',
   '/dashboard/my-attendance':   'My Attendance',
   '/dashboard/my-payslip':      'My Payslips',
   '/dashboard/referrals':       'My Referrals',

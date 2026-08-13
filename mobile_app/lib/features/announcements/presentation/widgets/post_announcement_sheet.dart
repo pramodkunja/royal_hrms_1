@@ -243,7 +243,7 @@ class _SheetHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
       decoration: BoxDecoration(
         color: AppColors.primary,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Row(
         children: [

@@ -6,6 +6,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../documents/presentation/widgets/document_file_picker.dart';
+import '../../../../shared/widgets/app_button.dart';
 import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
 import 'apply_leave_type_selector.dart';
@@ -561,20 +562,18 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton(
+                  child: AppButton(
+                    label: 'Apply Another',
+                    variant: AppButtonVariant.outline,
                     onPressed: _reset,
-                    child: const Text('Apply Another'),
                   ),
                 ),
                 if (widget.onDashboard != null) ...[
                   const SizedBox(width: 10),
                   Expanded(
-                    child: FilledButton(
+                    child: AppButton(
+                      label: 'Dashboard',
                       onPressed: widget.onDashboard,
-                      style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary),
-                      child: const Text('Dashboard',
-                          style: TextStyle(fontWeight: FontWeight.w600)),
                     ),
                   ),
                 ],
@@ -996,23 +995,13 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: FilledButton.icon(
-                    onPressed: !canSubmit
-                        ? null
-                        : () => _submit(typeOptions, typeEntities),
-                    icon: _loading
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.send_outlined, size: 16),
-                    label: Text(_loading ? 'Submitting…' : 'Submit',
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                    ),
+                  child: AppButton(
+                    label: 'Submit',
+                    onPressed: canSubmit
+                        ? () => _submit(typeOptions, typeEntities)
+                        : null,
+                    isLoading: _loading,
+                    leadingIcon: Icons.send_outlined,
                   ),
                 ),
               ],

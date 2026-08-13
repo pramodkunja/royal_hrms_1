@@ -36,6 +36,15 @@ class AppColors {
   static const Color _lightWarningContainer = Color(0xFFFEF3C7);
   static const Color _lightInfo = Color(0xFF0E7C86);
   static const Color _lightInfoContainer = Color(0xFFE6F1FB);
+  // "Half Day"/"Incomplete" attendance status accent — previously hardcoded
+  // as a raw Color(0xFF9333EA) independently in two attendance screens with
+  // an explicit "no AppColors token for purple" comment, so it never
+  // adapted for dark mode like every other status color does. Every other
+  // status color also has a solid *Container background field (used
+  // directly, not via a runtime alpha blend) — this one lacked that too,
+  // falling back to `.withValues(alpha: 0.12)` at each call site instead.
+  static const Color _lightAccentPurple = Color(0xFF9333EA);
+  static const Color _lightAccentPurpleContainer = Color(0xFFF3E5FB);
 
   // ── Dark palette (web: body.dark-mode CSS vars) ───────────────────────────
   static const Color _darkPrimary = Color(0xFF7FA3DE);
@@ -58,6 +67,12 @@ class AppColors {
   static const Color _darkWarningContainer = Color(0xFF3A2E12);
   static const Color _darkInfo = Color(0xFF90C2EB);
   static const Color _darkInfoContainer = Color(0xFF16283B);
+  // Lighter/pastel than the light-mode value, matching the same
+  // lighten-for-dark-background treatment already used for every other
+  // accent (e.g. _darkWarning, _darkInfo) rather than keeping the vivid
+  // light-mode hue, which would read as over-saturated on a dark surface.
+  static const Color _darkAccentPurple = Color(0xFFC4B5FD);
+  static const Color _darkAccentPurpleContainer = Color(0xFF3A2A52);
 
   // ── Live palette — every widget in the app reads these ─────────────────────
   static Color primary = _lightPrimary;
@@ -80,6 +95,8 @@ class AppColors {
   static Color warningContainer = _lightWarningContainer;
   static Color info = _lightInfo;
   static Color infoContainer = _lightInfoContainer;
+  static Color accentPurple = _lightAccentPurple;
+  static Color accentPurpleContainer = _lightAccentPurpleContainer;
 
   /// Swaps every field above between the light/dark palettes. Must be called
   /// (by [ThemeModeNotifier]) before the widget tree rebuilds, so the first
@@ -106,6 +123,9 @@ class AppColors {
     warningContainer = dark ? _darkWarningContainer : _lightWarningContainer;
     info = dark ? _darkInfo : _lightInfo;
     infoContainer = dark ? _darkInfoContainer : _lightInfoContainer;
+    accentPurple = dark ? _darkAccentPurple : _lightAccentPurple;
+    accentPurpleContainer =
+        dark ? _darkAccentPurpleContainer : _lightAccentPurpleContainer;
   }
 
   // Shadows — tinted-primary shadows read as muddy smears on a dark

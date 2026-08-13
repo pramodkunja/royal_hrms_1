@@ -21,6 +21,10 @@ class BranchRepositoryImpl implements BranchRepository {
   Future<BranchStatsEntity> getStats() => _dataSource.fetchStats();
 
   @override
+  Future<List<BranchDistributionEntity>> getDistribution() =>
+      _dataSource.fetchDistribution();
+
+  @override
   Future<List<BranchEntity>> getBranches({
     int page = 1,
     int pageSize = 50,

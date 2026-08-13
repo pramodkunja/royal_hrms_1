@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../shared/widgets/app_empty_state.dart';
+import '../../../shared/widgets/app_error_state.dart';
 import '../../../shared/widgets/expandable_fab.dart';
 import '../data/models/employee_model.dart';
 import 'providers/employee_providers.dart';
@@ -21,12 +26,56 @@ class EmployeesScreen extends ConsumerStatefulWidget {
 
 class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   final _searchCtrl = TextEditingController();
+  final _scrollController = ScrollController();
+  Timer? _searchDebounce;
   bool _fabExpanded = false;
+
+  // How close to the bottom (in pixels) triggers loading the next page —
+  // far enough ahead that "load more" is already in flight before the user
+  // actually reaches the end of the currently-loaded rows.
+  static const _loadMoreThreshold = 400.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    _searchDebounce?.cancel();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - _loadMoreThreshold) {
+      ref.read(employeeListProvider.notifier).loadNextPage();
+    }
+  }
+
+  // Search debounce: the text field updates its own controller (and
+  // therefore the visible cursor/text) immediately on every keystroke, but
+  // only commits to `employeeFiltersProvider` — which the paginated
+  // notifier watches and reacts to by fetching a fresh filtered page 1 —
+  // after the user pauses typing. Branch/Department/Status chip taps below
+  // are discrete, deliberate actions and intentionally bypass this: they
+  // update the filter immediately. Reads `employeeFiltersProvider` fresh
+  // when the debounce fires (not a `filters` snapshot captured at keystroke
+  // time) so a chip filter changed during the debounce window is preserved
+  // instead of being silently reverted by a stale search-only copyWith.
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      final current = ref.read(employeeFiltersProvider);
+      ref.read(employeeFiltersProvider.notifier).state =
+          current.copyWith(search: value);
+    });
   }
 
   Future<void> _showPicker({
@@ -97,10 +146,15 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   @override
   Widget build(BuildContext context) {
     final statsAsync = ref.watch(employeeStatsProvider);
-    final filteredAsync = ref.watch(filteredEmployeesProvider);
+    final listAsync = ref.watch(employeeListProvider);
     final filters = ref.watch(employeeFiltersProvider);
-    final branches = ref.watch(employeeBranchNameListProvider);
-    final depts = ref.watch(employeeDepartmentListProvider);
+    final branches = ref.watch(employeeListBranchOptionsProvider);
+    final depts = ref.watch(employeeListDepartmentOptionsProvider);
+    // Explicit rather than `.when()` so a filter-triggered/pull-to-refresh
+    // reload (isLoading == true but a previous page is still attached) keeps
+    // rendering that previous page instead of ever blanking the list —
+    // `.when()`'s default loading-branch behavior isn't relied on here.
+    final listState = listAsync.valueOrNull;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -124,7 +178,15 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
               setState(() => _fabExpanded = false);
               final added = await AddEmployeeSheet.show(context);
               if (added == true) {
-                ref.read(employeesProvider.notifier).refresh();
+                ref.invalidate(employeeListProvider);
+                ref.invalidate(employeeStatsProvider);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: const Text('Employee created successfully.'),
+                    backgroundColor: AppColors.success,
+                    behavior: SnackBarBehavior.floating,
+                  ));
+                }
               }
             },
           ),
@@ -134,8 +196,9 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
         children: [
           RefreshIndicator(
             color: AppColors.primary,
-            onRefresh: () => ref.read(employeesProvider.notifier).refresh(),
+            onRefresh: () => ref.read(employeeListProvider.notifier).refresh(),
             child: CustomScrollView(
+              controller: _scrollController,
               slivers: [
                 // ── Stats 2×2 grid ─────────────────────────────────────────
                 SliverToBoxAdapter(
@@ -149,9 +212,10 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                     child: TextField(
                       controller: _searchCtrl,
                       style: AppTextStyles.body,
-                      onChanged: (v) => ref
-                          .read(employeeFiltersProvider.notifier)
-                          .state = filters.copyWith(search: v),
+                      onChanged: (v) {
+                        setState(() {}); // refresh the clear (×) button's visibility
+                        _onSearchChanged(v);
+                      },
                       decoration: InputDecoration(
                         hintText: 'Search employees...',
                         hintStyle: AppTextStyles.body
@@ -162,7 +226,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             ? IconButton(
                                 icon: const Icon(Icons.clear, size: 18),
                                 onPressed: () {
-                                  _searchCtrl.clear();
+                                  _searchDebounce?.cancel();
+                                  setState(() => _searchCtrl.clear());
                                   ref
                                       .read(employeeFiltersProvider.notifier)
                                       .state = filters.copyWith(search: '');
@@ -302,12 +367,15 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                   ),
 
                 // ── Results count ───────────────────────────────────────────
-                if (filteredAsync.valueOrNull != null)
+                // Uses the backend's total `count` for the current filters,
+                // not `items.length` — the latter would only reflect however
+                // many pages happen to be loaded so far, not the real total.
+                if (listState != null)
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
                       child: Text(
-                        '${filteredAsync.valueOrNull!.length} employee${filteredAsync.valueOrNull!.length == 1 ? '' : 's'}',
+                        '${listState.count} employee${listState.count == 1 ? '' : 's'}',
                         style: AppTextStyles.caption.copyWith(
                           color: AppColors.textHint,
                           fontWeight: FontWeight.w600,
@@ -317,46 +385,122 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                   ),
 
                 // ── Employee list ───────────────────────────────────────────
-                filteredAsync.when(
-                  loading: () => const SliverFillRemaining(
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-                  error: (err, _) => SliverFillRemaining(
-                    child: _ErrorView(message: err.toString()),
-                  ),
-                  data: (employees) => employees.isEmpty
-                      ? SliverFillRemaining(
-                          child: _EmptyView(hasFilters: filters.hasActive),
-                        )
-                      : SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
-                          sliver: SliverList.separated(
-                            itemCount: employees.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 10),
-                            itemBuilder: (_, i) {
-                              final emp = employees[i];
-                              return EmployeeCard(
-                                employee: emp,
-                                onView: () => context.push(
-                                  AppRoutes.employeeProfilePath(emp.employeeId),
-                                  extra: emp,
-                                ),
-                                onEdit: () async {
-                                  final updated = await AddEmployeeSheet.show(
-                                      context,
-                                      editing: emp);
-                                  if (updated == true) {
-                                    ref
-                                        .read(employeesProvider.notifier)
-                                        .refresh();
-                                  }
-                                },
-                              );
-                            },
+                if (listState == null)
+                  // No page loaded yet at all: either the very first fetch is
+                  // still in flight, or it failed outright with nothing to
+                  // show. Checked via `hasValue`/`hasError` directly (not
+                  // `.when()`) so this branch can never fire once a page has
+                  // successfully loaded once, even while a later filter
+                  // change or refresh is back in `isLoading`.
+                  if (listAsync.hasError)
+                    SliverFillRemaining(
+                      child: AppErrorState(
+                        title: 'Could not load employees',
+                        message: userFriendlyMessage(listAsync.error!),
+                        onRetry: () => ref.invalidate(employeeListProvider),
+                      ),
+                    )
+                  else
+                    const SliverFillRemaining(
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                else if (listState.items.isEmpty)
+                  SliverFillRemaining(
+                    child: AppEmptyState(
+                      icon: Icons.badge_outlined,
+                      title: filters.search.isNotEmpty ||
+                              filters.status.isNotEmpty ||
+                              filters.department.isNotEmpty ||
+                              filters.branch.isNotEmpty
+                          ? 'No matching employees'
+                          : 'No employees yet',
+                      message: filters.search.isNotEmpty
+                          ? 'No employees match your search.'
+                          : (filters.status.isNotEmpty ||
+                                  filters.department.isNotEmpty ||
+                                  filters.branch.isNotEmpty)
+                              ? 'No employees match the selected filters.'
+                              : 'Employees will appear here once added.',
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                    sliver: SliverList.separated(
+                      itemCount: listState.items.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (_, i) {
+                        final emp = listState.items[i];
+                        return EmployeeCard(
+                          employee: emp,
+                          onView: () => context.push(
+                            AppRoutes.employeeProfilePath(emp.employeeId),
+                            extra: emp,
                           ),
+                          onEdit: () async {
+                            final updated =
+                                await AddEmployeeSheet.show(context, editing: emp);
+                            if (updated == true) {
+                              ref.invalidate(employeeListProvider);
+                              ref.invalidate(employeeStatsProvider);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  content: const Text('Employee updated successfully.'),
+                                  backgroundColor: AppColors.success,
+                                  behavior: SnackBarBehavior.floating,
+                                ));
+                              }
+                            }
+                          },
+                        );
+                      },
+                    ),
+                  ),
+
+                // ── Bottom "load more" row ────────────────────────────────────
+                // Never a full-screen loader — the already-loaded rows above
+                // stay exactly as they are while this renders below them.
+                if (listState != null && listState.isLoadingMore)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2.5),
                         ),
-                ),
+                      ),
+                    ),
+                  )
+                else if (listState != null && listState.loadMoreError != null)
+                  SliverToBoxAdapter(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              listState.loadMoreError!,
+                              style: AppTextStyles.caption
+                                  .copyWith(color: AppColors.textHint),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 6),
+                            TextButton(
+                              onPressed: () => ref
+                                  .read(employeeListProvider.notifier)
+                                  .loadNextPage(),
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  const SliverToBoxAdapter(child: SizedBox(height: 100)),
               ],
             ),
           ),
@@ -452,7 +596,9 @@ class _StatCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
+        // Matches the app's other card radius (12) rather than this card's
+        // previous one-off 14.
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
         boxShadow: AppColors.cardShadow,
       ),
@@ -572,72 +718,6 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-// ── Empty / Error views ───────────────────────────────────────────────────────
-
-class _EmptyView extends StatelessWidget {
-  final bool hasFilters;
-  const _EmptyView({required this.hasFilters});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Icon(Icons.badge_outlined,
-                  size: 36, color: AppColors.primary),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              hasFilters ? 'No results found' : 'No employees yet',
-              style: AppTextStyles.h4,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              hasFilters
-                  ? 'Try adjusting your filters.'
-                  : 'Employees will appear here once added.',
-              style: AppTextStyles.bodySecondary,
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ErrorView extends StatelessWidget {
-  final String message;
-  const _ErrorView({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
-            const SizedBox(height: 12),
-            Text('Could not load employees', style: AppTextStyles.h4),
-            const SizedBox(height: 6),
-            Text(message,
-                style: AppTextStyles.bodySecondary,
-                textAlign: TextAlign.center),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// Empty/Error states now use the shared AppEmptyState/AppErrorState widgets
+// (lib/shared/widgets/) directly at their call sites above — this file no
+// longer needs its own private versions of either.

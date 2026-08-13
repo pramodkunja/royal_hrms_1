@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
+import 'package:mobile_app/features/attendance/presentation/providers/attendance_providers.dart';
 import 'package:mobile_app/features/auth/presentation/providers/auth_providers.dart';
 import 'package:mobile_app/features/employees/data/models/employee_model.dart'
     show EmployeeFilters;
@@ -13,6 +14,7 @@ import 'package:mobile_app/features/employees/presentation/providers/employee_pr
 import 'package:mobile_app/features/dashboard/data/models/admin_dashboard_models.dart';
 import 'package:mobile_app/features/dashboard/data/models/dashboard_common_models.dart';
 import 'package:mobile_app/features/dashboard/presentation/providers/dashboard_providers.dart';
+import 'package:mobile_app/features/dashboard/presentation/widgets/attendance_ring_card.dart';
 import 'package:mobile_app/features/dashboard/presentation/widgets/dashboard_section.dart';
 import 'package:mobile_app/features/dashboard/presentation/widgets/quick_access.dart';
 
@@ -26,17 +28,29 @@ class AdminDashboardView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    Future<void> refreshAll() async {
+      ref.invalidate(systemAdminKpisProvider);
+      ref.invalidate(todayAttendanceProvider);
+      ref.invalidate(systemAdminAnnouncementProvider);
+      ref.invalidate(pendingApprovalsProvider);
+      ref.invalidate(systemAdminDepartmentHeadcountProvider);
+      ref.invalidate(systemAdminEmployeeLifecycleProvider);
+      ref.invalidate(systemAdminBirthdaysTodayProvider);
+      ref.invalidate(systemAdminBirthdaysUpcomingProvider);
+      ref.invalidate(auditLogsPageProvider);
+    }
+
+    // This view is reached via context.go() but every sub-section under it
+    // is pushed on top via goToDashboardSection — so popping back here
+    // never re-triggers autoDispose providers on its own. Re-run the same
+    // refresh pull-to-refresh does whenever the dashboard becomes visible
+    // again. `prev != null` skips the initial subscription.
+    ref.listen<int>(dashboardRevisitProvider, (prev, next) {
+      if (prev != null) refreshAll();
+    });
+
     return RefreshIndicator(
-      onRefresh: () async {
-        ref.invalidate(systemAdminKpisProvider);
-        ref.invalidate(systemAdminAnnouncementProvider);
-        ref.invalidate(pendingApprovalsProvider);
-        ref.invalidate(systemAdminDepartmentHeadcountProvider);
-        ref.invalidate(systemAdminEmployeeLifecycleProvider);
-        ref.invalidate(systemAdminBirthdaysTodayProvider);
-        ref.invalidate(systemAdminBirthdaysUpcomingProvider);
-        ref.invalidate(auditLogsPageProvider);
-      },
+      onRefresh: refreshAll,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
@@ -44,6 +58,8 @@ class AdminDashboardView extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const _SystemConsoleHeader(),
+            const SizedBox(height: 20),
+            const AttendanceRingCard(),
             const SizedBox(height: 20),
             QuickAccessCard(items: kQuickItemsAdmin),
             const SizedBox(height: 20),
@@ -67,7 +83,9 @@ class AdminDashboardView extends ConsumerWidget {
   }
 }
 
-// ── System Console header (dark hero card: greeting + health + KPIs) ───────
+// ── System Console header (gradient hero + white stat strip; shared shell —
+// see dashboard_section.dart's ConsoleHeaderShell/StatusRingAvatar/etc, also
+// used by the Employee, HR, and generic/Manager dashboards) ────────────────
 
 class _SystemConsoleHeader extends ConsumerWidget {
   const _SystemConsoleHeader();
@@ -77,56 +95,35 @@ class _SystemConsoleHeader extends ConsumerWidget {
     final user = ref.watch(authStateProvider).valueOrNull?.user;
     final kpisAsync = ref.watch(systemAdminKpisProvider);
     final name = (user?.fullName ?? '').isEmpty ? 'Admin' : user!.fullName;
+    // Same provider AttendanceRingCard (rendered right below this) reads for
+    // its own clocked-in state — one canonical source, so the two never
+    // disagree about whether this person is currently clocked in.
+    final clockedIn = ref.watch(todayAttendanceProvider).valueOrNull?.isClockedIn ?? false;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0F1B33), Color(0xFF17264D)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppColors.elevatedShadow,
-      ),
-      child: Column(
+    return ConsoleHeaderShell(
+      heroContent: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.terminal_rounded,
-                    color: Colors.white, size: 18),
-              ),
-              const SizedBox(width: 10),
+              StatusRingAvatar(name: name, active: clockedIn),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    const RoleBadgePill(label: 'SYSTEM CONSOLE', icon: Icons.terminal_rounded),
+                    const SizedBox(height: 7),
                     Text(
-                      'SYSTEM CONSOLE',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        letterSpacing: 1.2,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 10,
-                      ),
+                      'Welcome back,',
+                      style: AppTextStyles.bodySmall.copyWith(color: Colors.white.withValues(alpha: 0.8)),
                     ),
-                    const SizedBox(height: 2),
                     Text(
-                      'Welcome back, $name',
-                      style:
-                          AppTextStyles.h3.copyWith(color: Colors.white, height: 1.2),
-                      maxLines: 1,
+                      name,
+                      style: AppTextStyles.h3.copyWith(color: Colors.white, height: 1.15),
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
@@ -135,6 +132,10 @@ class _SystemConsoleHeader extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 12),
+          // Service health stays its own small row — a system admin's
+          // "is the platform healthy" glance is a different concept from
+          // "am I personally clocked in" below it, so it isn't folded into
+          // the shared info bar, just kept in the same gradient zone.
           kpisAsync.maybeWhen(
             data: (kpis) => Wrap(
               spacing: 12,
@@ -148,84 +149,43 @@ class _SystemConsoleHeader extends ConsumerWidget {
             ),
             orElse: () => const SizedBox.shrink(),
           ),
-          const SizedBox(height: 12),
-          Divider(color: Colors.white.withValues(alpha: 0.12), height: 1),
-          const SizedBox(height: 12),
-          kpisAsync.when(
-            data: (kpis) {
-              final stats = [
-                _ConsoleStat(
-                  icon: Icons.groups_outlined,
-                  value: '${kpis.totalEmployees}',
-                  label: 'Employees',
-                ),
-                _ConsoleStat(
-                  icon: Icons.fact_check_outlined,
-                  value: '${kpis.pendingApprovals}',
-                  label: 'Approvals',
-                ),
-                _ConsoleStat(
-                  icon: Icons.person_add_alt_outlined,
-                  value: '${kpis.employeesOnboarding}',
-                  label: 'Onboard',
-                ),
-                _ConsoleStat(
-                  icon: Icons.apartment_outlined,
-                  value: '${kpis.activeBranches}',
-                  label: 'Branches',
-                ),
-              ];
-              // A single row (not a 2x2 grid) keeps this section to one
-              // compact line of value+label per stat instead of stacking
-              // icon+value+label+sublabel across two tall rows.
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (var i = 0; i < stats.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 8),
-                    Expanded(child: stats[i]),
-                  ],
-                ],
-              );
-            },
-            loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation(Colors.white70),
-                  ),
-                ),
-              ),
-            ),
-            error: (e, _) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    friendlyDashboardError(e),
-                    style: AppTextStyles.caption.copyWith(color: Colors.white70),
-                  ),
-                  const SizedBox(height: 6),
-                  TextButton(
-                    onPressed: () => ref.invalidate(systemAdminKpisProvider),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(0, 0),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          const SizedBox(height: 16),
+          ConsoleInfoBar(clockedIn: clockedIn),
         ],
+      ),
+      statsContent: kpisAsync.when(
+        data: (kpis) => ConsoleStatsRow(stats: [
+          (icon: Icons.groups_outlined, value: '${kpis.totalEmployees}', label: 'Employees', color: AppColors.primary),
+          (
+            icon: Icons.fact_check_outlined,
+            value: '${kpis.pendingApprovals}',
+            label: 'Approvals',
+            color: AppColors.warning,
+          ),
+          (
+            icon: Icons.person_add_alt_outlined,
+            value: '${kpis.employeesOnboarding}',
+            label: 'Onboard',
+            color: AppColors.success,
+          ),
+          (icon: Icons.apartment_outlined, value: '${kpis.activeBranches}', label: 'Branches', color: AppColors.info),
+        ]),
+        loading: () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+        ),
+        error: (e, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(friendlyDashboardError(e), style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+            const SizedBox(height: 6),
+            TextButton(
+              onPressed: () => ref.invalidate(systemAdminKpisProvider),
+              style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -253,46 +213,6 @@ class _HealthDot extends StatelessWidget {
           label,
           style: AppTextStyles.caption
               .copyWith(color: Colors.white.withValues(alpha: 0.85)),
-        ),
-      ],
-    );
-  }
-}
-
-class _ConsoleStat extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final String label;
-
-  const _ConsoleStat({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: Colors.white.withValues(alpha: 0.5), size: 14),
-            const SizedBox(width: 4),
-            Text(
-              value,
-              style: AppTextStyles.h3.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
-            ),
-          ],
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.65)),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
         ),
       ],
     );
@@ -346,7 +266,7 @@ class _PendingApprovalsCard extends ConsumerWidget {
               data: (approvals) => Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _ApprovalRow(
+                  ActionRow(
                     icon: Icons.beach_access_outlined,
                     iconColor: AppColors.success,
                     title: 'Leave Requests',
@@ -354,7 +274,7 @@ class _PendingApprovalsCard extends ConsumerWidget {
                     onTap: () => goToDashboardSection(context, AppRoutes.leave),
                   ),
                   const Divider(height: 24),
-                  _ApprovalRow(
+                  ActionRow(
                     icon: Icons.account_balance_wallet_outlined,
                     iconColor: AppColors.warning,
                     title: 'Expense Claims',
@@ -362,7 +282,7 @@ class _PendingApprovalsCard extends ConsumerWidget {
                     onTap: () => goToDashboardSection(context, AppRoutes.expenses),
                   ),
                   const Divider(height: 24),
-                  _ApprovalRow(
+                  ActionRow(
                     icon: Icons.how_to_reg_outlined,
                     iconColor: AppColors.primary,
                     title: 'Onboarding Reviews',
@@ -379,7 +299,7 @@ class _PendingApprovalsCard extends ConsumerWidget {
                     },
                   ),
                   const Divider(height: 24),
-                  _ApprovalRow(
+                  ActionRow(
                     icon: Icons.logout_outlined,
                     iconColor: AppColors.error,
                     title: 'Separation Requests',
@@ -440,71 +360,13 @@ class _PendingBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.warning.withValues(alpha: 0.14),
+        color: AppColors.warningContainer,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         '$count pending',
         style: AppTextStyles.labelSmall
             .copyWith(color: AppColors.warning, fontWeight: FontWeight.w700),
-      ),
-    );
-  }
-}
-
-class _ApprovalRow extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final int count;
-  final VoidCallback onTap;
-
-  const _ApprovalRow({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.count,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: iconColor, size: 19),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w700),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-                const SizedBox(height: 2),
-                Text('Awaiting action', style: AppTextStyles.caption),
-              ],
-            ),
-          ),
-          Text(
-            '$count',
-            style: AppTextStyles.h4.copyWith(color: iconColor, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(width: 4),
-          Icon(Icons.chevron_right, size: 20, color: AppColors.textHint),
-        ],
       ),
     );
   }
@@ -650,13 +512,6 @@ String _formatDateTime(String iso) {
       '${hour.toString().padLeft(2, '0')}:$minute $period';
 }
 
-String _initialsOf(String name) {
-  final parts = name.trim().split(RegExp(r'\s+'));
-  if (name.isEmpty) return '?';
-  if (parts.length == 1) return parts[0][0].toUpperCase();
-  return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-}
-
 // ── Employee Lifecycle (tabbed) ───────────────────────────────────────────────
 
 class _EmployeeLifecycleCard extends ConsumerStatefulWidget {
@@ -707,7 +562,7 @@ class _EmployeeLifecycleCardState extends ConsumerState<_EmployeeLifecycleCard> 
                 children: [
                   for (var i = 0; i < 3; i++)
                     Expanded(
-                      child: _LifecycleTabButton(
+                      child: LifecycleTabButton(
                         label: _tabsMeta[i].label,
                         icon: _tabsMeta[i].icon,
                         count: groups[i].count,
@@ -735,80 +590,6 @@ class _EmployeeLifecycleCardState extends ConsumerState<_EmployeeLifecycleCard> 
   }
 }
 
-class _LifecycleTabButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final int count;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _LifecycleTabButton({
-    required this.label,
-    required this.icon,
-    required this.count,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = selected ? AppColors.primary : AppColors.textSecondary;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: selected ? AppColors.primary : Colors.transparent,
-              width: 2,
-            ),
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 13, color: color),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    label,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: color,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 5),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-              decoration: BoxDecoration(
-                color: selected
-                    ? AppColors.primary.withValues(alpha: 0.1)
-                    : AppColors.backgroundMid,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                '$count',
-                style: AppTextStyles.labelSmall
-                    .copyWith(color: color, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _LifecycleList extends StatelessWidget {
   final AdminLifecycleGroup group;
@@ -856,15 +637,7 @@ class _LifecycleRow extends StatelessWidget {
               context, '${AppRoutes.employees}/${employee.employeeId}'),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: const Color(0xFF16224A),
-            child: Text(
-              _initialsOf(employee.fullName),
-              style: AppTextStyles.labelSmall
-                  .copyWith(color: Colors.white, fontWeight: FontWeight.w700),
-            ),
-          ),
+          InitialsAvatar(name: employee.fullName),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -1250,7 +1023,7 @@ class _AuditLogRow extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppColors.info.withValues(alpha: 0.12),
+                  color: AppColors.infoContainer,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(

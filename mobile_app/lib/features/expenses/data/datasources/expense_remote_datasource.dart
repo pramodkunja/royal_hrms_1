@@ -15,11 +15,13 @@ class ExpenseRemoteDataSource {
     String? category,
     String? status,
     String? scope,
+    int? pageSize,
   }) async {
     final params = <String, dynamic>{};
     if (category != null && category.isNotEmpty) params['category'] = category;
     if (status != null && status.isNotEmpty) params['status'] = status;
     if (scope != null && scope.isNotEmpty) params['scope'] = scope;
+    if (pageSize != null) params['page_size'] = pageSize;
 
     try {
       final res = await _dio.get(ApiConstants.expenses, queryParameters: params);

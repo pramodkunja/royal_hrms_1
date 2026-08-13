@@ -25,7 +25,7 @@ class BranchEmptyView extends StatelessWidget {
                   size: 36, color: AppColors.primary),
             ),
             const SizedBox(height: 16),
-            Text('No branches yet', style: AppTextStyles.h4),
+            Text('No branches found', style: AppTextStyles.h4),
             const SizedBox(height: 6),
             Text(
               'Add your first branch to get started.',
@@ -69,7 +69,7 @@ class BranchErrorView extends StatelessWidget {
             Icon(Icons.cloud_off_outlined,
                 size: 48, color: AppColors.textHint),
             const SizedBox(height: 12),
-            Text('Could not load branches', style: AppTextStyles.h4),
+            Text('Unable to load branches', style: AppTextStyles.h4),
             const SizedBox(height: 6),
             Text(message,
                 style: AppTextStyles.bodySecondary,
@@ -78,7 +78,7 @@ class BranchErrorView extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh, size: 16),
-              label: const Text('Retry'),
+              label: const Text('Try Again'),
             ),
           ],
         ),

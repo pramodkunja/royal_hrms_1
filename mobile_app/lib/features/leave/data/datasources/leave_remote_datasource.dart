@@ -46,10 +46,12 @@ class LeaveRemoteDataSource {
   Future<List<LeaveRequestModel>> fetchLeaveRequests({
     String? status,
     String? scope,
+    int? pageSize,
   }) async {
     final params = <String, dynamic>{};
     if (status != null) params['status'] = status;
     if (scope != null) params['scope'] = scope;
+    if (pageSize != null) params['page_size'] = pageSize;
     final res = await _dio.get(ApiConstants.leaves, queryParameters: params);
     final data = _unwrap(res.data);
     // Handle both plain list and paginated {count, results}

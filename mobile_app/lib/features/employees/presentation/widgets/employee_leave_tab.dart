@@ -156,7 +156,7 @@ class _EmployeeLeaveTabState extends ConsumerState<EmployeeLeaveTab> {
         requestsAsync.when(
           data: _buildRequestsSection,
           loading: () => Padding(
-            padding: EdgeInsets.symmetric(vertical: 40),
+            padding: const EdgeInsets.symmetric(vertical: 40),
             child:
                 Center(child: CircularProgressIndicator(color: AppColors.primary)),
           ),

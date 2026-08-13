@@ -356,8 +356,19 @@ class SettingsRemoteDataSource {
   // ── Roles & Permissions ────────────────────────────────────────────────────
 
   Future<List<PermissionModel>> fetchPermissions() async {
-    final res = await _dio.get(ApiConstants.permissions);
-    final data = _unwrap(res.data);
+    final res = await _dio.get(ApiConstants.permissions, queryParameters: {'page_size': 100});
+    var data = _unwrap(res.data);
+    // The list is wrapped in the standard pagination envelope
+    // ({count, page, page_size, total_pages, results}) — the module-grouped
+    // map lives under `results`, not directly under `data`. Drilling into it
+    // here used to be skipped, so the loop below iterated over
+    // {count, page, page_size, total_pages, results} itself: none of those
+    // top-level values is a List, so every permission fetch silently
+    // returned [] — the Roles screen's Permission Matrix section and the
+    // Add/Edit Role form's permission picker both went empty as a result.
+    if (data is Map<String, dynamic> && data['results'] != null) {
+      data = data['results'];
+    }
     // Backend returns grouped by module: {module: [{id, codename, module, action}...], ...}
     if (data is Map<String, dynamic>) {
       final result = <PermissionModel>[];
@@ -525,8 +536,9 @@ class SettingsRemoteDataSource {
   // plain list if the endpoint ever returns one directly.
   List<dynamic> _toList(dynamic data) {
     if (data is List) return data;
-    if (data is Map<String, dynamic>)
+    if (data is Map<String, dynamic>) {
       return data['results'] as List<dynamic>? ?? [];
+    }
     return [];
   }
 }

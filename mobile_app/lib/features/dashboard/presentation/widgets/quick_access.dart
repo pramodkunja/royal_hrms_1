@@ -22,6 +22,31 @@ String resolveRoleCategory(String rawRole) {
   return 'employee'; // default, matches web's fallback
 }
 
+// Uploaded module icon artwork (assets/images/), keyed by the module's own
+// path rather than its per-role label text — a module can show up as
+// "Employees" under HR/Admin but "Team Members" under Manager, and it's
+// still the same module/image either way.
+const _kQuickItemImageByPath = <String, String>{
+  '/dashboard/employees': 'assets/images/Employees.png',
+  '/dashboard/attendance': 'assets/images/Attendance.png',
+  '/dashboard/my-attendance': 'assets/images/Attendance.png',
+  '/dashboard/branches': 'assets/images/Branches.png',
+  '/settings/roles': 'assets/images/Roles&Permissions.png',
+  '/dashboard/settings': 'assets/images/Settings.png',
+  '/dashboard/interview-list': 'assets/images/Interview list.png',
+  '/dashboard/candidate-review': 'assets/images/Review Candidate.png',
+};
+
+// Overrides keyed by "path|label" for the rare case where the SAME path is
+// shared by tiles that mean genuinely different things depending on role —
+// unlike the cases above, "Apply Leave" (an employee submitting their own
+// request) and "Leave Approvals" (HR reviewing others') both live at
+// /dashboard/leave but are not the same action, so only the HR-facing tile
+// gets the "Leave Approval" artwork; Apply Leave keeps its plain icon.
+const _kQuickItemImageByPathAndLabel = <String, String>{
+  '/dashboard/leave|Leave Approvals': 'assets/images/Leave Approval.png',
+};
+
 class QuickItem {
   final String label;
   final IconData icon;
@@ -36,6 +61,13 @@ class QuickItem {
     required this.path,
     this.permission,
   });
+
+  /// Uploaded module artwork to show instead of [icon], resolved from
+  /// [path] (and, for the few tiles where the same path means different
+  /// things per role, [label] too) — falls back to the plain Material icon
+  /// (null) for every module without a provided image.
+  String? get imageAsset =>
+      _kQuickItemImageByPathAndLabel['$path|$label'] ?? _kQuickItemImageByPath[path];
 }
 
 // Mirrors each web dashboard's own "Quick actions" array exactly (icons
@@ -273,15 +305,26 @@ class QuickTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: item.color.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(item.icon, color: item.color, size: 17),
-            ),
+            item.imageAsset != null
+                // The uploaded artwork is already a full-color icon (see
+                // _kQuickItemImageByPath) — no tinted background box behind
+                // it, unlike the plain glyph case below, and sized a touch
+                // bigger since it's carrying real detail rather than a
+                // simple line-icon shape.
+                ? SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: Image.asset(item.imageAsset!, fit: BoxFit.contain),
+                  )
+                : Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: item.color.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(item.icon, color: item.color, size: 17),
+                  ),
             const SizedBox(height: 8),
             Text(
               item.label,

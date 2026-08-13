@@ -5,6 +5,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../settings/data/models/departments_model.dart';
 import '../../../settings/presentation/providers/settings_providers.dart';
+import '../../../../shared/widgets/app_error_state.dart';
 import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
 import 'leave_request_detail_sheet.dart';
@@ -269,12 +270,14 @@ class _LeaveApprovalsTabState extends ConsumerState<LeaveApprovalsTab> {
                 ? Center(
                     child: CircularProgressIndicator(color: AppColors.primary))
                 : activeAsync.hasError
-                    ? Padding(
+                    ? AppErrorState(
+                        message: friendlyLeaveError(activeAsync.error!),
                         padding: const EdgeInsets.all(24),
-                        child: Text(
-                            'Could not load requests: ${friendlyLeaveError(activeAsync.error!)}',
-                            style: AppTextStyles.caption
-                                .copyWith(color: AppColors.error)),
+                        onRetry: () => ref.invalidate(
+                          _showPending
+                              ? leaveTeamPendingProvider(_teamFilter)
+                              : leaveTeamHistoryProvider(_teamFilter),
+                        ),
                       )
                     : rows.isEmpty
                         ? Center(
@@ -665,7 +668,14 @@ class _ApprovalCard extends StatelessWidget {
                               style: TextStyle(
                                   fontSize: 12, fontWeight: FontWeight.w600)),
                           style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.success,
+                            // AppColors.success is also the fill used for
+                            // "already approved" status pills elsewhere on
+                            // this screen — using it for the action button
+                            // too risked reading as a status indicator
+                            // rather than a button. Attendance's equivalent
+                            // Approve action already uses primary; this
+                            // aligns Leave with that existing convention.
+                            backgroundColor: AppColors.primary,
                             padding: const EdgeInsets.symmetric(vertical: 10),
                           ),
                         ),

@@ -322,6 +322,23 @@ class AbsenceAlertSectionModel {
       );
 }
 
+class FaceVerificationSectionModel {
+  final bool isMandatory;
+
+  const FaceVerificationSectionModel({required this.isMandatory});
+
+  static const defaults = FaceVerificationSectionModel(isMandatory: false);
+
+  factory FaceVerificationSectionModel.fromJson(Map<String, dynamic> json) {
+    return FaceVerificationSectionModel(isMandatory: json['is_mandatory'] as bool? ?? false);
+  }
+
+  Map<String, dynamic> toJson() => {'is_mandatory': isMandatory};
+
+  FaceVerificationSectionModel copyWith({bool? isMandatory}) =>
+      FaceVerificationSectionModel(isMandatory: isMandatory ?? this.isMandatory);
+}
+
 class AttendanceSettingsModel {
   final WorkingHoursSectionModel workingHours;
   final WeeklyOffSectionModel weeklyOff;
@@ -329,6 +346,7 @@ class AttendanceSettingsModel {
   final OvertimeRulesSectionModel overtimeRules;
   final LateMarkRulesSectionModel lateMarkRules;
   final AbsenceAlertSectionModel absenceAlert;
+  final FaceVerificationSectionModel faceVerification;
   final String? updatedByName;
   final String? updatedAt;
 
@@ -339,6 +357,7 @@ class AttendanceSettingsModel {
     required this.overtimeRules,
     required this.lateMarkRules,
     required this.absenceAlert,
+    required this.faceVerification,
     this.updatedByName,
     this.updatedAt,
   });
@@ -350,6 +369,7 @@ class AttendanceSettingsModel {
     overtimeRules: OvertimeRulesSectionModel.defaults,
     lateMarkRules: LateMarkRulesSectionModel.defaults,
     absenceAlert: AbsenceAlertSectionModel.defaults,
+    faceVerification: FaceVerificationSectionModel.defaults,
   );
 
   factory AttendanceSettingsModel.fromJson(Map<String, dynamic> json) {
@@ -372,6 +392,9 @@ class AttendanceSettingsModel {
       absenceAlert: json['absence_alert'] is Map<String, dynamic>
           ? AbsenceAlertSectionModel.fromJson(json['absence_alert'] as Map<String, dynamic>)
           : AbsenceAlertSectionModel.defaults,
+      faceVerification: json['face_verification'] is Map<String, dynamic>
+          ? FaceVerificationSectionModel.fromJson(json['face_verification'] as Map<String, dynamic>)
+          : FaceVerificationSectionModel.defaults,
       updatedByName: json['updated_by_name'] as String?,
       updatedAt: json['updated_at'] as String?,
     );
@@ -384,6 +407,7 @@ class AttendanceSettingsModel {
         'overtime_rules': overtimeRules.toJson(),
         'late_mark_rules': lateMarkRules.toJson(),
         'absence_alert': absenceAlert.toJson(),
+        'face_verification': faceVerification.toJson(),
       };
 
   AttendanceSettingsModel copyWith({
@@ -393,6 +417,7 @@ class AttendanceSettingsModel {
     OvertimeRulesSectionModel? overtimeRules,
     LateMarkRulesSectionModel? lateMarkRules,
     AbsenceAlertSectionModel? absenceAlert,
+    FaceVerificationSectionModel? faceVerification,
   }) =>
       AttendanceSettingsModel(
         workingHours: workingHours ?? this.workingHours,
@@ -401,6 +426,7 @@ class AttendanceSettingsModel {
         overtimeRules: overtimeRules ?? this.overtimeRules,
         lateMarkRules: lateMarkRules ?? this.lateMarkRules,
         absenceAlert: absenceAlert ?? this.absenceAlert,
+        faceVerification: faceVerification ?? this.faceVerification,
         updatedByName: updatedByName,
         updatedAt: updatedAt,
       );

@@ -36,6 +36,25 @@ class BranchStatsNotifier
   }
 }
 
+// ── Distribution (employees per branch — feeds the chart) ──────────────────────
+
+final branchDistributionProvider = AsyncNotifierProvider.autoDispose<
+    BranchDistributionNotifier,
+    List<BranchDistributionEntity>>(BranchDistributionNotifier.new);
+
+class BranchDistributionNotifier
+    extends AutoDisposeAsyncNotifier<List<BranchDistributionEntity>> {
+  BranchRepository get _repo => ref.read(branchRepositoryProvider);
+
+  @override
+  Future<List<BranchDistributionEntity>> build() => _repo.getDistribution();
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => _repo.getDistribution());
+  }
+}
+
 // ── Branch list ───────────────────────────────────────────────────────────────
 
 final branchListProvider = AsyncNotifierProvider.autoDispose<
@@ -68,7 +87,7 @@ class BranchListNotifier
       state = AsyncData([...state.valueOrNull ?? [], created]);
       return null;
     } catch (e) {
-      return _friendly(e);
+      return friendlyBranchError(e);
     }
   }
 
@@ -98,7 +117,7 @@ class BranchListNotifier
       );
       return null;
     } catch (e) {
-      return _friendly(e);
+      return friendlyBranchError(e);
     }
   }
 
@@ -110,7 +129,7 @@ class BranchListNotifier
       );
       return null;
     } catch (e) {
-      return _friendly(e);
+      return friendlyBranchError(e);
     }
   }
 
@@ -145,7 +164,9 @@ class CitiesNotifier
 
 // ── Error helper ──────────────────────────────────────────────────────────────
 
-String _friendly(Object e) {
+/// Turns a raw exception (DioException, SocketException, ...) into a message
+/// safe to show a user — never a stack trace or internal URL.
+String friendlyBranchError(Object e) {
   final msg = e.toString();
   if (msg.contains('SocketException') || msg.contains('connection')) {
     return 'Cannot reach server. Check your connection.';

@@ -7,7 +7,7 @@ import '../providers/voice_mute_provider.dart';
 import '../state/voice_conversation_state.dart';
 import 'payslip_summary_card.dart';
 
-/// Sampled straight from assets/images/Assistant.gif so this panel's chrome
+/// Sampled straight from assets/animations/Assistant.gif so this panel's chrome
 /// (borders, icons, spinner, buttons) reads as the same character talking,
 /// rather than the app's unrelated navy theme color. Success/error stay on
 /// AppColors.success/error below — those are meaningful status colors, not

@@ -44,9 +44,17 @@ class BranchModel extends BranchEntity {
     required super.stateName,
     required super.cityId,
     required super.cityName,
+    super.hrName,
     required super.employeesCount,
     required super.status,
     required super.isHeadquarter,
+    super.latitude,
+    super.longitude,
+    super.allowedRadiusMeters,
+    super.geofencingEnabled,
+    super.hasCoordinates,
+    super.createdAt,
+    super.updatedAt,
   });
 
   factory BranchModel.fromJson(Map<String, dynamic> json) => BranchModel(
@@ -58,9 +66,44 @@ class BranchModel extends BranchEntity {
         stateName: json['state_name'] as String? ?? '',
         cityId: json['city'] as int? ?? 0,
         cityName: json['city_name'] as String? ?? '',
+        hrName: json['hr_name'] as String?,
         employeesCount: json['employees_count'] as int? ?? 0,
         status: json['status'] as String? ?? 'active',
         isHeadquarter: json['is_headquarter'] as bool? ?? false,
+        latitude: _parseDouble(json['latitude']),
+        longitude: _parseDouble(json['longitude']),
+        allowedRadiusMeters: json['allowed_radius_meters'] as int? ?? 0,
+        geofencingEnabled: json['geofencing_enabled'] as bool? ?? false,
+        hasCoordinates: json['has_coordinates'] as bool? ?? false,
+        createdAt: _parseDate(json['created_at']),
+        updatedAt: _parseDate(json['updated_at']),
+      );
+
+  static double? _parseDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
+  }
+
+  static DateTime? _parseDate(dynamic value) {
+    if (value is! String) return null;
+    return DateTime.tryParse(value);
+  }
+}
+
+@immutable
+class BranchDistributionModel extends BranchDistributionEntity {
+  const BranchDistributionModel({
+    required super.branch,
+    required super.branchCode,
+    required super.employees,
+  });
+
+  factory BranchDistributionModel.fromJson(Map<String, dynamic> json) =>
+      BranchDistributionModel(
+        branch: json['branch'] as String? ?? '',
+        branchCode: json['branch_code'] as String? ?? '',
+        employees: json['employees'] as int? ?? 0,
       );
 }
 

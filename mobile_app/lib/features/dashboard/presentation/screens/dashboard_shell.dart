@@ -44,12 +44,26 @@ class _DashboardShellState extends ConsumerState<DashboardShell> {
     // for why this can't just be read off GoRouter itself. Deferred to next
     // frame: this runs during build, and a provider write during build
     // throws.
-    if (ref.read(currentVisiblePathProvider) != currentPath) {
+    final previousPath = ref.read(currentVisiblePathProvider);
+    if (previousPath != currentPath) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           ref.read(currentVisiblePathProvider.notifier).state = currentPath;
         }
       });
+
+      // Landing back on the dashboard home route from anywhere else — e.g.
+      // popping back after goToDashboardSection pushed a section on top —
+      // bump the revisit signal so HomeScreen's still-mounted providers
+      // (never disposed, since push/pop never tears it down) re-fetch.
+      // See dashboardRevisitProvider's doc comment for why this is needed.
+      if (currentPath == AppRoutes.dashboard && previousPath != AppRoutes.dashboard) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref.read(dashboardRevisitProvider.notifier).state++;
+          }
+        });
+      }
     }
 
     return PopScope(

@@ -82,11 +82,12 @@ class _WaitingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Spacer(flex: 2),
+          const SizedBox(height: 24),
           _CircleIcon(
             icon: Icons.hourglass_top_rounded,
             color: AppColors.primary,
@@ -108,7 +109,7 @@ class _WaitingView extends StatelessWidget {
           ),
           const SizedBox(height: 40),
           const _StatusTimeline(approved: false),
-          const Spacer(flex: 3),
+          const SizedBox(height: 40),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
@@ -155,11 +156,12 @@ class _ApprovedView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Spacer(flex: 2),
+          const SizedBox(height: 24),
           _CircleIcon(
             icon: Icons.check_circle_rounded,
             color: const Color(0xFF22C55E),
@@ -184,7 +186,7 @@ class _ApprovedView extends StatelessWidget {
           ),
           const SizedBox(height: 40),
           const _StatusTimeline(approved: true),
-          const Spacer(flex: 3),
+          const SizedBox(height: 40),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(

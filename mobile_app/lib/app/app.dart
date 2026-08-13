@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile_app/core/network/connectivity_provider.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_theme.dart';
 import 'package:mobile_app/core/theme/theme_mode_provider.dart';
 import 'package:mobile_app/features/voice_commands/presentation/widgets/voice_mic_overlay.dart';
+import 'package:mobile_app/shared/widgets/no_internet_view.dart';
 
 class RoyalHrmsApp extends ConsumerWidget {
   const RoyalHrmsApp({super.key});
@@ -49,8 +51,29 @@ class RoyalHrmsApp extends ConsumerWidget {
               ],
             ),
           ),
+          // Blocks the whole app behind a full-screen "no internet" state
+          // whenever connectivity drops, and clears itself the instant the
+          // device reconnects — no per-screen wiring needed.
+          const _ConnectivityGate(),
         ],
       ),
+    );
+  }
+}
+
+/// Renders nothing while online (or before the first connectivity check
+/// resolves, to avoid a startup flash) and a full-screen, input-blocking
+/// [NoInternetView] the moment connectivity_plus reports no active network.
+class _ConnectivityGate extends ConsumerWidget {
+  const _ConnectivityGate();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isOnline = ref.watch(isOnlineProvider).value ?? true;
+    if (isOnline) return const SizedBox.shrink();
+
+    return Positioned.fill(
+      child: NoInternetView(onRetry: () => ref.invalidate(isOnlineProvider)),
     );
   }
 }

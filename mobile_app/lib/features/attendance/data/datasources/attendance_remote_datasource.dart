@@ -34,6 +34,10 @@ class AttendanceRemoteDataSource {
     String? deviceName,
     String? deviceId,
     String? operatingSystem,
+    List<double>? faceEmbedding,
+    bool? livenessPassed,
+    double? livenessScore,
+    String? captureSessionId,
   }) async {
     final res = await _dio.post(ApiConstants.attendancePunch, data: {
       'punch_type': punchType,
@@ -46,6 +50,10 @@ class AttendanceRemoteDataSource {
       if (deviceId != null) 'device_id': deviceId,
       if (operatingSystem != null) 'operating_system': operatingSystem,
       'device_time': DateTime.now().toIso8601String(),
+      if (faceEmbedding != null) 'face_embedding': faceEmbedding,
+      if (livenessPassed != null) 'liveness_passed': livenessPassed,
+      if (livenessScore != null) 'liveness_score': livenessScore,
+      if (captureSessionId != null) 'capture_session_id': captureSessionId,
     });
     return TodayAttendanceModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
@@ -294,10 +302,13 @@ class AttendanceRemoteDataSource {
     return _unwrapList(res.data).map(HrCorrectionRowModel.fromJson).toList();
   }
 
-  Future<void> reviewCorrection(String id, {required bool approve}) async {
+  Future<void> reviewCorrection(String id, {required bool approve, String? remarks}) async {
     await _dio.patch(
       ApiConstants.attendanceHrCorrectionReview(id),
-      data: {'action': approve ? 'approve' : 'reject'},
+      data: {
+        'action': approve ? 'approve' : 'reject',
+        'remarks': remarks ?? '',
+      },
     );
   }
 

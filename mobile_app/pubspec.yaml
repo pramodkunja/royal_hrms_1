@@ -32,6 +32,9 @@ dependencies:
   # Connectivity
   connectivity_plus: ^6.1.1
 
+  # Animations (Lottie JSON — 404 / no-internet screens)
+  lottie: ^3.1.3
+
   # File / Image picking
   image_picker: ^1.1.2
   file_picker: ^8.1.2
@@ -46,6 +49,21 @@ dependencies:
   speech_to_text: ^7.0.0
   flutter_tts: ^4.2.2
 
+  # Face ID registration/verification — live camera preview + capture,
+  # on-device face detection for liveness cues (blink / head-turn), and a
+  # bundled on-device embedding model (MobileFaceNet, assets/models/
+  # mobilefacenet.tflite) — see features/facial_recognition. There is no
+  # backend endpoint for computing embeddings server-side, so the whole
+  # capture pipeline runs on-device end to end; the embedding is NOT
+  # numerically compatible with the web app's face-api.js embeddings (a
+  # different model entirely) — an employee must register and verify on the
+  # same platform.
+  camera: ^0.11.0+2
+  google_mlkit_face_detection: ^0.13.1
+  tflite_flutter: ^0.12.1
+  image: ^4.8.0
+  uuid: ^4.5.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -57,6 +75,8 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/models/
+    - assets/animations/
 
 # Config for `dart run flutter_native_splash:create` — generates the native
 # (pre-Flutter-engine) launch screen shown the instant the app icon is

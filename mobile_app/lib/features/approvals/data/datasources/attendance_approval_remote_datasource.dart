@@ -55,6 +55,7 @@ class AttendanceApprovalRemoteDataSource {
       l2ApproverName: cycleJson['l2_approver'] as String?,
       l1ApprovedAt: DateTime.tryParse(cycleJson['l1_approved_at']?.toString() ?? ''),
       l2ApprovedAt: DateTime.tryParse(cycleJson['l2_approved_at']?.toString() ?? ''),
+      hrSelfApprovedAt: DateTime.tryParse(cycleJson['hr_self_approved_at']?.toString() ?? ''),
       notes: '',
       payslipCount: 0,
       managerApprovals: managerApprovals,
@@ -66,11 +67,21 @@ class AttendanceApprovalRemoteDataSource {
     return CycleAttendanceSummary.fromJson(data, cycle);
   }
 
-  /// level: 'L1' (manager) or 'L2' (hr_admin).
-  Future<PayrollCycleModel> approveAttendance(String cycleId, String level, {String? comment}) async {
+  /// level: 'L1' (manager) or 'L2' (hr_admin). `selfApprove` mirrors web's
+  /// `self_approve` flag — optional self-attestation of the approver's own
+  /// attendance for the cycle, separate from approving their team/the cycle
+  /// (see ManagerAttendanceApproval.self_approved_at / PayrollCycle.hr_self_approved_at,
+  /// apps/payroll/views/cycles.py AttendanceApprovalView.post).
+  Future<PayrollCycleModel> approveAttendance(
+    String cycleId,
+    String level, {
+    String? comment,
+    bool selfApprove = false,
+  }) async {
     final res = await _dio.post(ApiConstants.payrollApproveAttendance(cycleId), data: {
       'level': level,
       if (comment != null && comment.isNotEmpty) 'comment': comment,
+      'self_approve': selfApprove,
     });
     return PayrollCycleModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }

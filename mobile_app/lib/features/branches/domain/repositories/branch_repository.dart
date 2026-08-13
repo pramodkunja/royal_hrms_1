@@ -9,6 +9,8 @@ abstract class BranchRepository {
 
   Future<BranchStatsEntity> getStats();
 
+  Future<List<BranchDistributionEntity>> getDistribution();
+
   Future<List<BranchEntity>> getBranches({int page = 1, int pageSize = 50});
 
   Future<BranchEntity> createBranch({

@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
+import 'package:mobile_app/features/attendance/presentation/providers/attendance_providers.dart';
 import 'package:mobile_app/features/auth/presentation/providers/auth_providers.dart';
 import 'package:mobile_app/features/hrms/domain/entities/birthday_entity.dart';
 import 'package:mobile_app/features/hrms/presentation/providers/hrms_providers.dart';
 import 'package:mobile_app/features/leave/domain/entities/leave_entity.dart';
 import 'package:mobile_app/features/leave/presentation/providers/leave_providers.dart';
-import '../widgets/clock_in_card.dart';
+import '../widgets/attendance_ring_card.dart';
 import '../widgets/dashboard_section.dart';
 import '../widgets/quick_access.dart';
 import 'admin_dashboard_view.dart';
@@ -53,14 +55,26 @@ class _GenericDashboardView extends ConsumerWidget {
     final category = resolveRoleCategory(user?.role ?? '');
     final quickAccess = kQuickItemsByRole[category]!;
     final canViewBirthdays = permissions.contains('employees.view');
-    final canClockIn = category == 'hr' || category == 'employee';
+
+    Future<void> refreshAll() async {
+      ref.invalidate(leaveStatsProvider);
+      ref.invalidate(leaveRequestsProvider);
+      ref.invalidate(todayAttendanceProvider);
+      if (canViewBirthdays) ref.invalidate(birthdaysProvider);
+    }
+
+    // HomeScreen is reached via context.go() but every sub-section under it
+    // (Attendance, Leave, etc.) is pushed on top via goToDashboardSection —
+    // so popping back here never re-triggers autoDispose providers on its
+    // own. Re-run the same refresh pull-to-refresh does whenever the
+    // dashboard becomes visible again. `prev != null` skips the initial
+    // subscription — only actual increments matter.
+    ref.listen<int>(dashboardRevisitProvider, (prev, next) {
+      if (prev != null) refreshAll();
+    });
 
     return RefreshIndicator(
-      onRefresh: () async {
-        ref.invalidate(leaveStatsProvider);
-        ref.invalidate(leaveRequestsProvider);
-        if (canViewBirthdays) ref.invalidate(birthdaysProvider);
-      },
+      onRefresh: refreshAll,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
@@ -73,12 +87,10 @@ class _GenericDashboardView extends ConsumerWidget {
               permissions: permissions,
             ),
             const SizedBox(height: 20),
+            const AttendanceRingCard(),
+            const SizedBox(height: 20),
             if (quickAccess.isNotEmpty) ...[
               QuickAccessCard(items: quickAccess),
-              const SizedBox(height: 20),
-            ],
-            if (canClockIn) ...[
-              const ClockInCard(),
               const SizedBox(height: 20),
             ],
             const _LeaveBalanceCard(),
@@ -97,9 +109,15 @@ class _GenericDashboardView extends ConsumerWidget {
   }
 }
 
-// ── Welcome card ─────────────────────────────────────────────────────────────
+// ── Welcome card (gradient hero + white stat strip; shared shell — see
+// dashboard_section.dart's ConsoleHeaderShell/StatusRingAvatar/etc, also
+// used by the Employee, HR, and Admin dashboards) ───────────────────────────
+// No numeric KPIs exist for this role (web's own ManagerDashboard.tsx has no
+// real backend behind it either), so the stat strip surfaces the two real
+// fields this view already had — role and permission count — instead of
+// inventing fake numbers just to fill four cells.
 
-class _WelcomeCard extends StatelessWidget {
+class _WelcomeCard extends ConsumerWidget {
   final String name;
   final String roleDisplay;
   final List<String> permissions;
@@ -111,98 +129,54 @@ class _WelcomeCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppColors.primary, const Color(0xFF2A6ACC)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppColors.elevatedShadow,
-      ),
-      child: Row(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final clockedIn = ref.watch(todayAttendanceProvider).valueOrNull?.isClockedIn ?? false;
+    final badge = roleDisplay.isEmpty ? 'WORKSPACE' : roleDisplay.toUpperCase();
+
+    return ConsoleHeaderShell(
+      heroContent: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Good day,',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: Colors.white.withValues(alpha: 0.8),
-                  ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              StatusRingAvatar(name: name, active: clockedIn),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    RoleBadgePill(label: badge),
+                    const SizedBox(height: 7),
+                    Text(
+                      'Welcome back,',
+                      style: AppTextStyles.bodySmall.copyWith(color: Colors.white.withValues(alpha: 0.8)),
+                    ),
+                    Text(
+                      name.isEmpty ? 'there' : name,
+                      style: AppTextStyles.h3.copyWith(color: Colors.white, height: 1.15),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  name.isEmpty ? 'Welcome' : name,
-                  style: AppTextStyles.h3.copyWith(color: Colors.white),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    roleDisplay.isEmpty ? 'Employee' : roleDisplay,
-                    style:
-                        AppTextStyles.labelSmall.copyWith(color: Colors.white),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  '${permissions.length} permission${permissions.length == 1 ? '' : 's'} granted',
-                  style: AppTextStyles.caption.copyWith(
-                    color: Colors.white.withValues(alpha: 0.65),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(width: 16),
-          _LargeInitialsAvatar(name: name),
+          const SizedBox(height: 16),
+          ConsoleInfoBar(clockedIn: clockedIn),
         ],
       ),
-    );
-  }
-}
-
-class _LargeInitialsAvatar extends StatelessWidget {
-  final String name;
-
-  const _LargeInitialsAvatar({required this.name});
-
-  @override
-  Widget build(BuildContext context) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    final initials = name.isEmpty
-        ? '?'
-        : parts.length == 1
-            ? parts[0][0].toUpperCase()
-            : '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-
-    return Container(
-      width: 60,
-      height: 60,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.20),
-        shape: BoxShape.circle,
-        border:
-            Border.all(color: Colors.white.withValues(alpha: 0.4), width: 2),
-      ),
-      child: Center(
-        child: Text(
-          initials,
-          style: AppTextStyles.h3.copyWith(color: Colors.white),
+      statsContent: ConsoleStatsRow(stats: [
+        (icon: Icons.badge_outlined, value: roleDisplay.isEmpty ? 'Employee' : roleDisplay, label: 'Role', color: AppColors.primary),
+        (
+          icon: Icons.verified_user_outlined,
+          value: '${permissions.length}',
+          label: permissions.length == 1 ? 'Permission' : 'Permissions',
+          color: AppColors.success,
         ),
-      ),
+      ]),
     );
   }
 }
@@ -220,7 +194,7 @@ class _LeaveBalanceCard extends ConsumerWidget {
     return SectionCard(
       title: 'Leave Balance',
       icon: Icons.beach_access_outlined,
-      accentColor: const Color(0xFFB5651D),
+      accentColor: AppColors.warning,
       child: statsAsync.when(
         data: (stats) {
           if (stats.balances.isEmpty) {
@@ -311,7 +285,7 @@ class _RecentLeaveRequestsCard extends ConsumerWidget {
     return SectionCard(
       title: 'Recent Leave Requests',
       icon: Icons.list_alt_outlined,
-      accentColor: const Color(0xFFB5651D),
+      accentColor: AppColors.warning,
       child: requestsAsync.when(
         data: (requests) {
           if (requests.isEmpty) {
@@ -354,16 +328,22 @@ class _RequestRow extends StatelessWidget {
 
   const _RequestRow({required this.request});
 
-  static Color _statusColor(String s) => switch (s) {
-        'approved' => AppColors.success,
-        'rejected' => AppColors.error,
-        'cancelled' => AppColors.textSecondary,
-        _ => AppColors.warning, // covers 'pending' and 'l2_pending'
+  // (background, foreground) — mirrors EmployeeCard._StatusBadge's pattern
+  // of a solid *Container fill behind the semantic accent color, rather
+  // than a runtime alpha blend of the accent itself. The blend approach
+  // produces a barely-visible tint in dark mode since AppColors' dark
+  // palette accents are themselves already light/pastel; the *Container
+  // fields are hand-tuned solid fills that don't have that problem.
+  static (Color, Color) _statusColors(String s) => switch (s) {
+        'approved' => (AppColors.successContainer, AppColors.success),
+        'rejected' => (AppColors.errorContainer, AppColors.error),
+        'cancelled' => (AppColors.backgroundMid, AppColors.textSecondary),
+        _ => (AppColors.warningContainer, AppColors.warning), // 'pending', 'l2_pending'
       };
 
   @override
   Widget build(BuildContext context) {
-    final sc = _statusColor(request.status);
+    final (bg, sc) = _statusColors(request.status);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -392,8 +372,7 @@ class _RequestRow extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-            color: sc.withValues(alpha: 0.1),
-            border: Border.all(color: sc.withValues(alpha: 0.3)),
+            color: bg,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(

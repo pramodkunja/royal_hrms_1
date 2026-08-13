@@ -17,6 +17,10 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
     String? deviceName,
     String? deviceId,
     String? operatingSystem,
+    List<double>? faceEmbedding,
+    bool? livenessPassed,
+    double? livenessScore,
+    String? captureSessionId,
   }) =>
       _ds.punch(
         punchType: punchType,
@@ -28,6 +32,10 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
         deviceName: deviceName,
         deviceId: deviceId,
         operatingSystem: operatingSystem,
+        faceEmbedding: faceEmbedding,
+        livenessPassed: livenessPassed,
+        livenessScore: livenessScore,
+        captureSessionId: captureSessionId,
       );
 
   @override
@@ -206,8 +214,8 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
       _ds.fetchHrCorrections(branch: branch, department: department, status: status);
 
   @override
-  Future<void> reviewCorrection(String id, {required bool approve}) =>
-      _ds.reviewCorrection(id, approve: approve);
+  Future<void> reviewCorrection(String id, {required bool approve, String? remarks}) =>
+      _ds.reviewCorrection(id, approve: approve, remarks: remarks);
 
   @override
   Future<List<HrUserEntity>> getHrUsers({String? branch}) =>

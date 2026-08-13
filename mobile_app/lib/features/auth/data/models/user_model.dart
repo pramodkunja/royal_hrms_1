@@ -15,6 +15,7 @@ class UserModel extends UserEntity {
     required super.permissions,
     super.onboardingStatus,
     super.canManageTeam,
+    super.isSuperuser,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -35,6 +36,7 @@ class UserModel extends UserEntity {
           [],
       onboardingStatus: json['onboarding_status'] as String?,
       canManageTeam: json['can_manage_team'] as bool? ?? false,
+      isSuperuser: json['is_superuser'] as bool? ?? false,
     );
   }
 
@@ -52,5 +54,6 @@ class UserModel extends UserEntity {
         'permissions': permissions,
         'onboarding_status': onboardingStatus,
         'can_manage_team': canManageTeam,
+        'is_superuser': isSuperuser,
       };
 }

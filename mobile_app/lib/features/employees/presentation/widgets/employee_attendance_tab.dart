@@ -383,7 +383,7 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
                     itemCount: firstWd + daysInMonth,
                     itemBuilder: (_, idx) {
                       if (idx < firstWd) {
-                        return _DayCell.blank();
+                        return const _DayCell.blank();
                       }
                       final day = idx - firstWd + 1;
                       final isToday = day == today.day &&

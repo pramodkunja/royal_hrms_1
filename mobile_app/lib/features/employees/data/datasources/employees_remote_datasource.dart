@@ -57,6 +57,28 @@ class EmployeeApprovalMatrixRow {
       );
 }
 
+// One page of the `/employees/` list endpoint's own pagination — mirrors
+// the backend envelope (`count`, `page`, `total_pages`, `results`) exactly,
+// used by fetchEmployeesPage() below instead of the eager fetchEmployees().
+class EmployeePageResult {
+  final List<EmployeeModel> items;
+  final int page;
+  final int totalPages;
+  final int count;
+
+  const EmployeePageResult({
+    required this.items,
+    required this.page,
+    required this.totalPages,
+    required this.count,
+  });
+}
+
+// Org-wide Total/Active/Onboarding counts, sourced from the `count` field of
+// three lightweight page_size=1 requests rather than downloading every
+// employee — see fetchEmployeeStatusCounts().
+typedef EmployeeStatusCounts = ({int total, int active, int onboarding});
+
 class EmployeesRemoteDataSource {
   final Dio _dio;
   EmployeesRemoteDataSource(this._dio);
@@ -94,6 +116,79 @@ class EmployeesRemoteDataSource {
       page++;
     } while (page <= totalPages);
     return employees;
+  }
+
+  // ── Single page (server-side pagination + filtering) ────────────────────────
+  //
+  // Unlike fetchEmployees() above, this fetches exactly one page and sends
+  // whatever filters are set as real query params instead of downloading
+  // everything and filtering client-side — used by the Employees list
+  // screen's paginated notifier. `search`/`department`/`branch`/`status` are
+  // exactly the params EmployeeListCreateView.get() already reads server-side
+  // (apps/accounts/views.py) — no new backend param is invented here.
+  // `designation` has no backend equivalent on this endpoint, so it's
+  // deliberately never sent even though EmployeeFilters still carries the
+  // field for other callers.
+
+  Future<EmployeePageResult> fetchEmployeesPage({
+    required int page,
+    required EmployeeFilters filters,
+    int pageSize = 20,
+  }) async {
+    final res = await _dio.get(ApiConstants.employees, queryParameters: {
+      'page': page,
+      'page_size': pageSize,
+      if (filters.search.isNotEmpty) 'search': filters.search,
+      if (filters.department.isNotEmpty) 'department': filters.department,
+      if (filters.branch.isNotEmpty) 'branch': filters.branch,
+      if (filters.status.isNotEmpty) 'status': filters.status,
+    });
+    final raw = _unwrap(res.data);
+    if (raw is Map<String, dynamic>) {
+      final list = raw['results'] as List<dynamic>? ?? [];
+      final items =
+          list.whereType<Map<String, dynamic>>().map(EmployeeModel.fromJson).toList();
+      return EmployeePageResult(
+        items: items,
+        page: raw['page'] as int? ?? page,
+        totalPages: raw['total_pages'] as int? ?? 1,
+        count: raw['count'] as int? ?? items.length,
+      );
+    }
+    // Defensive fallback matching fetchEmployees()'s handling above — this
+    // endpoint always returns the paginated envelope in practice.
+    if (raw is List) {
+      final items =
+          raw.whereType<Map<String, dynamic>>().map(EmployeeModel.fromJson).toList();
+      return EmployeePageResult(items: items, page: 1, totalPages: 1, count: items.length);
+    }
+    return const EmployeePageResult(items: [], page: 1, totalPages: 1, count: 0);
+  }
+
+  // ── Lightweight status counts (for the stats grid) ──────────────────────────
+  //
+  // Reuses the same endpoint + `status` param as fetchEmployeesPage, but with
+  // `page_size: 1` and only reads the `count` field from each response — this
+  // gets accurate org-wide Total/Active/Onboarding counts without downloading
+  // every employee record, which the stats grid previously required.
+
+  Future<EmployeeStatusCounts> fetchEmployeeStatusCounts() async {
+    Future<int> countFor(String? status) async {
+      final res = await _dio.get(ApiConstants.employees, queryParameters: {
+        'page': 1,
+        'page_size': 1,
+        if (status != null) 'status': status,
+      });
+      final raw = _unwrap(res.data);
+      return raw is Map<String, dynamic> ? (raw['count'] as int? ?? 0) : 0;
+    }
+
+    final results = await Future.wait([
+      countFor(null),
+      countFor('active'),
+      countFor('onboarding'),
+    ]);
+    return (total: results[0], active: results[1], onboarding: results[2]);
   }
 
   // ── Detail ─────────────────────────────────────────────────────────────────

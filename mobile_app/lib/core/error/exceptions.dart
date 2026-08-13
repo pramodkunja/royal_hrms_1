@@ -18,17 +18,21 @@ class NetworkException extends AppException {
 }
 
 class UnauthorizedException extends AppException {
-  const UnauthorizedException([String message = 'Session expired. Please log in again.'])
+  const UnauthorizedException([String message = 'Your session has expired. Please log in again.'])
       : super(message, statusCode: 401);
 }
 
+/// A permission-denied response from an *authenticated* request — the user
+/// is logged in but their role/permissions don't allow this action. Distinct
+/// from [AccountLockedException], which is specifically the login-endpoint's
+/// "too many failed attempts" lockout and can only ever come from `/login/`.
 class ForbiddenException extends AppException {
-  const ForbiddenException([String message = 'You do not have permission to perform this action.'])
+  const ForbiddenException([String message = "You don't have permission to perform this action."])
       : super(message, statusCode: 403);
 }
 
 class NotFoundException extends AppException {
-  const NotFoundException([String message = 'The requested resource was not found.'])
+  const NotFoundException([String message = 'The requested information could not be found.'])
       : super(message, statusCode: 404);
 }
 
@@ -38,17 +42,22 @@ class RateLimitException extends AppException {
 }
 
 class ServerException extends AppException {
-  const ServerException([String message = 'An unexpected server error occurred.'])
+  const ServerException([String message = 'Something went wrong on the server. Please try again.'])
       : super(message, statusCode: 500);
 }
 
+/// A 422 (or any backend field-validation failure) response — the request
+/// was understood but the submitted data didn't pass validation.
 class ValidationException extends AppException {
-  const ValidationException(super.message, {super.statusCode});
+  const ValidationException(
+      [String message = 'Please check the information you entered and try again.',
+      int? statusCode])
+      : super(message, statusCode: statusCode ?? 422);
 }
 
 class NoInternetException extends AppException {
   const NoInternetException(
-      [super.message = 'No internet connection. Please check your network.']);
+      [super.message = 'No internet connection. Check your connection and try again.']);
 }
 
 class AccountLockedException extends AppException {

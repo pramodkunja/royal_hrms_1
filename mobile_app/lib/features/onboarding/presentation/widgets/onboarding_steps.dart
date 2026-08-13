@@ -323,7 +323,14 @@ class _SecondaryButton extends StatelessWidget {
                   Icon(icon, size: 16),
                   const SizedBox(width: 8),
                 ],
-                Text(label, style: AppTextStyles.labelLarge),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: AppTextStyles.labelLarge,
+                    overflow: TextOverflow.ellipsis,
+                    softWrap: false,
+                  ),
+                ),
               ],
             ),
     );
@@ -1106,30 +1113,32 @@ class _DocumentsStepState extends State<_DocumentsStep> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (widget.onPrevious != null) ...[
-                _SecondaryButton(
-                  label: 'Previous',
-                  icon: Icons.arrow_back,
-                  onPressed: widget.onPrevious,
+              SizedBox(
+                width: double.infinity,
+                child: _PrimaryButton(
+                  label: 'Submit for Approval',
+                  loading: _submitting,
+                  onPressed: _handleSubmit,
                 ),
-                const SizedBox(height: 12),
-              ],
+              ),
+              const SizedBox(height: 12),
               Row(
                 children: [
+                  if (widget.onPrevious != null) ...[
+                    Expanded(
+                      child: _SecondaryButton(
+                        label: 'Previous',
+                        icon: Icons.arrow_back,
+                        onPressed: widget.onPrevious,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
                   Expanded(
                     child: _SecondaryButton(
                       label: 'Save Draft',
                       loading: _savingDraft,
                       onPressed: _handleSaveDraft,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: _PrimaryButton(
-                      label: 'Submit for Approval',
-                      loading: _submitting,
-                      onPressed: _handleSubmit,
                     ),
                   ),
                 ],

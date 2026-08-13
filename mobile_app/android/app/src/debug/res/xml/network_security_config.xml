@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Debug-build-only: Android blocks plaintext HTTP by default for apps
-  targeting API 28+. ApiConfig.localBaseUrl (core/config/api_config.dart)
-  points at http://localhost:8000 for local development, which the OS would
-  otherwise refuse to connect to. Scoped to src/debug so release builds
-  (which only ever talk to the HTTPS production API) are unaffected.
+  targeting API 28+. ApiConfig.localBaseUrlNative (core/config/api_config.dart)
+  points at whatever this dev machine's LAN IP happens to be for
+  physical-device-over-Wi-Fi testing, which changes every time the machine
+  reconnects to Wi-Fi (DHCP). A domain-scoped allowlist (just localhost /
+  10.0.2.2) has to be hand-edited every time that IP drifts, so instead this
+  permits cleartext traffic for ALL domains — acceptable because it's scoped
+  to src/debug only; release builds (which only ever talk to the HTTPS
+  production API) are unaffected.
 -->
 <network-security-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">localhost</domain>
-        <!-- Android emulator's alias for the host machine's localhost -->
-        <domain includeSubdomains="false">10.0.2.2</domain>
-    </domain-config>
+    <base-config cleartextTrafficPermitted="true" />
 </network-security-config>

@@ -16,6 +16,10 @@ class ApiConstants {
 
   static const Duration connectTimeout = Duration(seconds: 30);
   static const Duration receiveTimeout = Duration(seconds: 30);
+  // Was previously unset (Dio defaults to no send timeout at all), which let
+  // an upload (documents, bulk import, facial-recognition capture) hang
+  // indefinitely on a dead connection instead of failing recoverably.
+  static const Duration sendTimeout = Duration(seconds: 30);
 
   // Auth endpoints
   static const String login = '/login/';
@@ -181,6 +185,7 @@ class ApiConstants {
   static String branchCities(int stateId) => '/branch/states/$stateId/cities/';
   static const String branchPreviewCode = '/branch/branches/preview-code/';
   static const String branchStats = '/branch/branches/stats/';
+  static const String branchDistribution = '/branch/branches/distribution/';
   static const String branches = '/branch/branches/';
   static String branchDetail(int id) => '/branch/branches/$id/';
 
@@ -353,4 +358,21 @@ class ApiConstants {
   // dispatches every intent server-side; see registry/intents_en.yaml for
   // the full intent list).
   static const String voiceParse = '/voice/parse/';
+
+  // Facial Recognition — matches apps/attendance's real face-registration/
+  // face-verification endpoints exactly (there is no image-upload or
+  // embedding-extraction endpoint on the backend at all — it only ever
+  // accepts an already-computed embedding, same as the browser's
+  // face-api.js output; mobile computes its embedding entirely on-device,
+  // see features/facial_recognition/presentation/capture/).
+  static const String faceVerificationStatus = '/attendance/face-verification/status/';
+  static const String faceRegistrationMe = '/attendance/face-registration/me/';
+  static const String faceRegistrationSubmit = '/attendance/face-registration/';
+  static const String faceRegistrationPending = '/attendance/face-registration/pending/';
+  static String faceRegistrationReview(String id) =>
+      '/attendance/face-registration/$id/review/';
+  static const String faceRegistrationHrRegister = '/attendance/face-registration/register/';
+  static const String faceRegistrationEmployees = '/attendance/face-registration/employees/';
+  static String faceRegistrationEmployeeStatus(String employeeUuid) =>
+      '/attendance/face-registration/employees/$employeeUuid/status/';
 }

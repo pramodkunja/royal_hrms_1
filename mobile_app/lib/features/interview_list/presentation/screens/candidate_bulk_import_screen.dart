@@ -86,9 +86,9 @@ class _CandidateBulkImportScreenState extends ConsumerState<CandidateBulkImportS
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _InfoCard(
-                requiredCols: const ['name', 'email', 'position_applied', 'branch_name'],
-                optionalCols: const ['phone', 'interview_date', 'interview_mode', 'notes'],
+              const _InfoCard(
+                requiredCols: ['name', 'email', 'position_applied', 'branch_name'],
+                optionalCols: ['phone', 'interview_date', 'interview_mode', 'notes'],
               ),
               const SizedBox(height: 16),
               _FilePickerCard(picked: _picked, error: _pickError, onPick: _pickFile),

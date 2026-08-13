@@ -1,13 +1,8 @@
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mobile_app/core/location/location_service.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
-import 'package:mobile_app/core/utils/device_identifier.dart';
-import 'package:mobile_app/features/attendance/domain/entities/attendance_entity.dart';
 import 'package:mobile_app/features/attendance/presentation/providers/attendance_providers.dart'
     hide employeeAttendanceSummaryProvider;
 import 'package:mobile_app/features/auth/presentation/providers/auth_providers.dart';
@@ -15,6 +10,7 @@ import 'package:mobile_app/features/hrms/domain/entities/birthday_entity.dart';
 import 'package:mobile_app/features/hrms/presentation/providers/hrms_providers.dart';
 import '../../data/models/employee_dashboard_models.dart';
 import '../providers/dashboard_providers.dart';
+import '../widgets/attendance_ring_card.dart';
 import '../widgets/dashboard_section.dart';
 import '../widgets/quick_access.dart';
 
@@ -37,18 +33,28 @@ class EmployeeDashboardView extends ConsumerWidget {
     final permissions = user?.permissions ?? const [];
     final canViewBirthdays = permissions.contains('employees.view');
 
+    Future<void> refreshAll() async {
+      ref.invalidate(employeeKpisProvider);
+      ref.invalidate(todayAttendanceProvider);
+      ref.invalidate(employeeLeaveBalancesProvider);
+      ref.invalidate(employeeAttendanceSummaryForProvider);
+      ref.invalidate(employeeActionItemsProvider);
+      ref.invalidate(employeeRecentRequestsProvider);
+      ref.invalidate(sharedAnnouncementProvider);
+      if (canViewBirthdays) ref.invalidate(birthdaysProvider);
+    }
+
+    // This view is reached via context.go() but every sub-section under it
+    // is pushed on top via goToDashboardSection — so popping back here
+    // never re-triggers autoDispose providers on its own. Re-run the same
+    // refresh pull-to-refresh does whenever the dashboard becomes visible
+    // again. `prev != null` skips the initial subscription.
+    ref.listen<int>(dashboardRevisitProvider, (prev, next) {
+      if (prev != null) refreshAll();
+    });
+
     return RefreshIndicator(
-      onRefresh: () async {
-        ref.invalidate(employeeKpisProvider);
-        ref.invalidate(employeeAttendanceStatusProvider);
-        ref.invalidate(todayAttendanceProvider);
-        ref.invalidate(employeeLeaveBalancesProvider);
-        ref.invalidate(employeeAttendanceSummaryForProvider);
-        ref.invalidate(employeeActionItemsProvider);
-        ref.invalidate(employeeRecentRequestsProvider);
-        ref.invalidate(sharedAnnouncementProvider);
-        if (canViewBirthdays) ref.invalidate(birthdaysProvider);
-      },
+      onRefresh: refreshAll,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
@@ -56,6 +62,8 @@ class EmployeeDashboardView extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const _EmpConsoleCard(),
+            const SizedBox(height: 20),
+            const AttendanceRingCard(),
             const SizedBox(height: 20),
             QuickAccessCard(items: kQuickItemsEmployee),
             const SizedBox(height: 20),
@@ -83,30 +91,9 @@ class EmployeeDashboardView extends ConsumerWidget {
   }
 }
 
-// ── Console (dark hero card: greeting + clock control + KPIs + status) ─────
-
-const Map<String, String> _kAttendanceLabel = {
-  'present': 'Present',
-  'late': 'Late',
-  'absent': 'Absent',
-  'on_leave': 'On Leave',
-  'weekly_off': 'Weekly Off',
-  'holiday': 'Holiday',
-  'half_day': 'Half Day',
-  'incomplete': 'Incomplete',
-};
-
-Color _attendanceStatusColor(String status) => switch (status) {
-      'present' => const Color(0xFF16A34A),
-      'late' => const Color(0xFFD97706),
-      'absent' => const Color(0xFFDC2626),
-      'on_leave' => const Color(0xFF2563EB),
-      'weekly_off' => const Color(0xFF94A3B8),
-      'holiday' => const Color(0xFF7C3AED),
-      'half_day' => const Color(0xFFD97706),
-      'incomplete' => const Color(0xFFDC2626),
-      _ => Colors.white54,
-    };
+// ── Console (gradient hero + white stat strip; shared shell — see
+// dashboard_section.dart's ConsoleHeaderShell/StatusRingAvatar/etc, also
+// used by the HR, Admin, and generic/Manager dashboards) ───────────────────
 
 class _EmpConsoleCard extends ConsumerWidget {
   const _EmpConsoleCard();
@@ -114,359 +101,86 @@ class _EmpConsoleCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authStateProvider).valueOrNull?.user;
-    final firstName = (user?.fullName ?? '').trim().isEmpty
-        ? 'there'
-        : user!.fullName.trim().split(RegExp(r'\s+')).first;
+    final name = (user?.fullName ?? '').isEmpty ? 'there' : user!.fullName;
     final kpisAsync = ref.watch(employeeKpisProvider);
+    // Same provider AttendanceRingCard (rendered right below this) reads for
+    // its own clocked-in state — one canonical source, so the two never
+    // disagree about whether this person is currently clocked in.
+    final clockedIn = ref.watch(todayAttendanceProvider).valueOrNull?.isClockedIn ?? false;
 
-    // Redesigned to be far more compact — the previous version stacked a
-    // header, a clock button, its own correction-request line, a KPI
-    // section spanning two rows, and a THIRD section repeating the same
-    // clock-in/out times already implied by the button above. Now: one
-    // header row, one row that merges the clock control with those same
-    // times (no more separate/duplicated status strip), and a single-row
-    // KPI strip instead of a 2-row grid.
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1A3A6E), Color(0xFF0E2447)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: AppColors.elevatedShadow,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
+    return ConsoleHeaderShell(
+      heroContent: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Welcome back, $firstName',
-                    style: AppTextStyles.body.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                kpisAsync.maybeWhen(
-                  data: (kpis) {
-                    final status = kpis.todayAttendance?.status.toLowerCase();
-                    if (status == null || status.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
-                    return _AttendanceStatusPill(status: status);
-                  },
-                  orElse: () => const SizedBox.shrink(),
-                ),
-              ],
-            ),
-          ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(14, 10, 14, 0),
-            child: _ConsoleClockRow(),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-            child: Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-            child: kpisAsync.when(
-              data: (kpis) => _ConsoleKpiRow(kpis: kpis),
-              loading: () => const Padding(
-                padding: EdgeInsets.symmetric(vertical: 10),
-                child: Center(
-                  child: SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation(Colors.white70),
-                    ),
-                  ),
-                ),
-              ),
-              error: (e, _) => Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      friendlyDashboardError(e),
-                      style: AppTextStyles.caption.copyWith(color: Colors.white70),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => ref.invalidate(employeeKpisProvider),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(0, 0),
-                    ),
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AttendanceStatusPill extends StatelessWidget {
-  final String status;
-  const _AttendanceStatusPill({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _attendanceStatusColor(status);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.20),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 5,
-            height: 5,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 5),
-          Text(
-            _kAttendanceLabel[status] ?? status,
-            style: AppTextStyles.labelSmall
-                .copyWith(color: color, fontWeight: FontWeight.w700, fontSize: 11),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Compact Clock In/Out control merged with the clock-in/out/working-hours
-/// summary and the "Request Attendance Correction" action — one row instead
-/// of three separate sections (a button, its own link line, and a whole
-/// second divider+row repeating the same in/out times). Reuses the same
-/// punch flow as the rest of the app (`todayAttendanceProvider`) plus
-/// `employeeAttendanceStatusProvider` for the inline times.
-class _ConsoleClockRow extends ConsumerStatefulWidget {
-  const _ConsoleClockRow();
-
-  @override
-  ConsumerState<_ConsoleClockRow> createState() => _ConsoleClockRowState();
-}
-
-class _ConsoleClockRowState extends ConsumerState<_ConsoleClockRow> {
-  bool _punching = false;
-
-  Future<void> _toggleClock(TodayAttendanceEntity today) async {
-    if (_punching) return;
-    setState(() => _punching = true);
-
-    final position = await ref.read(locationServiceProvider).getCurrentPosition();
-    if (!mounted) return;
-
-    final error = await ref.read(todayAttendanceProvider.notifier).punch(
-          isCurrentlyClockedIn: today.isClockedIn,
-          attendanceMode: 'office',
-          latitude: position?.latitude,
-          longitude: position?.longitude,
-          accuracy: position?.accuracy,
-          deviceName: kIsWeb
-              ? 'Web'
-              : Platform.isAndroid
-                  ? 'Android'
-                  : Platform.isIOS
-                      ? 'iOS'
-                      : null,
-          operatingSystem: kIsWeb ? 'web' : Platform.operatingSystem,
-          deviceId: await ref.read(deviceIdProvider.future),
-        );
-
-    if (!mounted) return;
-    setState(() => _punching = false);
-
-    if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error), backgroundColor: AppColors.error),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final todayAsync = ref.watch(todayAttendanceProvider);
-    final statusAsync = ref.watch(employeeAttendanceStatusProvider);
-
-    return todayAsync.when(
-      data: (today) {
-        final isClockedIn = today.isClockedIn;
-        return Row(
-          children: [
-            // IntrinsicWidth: a Row gives a non-flex child unbounded main-axis
-            // (width) constraints by default, expecting the child to size
-            // itself — SizedBox here only fixes height, so the ElevatedButton
-            // was receiving maxWidth: infinity, which its own internal layout
-            // (ButtonStyleButton._computeSize) asserts against and throws on.
-            // IntrinsicWidth measures the button's natural content width first
-            // and hands that down as a bounded constraint instead.
-            IntrinsicWidth(
-              child: SizedBox(
-                height: 32,
-                child: ElevatedButton(
-                  onPressed: _punching ? null : () => _toggleClock(today),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        (isClockedIn ? const Color(0xFFDC2626) : const Color(0xFF16A34A))
-                            .withValues(alpha: 0.18),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    side: BorderSide(
-                      color: (isClockedIn ? const Color(0xFFF87171) : const Color(0xFF4ADE80))
-                          .withValues(alpha: 0.45),
-                      width: 1.5,
-                    ),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                  ),
-                  child: _punching
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation(Colors.white),
-                          ),
-                        )
-                      : Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(isClockedIn ? Icons.logout : Icons.login, size: 13),
-                            const SizedBox(width: 5),
-                            Text(
-                              isClockedIn ? 'Clock Out' : 'Clock In',
-                              style: AppTextStyles.labelSmall
-                                  .copyWith(color: Colors.white, fontWeight: FontWeight.w700),
-                            ),
-                          ],
-                        ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: statusAsync.maybeWhen(
-                data: (status) => Text(
-                  '${status.clockInTime ?? '—'} → ${status.clockOutTime ?? '—'}'
-                  '${status.workingHours.isEmpty ? '' : '  ·  ${status.workingHours}'}',
-                  style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.6)),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                orElse: () => const SizedBox.shrink(),
-              ),
-            ),
-            Tooltip(
-              message: 'Request Attendance Correction',
-              child: InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () => goToDashboardSection(context, AppRoutes.myAttendance),
-                child: Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: Icon(Icons.flag_outlined, size: 16, color: Colors.white.withValues(alpha: 0.65)),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-      loading: () => Text('Loading…', style: AppTextStyles.caption.copyWith(color: Colors.white54)),
-      error: (e, _) => Text(
-        friendlyAttendanceError(e),
-        style: AppTextStyles.caption.copyWith(color: Colors.white70),
-      ),
-    );
-  }
-}
-
-/// Single-row KPI strip (was a 2-row grid) — a shorter, plainer label
-/// (dropping the old "This month"/"Require attention"/"Pending" sub-line
-/// entirely) fits four columns without the truncation a 4-across layout
-/// hit before; letting the label wrap to 2 lines instead of an ellipsis
-/// covers the rare case a value is unexpectedly wide.
-class _ConsoleKpiRow extends StatelessWidget {
-  final EmployeeKpis kpis;
-  const _ConsoleKpiRow({required this.kpis});
-
-  @override
-  Widget build(BuildContext context) {
-    final stats = [
-      (icon: Icons.fingerprint, value: '${kpis.daysPresent}/${kpis.workingDays}', label: 'Days Present'),
-      (icon: Icons.event_busy_outlined, value: '${kpis.absentDays}', label: 'Absent Days'),
-      (icon: Icons.checklist_outlined, value: '${kpis.pendingActionItems}', label: 'Action Items'),
-      (icon: Icons.receipt_long_outlined, value: '${kpis.pendingExpenseClaims}', label: 'Expenses'),
-    ];
-
-    return Row(
-      children: [for (final s in stats) Expanded(child: _KpiCell(stat: s))],
-    );
-  }
-}
-
-typedef _KpiStat = ({IconData icon, String value, String label});
-
-class _KpiCell extends StatelessWidget {
-  final _KpiStat stat;
-  const _KpiCell({required this.stat});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
-            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(stat.icon, size: 12, color: Colors.white.withValues(alpha: 0.4)),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  stat.value,
-                  style: AppTextStyles.h4
-                      .copyWith(color: Colors.white, fontWeight: FontWeight.w800),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              StatusRingAvatar(name: name, active: clockedIn),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const RoleBadgePill(label: 'EMPLOYEE WORKSPACE', icon: Icons.badge_outlined),
+                    const SizedBox(height: 7),
+                    Text(
+                      'Welcome back,',
+                      style: AppTextStyles.bodySmall.copyWith(color: Colors.white.withValues(alpha: 0.8)),
+                    ),
+                    Text(
+                      name,
+                      style: AppTextStyles.h3.copyWith(color: Colors.white, height: 1.15),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 2),
-          Text(
-            stat.label,
-            style: AppTextStyles.labelSmall.copyWith(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
-              color: Colors.white.withValues(alpha: 0.72),
-            ),
-            maxLines: 2,
-          ),
+          const SizedBox(height: 16),
+          ConsoleInfoBar(clockedIn: clockedIn),
         ],
+      ),
+      statsContent: kpisAsync.when(
+        data: (kpis) => ConsoleStatsRow(stats: [
+          (
+            icon: Icons.fingerprint,
+            value: '${kpis.daysPresent}/${kpis.workingDays}',
+            label: 'Days Present',
+            color: AppColors.success,
+          ),
+          (icon: Icons.event_busy_outlined, value: '${kpis.absentDays}', label: 'Absent Days', color: AppColors.error),
+          (
+            icon: Icons.checklist_outlined,
+            value: '${kpis.pendingActionItems}',
+            label: 'Action Items',
+            color: AppColors.warning,
+          ),
+          (
+            icon: Icons.receipt_long_outlined,
+            value: '${kpis.pendingExpenseClaims}',
+            label: 'Expenses',
+            color: AppColors.info,
+          ),
+        ]),
+        loading: () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+        ),
+        error: (e, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(friendlyDashboardError(e), style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+            const SizedBox(height: 6),
+            TextButton(
+              onPressed: () => ref.invalidate(employeeKpisProvider),
+              style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -474,11 +188,17 @@ class _KpiCell extends StatelessWidget {
 
 // ── Leave balances (grid-of-cells, matching web's EmpLeaveBalances) ────────
 
-const Map<String, Color> _kLeaveTypeColor = {
-  'casual': Color(0xFF0E7C86),
-  'sick': Color(0xFFB5651D),
-  'earned': Color(0xFF1B8A6B),
-  'lwp': Color(0xFF64748B),
+// A getter (not a `const` map) so these read the live, theme-aware
+// AppColors fields — 3 of these 4 values were previously hardcoded hex
+// literals that happened to exactly equal a light-mode-only AppColors
+// value, so they stayed pinned to that hue after a dark-mode toggle while
+// every other themed color on this screen correctly flipped. 'lwp' has no
+// existing AppColors equivalent, so it's left as a literal.
+Map<String, Color> get _kLeaveTypeColor => {
+  'casual': AppColors.info,
+  'sick': AppColors.warning,
+  'earned': AppColors.success,
+  'lwp': const Color(0xFF64748B),
 };
 
 const Map<String, String> _kLeaveTypeLabel = {
@@ -498,18 +218,14 @@ class _EmpLeaveBalancesCard extends ConsumerWidget {
     final balancesAsync = ref.watch(employeeLeaveBalancesProvider);
     final year = DateTime.now().year;
 
+    // No "Apply Leave" trailing button here anymore — AttendanceRingCard
+    // (right below the console header, above this card) already has one,
+    // and having the same action twice in a row down the page read as
+    // redundant rather than a deliberate second shortcut.
     return SectionCard(
       title: 'Leave Balances — $year',
       icon: Icons.beach_access_outlined,
-      accentColor: const Color(0xFFB5651D),
-      trailing: TextButton(
-        onPressed: () => goToDashboardSection(context, AppRoutes.leave),
-        style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          minimumSize: const Size(0, 0),
-        ),
-        child: Text('Apply Leave', style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w700)),
-      ),
+      accentColor: AppColors.warning,
       child: balancesAsync.when(
         data: (summary) {
           if (summary.balances.isEmpty) {
@@ -687,7 +403,7 @@ class _EmpAttendanceSummaryCardState extends ConsumerState<_EmpAttendanceSummary
     return SectionCard(
       title: "This Month's Attendance",
       icon: Icons.calendar_view_month_outlined,
-      accentColor: const Color(0xFF1B8A6B),
+      accentColor: AppColors.success,
       trailing: _MonthDropdown(
         month: _month,
         year: _year,
@@ -1002,7 +718,7 @@ class _CountBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
       decoration: BoxDecoration(
-        color: AppColors.warning.withValues(alpha: 0.14),
+        color: AppColors.warningContainer,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -1086,27 +802,30 @@ class _StatusBadge extends StatelessWidget {
   final Map<String, String> labelMap;
   const _StatusBadge({required this.status, required this.labelMap});
 
-  static Color _colorFor(String s) => switch (s) {
-        'approved' => AppColors.success,
-        'rejected' => AppColors.error,
-        'cancelled' => AppColors.textSecondary,
-        _ => AppColors.warning,
+  // (background, foreground) — solid *Container fill behind the accent
+  // color, matching EmployeeCard._StatusBadge's reference pattern, instead
+  // of a runtime alpha blend that reads as a barely-visible tint in dark
+  // mode (AppColors' dark accents are already light/pastel).
+  static (Color, Color) _colorsFor(String s) => switch (s) {
+        'approved' => (AppColors.successContainer, AppColors.success),
+        'rejected' => (AppColors.errorContainer, AppColors.error),
+        'cancelled' => (AppColors.backgroundMid, AppColors.textSecondary),
+        _ => (AppColors.warningContainer, AppColors.warning),
       };
 
   @override
   Widget build(BuildContext context) {
-    final c = _colorFor(status);
+    final (bg, fg) = _colorsFor(status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
       decoration: BoxDecoration(
-        color: c.withValues(alpha: 0.1),
-        border: Border.all(color: c.withValues(alpha: 0.3)),
+        color: bg,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         labelMap[status] ?? status,
         style: AppTextStyles.labelSmall
-            .copyWith(color: c, fontWeight: FontWeight.w700, fontSize: 10),
+            .copyWith(color: fg, fontWeight: FontWeight.w700, fontSize: 10),
       ),
     );
   }
@@ -1132,7 +851,7 @@ class _EmpRecentRequestsCard extends ConsumerWidget {
     return SectionCard(
       title: 'Recent Requests',
       icon: Icons.inbox_outlined,
-      accentColor: const Color(0xFFB5651D),
+      accentColor: AppColors.warning,
       trailing: requestsAsync.maybeWhen(
         data: (r) {
           final pending =

@@ -32,12 +32,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
       return;
     }
     _tabController?.dispose();
-    _tabController = TabController(length: isEmployee ? 4 : 5, vsync: this)
-      // Rebuilds so the "Apply My Leave" FAB can hide itself while already
-      // on the Apply Leave tab (index 1 in both the 4- and 5-tab layouts).
-      ..addListener(() {
-        if (mounted) setState(() {});
-      });
+    _tabController = TabController(length: isEmployee ? 4 : 5, vsync: this);
     _isEmployeeForController = isEmployee;
   }
 
@@ -256,16 +251,30 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
       ),
       // Hidden while already on the Apply Leave tab (index 1 in both the
       // employee's 4-tab and approver's 5-tab layout) — redundant there.
-      floatingActionButton: tabController.index == 1
-          ? null
-          : FloatingActionButton.extended(
-              heroTag: 'leave-apply-fab',
-              onPressed: () => tabController.animateTo(1),
-              backgroundColor: AppColors.primary,
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('Apply My Leave',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-            ),
+      //
+      // Scoped to its own ListenableBuilder (rather than a TabController
+      // listener calling setState on the whole screen, as this used to do)
+      // so switching tabs no longer reconstructs `tabs`/`tabViews` and
+      // reruns every tab body's build()/ref.watch calls just to show or
+      // hide this button — only this small builder re-evaluates on tab
+      // change now. Trade-off: Scaffold's built-in FAB show/hide scale
+      // transition no longer applies here (the property it receives is
+      // always a non-null widget), so the button appears/disappears
+      // instantly instead of animating — everything else about it is
+      // unchanged.
+      floatingActionButton: ListenableBuilder(
+        listenable: tabController,
+        builder: (context, _) => tabController.index == 1
+            ? const SizedBox.shrink()
+            : FloatingActionButton.extended(
+                heroTag: 'leave-apply-fab',
+                onPressed: () => tabController.animateTo(1),
+                backgroundColor: AppColors.primary,
+                icon: const Icon(Icons.add, color: Colors.white),
+                label: const Text('Apply My Leave',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              ),
+      ),
     );
   }
 }

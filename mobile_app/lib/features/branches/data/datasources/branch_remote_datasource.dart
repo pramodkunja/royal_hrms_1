@@ -46,6 +46,18 @@ class BranchRemoteDataSource {
     return BranchStatsModel.fromJson(data as Map<String, dynamic>);
   }
 
+  // ── Distribution (employees per branch, for the chart) ─────────────────────────
+
+  Future<List<BranchDistributionModel>> fetchDistribution() async {
+    final res = await _dio.get(ApiConstants.branchDistribution);
+    final data = _unwrap(res.data);
+    final list = _toList(data);
+    return list
+        .map((item) =>
+            BranchDistributionModel.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
   // ── Branches ────────────────────────────────────────────────────────────────
 
   Future<List<BranchModel>> fetchBranches({

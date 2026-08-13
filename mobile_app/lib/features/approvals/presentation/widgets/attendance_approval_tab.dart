@@ -124,6 +124,11 @@ class _CycleAttendancePanelState extends ConsumerState<_CycleAttendancePanel> {
   final _commentCtrl = TextEditingController();
   bool _submitting = false;
   String? _expandedEmployeeId;
+  // Mirrors web's "self-attested" checkbox — the approver additionally
+  // confirms their OWN attendance for the cycle, separate from approving
+  // their team (L1) or the cycle as a whole (L2). Optional; sent as
+  // self_approve on the approve call.
+  bool _selfApprove = false;
 
   @override
   void dispose() {
@@ -136,19 +141,27 @@ class _CycleAttendancePanelState extends ConsumerState<_CycleAttendancePanel> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.cycleId != widget.cycleId) {
       _commentCtrl.clear();
+      _selfApprove = false;
       _expandedEmployeeId = null;
     }
   }
 
   Future<void> _approve(String level) async {
     setState(() => _submitting = true);
-    final err = await approveCycleAttendance(ref, widget.cycleId, level, comment: _commentCtrl.text.trim());
+    final err = await approveCycleAttendance(
+      ref,
+      widget.cycleId,
+      level,
+      comment: _commentCtrl.text.trim(),
+      selfApprove: _selfApprove,
+    );
     if (!mounted) return;
     setState(() => _submitting = false);
     if (err != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err), backgroundColor: AppColors.error));
     } else {
       _commentCtrl.clear();
+      setState(() => _selfApprove = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Attendance $level approved.'), backgroundColor: AppColors.success));
     }
   }
@@ -205,6 +218,8 @@ class _CycleAttendancePanelState extends ConsumerState<_CycleAttendancePanel> {
                         label: l2Done ? 'L2 ✓ ${cycle.l2ApproverName}' : 'L2 Waiting',
                         color: l2Done ? AppColors.success : AppColors.textSecondary,
                       ),
+                      if (cycle.hrSelfApprovedAt != null)
+                        _Badge(label: 'HR Self-Approved', color: AppColors.warning),
                     ],
                   ),
                   if (mgrTotalCount > 0) ...[
@@ -251,7 +266,37 @@ class _CycleAttendancePanelState extends ConsumerState<_CycleAttendancePanel> {
                       maxLines: 2,
                       decoration: const InputDecoration(labelText: 'Comment (optional)', isDense: true),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 4),
+                    InkWell(
+                      onTap: () => setState(() => _selfApprove = !_selfApprove),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: Checkbox(
+                                value: _selfApprove,
+                                onChanged: (v) => setState(() => _selfApprove = v ?? false),
+                                visualDensity: VisualDensity.compact,
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'I also confirm my own attendance for this period is accurate (self-attested)',
+                                style: AppTextStyles.caption.copyWith(fontSize: 11.5),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
@@ -460,6 +505,10 @@ class _ManagerSignoffPill extends StatelessWidget {
             const SizedBox(width: 6),
             Text(_fmtDateTime(row.approvedAt!),
                 style: AppTextStyles.caption.copyWith(fontSize: 10, color: AppColors.textHint)),
+          ],
+          if (row.selfApprovedAt != null) ...[
+            const SizedBox(width: 6),
+            _Badge(label: 'Self-Approved', color: AppColors.warning),
           ],
         ],
       ),

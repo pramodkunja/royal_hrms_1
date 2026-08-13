@@ -9,9 +9,9 @@ import '../providers/announcement_providers.dart';
 
 final _kCategoryMeta = <String, ({Color color, IconData icon, String label})>{
   'general':     (color: AppColors.primary,        icon: Icons.campaign_outlined,    label: 'General'),
-  'policy':      (color: Color(0xFFB45309),         icon: Icons.gavel_outlined,       label: 'Policy'),
-  'event':       (color: Color(0xFF7C3AED),         icon: Icons.event_outlined,       label: 'Event'),
-  'celebration': (color: Color(0xFFD4487B),         icon: Icons.celebration_outlined, label: 'Celebration'),
+  'policy':      (color: const Color(0xFFB45309),         icon: Icons.gavel_outlined,       label: 'Policy'),
+  'event':       (color: const Color(0xFF7C3AED),         icon: Icons.event_outlined,       label: 'Event'),
+  'celebration': (color: const Color(0xFFD4487B),         icon: Icons.celebration_outlined, label: 'Celebration'),
 };
 
 ({Color color, IconData icon, String label}) _catMeta(String cat) =>

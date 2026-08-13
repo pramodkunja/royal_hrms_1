@@ -58,6 +58,8 @@ class _EmployeeBulkImportScreenState extends ConsumerState<EmployeeBulkImportScr
       setState(() { _result = result; _uploading = false; });
       if (result.created > 0) {
         ref.invalidate(employeesProvider);
+        ref.invalidate(employeeListProvider);
+        ref.invalidate(employeeStatsProvider);
       }
     } catch (e) {
       if (!mounted) return;
@@ -85,12 +87,12 @@ class _EmployeeBulkImportScreenState extends ConsumerState<EmployeeBulkImportScr
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _InfoCard(
-                requiredCols: const [
+              const _InfoCard(
+                requiredCols: [
                   'first_name', 'last_name', 'email', 'role',
                   'department', 'designation', 'branch', 'date_of_joining',
                 ],
-                optionalCols: const [
+                optionalCols: [
                   'phone', 'employee_type', 'gender', 'date_of_birth',
                   'blood_group', 'address',
                 ],
@@ -313,5 +315,10 @@ String _friendly(Object e) {
     }
     return parseDioException(e).message;
   }
-  return e.toString().replaceAll('Exception:', '').trim();
+  // A non-DioException here (e.g. a malformed-response parsing error, or a
+  // file_picker/platform exception) previously fell through to a raw
+  // `e.toString()` dump shown directly in the on-screen error banner —
+  // route it through the same centralized helper every other screen uses
+  // instead.
+  return userFriendlyMessage(e);
 }

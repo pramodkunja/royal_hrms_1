@@ -24,7 +24,10 @@ class EmployeeCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        // Matches the app's other card radius (12 — Dashboard's SectionCard,
+        // the theme's own CardTheme) rather than this card's previous
+        // one-off 16.
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
         boxShadow: AppColors.cardShadow,
       ),
@@ -39,8 +42,8 @@ class EmployeeCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: employee.avatarColor,
                 borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  bottomLeft: Radius.circular(16),
+                  topLeft: Radius.circular(12),
+                  bottomLeft: Radius.circular(12),
                 ),
               ),
             ),

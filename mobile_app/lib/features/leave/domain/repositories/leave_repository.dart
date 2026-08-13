@@ -6,7 +6,7 @@ abstract class LeaveRepository {
   Future<List<LeaveBalanceEntity>> getLeaveBalances();
   Future<LeaveStatsEntity> getLeaveStats();
   Future<List<LeaveRequestEntity>> getLeaveRequests(
-      {String? status, String? scope});
+      {String? status, String? scope, int? pageSize});
   Future<LeaveRequestPageEntity> getLeaveRequestsPaginated({
     String? status,
     String? scope,

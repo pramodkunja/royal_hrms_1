@@ -12,6 +12,13 @@ abstract class AttendanceRepository {
     String? deviceName,
     String? deviceId,
     String? operatingSystem,
+    // Only sent when Face ID Verification is mandatory (see
+    // FaceVerificationService.verify_for_punch on the backend) — omitted
+    // entirely otherwise, same as web/voice.
+    List<double>? faceEmbedding,
+    bool? livenessPassed,
+    double? livenessScore,
+    String? captureSessionId,
   });
   Future<TodayAttendanceEntity> getToday();
   Future<AttendanceStatsEntity> getStats({int? month, int? year, String? employeeId});
@@ -97,7 +104,7 @@ abstract class AttendanceRepository {
     String? department,
     String? status,
   });
-  Future<void> reviewCorrection(String id, {required bool approve});
+  Future<void> reviewCorrection(String id, {required bool approve, String? remarks});
 
   // Invalid Punch actions
   Future<List<HrUserEntity>> getHrUsers({String? branch});

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/app_error_state.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../providers/leave_providers.dart';
 
@@ -54,36 +55,11 @@ class LeaveAnalyticsTab extends ConsumerWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 96),
         child: hasError
-            ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 80),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.error_outline,
-                          size: 32, color: AppColors.error),
-                      const SizedBox(height: 8),
-                      Text('Failed to load leave analytics.',
-                          style: AppTextStyles.bodySecondary),
-                      const SizedBox(height: 4),
-                      Padding(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 32),
-                        child: Text(
-                          friendlyLeaveError(statsAsync.error!),
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.caption
-                              .copyWith(color: AppColors.textHint),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      OutlinedButton(
-                        onPressed: () => ref.invalidate(leaveStatsProvider),
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                ),
+            ? AppErrorState(
+                title: 'Failed to load leave analytics.',
+                message: friendlyLeaveError(statsAsync.error!),
+                padding: const EdgeInsets.symmetric(vertical: 80),
+                onRetry: () => ref.invalidate(leaveStatsProvider),
               )
             : Column(
           mainAxisSize: MainAxisSize.min,

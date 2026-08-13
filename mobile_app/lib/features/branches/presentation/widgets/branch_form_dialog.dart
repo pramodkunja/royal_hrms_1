@@ -234,6 +234,7 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
     if (result == null) {
       Navigator.pop(context);
       ref.read(branchStatsProvider.notifier).refresh();
+      ref.read(branchDistributionProvider.notifier).refresh();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(result),

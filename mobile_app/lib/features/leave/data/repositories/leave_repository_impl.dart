@@ -19,8 +19,8 @@ class LeaveRepositoryImpl implements LeaveRepository {
 
   @override
   Future<List<LeaveRequestEntity>> getLeaveRequests(
-          {String? status, String? scope}) =>
-      _ds.fetchLeaveRequests(status: status, scope: scope);
+          {String? status, String? scope, int? pageSize}) =>
+      _ds.fetchLeaveRequests(status: status, scope: scope, pageSize: pageSize);
 
   @override
   Future<LeaveRequestPageEntity> getLeaveRequestsPaginated({

@@ -57,9 +57,18 @@ final employeeDailyAttendanceProvider = FutureProvider.autoDispose
 });
 
 /// Approves L1/L2 attendance for an arbitrary cycle (Approvals screen).
-Future<String?> approveCycleAttendance(WidgetRef ref, String cycleId, String level, {String? comment}) async {
+/// `selfApprove` mirrors web's optional self-attestation checkbox.
+Future<String?> approveCycleAttendance(
+  WidgetRef ref,
+  String cycleId,
+  String level, {
+  String? comment,
+  bool selfApprove = false,
+}) async {
   try {
-    await ref.read(attendanceApprovalDataSourceProvider).approveAttendance(cycleId, level, comment: comment);
+    await ref
+        .read(attendanceApprovalDataSourceProvider)
+        .approveAttendance(cycleId, level, comment: comment, selfApprove: selfApprove);
     ref.invalidate(cycleAttendanceSummaryProvider(cycleId));
     ref.invalidate(pendingApprovalCyclesProvider);
     return null;

@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../widgets/attendance_approval_tab.dart';
+import '../widgets/face_registration_approvals_tab.dart';
 import '../widgets/team_approvals_tab.dart';
 
 // Ports web's app/dashboard/approvals/page.tsx (2026-07-21 change) — the
@@ -34,6 +35,12 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
     _tabCtrl = TabController(length: keys.length, vsync: this, initialIndex: oldIndex < keys.length ? oldIndex : 0);
   }
 
+  String _tabLabel(String key) => switch (key) {
+        'team' => 'Team Approvals',
+        'face_id' => 'Face ID Approvals',
+        _ => 'Attendance Approval',
+      };
+
   bool _listEquals(List<String> a, List<String> b) {
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
@@ -53,19 +60,26 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
     final user = ref.watch(authStateProvider).valueOrNull?.user;
     final canApproveLeave = user?.hasPermission('leave.approve') ?? false;
     final canApproveExpense = user?.hasPermission('expenses.approve') ?? false;
-    final canApproveTeam = canApproveLeave || canApproveExpense;
-    // Matches web: managers always get this tab (role.can_manage_team);
-    // everyone else needs a payroll permission, but HR is excluded since
-    // attendance sign-off moved to Leave Management for HR specifically.
-    final role = user?.role ?? '';
-    final isHR = role == 'hr' || role == 'hr_admin';
-    final hasPayrollPerm = user?.hasPermission('payroll.view') == true || user?.hasPermission('payroll.approve') == true;
-    final canApproveAttendance = (user?.canManageTeam ?? false) || (hasPayrollPerm && !isHR);
-    final canApproveCorrections = user?.hasPermission('attendance.view') ?? false;
+    // attendance.create — matches web's useAnyPermission("leave.approve",
+    // "expenses.approve", "attendance.create") exactly. Previously mobile
+    // used attendance.view here, which was a real mismatch (attendance.view
+    // is a much broader read permission most employees have, so this tab
+    // was showing up for people who couldn't actually action anything).
+    final canApproveCorrections = user?.hasPermission('attendance.create') ?? false;
+    final canApproveTeam = canApproveLeave || canApproveExpense || canApproveCorrections;
+    // Matches web exactly: user.can_manage_team === true || user.is_superuser
+    // === true || hasPermission('payroll.view') — no HR-role exclusion /
+    // payroll.approve alternative, both of which were undocumented
+    // mobile-only deviations from web's actual gate.
+    final canApproveAttendance = (user?.canManageTeam ?? false) ||
+        (user?.isSuperuser ?? false) ||
+        (user?.hasPermission('payroll.view') ?? false);
+    final canApproveFaceId = user?.hasPermission('facial_recognition.approve') ?? false;
 
     final keys = <String>[
-      if (canApproveTeam || canApproveCorrections) 'team',
+      if (canApproveTeam) 'team',
       if (canApproveAttendance) 'attendance',
+      if (canApproveFaceId) 'face_id',
     ];
     _syncTabs(keys);
     final tabCtrl = _tabCtrl;
@@ -100,21 +114,21 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
                   indicatorColor: AppColors.primary,
                   labelStyle: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, fontSize: 13),
                   unselectedLabelStyle: AppTextStyles.label.copyWith(fontSize: 13),
-                  tabs: keys
-                      .map((k) => Tab(text: k == 'team' ? 'Team Approvals' : 'Attendance Approval'))
-                      .toList(),
+                  tabs: keys.map((k) => Tab(text: _tabLabel(k))).toList(),
                 ),
               Expanded(
                 child: TabBarView(
                   controller: tabCtrl,
                   children: keys
-                      .map((k) => k == 'team'
-                          ? TeamApprovalsTab(
-                              canApproveLeave: canApproveLeave,
-                              canApproveExpense: canApproveExpense,
-                              canApproveCorrections: canApproveCorrections,
-                            )
-                          : const AttendanceApprovalTab())
+                      .map((k) => switch (k) {
+                            'team' => TeamApprovalsTab(
+                                canApproveLeave: canApproveLeave,
+                                canApproveExpense: canApproveExpense,
+                                canApproveCorrections: canApproveCorrections,
+                              ),
+                            'face_id' => const FaceRegistrationApprovalsTab(),
+                            _ => const AttendanceApprovalTab(),
+                          })
                       .toList(),
                 ),
               ),

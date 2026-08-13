@@ -228,7 +228,7 @@ class _LeaveCarryForwardTabState extends ConsumerState<LeaveCarryForwardTab> {
               const SizedBox(height: 16),
 
               if (noYears)
-                _EmptyCard(
+                const _EmptyCard(
                   icon: Icons.event_busy_outlined,
                   title: 'No leave year data found',
                   message:

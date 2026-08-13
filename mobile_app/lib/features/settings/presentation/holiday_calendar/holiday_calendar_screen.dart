@@ -1107,7 +1107,7 @@ class _Legend extends StatelessWidget {
         _LegendDot('National', HolidayStyles.national),
         _LegendDot('Regional', HolidayStyles.regional),
         _LegendDot('Company', HolidayStyles.company),
-        _LegendDot('Optional', HolidayStyles.optional),
+        const _LegendDot('Optional', HolidayStyles.optional),
       ],
     );
   }

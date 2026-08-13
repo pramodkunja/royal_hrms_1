@@ -5,63 +5,149 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/branch_entity.dart';
 import '../providers/branch_providers.dart';
 import '../widgets/branch_card.dart';
+import '../widgets/branch_filter_bar.dart';
 import '../widgets/branch_form_dialog.dart';
 import '../widgets/branch_list_states.dart';
 import '../widgets/branch_stats_row.dart';
 import '../widgets/employee_distribution.dart';
 
-class BranchesScreen extends ConsumerWidget {
+class BranchesScreen extends ConsumerStatefulWidget {
   const BranchesScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final statsAsync = ref.watch(branchStatsProvider);
+  ConsumerState<BranchesScreen> createState() => _BranchesScreenState();
+}
+
+class _BranchesScreenState extends ConsumerState<BranchesScreen> {
+  final _searchCtrl = TextEditingController();
+  String _search = '';
+  BranchStatusFilter _statusFilter = BranchStatusFilter.all;
+  BranchTypeFilter _typeFilter = BranchTypeFilter.all;
+  BranchGeofencingFilter _geoFilter = BranchGeofencingFilter.all;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<BranchEntity> _applyFilters(List<BranchEntity> branches) {
+    final query = _search.trim().toLowerCase();
+    return branches.where((b) {
+      if (query.isNotEmpty) {
+        final haystack =
+            '${b.branchName} ${b.branchCode} ${b.cityName} ${b.stateName}'
+                .toLowerCase();
+        if (!haystack.contains(query)) return false;
+      }
+      switch (_statusFilter) {
+        case BranchStatusFilter.active:
+          if (!b.isActive) return false;
+        case BranchStatusFilter.inactive:
+          if (b.isActive) return false;
+        case BranchStatusFilter.all:
+          break;
+      }
+      switch (_typeFilter) {
+        case BranchTypeFilter.headquarters:
+          if (!b.isHeadquarter) return false;
+        case BranchTypeFilter.branch:
+          if (b.isHeadquarter) return false;
+        case BranchTypeFilter.all:
+          break;
+      }
+      switch (_geoFilter) {
+        case BranchGeofencingFilter.enabled:
+          if (!b.geofencingEnabled) return false;
+        case BranchGeofencingFilter.disabled:
+          if (b.geofencingEnabled) return false;
+        case BranchGeofencingFilter.all:
+          break;
+      }
+      return true;
+    }).toList();
+  }
+
+  Future<void> _refresh() {
+    return Future.wait([
+      ref.read(branchStatsProvider.notifier).refresh(),
+      ref.read(branchListProvider.notifier).refresh(),
+      ref.read(branchDistributionProvider.notifier).refresh(),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final branchesAsync = ref.watch(branchListProvider);
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isWide = screenWidth >= 700;
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openForm(context, null),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text(
-          'Add Branch',
-          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
+      floatingActionButton: screenWidth < 360
+          ? FloatingActionButton(
+              onPressed: () => _openForm(context, null),
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              tooltip: 'Add Branch',
+              child: const Icon(Icons.add),
+            )
+          : FloatingActionButton.extended(
+              onPressed: () => _openForm(context, null),
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add),
+              label: const Text(
+                'Add Branch',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
       body: RefreshIndicator(
         color: AppColors.primary,
-        onRefresh: () async {
-          await Future.wait([
-            ref.read(branchStatsProvider.notifier).refresh(),
-            ref.read(branchListProvider.notifier).refresh(),
-          ]);
-        },
+        onRefresh: _refresh,
         child: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Text(
-                  'Branch Management',
-                  style: AppTextStyles.h4,
+                child: _PageHeader(
+                  onRefresh: _refresh,
+                  isLoading: branchesAsync.isLoading,
                 ),
               ),
             ),
             SliverToBoxAdapter(
-              child: statsAsync.when(
+              child: branchesAsync.when(
                 loading: () => const BranchStatsRowShimmer(),
                 error: (e, _) => const SizedBox.shrink(),
-                data: (stats) => BranchStatsRow(stats: stats),
+                data: (branches) => BranchStatsRow(branches: branches),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: branchesAsync.maybeWhen(
+                data: (branches) => branches.isEmpty
+                    ? const SizedBox.shrink()
+                    : BranchFilterBar(
+                        searchController: _searchCtrl,
+                        onSearchChanged: (val) => setState(() => _search = val),
+                        statusFilter: _statusFilter,
+                        onStatusChanged: (val) =>
+                            setState(() => _statusFilter = val),
+                        typeFilter: _typeFilter,
+                        onTypeChanged: (val) => setState(() => _typeFilter = val),
+                        geofencingFilter: _geoFilter,
+                        onGeofencingChanged: (val) =>
+                            setState(() => _geoFilter = val),
+                      ),
+                orElse: () => const SizedBox.shrink(),
               ),
             ),
             branchesAsync.when(
               loading: () => _loadingGrid(),
               error: (e, _) => SliverToBoxAdapter(
                 child: BranchErrorView(
-                  message: e.toString(),
+                  message: friendlyBranchError(e),
                   onRetry: () {
                     ref.invalidate(branchListProvider);
                     ref.invalidate(branchStatsProvider);
@@ -75,26 +161,30 @@ class BranchesScreen extends ConsumerWidget {
                         onAdd: () => _openForm(context, null)),
                   );
                 }
+                final filtered = _applyFilters(branches);
+                if (filtered.isEmpty) {
+                  return SliverToBoxAdapter(
+                    child: _NoMatchesView(onClear: () {
+                      setState(() {
+                        _searchCtrl.clear();
+                        _search = '';
+                        _statusFilter = BranchStatusFilter.all;
+                        _typeFilter = BranchTypeFilter.all;
+                        _geoFilter = BranchGeofencingFilter.all;
+                      });
+                    }),
+                  );
+                }
                 return _BranchGrid(
-                  branches: branches,
+                  branches: filtered,
+                  twoColumns: isWide,
                   onEdit: (b) => _openForm(context, b),
                   onDelete: (b) => _confirmDelete(context, ref, b),
                 );
               },
             ),
-            branchesAsync.maybeWhen(
-              data: (branches) {
-                if (branches.isEmpty) {
-                  return const SliverToBoxAdapter(child: SizedBox.shrink());
-                }
-                return SliverToBoxAdapter(
-                  child: EmployeeDistributionSection(branches: branches),
-                );
-              },
-              orElse: () =>
-                  const SliverToBoxAdapter(child: SizedBox.shrink()),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 32)),
+            const SliverToBoxAdapter(child: EmployeeDistributionSection()),
+            const SliverToBoxAdapter(child: SizedBox(height: 96)),
           ],
         ),
       ),
@@ -148,7 +238,10 @@ class BranchesScreen extends ConsumerWidget {
 
     final error =
         await ref.read(branchListProvider.notifier).remove(branch.id);
-    if (error == null) ref.read(branchStatsProvider.notifier).refresh();
+    if (error == null) {
+      ref.read(branchStatsProvider.notifier).refresh();
+      ref.read(branchDistributionProvider.notifier).refresh();
+    }
 
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -171,10 +264,10 @@ class BranchesScreen extends ConsumerWidget {
           (_, __) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Container(
-              height: 180,
+              height: 220,
               decoration: BoxDecoration(
                 color: AppColors.border,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(14),
               ),
             ),
           ),
@@ -185,35 +278,151 @@ class BranchesScreen extends ConsumerWidget {
   }
 }
 
-class _BranchGrid extends StatelessWidget {
-  final List<BranchEntity> branches;
-  final void Function(BranchEntity) onEdit;
-  final void Function(BranchEntity) onDelete;
-
-  const _BranchGrid({
-    required this.branches,
-    required this.onEdit,
-    required this.onDelete,
-  });
+class _PageHeader extends StatelessWidget {
+  final Future<void> Function() onRefresh;
+  final bool isLoading;
+  const _PageHeader({required this.onRefresh, required this.isLoading});
 
   @override
   Widget build(BuildContext context) {
-    return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-      sliver: SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (_, index) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: BranchCard(
-              branch: branches[index],
-              onEdit: () => onEdit(branches[index]),
-              onDelete: () => onDelete(branches[index]),
-            ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Branch Management', style: AppTextStyles.h1),
+              const SizedBox(height: 4),
+              Text(
+                "Manage your organization's branches and locations",
+                style: AppTextStyles.bodySecondary,
+              ),
+            ],
           ),
-          childCount: branches.length,
+        ),
+        IconButton(
+          onPressed: isLoading ? null : onRefresh,
+          tooltip: 'Refresh',
+          icon: isLoading
+              ? SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: AppColors.primary),
+                )
+              : Icon(Icons.refresh_rounded, color: AppColors.primary),
+        ),
+      ],
+    );
+  }
+}
+
+class _NoMatchesView extends StatelessWidget {
+  final VoidCallback onClear;
+  const _NoMatchesView({required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_off_rounded, size: 44, color: AppColors.textHint),
+            const SizedBox(height: 12),
+            Text('No branches match your filters', style: AppTextStyles.h4),
+            const SizedBox(height: 6),
+            Text(
+              'Try adjusting your search or filters.',
+              style: AppTextStyles.bodySecondary,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: onClear,
+              icon: const Icon(Icons.filter_alt_off_outlined, size: 16),
+              label: const Text('Clear Filters'),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
+class _BranchGrid extends StatelessWidget {
+  final List<BranchEntity> branches;
+  final bool twoColumns;
+  final void Function(BranchEntity) onEdit;
+  final void Function(BranchEntity) onDelete;
+
+  const _BranchGrid({
+    required this.branches,
+    required this.twoColumns,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!twoColumns) {
+      return SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        sliver: SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (_, index) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: BranchCard(
+                branch: branches[index],
+                onEdit: () => onEdit(branches[index]),
+                onDelete: () => onDelete(branches[index]),
+              ),
+            ),
+            childCount: branches.length,
+          ),
+        ),
+      );
+    }
+
+    final rowCount = (branches.length / 2).ceil();
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (_, rowIndex) {
+            final firstIndex = rowIndex * 2;
+            final secondIndex = firstIndex + 1;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: BranchCard(
+                      branch: branches[firstIndex],
+                      onEdit: () => onEdit(branches[firstIndex]),
+                      onDelete: () => onDelete(branches[firstIndex]),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: secondIndex < branches.length
+                        ? BranchCard(
+                            branch: branches[secondIndex],
+                            onEdit: () => onEdit(branches[secondIndex]),
+                            onDelete: () => onDelete(branches[secondIndex]),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ],
+              ),
+            );
+          },
+          childCount: rowCount,
+        ),
+      ),
+    );
+  }
+}

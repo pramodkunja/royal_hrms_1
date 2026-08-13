@@ -55,11 +55,16 @@ class ManagerApprovalRow {
   final String id;
   final String managerName;
   final DateTime? approvedAt;
+  // Set alongside approvedAt when the manager also self-attested their own
+  // attendance for the cycle (see ManagerAttendanceApproval.self_approved_at,
+  // apps/payroll/models.py) — distinct from approvedAt, which covers their team.
+  final DateTime? selfApprovedAt;
 
   const ManagerApprovalRow({
     required this.id,
     required this.managerName,
     this.approvedAt,
+    this.selfApprovedAt,
   });
 
   factory ManagerApprovalRow.fromJson(Map<String, dynamic> json) =>
@@ -67,6 +72,7 @@ class ManagerApprovalRow {
         id: json['id']?.toString() ?? '',
         managerName: json['manager_name'] as String? ?? '',
         approvedAt: _toDate(json['approved_at']),
+        selfApprovedAt: _toDate(json['self_approved_at']),
       );
 }
 
@@ -84,6 +90,9 @@ class PayrollCycleModel {
   final String? l2ApproverName;
   final DateTime? l1ApprovedAt;
   final DateTime? l2ApprovedAt;
+  // HR's self-attestation of their own attendance when doing the L2 sign-off
+  // (PayrollCycle.hr_self_approved_at, apps/payroll/models.py).
+  final DateTime? hrSelfApprovedAt;
   final DateTime? queryWindowClosesAt;
   final DateTime? paidAt;
   final String notes;
@@ -110,6 +119,7 @@ class PayrollCycleModel {
     this.l2ApproverName,
     this.l1ApprovedAt,
     this.l2ApprovedAt,
+    this.hrSelfApprovedAt,
     this.queryWindowClosesAt,
     this.paidAt,
     required this.notes,
@@ -132,6 +142,7 @@ class PayrollCycleModel {
     l2ApproverName: json['l2_approver_name'] as String?,
     l1ApprovedAt: _toDate(json['attendance_l1_approved_at']),
     l2ApprovedAt: _toDate(json['attendance_l2_approved_at']),
+    hrSelfApprovedAt: _toDate(json['hr_self_approved_at']),
     queryWindowClosesAt: _toDate(json['query_window_closes_at']),
     paidAt: _toDate(json['paid_at']),
     notes: json['notes'] as String? ?? '',

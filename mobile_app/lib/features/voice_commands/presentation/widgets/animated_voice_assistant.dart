@@ -183,7 +183,7 @@ class _AnimatedVoiceAssistantState extends State<AnimatedVoiceAssistant>
                               // container-level float/breathe/glow/bounce on
                               // top of it, no hand-drawn face on top.
                               child: Image.asset(
-                                'assets/images/Assistant.gif',
+                                'assets/animations/Assistant.gif',
                                 fit: BoxFit.contain,
                                 gaplessPlayback: true,
                               ),

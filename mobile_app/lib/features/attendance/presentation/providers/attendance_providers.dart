@@ -38,6 +38,10 @@ class TodayAttendanceNotifier
   }
 
   /// Returns null on success, or a user-facing error message on failure.
+  /// `faceEmbedding`/`livenessPassed`/`livenessScore`/`captureSessionId` are
+  /// only ever populated by the caller when Face ID Verification is
+  /// mandatory and the capture flow already ran (see AttendanceRingCard) — the
+  /// backend enforces this regardless, these are just carried through.
   Future<String?> punch({
     required bool isCurrentlyClockedIn,
     required String attendanceMode,
@@ -47,6 +51,10 @@ class TodayAttendanceNotifier
     String? deviceName,
     String? deviceId,
     String? operatingSystem,
+    List<double>? faceEmbedding,
+    bool? livenessPassed,
+    double? livenessScore,
+    String? captureSessionId,
   }) async {
     try {
       final updated = await _repo.punch(
@@ -58,6 +66,10 @@ class TodayAttendanceNotifier
         deviceName: deviceName,
         deviceId: deviceId,
         operatingSystem: operatingSystem,
+        faceEmbedding: faceEmbedding,
+        livenessPassed: livenessPassed,
+        livenessScore: livenessScore,
+        captureSessionId: captureSessionId,
       );
       state = AsyncData(updated);
       ref.invalidate(attendanceStatsProvider);
@@ -214,9 +226,27 @@ class AttendanceRecordsNotifier
     );
   }
 
+  // Pull-to-refresh on the Attendance HR tab was replacing the entire
+  // records list with a blank spinner while refetching — copyWithPrevious
+  // keeps the current page visible until the new one is ready, same pattern
+  // already established for employeeListProvider's refresh(). Deliberately
+  // NOT using `AsyncValue.guard()` here: guard()'s own AsyncError has no
+  // previous value attached, so a failed refresh (e.g. a connectivity blip)
+  // would still wipe the list to a full error screen despite the line
+  // above — the try/catch instead attaches `previous` to the error branch
+  // too, matching what Riverpod's own ref.invalidate()/ref.refresh() path
+  // does automatically (verified against the framework's own
+  // asyncTransition() in package:riverpod/src/common.dart).
   Future<void> refresh() async {
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(() => build());
+    final previous = state;
+    state = const AsyncLoading<PaginatedListEntity<AttendanceRowEntity>>()
+        .copyWithPrevious(state);
+    try {
+      state = AsyncData(await build());
+    } catch (e, st) {
+      state = AsyncError<PaginatedListEntity<AttendanceRowEntity>>(e, st)
+          .copyWithPrevious(previous);
+    }
   }
 
   /// Returns null on success, or a user-facing error message on failure.
@@ -319,9 +349,19 @@ class OvertimeListNotifier extends AutoDisposeAsyncNotifier<PaginatedListEntity<
     return _repo.getOvertimeList(page: page);
   }
 
+  // See AttendanceRecordsNotifier.refresh() above for why this is a
+  // try/catch instead of AsyncValue.guard() — guard() drops `previous` on
+  // failure, which would undo the copyWithPrevious just below.
   Future<void> refresh() async {
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(() => build());
+    final previous = state;
+    state = const AsyncLoading<PaginatedListEntity<OvertimeRowEntity>>()
+        .copyWithPrevious(state);
+    try {
+      state = AsyncData(await build());
+    } catch (e, st) {
+      state = AsyncError<PaginatedListEntity<OvertimeRowEntity>>(e, st)
+          .copyWithPrevious(previous);
+    }
   }
 
   /// Returns null on success, or a user-facing error message on failure.
@@ -372,9 +412,16 @@ class InvalidPunchesNotifier extends AutoDisposeAsyncNotifier<List<InvalidPunchE
     return _repo.getInvalidPunches(branch: branch, department: department, date: _fmtDate(date));
   }
 
+  // See AttendanceRecordsNotifier.refresh() above for why this is a
+  // try/catch instead of AsyncValue.guard().
   Future<void> refresh() async {
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(() => build());
+    final previous = state;
+    state = const AsyncLoading<List<InvalidPunchEntity>>().copyWithPrevious(state);
+    try {
+      state = AsyncData(await build());
+    } catch (e, st) {
+      state = AsyncError<List<InvalidPunchEntity>>(e, st).copyWithPrevious(previous);
+    }
   }
 
   /// Returns null on success, or a user-facing error message on failure.
@@ -437,9 +484,16 @@ class UnpunchesNotifier extends AutoDisposeAsyncNotifier<List<UnpunchRowEntity>>
     return _repo.getUnpunches(branch: branch, department: department, date: _fmtDate(date));
   }
 
+  // See AttendanceRecordsNotifier.refresh() above for why this is a
+  // try/catch instead of AsyncValue.guard().
   Future<void> refresh() async {
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(() => build());
+    final previous = state;
+    state = const AsyncLoading<List<UnpunchRowEntity>>().copyWithPrevious(state);
+    try {
+      state = AsyncData(await build());
+    } catch (e, st) {
+      state = AsyncError<List<UnpunchRowEntity>>(e, st).copyWithPrevious(previous);
+    }
   }
 
   /// Approve/reject the pending correction behind an un-punch row.
@@ -457,37 +511,59 @@ class UnpunchesNotifier extends AutoDisposeAsyncNotifier<List<UnpunchRowEntity>>
 }
 
 // ── HR Attendance — General Corrections inbox ───────────────────────────────────
-
+// A single consolidated provider backs BOTH the Attendance screen's own
+// "Correction Requests" section AND the Approvals screen's unified Team
+// Approvals inbox — previously these were two independent hand-written
+// notifier classes hitting the same endpoints. It's a `.family` keyed by a
+// full filter record (status/branch/department) — NOT just watched from the
+// shared hrAttendanceBranchFilterProvider/hrAttendanceDepartmentFilterProvider
+// StateProviders — so each caller passes exactly the slice it wants with no
+// ambient state leaking between them: attendance_screen.dart builds its key
+// from its own local hrCorrectionsStatusFilterProvider plus the shared HR
+// Attendance branch/department filters (preserving its existing behavior),
+// while the Approvals feature passes an explicit empty/'all' filter so a
+// branch or department filter left set on the unrelated Attendance screen
+// can never silently hide rows from the Team Approvals inbox.
 final hrCorrectionsStatusFilterProvider = StateProvider.autoDispose<String>((ref) => 'pending');
 
-final hrCorrectionsProvider = AsyncNotifierProvider.autoDispose<HrCorrectionsNotifier,
-    List<HrCorrectionRowEntity>>(HrCorrectionsNotifier.new);
+typedef HrCorrectionsFilter = ({String? status, String? branch, String? department});
 
-class HrCorrectionsNotifier extends AutoDisposeAsyncNotifier<List<HrCorrectionRowEntity>> {
+final hrCorrectionsProvider = AsyncNotifierProvider.autoDispose
+    .family<HrCorrectionsNotifier, List<HrCorrectionRowEntity>, HrCorrectionsFilter>(HrCorrectionsNotifier.new);
+
+class HrCorrectionsNotifier extends AutoDisposeFamilyAsyncNotifier<List<HrCorrectionRowEntity>, HrCorrectionsFilter> {
   AttendanceRepository get _repo => ref.read(attendanceRepositoryProvider);
 
   @override
-  Future<List<HrCorrectionRowEntity>> build() {
-    final branch = ref.watch(hrAttendanceBranchFilterProvider);
-    final department = ref.watch(hrAttendanceDepartmentFilterProvider);
-    final status = ref.watch(hrCorrectionsStatusFilterProvider);
+  Future<List<HrCorrectionRowEntity>> build(HrCorrectionsFilter filter) {
     return _repo.getHrCorrections(
-      branch: branch,
-      department: department,
-      status: status == 'all' ? null : status,
+      branch: filter.branch,
+      department: filter.department,
+      status: (filter.status == null || filter.status == 'all') ? null : filter.status,
     );
   }
 
+  // See AttendanceRecordsNotifier.refresh() above for why this is a
+  // try/catch instead of AsyncValue.guard().
   Future<void> refresh() async {
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(() => build());
+    final previous = state;
+    state = const AsyncLoading<List<HrCorrectionRowEntity>>().copyWithPrevious(state);
+    try {
+      state = AsyncData(await build(arg));
+    } catch (e, st) {
+      state = AsyncError<List<HrCorrectionRowEntity>>(e, st).copyWithPrevious(previous);
+    }
   }
 
   /// Returns null on success, or a user-facing error message on failure.
-  Future<String?> reviewCorrection(String correctionId, {required bool approve}) async {
+  Future<String?> reviewCorrection(String correctionId, {required bool approve, String? remarks}) async {
     try {
-      await _repo.reviewCorrection(correctionId, approve: approve);
-      await refresh();
+      await _repo.reviewCorrection(correctionId, approve: approve, remarks: remarks);
+      // Every filter-keyed instance of this family may be showing the row
+      // that just changed state (e.g. the Attendance screen's "pending" view
+      // and the Approvals screen's "all" view) — invalidate the whole family
+      // rather than just this instance so neither goes stale.
+      ref.invalidate(hrCorrectionsProvider);
       ref.invalidate(attendanceDashboardProvider);
       return null;
     } catch (e) {

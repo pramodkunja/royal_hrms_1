@@ -5,9 +5,11 @@ import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/validators/form_validators.dart';
+import '../../../../shared/widgets/app_error_state.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/models/my_profile_model.dart';
 import '../providers/profile_providers.dart';
+import '../widgets/profile_face_id_section.dart';
 import '../widgets/profile_sections.dart';
 
 // ignore_for_file: use_build_context_synchronously
@@ -233,6 +235,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             onSubmit: _onChangePassword,
                           ),
                           const SizedBox(height: 16),
+                          const ProfileFaceIdSection(),
+                          const SizedBox(height: 16),
                           const ProfileDocumentsSection(),
                         ],
                       ),
@@ -243,28 +247,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             );
           },
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => _errorState(friendlyProfileError(e)),
-        ),
-      ),
-    );
-  }
-
-  Widget _errorState(String message) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, size: 40, color: AppColors.error),
-            const SizedBox(height: 12),
-            Text(message, style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            OutlinedButton(
-              onPressed: () => ref.invalidate(myProfileProvider),
-              child: const Text('Retry'),
-            ),
-          ],
+          error: (e, _) => AppErrorState(
+            message: friendlyProfileError(e),
+            onRetry: () => ref.invalidate(myProfileProvider),
+          ),
         ),
       ),
     );
