@@ -7,14 +7,20 @@ abstract class AuthRepository {
   /// Ends the current session on both the server and locally.
   Future<void> logout();
 
-  /// Sends an OTP to the provided email for password reset.
-  Future<void> forgotPassword(String email);
+  /// Sends an OTP to the provided email for password reset. [companyCode]
+  /// identifies the tenant the account belongs to, as at login.
+  Future<void> forgotPassword(String companyCode, String email);
 
   /// Verifies the OTP and returns a one-time reset token.
-  Future<String> verifyOtp(String email, String otp);
+  Future<String> verifyOtp(String companyCode, String email, String otp);
 
   /// Resets the password using the one-time reset token.
-  Future<void> resetPassword(String resetToken, String newPassword, String confirmPassword);
+  Future<void> resetPassword(
+    String companyCode,
+    String resetToken,
+    String newPassword,
+    String confirmPassword,
+  );
 
   /// Reads cached user data from secure storage; returns null if not logged in.
   Future<UserEntity?> getCachedUser();

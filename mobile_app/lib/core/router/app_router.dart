@@ -283,7 +283,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.forgotPassword,
-        builder: (_, __) => const ForgotPasswordScreen(),
+        builder: (_, state) => ForgotPasswordScreen(
+          initialCompanyCode: state.extra is String ? state.extra as String : null,
+        ),
       ),
 
       // ── Onboarding (outside dashboard shell) ───────────────────────────

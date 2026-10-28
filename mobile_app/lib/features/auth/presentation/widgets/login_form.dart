@@ -137,7 +137,12 @@ class _LoginFormState extends ConsumerState<LoginForm> {
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
-              onPressed: isLoading ? null : () => context.push(AppRoutes.forgotPassword),
+              onPressed: isLoading
+                  ? null
+                  : () => context.push(
+                        AppRoutes.forgotPassword,
+                        extra: _companyCodeCtrl.text.trim(),
+                      ),
               style: TextButton.styleFrom(
                 foregroundColor: AppColors.primary,
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),

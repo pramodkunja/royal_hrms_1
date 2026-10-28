@@ -5,5 +5,6 @@ class ForgotPasswordUseCase {
 
   const ForgotPasswordUseCase(this._repository);
 
-  Future<void> call(String email) => _repository.forgotPassword(email.trim().toLowerCase());
+  Future<void> call(String companyCode, String email) =>
+      _repository.forgotPassword(companyCode.trim(), email.trim().toLowerCase());
 }

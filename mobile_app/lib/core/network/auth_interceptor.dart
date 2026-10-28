@@ -24,11 +24,21 @@ import 'api_client.dart';
 class AuthInterceptor extends Interceptor {
   final Dio _dio;
   final Ref _ref;
-  bool _isRefreshing = false;
 
-  // Each entry keeps the handler so we can resolve/reject it properly
-  // once the in-flight refresh completes.
-  final List<_Pending> _pending = [];
+  /// `RequestOptions.extra` flag set on a request that is being replayed
+  /// after a successful refresh. A 401 on such a request is final — it is
+  /// never refreshed or queued again (see [onError]).
+  static const retriedAfterRefreshKey = 'authRetriedAfterRefresh';
+
+  // The single in-flight refresh shared by every concurrent 401. It settles
+  // as soon as /token/refresh/ itself finishes — *before* any request is
+  // replayed — so a replayed request that 401s again can never end up
+  // waiting on the very refresh that is waiting on it. (The previous
+  // `_isRefreshing` flag + `_pending` queue stayed locked until the
+  // triggering request's retry completed, so a second 401 on that retry
+  // queued itself behind its own refresh and hung every later 401 in the
+  // app forever.)
+  Future<_RefreshResult>? _refreshInFlight;
 
   AuthInterceptor(this._dio, this._ref);
 
@@ -88,13 +98,55 @@ class AuthInterceptor extends Interceptor {
       return;
     }
 
-    // Queue requests that arrive while a refresh is already in progress.
-    if (_isRefreshing) {
-      _pending.add(_Pending(err.requestOptions, handler));
+    // A request already replayed once after a successful refresh that is
+    // *still* rejected: the fresh session itself isn't accepted (user
+    // deactivated, tenant/permission change, ...). Refreshing again would
+    // loop, and waiting on another refresh is what used to deadlock — so
+    // end the session instead.
+    if (err.requestOptions.extra[retriedAfterRefreshKey] == true) {
+      _signalSessionExpired();
+      handler.next(_unauthorizedError(err.requestOptions));
       return;
     }
 
-    _isRefreshing = true;
+    // Every concurrent 401 shares one refresh; each request then settles
+    // its own handler below, so none can be left hanging.
+    final result = await (_refreshInFlight ??=
+        _refreshSession().whenComplete(() => _refreshInFlight = null));
+
+    switch (result) {
+      case _RefreshSucceeded():
+        await _retry(err.requestOptions, handler);
+      case _RefreshRejected():
+        // Only a definitive rejection *from the server* (it responded,
+        // saying the refresh token itself is invalid/expired) means the
+        // session has truly ended — signalled once inside _refreshSession.
+        handler.next(_unauthorizedError(err.requestOptions));
+      case _RefreshNetworkFailure():
+        // A network-level failure — timeout, no connectivity, the app being
+        // backgrounded mid-request — proves nothing about the session, so
+        // it must never force a logout; surface the request's own error.
+        handler.next(err);
+      case _RefreshUnexpectedFailure(:final error):
+        // A non-DioException failure during refresh (e.g. a secure-storage
+        // platform exception from a locked/corrupted Keychain/Keystore).
+        // Treated like a network-level failure — nothing proves the session
+        // is invalid — but still surfaced as a real failure, never hung.
+        handler.next(
+          DioException(
+            requestOptions: err.requestOptions,
+            error: error,
+            type: DioExceptionType.unknown,
+          ),
+        );
+    }
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  // Calls /token/refresh/ and persists any returned tokens. Never throws —
+  // every outcome is returned so each waiting request can settle itself.
+  Future<_RefreshResult> _refreshSession() async {
     try {
       // Send the stored refresh token in the body as a fallback for whenever
       // the httpOnly refresh cookie doesn't reach the server (see onRequest).
@@ -118,61 +170,46 @@ class AuthInterceptor extends Interceptor {
       if (newRefreshToken != null) {
         await _storage.write(AppConstants.keyRefreshToken, newRefreshToken);
       }
-
-      // Retry the original request — onRequest will add the new Bearer header.
-      final retryResponse = await _dio.fetch(err.requestOptions);
-      _resolvePending();
-      handler.resolve(retryResponse);
+      return const _RefreshSucceeded();
     } on DioException catch (refreshErr) {
-      // Only a definitive rejection *from the server* (it responded, saying
-      // the refresh token itself is invalid/expired) means the session has
-      // truly ended. A network-level failure — timeout, no connectivity,
-      // the app being backgrounded mid-request — has no response at all and
-      // proves nothing about the session; treating it the same forced a
-      // full logout over a transient connectivity blip on whatever unlucky
-      // request happened to hit the expired-access-token window first (e.g.
-      // submitting a form after leaving it open for a while).
       if (refreshErr.response != null) {
         _signalSessionExpired();
-        final authError = DioException(
-          requestOptions: err.requestOptions,
-          error: const UnauthorizedException(),
-          type: DioExceptionType.badResponse,
-        );
-        // Every request queued behind this refresh gets the same verdict as
-        // the one that triggered it — previously queued requests were always
-        // force-rejected as "unauthorized" even on a mere network blip,
-        // while the triggering request got the real (non-auth) error; that
-        // mismatch is what this shared helper fixes.
-        _rejectPending(authError);
-        handler.next(authError);
-      } else {
-        _rejectPending(err);
-        handler.next(err);
+        return const _RefreshRejected();
       }
+      return const _RefreshNetworkFailure();
     } catch (e) {
-      // A non-DioException failure during refresh (e.g. a secure-storage
-      // platform exception from a locked/corrupted Keychain/Keystore) used
-      // to fall through uncaught: `_isRefreshing` still reset via `finally`,
-      // but neither the triggering request nor anything in `_pending` ever
-      // got resolved/rejected, so every queued request hung forever. Treat
-      // it like a network-level failure — nothing proves the session is
-      // invalid, but every queued request must still be settled, not left
-      // hanging — while still surfacing it as a real (non-fake-success)
-      // failure to the caller.
-      final fallbackError = DioException(
-        requestOptions: err.requestOptions,
-        error: e,
-        type: DioExceptionType.unknown,
-      );
-      _rejectPending(fallbackError);
-      handler.next(fallbackError);
-    } finally {
-      _isRefreshing = false;
+      return _RefreshUnexpectedFailure(e);
     }
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
+  // Replays [options] once with the refreshed session. Any failure of the
+  // replay is that request's own outcome — a non-401 error (e.g. a 500) no
+  // longer counts as a refresh rejection and so no longer forces a logout;
+  // a 401 is handled by the retriedAfterRefreshKey branch in onError.
+  //
+  // The same RequestOptions instance is reused on purpose: onRequest then
+  // overwrites the Authorization header, and CookieManager recognises its
+  // own previous Cookie header on this instance and rebuilds it from the
+  // updated jar instead of merging in the stale access-token cookie.
+  Future<void> _retry(RequestOptions options, ErrorInterceptorHandler handler) async {
+    options.extra[retriedAfterRefreshKey] = true;
+    try {
+      final response = await _dio.fetch<dynamic>(options);
+      handler.resolve(response);
+    } on DioException catch (retryErr) {
+      handler.next(retryErr);
+    } catch (e) {
+      handler.next(
+        DioException(requestOptions: options, error: e, type: DioExceptionType.unknown),
+      );
+    }
+  }
+
+  DioException _unauthorizedError(RequestOptions options) => DioException(
+        requestOptions: options,
+        error: const UnauthorizedException(),
+        type: DioExceptionType.badResponse,
+      );
 
   // Backend envelope: { success, message, data: { access: "...", refresh: "..." } }
   String? _extractToken(dynamic responseData, String key) {
@@ -184,37 +221,6 @@ class AuthInterceptor extends Interceptor {
     }
   }
 
-  void _resolvePending() {
-    for (final p in _pending) {
-      _dio.fetch(p.options).then(
-        (response) => p.handler.resolve(response),
-        onError: (Object err) {
-          if (err is DioException) p.handler.next(err);
-        },
-      );
-    }
-    _pending.clear();
-  }
-
-  // Settles every queued request with the same verdict [error] carries —
-  // the caller decides whether that's a genuine auth failure (session
-  // truly expired) or a network-level failure (nothing proven), so queued
-  // requests are never misreported differently than the request that
-  // triggered the refresh in the first place.
-  void _rejectPending(DioException error) {
-    for (final p in _pending) {
-      p.handler.next(
-        DioException(
-          requestOptions: p.options,
-          error: error.error,
-          type: error.type,
-          response: error.response,
-        ),
-      );
-    }
-    _pending.clear();
-  }
-
   void _signalSessionExpired() {
     try {
       _ref.read(sessionExpiredProvider.notifier).state = true;
@@ -224,10 +230,27 @@ class AuthInterceptor extends Interceptor {
   }
 }
 
-class _Pending {
-  final RequestOptions options;
-  final ErrorInterceptorHandler handler;
-  const _Pending(this.options, this.handler);
+sealed class _RefreshResult {
+  const _RefreshResult();
+}
+
+class _RefreshSucceeded extends _RefreshResult {
+  const _RefreshSucceeded();
+}
+
+/// The server answered the refresh with an error — the session has ended.
+class _RefreshRejected extends _RefreshResult {
+  const _RefreshRejected();
+}
+
+/// No response at all (timeout, offline) — says nothing about the session.
+class _RefreshNetworkFailure extends _RefreshResult {
+  const _RefreshNetworkFailure();
+}
+
+class _RefreshUnexpectedFailure extends _RefreshResult {
+  final Object error;
+  const _RefreshUnexpectedFailure(this.error);
 }
 
 final authInterceptorProvider = Provider.family<AuthInterceptor, Dio>(

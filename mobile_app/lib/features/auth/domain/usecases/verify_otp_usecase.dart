@@ -6,5 +6,6 @@ class VerifyOtpUseCase {
   const VerifyOtpUseCase(this._repository);
 
   /// Returns a one-time [resetToken] used in the password reset step.
-  Future<String> call(String email, String otp) => _repository.verifyOtp(email, otp);
+  Future<String> call(String companyCode, String email, String otp) =>
+      _repository.verifyOtp(companyCode.trim(), email, otp);
 }

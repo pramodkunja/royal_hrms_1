@@ -12,7 +12,15 @@ import 'otp_input_widget.dart';
 class ForgotPasswordForm extends ConsumerStatefulWidget {
   final VoidCallback onBackToLogin;
 
-  const ForgotPasswordForm({super.key, required this.onBackToLogin});
+  /// Pre-fills the Company Code field — the code already typed on the login
+  /// screen, so the user doesn't have to enter it twice.
+  final String? initialCompanyCode;
+
+  const ForgotPasswordForm({
+    super.key,
+    required this.onBackToLogin,
+    this.initialCompanyCode,
+  });
 
   @override
   ConsumerState<ForgotPasswordForm> createState() => _ForgotPasswordFormState();
@@ -21,6 +29,7 @@ class ForgotPasswordForm extends ConsumerStatefulWidget {
 class _ForgotPasswordFormState extends ConsumerState<ForgotPasswordForm> {
   final _emailFormKey = GlobalKey<FormState>();
   final _resetFormKey = GlobalKey<FormState>();
+  late final _companyCodeCtrl = TextEditingController(text: widget.initialCompanyCode?.trim());
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
@@ -30,6 +39,7 @@ class _ForgotPasswordFormState extends ConsumerState<ForgotPasswordForm> {
 
   @override
   void dispose() {
+    _companyCodeCtrl.dispose();
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
@@ -51,11 +61,12 @@ class _ForgotPasswordFormState extends ConsumerState<ForgotPasswordForm> {
         switch (state.step) {
           ForgotPasswordStep.email => _EmailStep(
               formKey: _emailFormKey,
-              controller: _emailCtrl,
+              companyCodeController: _companyCodeCtrl,
+              emailController: _emailCtrl,
               isLoading: state.isLoading,
               onSubmit: () {
                 if (_emailFormKey.currentState?.validate() ?? false) {
-                  notifier.sendOtp(_emailCtrl.text);
+                  notifier.sendOtp(_companyCodeCtrl.text, _emailCtrl.text);
                 }
               },
               onBackToLogin: widget.onBackToLogin,
@@ -65,7 +76,7 @@ class _ForgotPasswordFormState extends ConsumerState<ForgotPasswordForm> {
               isLoading: state.isLoading,
               onOtpChanged: (otp) => _currentOtp = otp,
               onSubmit: () => notifier.verifyOtp(_currentOtp),
-              onResend: () => notifier.sendOtp(state.email ?? ''),
+              onResend: () => notifier.sendOtp(state.companyCode ?? '', state.email ?? ''),
             ),
           ForgotPasswordStep.reset => _ResetStep(
               formKey: _resetFormKey,
@@ -91,14 +102,16 @@ class _ForgotPasswordFormState extends ConsumerState<ForgotPasswordForm> {
 
 class _EmailStep extends StatelessWidget {
   final GlobalKey<FormState> formKey;
-  final TextEditingController controller;
+  final TextEditingController companyCodeController;
+  final TextEditingController emailController;
   final bool isLoading;
   final VoidCallback onSubmit;
   final VoidCallback onBackToLogin;
 
   const _EmailStep({
     required this.formKey,
-    required this.controller,
+    required this.companyCodeController,
+    required this.emailController,
     required this.isLoading,
     required this.onSubmit,
     required this.onBackToLogin,
@@ -111,13 +124,22 @@ class _EmailStep extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Enter your registered email and we\'ll send you an OTP.',
+          Text('Enter your company code and registered email and we\'ll send you an OTP.',
               style: AppTextStyles.bodySecondary),
           const SizedBox(height: 20),
           AppTextField(
+            label: 'Company Code',
+            hint: 'e.g. ROYAL01',
+            controller: companyCodeController,
+            textInputAction: TextInputAction.next,
+            validator: (value) => FormValidators.required(value, fieldName: 'Company code'),
+            enabled: !isLoading,
+          ),
+          const SizedBox(height: 16),
+          AppTextField(
             label: 'Email Address',
             hint: 'you@company.com',
-            controller: controller,
+            controller: emailController,
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.done,
             validator: FormValidators.email,

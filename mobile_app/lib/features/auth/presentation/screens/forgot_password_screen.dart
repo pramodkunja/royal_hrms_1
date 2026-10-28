@@ -10,7 +10,10 @@ import '../states/forgot_password_state.dart';
 import '../widgets/forgot_password_form.dart';
 
 class ForgotPasswordScreen extends ConsumerWidget {
-  const ForgotPasswordScreen({super.key});
+  /// Company code carried over from the login form, if one was entered.
+  final String? initialCompanyCode;
+
+  const ForgotPasswordScreen({super.key, this.initialCompanyCode});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -79,6 +82,7 @@ class ForgotPasswordScreen extends ConsumerWidget {
                             _StepIndicator(currentStep: step),
                             const SizedBox(height: 28),
                             ForgotPasswordForm(
+                              initialCompanyCode: initialCompanyCode,
                               onBackToLogin: () {
                                 // This uses context.go(), which does NOT
                                 // trigger PopScope, so it is safe to reset()

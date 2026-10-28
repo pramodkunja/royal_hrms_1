@@ -70,17 +70,26 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> forgotPassword(String email) =>
-      _dataSource.forgotPassword(ForgotPasswordRequestModel(email: email));
+  Future<void> forgotPassword(String companyCode, String email) => _dataSource.forgotPassword(
+        ForgotPasswordRequestModel(companyCode: companyCode, email: email),
+      );
 
   @override
-  Future<String> verifyOtp(String email, String otp) =>
-      _dataSource.verifyOtp(VerifyOtpRequestModel(email: email, otp: otp));
+  Future<String> verifyOtp(String companyCode, String email, String otp) =>
+      _dataSource.verifyOtp(
+        VerifyOtpRequestModel(companyCode: companyCode, email: email, otp: otp),
+      );
 
   @override
-  Future<void> resetPassword(String resetToken, String newPassword, String confirmPassword) =>
+  Future<void> resetPassword(
+    String companyCode,
+    String resetToken,
+    String newPassword,
+    String confirmPassword,
+  ) =>
       _dataSource.resetPassword(
         ResetPasswordRequestModel(
+          companyCode: companyCode,
           resetToken: resetToken,
           newPassword: newPassword,
           confirmPassword: confirmPassword,
