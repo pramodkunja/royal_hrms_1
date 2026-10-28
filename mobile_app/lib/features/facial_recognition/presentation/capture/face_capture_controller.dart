@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:image/image.dart' as img;
 import 'package:uuid/uuid.dart';
 
 import 'face_capture_state.dart';
@@ -20,6 +22,63 @@ const _kLivenessTimeout = Duration(milliseconds: 9000);
 const _kBlinkClosedThreshold = 0.3;
 const _kBlinkOpenThreshold = 0.6;
 const _kHeadTurnDegrees = 15.0;
+
+// ─── Pre-capture quality checks (FR-2) ─────────────────────────────────────
+// Five signals gating a doomed capture before it ever reaches the backend —
+// UX only, never a substitute for backend's own liveness/embedding
+// verification (see FaceVerificationService.verify_for_punch). Thresholds
+// are ported from frontend/lib/faceApi/qualityGate.ts and frameCapture.ts
+// wherever the underlying signal is the same shape; two are NOT literal
+// ports because the signal itself differs in kind, not just in value — see
+// each constant's own comment.
+
+// Distance/size — IDENTICAL signal to web's faceWidthRatio (bounding-box
+// width / frame width), so these are ported verbatim from
+// qualityGate.ts's QUALITY_THRESHOLDS.MIN/MAX_FACE_WIDTH_RATIO.
+const _kMinFaceWidthRatio = 0.20;
+const _kMaxFaceWidthRatio = 0.75;
+
+// Frontality — NOT a literal port of web's MIN_FRONTALITY (0.7). Web's value
+// is a dimensionless [0,1] score from computeFrontality() — a landmark-based
+// nose-to-eye asymmetry ratio face-api.js's 68 points make possible. ML Kit
+// exposes no equivalent landmark set for that formula; the only comparable
+// signal here is headEulerAngleY, an absolute yaw in DEGREES — a different
+// unit entirely, so "adapt 0.7" has no literal meaning. Chosen instead so
+// this sits comfortably below _kHeadTurnDegrees (15°, the liveness
+// challenge's deliberate-turn threshold): a frontal-facing bar anywhere near
+// 15° would read as "frontal enough" for a pose already halfway into a
+// liveness turn, defeating the point of checking frontality before that
+// challenge even starts. 12° is a common tolerance in face-alignment
+// pipelines for "facing the camera" and leaves clear separation from 15°.
+const _kMaxFrontalYawDegrees = 12.0;
+
+// Lighting — same 0-255 mean-luminance scale regardless of platform (ITU-R
+// BT.601, computed identically below), so ported verbatim from
+// qualityGate.ts's MIN/MAX_MEAN_LUMINANCE.
+const _kMinMeanLuminance = 60.0;
+const _kMaxMeanLuminance = 200.0;
+
+// Eye occlusion — same luminance/contrast signal and formula as web's
+// frameCapture.ts (EYE_OCCLUSION_MAX_LUMINANCE/MAX_STD_DEV), ported verbatim.
+// Deliberately conservative, same as web: BOTH eyes must read as
+// dark-AND-flat, run only once the frame has already cleared every other
+// check above, and framed to the user as a best-effort guess, never a
+// certainty — see _assessEyeOcclusion's own doc comment.
+const _kEyeOcclusionMaxLuminance = 50.0;
+const _kEyeOcclusionMaxStdDev = 10.0;
+
+const _kMultipleFacesHint = 'Multiple faces detected — make sure only your face is in frame.';
+const _kTooFarHint = 'Move closer to the camera.';
+const _kTooCloseHint = 'Move back a little.';
+const _kNotFrontalHint = 'Face the camera directly.';
+const _kTooDarkMessage = 'Lighting too dark — move to a better-lit area and try again.';
+const _kTooBrightMessage = 'Lighting too bright — avoid direct backlight or glare and try again.';
+// Verbatim match of web's EYE_OCCLUSION_MESSAGE (frameCapture.ts) — same
+// deliberately non-accusatory framing ("we couldn't clearly detect", not
+// "you're wearing sunglasses"), since this is a heuristic guess, not a
+// certain diagnosis.
+const _kEyeOcclusionMessage =
+    "We couldn't clearly detect your eyes — please remove sunglasses or anything covering your face and try again.";
 
 final _orientations = {
   DeviceOrientation.portraitUp: 0,
@@ -100,6 +159,17 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
       _detector = FaceDetector(
         options: FaceDetectorOptions(
           enableClassification: true,
+          // Contours (not landmarks) — FaceLandmarkType.leftEye/rightEye is
+          // a single center point, too coarse to build a real eye-region box
+          // from; FaceContourType.leftEye/rightEye gives the multi-point
+          // outline this needs, the same shape web's per-eye landmark set
+          // gives boundingBoxOfPoints() in frameCapture.ts. Only consumed
+          // once, post-liveness, against the still photo (see
+          // _assessEyeOcclusion) — computed on every live frame too since
+          // FaceDetectorOptions is shared by both passes and ML Kit has no
+          // per-call override, a deliberate simplicity/perf tradeoff worth
+          // revisiting if real-device profiling shows it matters.
+          enableContours: true,
           performanceMode: FaceDetectorMode.fast,
         ),
       );
@@ -131,7 +201,7 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
       final inputImage = _toInputImage(image, _cameraController!.description);
       if (inputImage == null) return;
       final faces = await _detector!.processImage(inputImage);
-      if (!_stopped) await _handleFaces(faces);
+      if (!_stopped) await _handleFaces(faces, image.width);
     } catch (_) {
       // A single failed frame shouldn't abort the whole capture attempt.
     } finally {
@@ -139,17 +209,43 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
     }
   }
 
-  Future<void> _handleFaces(List<Face> faces) async {
+  Future<void> _handleFaces(List<Face> faces, int frameWidth) async {
     if (faces.length != 1) {
       _stableFrames = 0;
-      if (state.phase != FaceCapturePhase.detecting) {
-        state = state.copyWith(phase: FaceCapturePhase.detecting);
-      }
+      // "No face" stays silent (state.liveHint: null, falling back to the
+      // caller's static instruction text) — mirrors web's own
+      // classifyDetectedFaceCount handling exactly (`faceCount === 'none'`
+      // returns empty reasons, only 'multiple' gets a message). Only the
+      // multiple-faces case gets a distinct hint; there's no separate "no
+      // face" message to add on top of the ambient "Looking for a face…"
+      // status this phase's UI already shows.
+      state = state.copyWith(
+        phase: FaceCapturePhase.detecting,
+        liveHint: faces.length > 1 ? _kMultipleFacesHint : null,
+      );
       return;
     }
     final face = faces.first;
 
     if (state.phase == FaceCapturePhase.detecting) {
+      // Distance/frontality only gate this phase — not livenessChecking,
+      // where the head is deliberately moving/turning as part of the
+      // challenge itself; checking frontality there would just fight the
+      // very motion being asked for. See this file's module-level comment
+      // for why these run pre-liveness at all (a deliberate mobile-specific
+      // adaptation — web's own equivalent checks only run post-liveness, at
+      // actual frame-capture time, since its capture is multi-frame and
+      // averaged; this app's is a single still, so catching bad framing
+      // before spending 9s on the liveness challenge is worth the earlier
+      // check here).
+      final hint = _liveFramingHint(face, frameWidth);
+      if (hint != null) {
+        _stableFrames = 0;
+        state = state.copyWith(liveHint: hint);
+        return;
+      }
+      if (state.liveHint != null) state = state.copyWith(liveHint: null);
+
       _stableFrames++;
       if (_stableFrames >= _kStableFramesToStart) {
         _livenessDeadline = DateTime.now().add(_kLivenessTimeout);
@@ -190,6 +286,26 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
     }
   }
 
+  /// Distance, then frontality — the two live, per-frame checks that gate
+  /// the pre-liveness `detecting` phase (multi-face is handled by the caller
+  /// before this is ever reached). Returns null when framing looks fine.
+  /// headEulerAngleY is "guaranteed only in accurate mode" per ML Kit's own
+  /// docs (this detector runs `fast`, same as the pre-existing head-turn
+  /// liveness check above, which already relies on the same field) — a null
+  /// reading here just skips the frontality check for that frame rather than
+  /// blocking on it, same fail-open shape as the liveness code already uses.
+  String? _liveFramingHint(Face face, int frameWidth) {
+    if (frameWidth <= 0) return null;
+    final widthRatio = face.boundingBox.width / frameWidth;
+    if (widthRatio < _kMinFaceWidthRatio) return _kTooFarHint;
+    if (widthRatio > _kMaxFaceWidthRatio) return _kTooCloseHint;
+
+    final yaw = face.headEulerAngleY;
+    if (yaw != null && yaw.abs() > _kMaxFrontalYawDegrees) return _kNotFrontalHint;
+
+    return null;
+  }
+
   Future<void> _onLivenessPassed({required double score}) async {
     if (_stopped) return;
     _stopped = true; // stop reacting to further frames immediately
@@ -209,14 +325,132 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
         );
         return;
       }
+      final stillFace = stillFaces.first;
 
-      final embedding = await _embedder.embed(picture.path, stillFaces.first.boundingBox);
+      // Lighting + eye-occlusion — the two checks that need actual pixel
+      // data, so (unlike distance/frontality above) these run once, here, on
+      // the committed still photo rather than on every live preview frame —
+      // matches web's own captureOneQualityGatedFrame, which likewise only
+      // samples pixel luminance on the frame that's actually a capture
+      // candidate, never on every frame of its live preview loop.
+      final decoded = img.decodeImage(await File(picture.path).readAsBytes());
+      if (decoded != null) {
+        final qualityFailure = _assessStillPhotoQuality(decoded, stillFace);
+        if (qualityFailure != null) {
+          state = state.copyWith(phase: FaceCapturePhase.qualityFailed, message: qualityFailure);
+          return;
+        }
+      }
+      // decoded == null (a still photo the `image` package couldn't parse)
+      // deliberately falls through rather than blocking the capture — the
+      // photo already passed ML Kit's own detection above, so treating an
+      // unrelated decode failure as a hard rejection would block a
+      // perfectly usable capture over a problem in an unrelated check.
+
+      final embedding = await _embedder.embed(picture.path, stillFace.boundingBox);
       state = state.copyWith(phase: FaceCapturePhase.ready, embedding: embedding);
     } catch (_) {
       state = state.copyWith(phase: FaceCapturePhase.error, message: 'Could not process the captured photo.');
     } finally {
       await _teardown();
     }
+  }
+
+  /// Lighting first, then eye occlusion — matches web's own ordering
+  /// (assessFrameQuality's luminance check, then assessEyeOcclusion only
+  /// once everything else already passed). Returns the user-facing message
+  /// for whichever check fails first, or null if both pass.
+  String? _assessStillPhotoQuality(img.Image decoded, Face face) {
+    final box = _clampedBox(face.boundingBox, decoded.width, decoded.height);
+    if (box == null) return null; // degenerate box — nothing meaningful to sample
+
+    final luminance = _meanLuminanceOfBox(decoded, box);
+    if (luminance < _kMinMeanLuminance) return _kTooDarkMessage;
+    if (luminance > _kMaxMeanLuminance) return _kTooBrightMessage;
+
+    if (_assessEyeOcclusion(decoded, face)) return _kEyeOcclusionMessage;
+    return null;
+  }
+
+  ({int x0, int y0, int x1, int y1})? _clampedBox(Rect box, int imageWidth, int imageHeight) {
+    final x0 = box.left.floor().clamp(0, imageWidth);
+    final y0 = box.top.floor().clamp(0, imageHeight);
+    final x1 = box.right.ceil().clamp(0, imageWidth);
+    final y1 = box.bottom.ceil().clamp(0, imageHeight);
+    if (x1 <= x0 || y1 <= y0) return null;
+    return (x0: x0, y0: y0, x1: x1, y1: y1);
+  }
+
+  /// ITU-R BT.601 mean luminance over a pixel region — identical formula and
+  /// scale (0-255) to web's meanLuminanceOfBox (frameCapture.ts), just read
+  /// from a decoded still photo via package:image instead of canvas
+  /// ImageData.
+  double _meanLuminanceOfBox(img.Image image, ({int x0, int y0, int x1, int y1}) box) {
+    double sum = 0;
+    var count = 0;
+    for (var y = box.y0; y < box.y1; y++) {
+      for (var x = box.x0; x < box.x1; x++) {
+        final p = image.getPixel(x, y);
+        sum += 0.299 * p.r + 0.587 * p.g + 0.114 * p.b;
+        count++;
+      }
+    }
+    return count == 0 ? 0 : sum / count;
+  }
+
+  /// Best-effort guess at covered eyes (sunglasses, a mask pulled up too
+  /// high, a hand, ...) — NOT a dedicated occlusion detector; ML Kit has no
+  /// signal for this any more than face-api.js did. Mirrors web's
+  /// assessEyeOcclusion exactly: both eye regions must read as
+  /// dark-AND-flat (low mean luminance AND low standard deviation — a real,
+  /// visible open eye has internal contrast a covered one doesn't), using
+  /// FaceContourType eye outlines for the region instead of face-api.js's
+  /// landmark points. Deliberately conservative — this only ever runs after
+  /// lighting has already passed above, so a dark reading here reflects the
+  /// eye region specifically, not just a dim room. Prefer under-triggering
+  /// over over-triggering: telling a legitimately dim-lit but unobstructed
+  /// user to "remove sunglasses" they aren't wearing is worse than missing
+  /// an actual pair once in a while.
+  bool _assessEyeOcclusion(img.Image decoded, Face face) {
+    final left = face.contours[FaceContourType.leftEye]?.points;
+    final right = face.contours[FaceContourType.rightEye]?.points;
+    if (left == null || left.isEmpty || right == null || right.isEmpty) {
+      return false; // no contour data this attempt — fail open, same as a null headEulerAngleY does above
+    }
+    final leftBox = _clampedBox(_boundingBoxOfPoints(left), decoded.width, decoded.height);
+    final rightBox = _clampedBox(_boundingBoxOfPoints(right), decoded.width, decoded.height);
+    if (leftBox == null || rightBox == null) return false;
+
+    return _looksOccluded(decoded, leftBox) && _looksOccluded(decoded, rightBox);
+  }
+
+  bool _looksOccluded(img.Image decoded, ({int x0, int y0, int x1, int y1}) box) {
+    double sum = 0, sumSquares = 0;
+    var count = 0;
+    for (var y = box.y0; y < box.y1; y++) {
+      for (var x = box.x0; x < box.x1; x++) {
+        final p = decoded.getPixel(x, y);
+        final luminance = 0.299 * p.r + 0.587 * p.g + 0.114 * p.b;
+        sum += luminance;
+        sumSquares += luminance * luminance;
+        count++;
+      }
+    }
+    if (count == 0) return false;
+    final mean = sum / count;
+    final variance = (sumSquares / count - mean * mean).clamp(0.0, double.infinity);
+    final stdDev = sqrt(variance);
+    return mean < _kEyeOcclusionMaxLuminance && stdDev < _kEyeOcclusionMaxStdDev;
+  }
+
+  Rect _boundingBoxOfPoints(List<Point<int>> points) {
+    final xs = points.map((p) => p.x.toDouble());
+    final ys = points.map((p) => p.y.toDouble());
+    final minX = xs.reduce((a, b) => a < b ? a : b);
+    final maxX = xs.reduce((a, b) => a > b ? a : b);
+    final minY = ys.reduce((a, b) => a < b ? a : b);
+    final maxY = ys.reduce((a, b) => a > b ? a : b);
+    return Rect.fromLTRB(minX, minY, maxX, maxY);
   }
 
   InputImage? _toInputImage(CameraImage image, CameraDescription camera) {

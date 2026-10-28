@@ -11,6 +11,7 @@ import '../../data/models/departments_model.dart';
 import '../../data/models/email_template_model.dart';
 import '../../data/models/employee_code_model.dart';
 import '../../data/models/leave_policy_model.dart';
+import '../../data/models/onboarding_field_config_model.dart';
 import '../../data/models/roles_model.dart';
 import '../../data/models/smtp_model.dart';
 
@@ -380,6 +381,215 @@ class DesignationsNotifier
       state = AsyncData(
         (state.valueOrNull ?? []).where((d) => d.id != id).toList(),
       );
+      return null;
+    } catch (e) {
+      return _friendly(e);
+    }
+  }
+}
+
+// ── Onboarding Fields (wizard steps 0-3) ──────────────────────────────────────
+
+OnboardingFieldConfigModel _withFieldOrder(OnboardingFieldConfigModel f, int order) =>
+    OnboardingFieldConfigModel(
+      fieldKey: f.fieldKey,
+      label: f.label,
+      fieldType: f.fieldType,
+      options: f.options,
+      allowMultiple: f.allowMultiple,
+      step: f.step,
+      order: order,
+      visible: f.visible,
+      required: f.required,
+      isCustom: f.isCustom,
+      isLocked: f.isLocked,
+      updatedAt: f.updatedAt,
+    );
+
+DocumentTypeConfigModel _withTypeOrder(DocumentTypeConfigModel t, int order) => DocumentTypeConfigModel(
+      typeKey: t.typeKey,
+      label: t.label,
+      order: order,
+      visible: t.visible,
+      required: t.required,
+      allowMultiple: t.allowMultiple,
+      isCustom: t.isCustom,
+      isLocked: t.isLocked,
+      updatedAt: t.updatedAt,
+    );
+
+final onboardingFieldsProvider = AsyncNotifierProvider.autoDispose<
+    OnboardingFieldsNotifier, List<OnboardingFieldConfigModel>>(
+  OnboardingFieldsNotifier.new,
+);
+
+class OnboardingFieldsNotifier
+    extends AutoDisposeAsyncNotifier<List<OnboardingFieldConfigModel>> {
+  SettingsRemoteDataSource get _ds => ref.read(settingsDataSourceProvider);
+
+  @override
+  Future<List<OnboardingFieldConfigModel>> build() => _ds.fetchOnboardingFields();
+
+  Future<String?> create(OnboardingFieldFormData form) async {
+    try {
+      final created = await _ds.createOnboardingField(form);
+      state = AsyncData([...state.valueOrNull ?? [], created]);
+      return null;
+    } catch (e) {
+      return _friendly(e);
+    }
+  }
+
+  Future<String?> _patch(String fieldKey, Map<String, dynamic> patch) async {
+    try {
+      final updated = await _ds.updateOnboardingField(fieldKey, patch);
+      state = AsyncData(
+        (state.valueOrNull ?? []).map((f) => f.fieldKey == fieldKey ? updated : f).toList(),
+      );
+      return null;
+    } catch (e) {
+      return _friendly(e);
+    }
+  }
+
+  Future<String?> setVisible(String fieldKey, bool visible) => _patch(fieldKey, {'visible': visible});
+
+  Future<String?> setRequired(String fieldKey, bool required) =>
+      _patch(fieldKey, {'required': required});
+
+  /// Moves the field at [oldIndex] to [newIndex] within [stepFields] (that
+  /// step's fields, already sorted by `order`) and PATCHes `order` for every
+  /// field whose position actually shifted. Updates state optimistically so
+  /// the drag-and-drop UI can animate the drop immediately, then rolls back
+  /// to the pre-drag order if any PATCH fails.
+  Future<String?> reorderField(
+    List<OnboardingFieldConfigModel> stepFields,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final previous = state.valueOrNull ?? [];
+    final reordered = List<OnboardingFieldConfigModel>.from(stepFields);
+    final moved = reordered.removeAt(oldIndex);
+    reordered.insert(newIndex, moved);
+
+    final optimistic = {
+      for (var i = 0; i < reordered.length; i++) reordered[i].fieldKey: _withFieldOrder(reordered[i], i),
+    };
+    state = AsyncData(previous.map((f) => optimistic[f.fieldKey] ?? f).toList());
+
+    final patches = <Future<OnboardingFieldConfigModel>>[
+      for (var i = 0; i < reordered.length; i++)
+        if (reordered[i].order != i) _ds.updateOnboardingField(reordered[i].fieldKey, {'order': i}),
+    ];
+    if (patches.isEmpty) return null;
+
+    try {
+      final results = await Future.wait(patches);
+      final byKey = {for (final r in results) r.fieldKey: r};
+      state = AsyncData((state.valueOrNull ?? []).map((f) => byKey[f.fieldKey] ?? f).toList());
+      return null;
+    } catch (e) {
+      state = AsyncData(previous);
+      return _friendly(e);
+    }
+  }
+
+  Future<String?> remove(String fieldKey) async {
+    try {
+      await _ds.deleteOnboardingField(fieldKey);
+      state = AsyncData((state.valueOrNull ?? []).where((f) => f.fieldKey != fieldKey).toList());
+      return null;
+    } catch (e) {
+      return _friendly(e);
+    }
+  }
+}
+
+// ── Document Types (wizard step 4 — Documents) ───────────────────────────────
+
+final documentTypesProvider = AsyncNotifierProvider.autoDispose<
+    DocumentTypesNotifier, List<DocumentTypeConfigModel>>(
+  DocumentTypesNotifier.new,
+);
+
+class DocumentTypesNotifier
+    extends AutoDisposeAsyncNotifier<List<DocumentTypeConfigModel>> {
+  SettingsRemoteDataSource get _ds => ref.read(settingsDataSourceProvider);
+
+  @override
+  Future<List<DocumentTypeConfigModel>> build() => _ds.fetchDocumentTypes();
+
+  Future<String?> create(DocumentTypeFormData form) async {
+    try {
+      final created = await _ds.createDocumentType(form);
+      state = AsyncData([...state.valueOrNull ?? [], created]);
+      return null;
+    } catch (e) {
+      return _friendly(e);
+    }
+  }
+
+  Future<String?> _patch(String typeKey, Map<String, dynamic> patch) async {
+    try {
+      final updated = await _ds.updateDocumentType(typeKey, patch);
+      state = AsyncData(
+        (state.valueOrNull ?? []).map((t) => t.typeKey == typeKey ? updated : t).toList(),
+      );
+      return null;
+    } catch (e) {
+      return _friendly(e);
+    }
+  }
+
+  Future<String?> setVisible(String typeKey, bool visible) => _patch(typeKey, {'visible': visible});
+
+  Future<String?> setRequired(String typeKey, bool required) =>
+      _patch(typeKey, {'required': required});
+
+  Future<String?> setAllowMultiple(String typeKey, bool allowMultiple) =>
+      _patch(typeKey, {'allow_multiple': allowMultiple});
+
+  /// Moves the type at [oldIndex] to [newIndex] within [types] (already
+  /// sorted by `order`) and PATCHes `order` for every type whose position
+  /// actually shifted. Updates state optimistically so the drag-and-drop UI
+  /// can animate the drop immediately, then rolls back to the pre-drag order
+  /// if any PATCH fails.
+  Future<String?> reorderType(
+    List<DocumentTypeConfigModel> types,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final previous = state.valueOrNull ?? [];
+    final reordered = List<DocumentTypeConfigModel>.from(types);
+    final moved = reordered.removeAt(oldIndex);
+    reordered.insert(newIndex, moved);
+
+    final optimistic = {
+      for (var i = 0; i < reordered.length; i++) reordered[i].typeKey: _withTypeOrder(reordered[i], i),
+    };
+    state = AsyncData(previous.map((t) => optimistic[t.typeKey] ?? t).toList());
+
+    final patches = <Future<DocumentTypeConfigModel>>[
+      for (var i = 0; i < reordered.length; i++)
+        if (reordered[i].order != i) _ds.updateDocumentType(reordered[i].typeKey, {'order': i}),
+    ];
+    if (patches.isEmpty) return null;
+
+    try {
+      final results = await Future.wait(patches);
+      final byKey = {for (final r in results) r.typeKey: r};
+      state = AsyncData((state.valueOrNull ?? []).map((t) => byKey[t.typeKey] ?? t).toList());
+      return null;
+    } catch (e) {
+      state = AsyncData(previous);
+      return _friendly(e);
+    }
+  }
+
+  Future<String?> remove(String typeKey) async {
+    try {
+      await _ds.deleteDocumentType(typeKey);
+      state = AsyncData((state.valueOrNull ?? []).where((t) => t.typeKey != typeKey).toList());
       return null;
     } catch (e) {
       return _friendly(e);

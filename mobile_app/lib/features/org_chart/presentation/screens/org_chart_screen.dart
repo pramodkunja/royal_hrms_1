@@ -1,14 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../../shared/widgets/app_error_state.dart';
+import '../../../../shared/widgets/blue_hero_banner.dart';
 import '../../domain/entities/org_chart_entity.dart';
 import '../providers/org_chart_providers.dart';
 import '../widgets/org_dept_card.dart';
-import '../widgets/org_md_card.dart';
+import '../widgets/org_root_card.dart';
+
+const _kDeptPalette = [
+  Color(0xFFE65100),
+  Color(0xFF1565C0),
+  Color(0xFF2E7D32),
+  Color(0xFF6A1B9A),
+  Color(0xFF00838F),
+  Color(0xFFAD1457),
+  Color(0xFF37474F),
+  Color(0xFFC62828),
+];
 
 class OrgChartScreen extends ConsumerWidget {
   const OrgChartScreen({super.key});
+
+  void _openProfile(BuildContext context, OrgPersonEntity person) {
+    if (person.employeeId.isEmpty) return;
+    context.push(AppRoutes.employeeProfilePath(person.employeeId));
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -21,33 +43,34 @@ class OrgChartScreen extends ConsumerWidget {
         onRefresh: () => ref.read(orgChartProvider.notifier).refresh(),
         child: CustomScrollView(
           slivers: [
-            // ── Header ──────────────────────────────────────────────────────
             SliverToBoxAdapter(
               child: chartAsync.when(
                 loading: () => const _HeaderShimmer(),
-                error: (_, __) => const _HeaderShimmer(),
-                data: (chart) => _Header(companyName: chart.companyName),
+                error: (_, __) => const _Header(),
+                data: (chart) => _Header(scope: chart.scope),
               ),
             ),
-
-            // ── Content ──────────────────────────────────────────────────────
             chartAsync.when(
               loading: () => SliverFillRemaining(
-                child: Center(
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                ),
+                child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
               ),
               error: (e, _) => SliverFillRemaining(
-                child: _ErrorView(
-                  message: e.toString(),
+                child: AppErrorState(
+                  message: userFriendlyMessage(e),
+                  title: 'Failed to load org chart',
                   onRetry: () => ref.invalidate(orgChartProvider),
                 ),
               ),
-              data: (chart) => SliverToBoxAdapter(
-                child: _OrgTree(chart: chart),
-              ),
+              data: (chart) => chart.groups.isEmpty
+                  ? const SliverFillRemaining(
+                      child: AppEmptyState(
+                        icon: Icons.account_tree_outlined,
+                        title: 'No organisation data',
+                        message: 'There are no active employees to display yet.',
+                      ),
+                    )
+                  : SliverToBoxAdapter(child: _OrgGroups(chart: chart, onTapPerson: (p) => _openProfile(context, p))),
             ),
-
             const SliverToBoxAdapter(child: SizedBox(height: 32)),
           ],
         ),
@@ -56,26 +79,99 @@ class OrgChartScreen extends ConsumerWidget {
   }
 }
 
-// ── Header ─────────────────────────────────────────────────────────────────────
+// ── Header ───────────────────────────────────────────────────────────────
 
-class _Header extends StatelessWidget {
-  final String companyName;
-  const _Header({required this.companyName});
+class _Header extends ConsumerWidget {
+  final OrgChartScope? scope;
+  const _Header({this.scope});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectedBranch = ref.watch(orgChartSelectedBranchProvider);
+    return BlueHeroBanner(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Organisation Chart', style: AppTextStyles.h4.copyWith(color: Colors.white)),
+          const SizedBox(height: 2),
+          Text(
+            selectedBranch ?? 'All branches',
+            style: AppTextStyles.caption.copyWith(fontSize: 12, color: Colors.white.withValues(alpha: 0.85)),
+          ),
+          if (scope == OrgChartScope.company) ...[
+            const SizedBox(height: 12),
+            _BranchPicker(selectedBranch: selectedBranch),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BranchPicker extends ConsumerWidget {
+  final String? selectedBranch;
+  const _BranchPicker({required this.selectedBranch});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final namesAsync = ref.watch(orgChartBranchNamesProvider);
+    return namesAsync.when(
+      loading: () => const SizedBox(height: 32),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (names) {
+        if (names.isEmpty) return const SizedBox.shrink();
+        return SizedBox(
+          height: 32,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              _BranchChip(
+                label: 'All Branches',
+                selected: selectedBranch == null,
+                onTap: () => ref.read(orgChartSelectedBranchProvider.notifier).state = null,
+              ),
+              const SizedBox(width: 8),
+              for (final name in names) ...[
+                _BranchChip(
+                  label: name,
+                  selected: selectedBranch == name,
+                  onTap: () => ref.read(orgChartSelectedBranchProvider.notifier).state = name,
+                ),
+                const SizedBox(width: 8),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _BranchChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _BranchChip({required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Organisation Chart', style: AppTextStyles.h4),
-          const SizedBox(height: 2),
-          Text(
-            companyName,
-            style: AppTextStyles.caption.copyWith(fontSize: 12),
+    return Material(
+      color: selected ? Colors.white : Colors.white.withValues(alpha: 0.15),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          child: Text(
+            label,
+            style: AppTextStyles.caption.copyWith(
+              fontWeight: FontWeight.w600,
+              color: selected ? AppColors.primary : Colors.white,
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -86,75 +182,103 @@ class _HeaderShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+    return BlueHeroBanner(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-              height: 18, width: 180, color: AppColors.border,
-              margin: const EdgeInsets.only(bottom: 6)),
-          Container(height: 12, width: 140, color: AppColors.border),
+          Container(height: 18, width: 180, color: Colors.white.withValues(alpha: 0.25), margin: const EdgeInsets.only(bottom: 6)),
+          Container(height: 12, width: 140, color: Colors.white.withValues(alpha: 0.25)),
         ],
       ),
     );
   }
 }
 
-// ── Full org tree ──────────────────────────────────────────────────────────────
+// ── Groups (usually one; several when "All Branches" is selected) ────────
 
-class _OrgTree extends StatelessWidget {
+class _OrgGroups extends StatelessWidget {
   final OrgChartEntity chart;
-  const _OrgTree({required this.chart});
+  final ValueChanged<OrgPersonEntity> onTapPerson;
+  const _OrgGroups({required this.chart, required this.onTapPerson});
 
   @override
   Widget build(BuildContext context) {
+    final showBranchLabels = chart.groups.length > 1;
+    var colorIndex = 0;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
       child: Column(
         children: [
-          // Managing Director card
-          OrgMdCard(member: chart.managingDirector),
-
-          if (chart.departments.isNotEmpty) ...[
-            // Connector: MD card → first dept
-            Center(
-              child: Container(
-                width: 1.5,
-                height: 32,
-                color: AppColors.border,
+          for (final group in chart.groups) ...[
+            if (showBranchLabels) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  group.branch.isEmpty ? 'Unassigned' : group.branch,
+                  style: AppTextStyles.label.copyWith(color: AppColors.textSecondary),
+                ),
               ),
+              const SizedBox(height: 10),
+            ],
+            _OrgTree(
+              group: group,
+              nextColorIndex: () => _kDeptPalette[colorIndex++ % _kDeptPalette.length],
+              onTapPerson: onTapPerson,
             ),
-
-            // Department nodes
-            ...chart.departments.asMap().entries.map((entry) {
-              final index = entry.key;
-              final dept = entry.value;
-              final isLast = index == chart.departments.length - 1;
-              return _DeptRow(dept: dept, isLast: isLast);
-            }),
-          ] else
-            Padding(
-              padding: const EdgeInsets.only(top: 40),
-              child: Text(
-                'No departments found.',
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textHint),
-                textAlign: TextAlign.center,
-              ),
-            ),
+            const SizedBox(height: 24),
+          ],
         ],
       ),
     );
   }
 }
 
-// ── Dept row with tree connector ──────────────────────────────────────────────
+class _OrgTree extends StatelessWidget {
+  final OrgChartGroupEntity group;
+  final Color Function() nextColorIndex;
+  final ValueChanged<OrgPersonEntity> onTapPerson;
+  const _OrgTree({required this.group, required this.nextColorIndex, required this.onTapPerson});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        OrgRootCard(
+          person: group.root,
+          onTap: group.root == null ? null : () => onTapPerson(group.root!),
+        ),
+        if (group.departments.isNotEmpty) ...[
+          Center(child: Container(width: 1.5, height: 32, color: AppColors.border)),
+          ...group.departments.asMap().entries.map((entry) {
+            final isLast = entry.key == group.departments.length - 1;
+            return _DeptRow(
+              dept: entry.value,
+              isLast: isLast,
+              color: nextColorIndex(),
+              onTapPerson: onTapPerson,
+            );
+          }),
+        ] else
+          Padding(
+            padding: const EdgeInsets.only(top: 40),
+            child: Text(
+              'No departments found.',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
+              textAlign: TextAlign.center,
+            ),
+          ),
+      ],
+    );
+  }
+}
 
 class _DeptRow extends StatelessWidget {
-  final DepartmentNodeEntity dept;
+  final OrgDepartmentEntity dept;
   final bool isLast;
-  const _DeptRow({required this.dept, required this.isLast});
+  final Color color;
+  final ValueChanged<OrgPersonEntity> onTapPerson;
+  const _DeptRow({required this.dept, required this.isLast, required this.color, required this.onTapPerson});
 
   @override
   Widget build(BuildContext context) {
@@ -164,27 +288,15 @@ class _DeptRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Tree connector
-            SizedBox(
-              width: 24,
-              child: CustomPaint(
-                painter: _BranchPainter(
-                  isLast: isLast,
-                  color: AppColors.border,
-                ),
-              ),
-            ),
+            SizedBox(width: 24, child: CustomPaint(painter: _BranchPainter(isLast: isLast, color: AppColors.border))),
             const SizedBox(width: 6),
-            // Department card
-            Expanded(child: OrgDeptCard(dept: dept)),
+            Expanded(child: OrgDeptCard(dept: dept, color: color, onTapPerson: onTapPerson)),
           ],
         ),
       ),
     );
   }
 }
-
-// ── Tree branch painter ────────────────────────────────────────────────────────
 
 class _BranchPainter extends CustomPainter {
   final bool isLast;
@@ -197,58 +309,13 @@ class _BranchPainter extends CustomPainter {
       ..color = color
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round;
-
     const branchY = 32.0;
     final cx = size.width / 2;
-
-    // Vertical line from top down to branch point
     canvas.drawLine(Offset(cx, 0), Offset(cx, branchY), paint);
-
-    // Continue vertical line below branch (if not last)
-    if (!isLast) {
-      canvas.drawLine(
-          Offset(cx, branchY), Offset(cx, size.height), paint);
-    }
-
-    // Horizontal branch right to card
+    if (!isLast) canvas.drawLine(Offset(cx, branchY), Offset(cx, size.height), paint);
     canvas.drawLine(Offset(cx, branchY), Offset(size.width, branchY), paint);
   }
 
   @override
-  bool shouldRepaint(_BranchPainter old) =>
-      old.isLast != isLast || old.color != color;
-}
-
-// ── Error view ─────────────────────────────────────────────────────────────────
-
-class _ErrorView extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-  const _ErrorView({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.error_outline, size: 48, color: AppColors.error),
-          const SizedBox(height: 12),
-          Text('Failed to load org chart',
-              style: AppTextStyles.label
-                  .copyWith(color: AppColors.textSecondary)),
-          const SizedBox(height: 6),
-          Text(message,
-              style: AppTextStyles.caption, textAlign: TextAlign.center),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh, size: 16),
-            label: const Text('Retry'),
-          ),
-        ],
-      ),
-    );
-  }
+  bool shouldRepaint(_BranchPainter old) => old.isLast != isLast || old.color != color;
 }

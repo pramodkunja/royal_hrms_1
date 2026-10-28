@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/blue_hero_banner.dart';
 
 enum BranchStatusFilter { all, active, inactive }
 
@@ -59,50 +60,28 @@ class BranchFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            height: 42,
-            child: TextField(
-              controller: searchController,
-              style: AppTextStyles.bodySmall,
-              onChanged: onSearchChanged,
-              decoration: InputDecoration(
-                hintText: 'Search by name, code, city or state...',
-                hintStyle: AppTextStyles.caption,
-                prefixIcon: Icon(Icons.search, size: 18, color: AppColors.textHint),
-                suffixIcon: searchController.text.isNotEmpty
-                    ? IconButton(
-                        icon: Icon(Icons.clear, size: 16, color: AppColors.textHint),
-                        onPressed: () {
-                          searchController.clear();
-                          onSearchChanged('');
-                        },
-                      )
-                    : null,
-                isDense: true,
-                filled: true,
-                fillColor: AppColors.surface,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: AppColors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: AppColors.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: AppColors.primary, width: 1.5),
-                ),
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        BlueHeroBanner(
+          child: TextField(
+            controller: searchController,
+            style: AppTextStyles.bodySmall,
+            onChanged: onSearchChanged,
+            decoration: heroSearchFieldDecoration(
+              hintText: 'Search by name, code, city or state...',
+              showClear: searchController.text.isNotEmpty,
+              onClear: () {
+                searchController.clear();
+                onSearchChanged('');
+              },
             ),
           ),
-          const SizedBox(height: 10),
-          SingleChildScrollView(
+        ),
+        const SizedBox(height: 10),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
@@ -135,8 +114,8 @@ class BranchFilterBar extends StatelessWidget {
               ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

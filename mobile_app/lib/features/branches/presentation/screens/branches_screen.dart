@@ -84,46 +84,47 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      floatingActionButton: screenWidth < 360
-          ? FloatingActionButton(
-              onPressed: () => _openForm(context, null),
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              tooltip: 'Add Branch',
-              child: const Icon(Icons.add),
-            )
-          : FloatingActionButton.extended(
-              onPressed: () => _openForm(context, null),
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add),
-              label: const Text(
-                'Add Branch',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-              ),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            ),
+      // Hidden while there are zero branches at all — BranchEmptyView
+      // already has its own "Add Branch" button front and center there, so
+      // showing this FAB too just duplicated the same action twice on one
+      // screen (same fix as Assessments'/Documents' empty states). Still
+      // shown when filters/search reduce the list to zero *matches*, since
+      // then this FAB remains the only way to add a branch.
+      floatingActionButton: branchesAsync.maybeWhen(
+        data: (branches) => branches.isEmpty
+            ? null
+            : screenWidth < 360
+                ? FloatingActionButton(
+                    onPressed: () => _openForm(context, null),
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    tooltip: 'Add Branch',
+                    child: const Icon(Icons.add),
+                  )
+                : FloatingActionButton.extended(
+                    onPressed: () => _openForm(context, null),
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    icon: const Icon(Icons.add),
+                    label: const Text(
+                      'Add Branch',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+        orElse: () => null,
+      ),
       body: RefreshIndicator(
         color: AppColors.primary,
         onRefresh: _refresh,
         child: CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: _PageHeader(
-                  onRefresh: _refresh,
-                  isLoading: branchesAsync.isLoading,
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: branchesAsync.when(
-                loading: () => const BranchStatsRowShimmer(),
-                error: (e, _) => const SizedBox.shrink(),
-                data: (branches) => BranchStatsRow(branches: branches),
-              ),
-            ),
+            // ── Hero (search + filters) ──────────────────────────────────────
+            // No separate "Branch Management" title here — that duplicated
+            // the app bar's own title. Hero comes first, matching Employees'
+            // order (hero, then stats), not stats-then-hero. Pull-to-refresh
+            // (RefreshIndicator above) already covers what _PageHeader's
+            // explicit refresh icon used to do.
             SliverToBoxAdapter(
               child: branchesAsync.maybeWhen(
                 data: (branches) => branches.isEmpty
@@ -141,6 +142,13 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
                             setState(() => _geoFilter = val),
                       ),
                 orElse: () => const SizedBox.shrink(),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: branchesAsync.when(
+                loading: () => const BranchStatsRowShimmer(),
+                error: (e, _) => const SizedBox.shrink(),
+                data: (branches) => BranchStatsRow(branches: branches),
               ),
             ),
             branchesAsync.when(
@@ -274,46 +282,6 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
           childCount: 3,
         ),
       ),
-    );
-  }
-}
-
-class _PageHeader extends StatelessWidget {
-  final Future<void> Function() onRefresh;
-  final bool isLoading;
-  const _PageHeader({required this.onRefresh, required this.isLoading});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Branch Management', style: AppTextStyles.h1),
-              const SizedBox(height: 4),
-              Text(
-                "Manage your organization's branches and locations",
-                style: AppTextStyles.bodySecondary,
-              ),
-            ],
-          ),
-        ),
-        IconButton(
-          onPressed: isLoading ? null : onRefresh,
-          tooltip: 'Refresh',
-          icon: isLoading
-              ? SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: AppColors.primary),
-                )
-              : Icon(Icons.refresh_rounded, color: AppColors.primary),
-        ),
-      ],
     );
   }
 }

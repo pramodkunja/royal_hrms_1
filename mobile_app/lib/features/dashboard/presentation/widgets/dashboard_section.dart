@@ -2,13 +2,40 @@ import 'package:flutter/material.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
 
+/// A fixed-size, centered image icon — used wherever a dashboard card needs
+/// an asset (PNG) icon instead of a Material [Icon]. Sized via an explicit
+/// [SizedBox] + [Center] rather than relying on the image's own intrinsic
+/// layout, so it renders at exactly [size] and stays centered even when a
+/// parent (e.g. a fixed-size chip container) hands it tighter constraints.
+class SectionIconAsset extends StatelessWidget {
+  final String assetPath;
+  final double size;
+
+  const SectionIconAsset(this.assetPath, {super.key, this.size = 19});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Center(
+        child: Image.asset(assetPath, width: size, height: size, fit: BoxFit.contain),
+      ),
+    );
+  }
+}
+
 /// Shared section-card chrome used by every dashboard widget (Employee,
 /// Admin, HR, and the generic/Manager fallback) so all role dashboards look
 /// visually consistent. Extracted from what used to be a private class in
 /// `home_screen.dart` so the new per-role dashboard files can reuse it.
 class SectionCard extends StatelessWidget {
   final String title;
-  final IconData icon;
+  final IconData? icon;
+  // Overrides [icon] with an asset image (e.g. SectionIconAsset) when set —
+  // used by cards (Announcement, Birthdays) that show a PNG instead of a
+  // Material icon.
+  final Widget? iconWidget;
   final Color accentColor;
   final Widget child;
   final Widget? trailing;
@@ -16,11 +43,12 @@ class SectionCard extends StatelessWidget {
   const SectionCard({
     super.key,
     required this.title,
-    required this.icon,
+    this.icon,
+    this.iconWidget,
     required this.accentColor,
     required this.child,
     this.trailing,
-  });
+  }) : assert(icon != null || iconWidget != null, 'Provide either icon or iconWidget');
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +67,7 @@ class SectionCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
             child: Row(
               children: [
-                Icon(icon, size: 19, color: accentColor),
+                iconWidget ?? Icon(icon, size: 19, color: accentColor),
                 const SizedBox(width: 8),
                 Expanded(child: Text(title, style: AppTextStyles.h4)),
                 if (trailing != null) trailing!,
@@ -58,10 +86,14 @@ class SectionCard extends StatelessWidget {
 }
 
 class SectionMessage extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
+  // Overrides [icon] with an asset image (e.g. SectionIconAsset) — see
+  // SectionCard.iconWidget for the same pattern.
+  final Widget? iconWidget;
   final String label;
 
-  const SectionMessage({super.key, required this.icon, required this.label});
+  const SectionMessage({super.key, this.icon, this.iconWidget, required this.label})
+      : assert(icon != null || iconWidget != null, 'Provide either icon or iconWidget');
 
   @override
   Widget build(BuildContext context) {
@@ -77,13 +109,22 @@ class SectionMessage extends StatelessWidget {
     }
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Column(
-        children: [
-          Icon(icon, color: AppColors.textHint, size: 28),
-          const SizedBox(height: 8),
-          Text(label,
-              style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
-        ],
+      // SizedBox(width: double.infinity) forces this Column to actually span
+      // the card's full width — SectionCard's outer Column uses
+      // crossAxisAlignment.start, so without this the Column here would
+      // shrink to its widest child's (the Text's) intrinsic width and the
+      // whole icon+label block would sit pinned to the left edge instead of
+      // centered in the card.
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          children: [
+            iconWidget ?? Icon(icon, color: AppColors.textHint, size: 28),
+            const SizedBox(height: 8),
+            Text(label,
+                style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
+          ],
+        ),
       ),
     );
   }

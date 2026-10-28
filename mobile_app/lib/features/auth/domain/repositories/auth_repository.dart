@@ -2,7 +2,7 @@ import '../entities/user_entity.dart';
 
 abstract class AuthRepository {
   /// Authenticates the user and returns the logged-in [UserEntity].
-  Future<UserEntity> login(String email, String password);
+  Future<UserEntity> login(String companyCode, String email, String password);
 
   /// Ends the current session on both the server and locally.
   Future<void> logout();

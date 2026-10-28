@@ -36,10 +36,10 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     }
   }
 
-  Future<void> login(String email, String password) async {
+  Future<void> login(String companyCode, String email, String password) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      final user = await LoginUseCase(_repository)(email, password);
+      final user = await LoginUseCase(_repository)(companyCode, email, password);
       return AuthState(user: user);
     });
   }

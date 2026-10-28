@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/blue_hero_banner.dart';
+import '../../../../shared/widgets/stat_card.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/referral_entity.dart';
 import '../providers/referral_providers.dart';
@@ -29,7 +31,8 @@ class _ReferralsScreenState extends ConsumerState<ReferralsScreen>
   @override
   void initState() {
     super.initState();
-    final permissions = ref.read(authStateProvider).valueOrNull?.user?.permissions ?? const [];
+    final permissions =
+        ref.read(authStateProvider).valueOrNull?.user?.permissions ?? const [];
     _showAllTab = permissions.contains('recruitment.view');
     _tabController = TabController(length: _showAllTab ? 3 : 2, vsync: this);
   }
@@ -69,105 +72,134 @@ class _ReferralsScreenState extends ConsumerState<ReferralsScreen>
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.person_add_alt_1_outlined),
-        label: const Text('Refer Someone', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        label: const Text('Refer Someone',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.only(left: 10),
-              decoration: BoxDecoration(
-                border: Border(left: BorderSide(color: AppColors.primary, width: 4)),
-              ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          BlueHeroBanner(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Referrals',
+                  style: AppTextStyles.h2.copyWith(
+                      color: Colors.white, fontWeight: FontWeight.w800),
+                ),
+                Text(
+                  'Refer talented people you know and earn a bonus when they join the team.',
+                  style: AppTextStyles.bodySecondary
+                      .copyWith(color: Colors.white.withValues(alpha: 0.85)),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Referrals',
-                    style: AppTextStyles.h2.copyWith(color: AppColors.primary, fontWeight: FontWeight.w800),
+                  // Stats in normal flow (not overlapping the hero) — the
+                  // overlap trick relied on a hardcoded hero height that
+                  // undershot the real rendered height of the wrapping
+                  // subtitle text, which visibly covered it and let it spill
+                  // out past the hero's rounded bottom. Matches the safe
+                  // pattern every other hero'd screen already uses.
+                  _StatsRow(
+                    totalReferred: totalReferred,
+                    inPipeline: inPipeline,
+                    selected: selected,
+                    converted: converted,
                   ),
-                  Text(
-                    'Refer talented people you know and earn a bonus when they join the team.',
-                    style: AppTextStyles.bodySecondary,
-                  ),
-                ],
-              ),
-            ),
-            if (_showSuccessBanner) ...[
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.successContainer,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'Referral submitted successfully! It will appear in My Referrals shortly.',
-                  style: AppTextStyles.caption.copyWith(color: AppColors.success, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-            const SizedBox(height: 14),
-            _StatsRow(
-              totalReferred: totalReferred,
-              inPipeline: inPipeline,
-              selected: selected,
-              converted: converted,
-            ),
-            const SizedBox(height: 16),
-            TabBar(
-              controller: _tabController,
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              labelColor: AppColors.primary,
-              unselectedLabelColor: AppColors.textSecondary,
-              indicatorColor: AppColors.primary,
-              labelStyle: AppTextStyles.label,
-              tabs: [
-                const Tab(child: _TabLabel(icon: Icons.groups_outlined, label: 'My Referrals')),
-                if (_showAllTab) const Tab(child: _TabLabel(icon: Icons.list_alt_outlined, label: 'All Referrals')),
-                const Tab(child: _TabLabel(icon: Icons.description_outlined, label: 'Referral Rules')),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _ReferralListBody(
-                    async: myAsync,
-                    searchController: _mySearchCtrl,
-                    search: _mySearch,
-                    onSearchChanged: (v) => setState(() => _mySearch = v),
-                    showReferredBy: false,
-                    onRefresh: () => ref.read(myReferralsProvider.notifier).refresh(),
-                    onRetry: () => ref.invalidate(myReferralsProvider),
-                  ),
-                  if (_showAllTab)
-                    Consumer(
-                      builder: (context, ref, _) {
-                        final allAsync = ref.watch(allReferralsProvider);
-                        return _ReferralListBody(
-                          async: allAsync,
-                          searchController: _allSearchCtrl,
-                          search: _allSearch,
-                          onSearchChanged: (v) => setState(() => _allSearch = v),
-                          showReferredBy: true,
-                          onRefresh: () => ref.read(allReferralsProvider.notifier).refresh(),
-                          onRetry: () => ref.invalidate(allReferralsProvider),
-                        );
-                      },
+                  const SizedBox(height: 16),
+                  if (_showSuccessBanner) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.successContainer,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Referral submitted successfully! It will appear in My Referrals shortly.',
+                        style: AppTextStyles.caption.copyWith(
+                            color: AppColors.success,
+                            fontWeight: FontWeight.w600),
+                      ),
                     ),
-                  const _RulesTabBody(),
+                    const SizedBox(height: 12),
+                  ],
+                  TabBar(
+                    controller: _tabController,
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    labelColor: AppColors.primary,
+                    unselectedLabelColor: AppColors.textSecondary,
+                    indicatorColor: AppColors.primary,
+                    labelStyle: AppTextStyles.label,
+                    tabs: [
+                      const Tab(
+                          child: _TabLabel(
+                              icon: Icons.groups_outlined,
+                              label: 'My Referrals')),
+                      if (_showAllTab)
+                        const Tab(
+                            child: _TabLabel(
+                                icon: Icons.list_alt_outlined,
+                                label: 'All Referrals')),
+                      const Tab(
+                          child: _TabLabel(
+                              icon: Icons.description_outlined,
+                              label: 'Referral Rules')),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _ReferralListBody(
+                          async: myAsync,
+                          searchController: _mySearchCtrl,
+                          search: _mySearch,
+                          onSearchChanged: (v) => setState(() => _mySearch = v),
+                          showReferredBy: false,
+                          onRefresh: () =>
+                              ref.read(myReferralsProvider.notifier).refresh(),
+                          onRetry: () => ref.invalidate(myReferralsProvider),
+                        ),
+                        if (_showAllTab)
+                          Consumer(
+                            builder: (context, ref, _) {
+                              final allAsync = ref.watch(allReferralsProvider);
+                              return _ReferralListBody(
+                                async: allAsync,
+                                searchController: _allSearchCtrl,
+                                search: _allSearch,
+                                onSearchChanged: (v) =>
+                                    setState(() => _allSearch = v),
+                                showReferredBy: true,
+                                onRefresh: () => ref
+                                    .read(allReferralsProvider.notifier)
+                                    .refresh(),
+                                onRetry: () =>
+                                    ref.invalidate(allReferralsProvider),
+                              );
+                            },
+                          ),
+                        const _RulesTabBody(),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -211,58 +243,41 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = [
-      (label: 'Total Referred', value: totalReferred, icon: Icons.groups_outlined, color: AppColors.primary),
-      (label: 'In Pipeline', value: inPipeline, icon: Icons.schedule_outlined, color: AppColors.warning),
-      (label: 'Selected', value: selected, icon: Icons.how_to_reg_outlined, color: AppColors.success),
-      (label: 'Converted', value: converted, icon: Icons.emoji_events_outlined, color: AppColors.primary),
-    ];
-    return SizedBox(
-      height: 128,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (context, i) {
-          final item = items[i];
-          return Container(
-            width: 136,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: AppColors.cardShadow,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: item.color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(item.icon, color: item.color, size: 18),
-                ),
-                const Spacer(),
-                Text(
-                  '${item.value}',
-                  style: AppTextStyles.h2.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  item.label,
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+    // Shared StatCard/StatCardRow — same visual design as the Employees
+    // screen's directory-stats strip (148-wide cards, 40x40 icon tile,
+    // fontSize 22 count). Values/icons/colors unchanged, only the card
+    // chrome now matches the rest of the app. `padding: zero` because this
+    // row already sits inside the screen body's horizontal-16 Padding, so
+    // the cards line up with the TabBar/success banner below instead of
+    // double-indenting.
+    return StatCardRow(
+      padding: EdgeInsets.zero,
+      cards: [
+        StatCard(
+          icon: Icons.groups_outlined,
+          count: totalReferred,
+          label: 'Total Referred',
+          color: AppColors.primary,
+        ),
+        StatCard(
+          icon: Icons.schedule_outlined,
+          count: inPipeline,
+          label: 'In Pipeline',
+          color: AppColors.warning,
+        ),
+        StatCard(
+          icon: Icons.how_to_reg_outlined,
+          count: selected,
+          label: 'Selected',
+          color: AppColors.success,
+        ),
+        StatCard(
+          icon: Icons.emoji_events_outlined,
+          count: converted,
+          label: 'Converted',
+          color: AppColors.primary,
+        ),
+      ],
     );
   }
 }
@@ -292,7 +307,8 @@ class _ReferralListBody extends StatelessWidget {
     if (search.trim().isEmpty) return items;
     final q = search.toLowerCase();
     return items.where((r) {
-      final haystack = '${r.name} ${r.positionApplied} ${r.referralByName}'.toLowerCase();
+      final haystack =
+          '${r.name} ${r.positionApplied} ${r.referralByName}'.toLowerCase();
       return haystack.contains(q);
     }).toList();
   }
@@ -325,7 +341,8 @@ class _ReferralListBody extends StatelessWidget {
                           _EmptyState(
                             icon: Icons.person_add_alt_outlined,
                             title: 'No referrals found',
-                            body: 'Try adjusting your search or submit a new referral.',
+                            body:
+                                'Try adjusting your search or submit a new referral.',
                           ),
                         ],
                       )
@@ -341,7 +358,8 @@ class _ReferralListBody extends StatelessWidget {
               );
             },
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => _ErrorState(message: friendlyReferralError(e), onRetry: onRetry),
+            error: (e, _) => _ErrorState(
+                message: friendlyReferralError(e), onRetry: onRetry),
           ),
         ),
       ],
@@ -371,7 +389,8 @@ class _RulesTabBody extends ConsumerWidget {
                   const _EmptyState(
                     icon: Icons.description_outlined,
                     title: 'No rules configured',
-                    body: 'An admin can add referral rules from Settings → Referral Rules.',
+                    body:
+                        'An admin can add referral rules from Settings → Referral Rules.',
                   )
                 else ...[
                   Container(
@@ -384,7 +403,8 @@ class _RulesTabBody extends ConsumerWidget {
                     child: Text(
                       'These rules govern the Employee Referral Programme. Please read '
                       'them carefully before submitting a referral.',
-                      style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                      style: AppTextStyles.caption
+                          .copyWith(color: AppColors.textSecondary),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -421,7 +441,8 @@ class _EmptyState extends StatelessWidget {
   final String title;
   final String body;
 
-  const _EmptyState({required this.icon, required this.title, required this.body});
+  const _EmptyState(
+      {required this.icon, required this.title, required this.body});
 
   @override
   Widget build(BuildContext context) {
@@ -431,7 +452,8 @@ class _EmptyState extends StatelessWidget {
         children: [
           Icon(icon, size: 36, color: AppColors.textHint),
           const SizedBox(height: 12),
-          Text(title, style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w700)),
+          Text(title,
+              style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
           Text(
             body,

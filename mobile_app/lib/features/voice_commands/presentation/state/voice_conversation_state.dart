@@ -5,10 +5,19 @@
 /// text instead of speech (the keyboard-badge entry point next to the mic
 /// bubble — a typed-fallback alternative to speaking, same idea as the web
 /// app's keyboard-icon toggle, left as this app's own UI/UX call). "transcript":
-/// recognized/typed text shown while the request is in flight. "result": a
-/// response has come back — either the next turn of a conversational
-/// dialogue, or the final answer.
-enum VoicePanelPhase { listening, typing, transcript, result }
+/// recognized/typed text shown while the request is in flight. "retrying": an
+/// automatic, backend-driven second capture after a voice-sourced transcript
+/// came back as a final no_match — see VoiceCommandController's Hindi-STT
+/// fallback (POST /voice/transcribe-fallback/); distinct from "listening" so
+/// the panel can explain why the mic reopened without any tap. "faceProof":
+/// backend responded to a clock_in/clock_out with AWAITING_FACE_PROOF_STAGE
+/// (apps/voice_commands/conversation_clock_in_face.py) — the existing
+/// facial_recognition capture sheet is about to open (or has just closed
+/// pending its result); distinct from "result" so the panel doesn't show the
+/// normal "Answer by voice / type an answer" controls, which make no sense
+/// for a camera step. "result": a response has come back — either the next
+/// turn of a conversational dialogue, or the final answer.
+enum VoicePanelPhase { listening, typing, transcript, retrying, faceProof, result }
 
 enum VoiceResultStatus { success, error }
 
@@ -32,6 +41,13 @@ class VoiceConversationState {
   // the shape is recognized, without the controller needing to know about
   // any particular intent.
   final dynamic result;
+  // 'en' | 'hi' — only meaningful once phase is `result`; backend-reported
+  // (VoiceResultEntity.language), never inferred client-side. Drives the
+  // small language badge the result view shows for a Hindi reply (see
+  // VoiceConversationPanel) — omitted for English since that's the
+  // overwhelming common case and a badge on every single result would just
+  // be noise.
+  final String language;
 
   const VoiceConversationState({
     this.transcript = '',
@@ -43,6 +59,7 @@ class VoiceConversationState {
     this.isProcessing = false,
     this.resultStatus,
     this.result,
+    this.language = 'en',
   });
 
   VoiceConversationState copyWith({
@@ -55,6 +72,7 @@ class VoiceConversationState {
     bool? isProcessing,
     VoiceResultStatus? resultStatus,
     dynamic result,
+    String? language,
   }) {
     return VoiceConversationState(
       transcript: transcript ?? this.transcript,
@@ -66,6 +84,7 @@ class VoiceConversationState {
       isProcessing: isProcessing ?? this.isProcessing,
       resultStatus: resultStatus ?? this.resultStatus,
       result: result ?? this.result,
+      language: language ?? this.language,
     );
   }
 }

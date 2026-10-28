@@ -39,6 +39,13 @@ class SmtpScreen extends ConsumerWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Text(
+                  'Manage outgoing email server configurations',
+                  style: AppTextStyles.bodySecondary,
+                ),
+              ),
               if (active != null) _ActiveBanner(entry: active),
               Expanded(
                 child: ListView.separated(

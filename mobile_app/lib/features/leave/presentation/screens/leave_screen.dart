@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../branches/presentation/providers/branch_providers.dart';
+import '../../../../shared/widgets/blue_hero_banner.dart';
 import '../widgets/leave_dashboard_tab.dart';
 import '../widgets/apply_leave_tab.dart';
 import '../widgets/leave_approvals_tab.dart';
@@ -104,8 +105,7 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
       ApplyLeaveTab(
         onDashboard: () => tabController.animateTo(0),
       ),
-      if (!isEmployee)
-        LeaveApprovalsTab(selectedBranches: _selectedBranches),
+      if (!isEmployee) LeaveApprovalsTab(selectedBranches: _selectedBranches),
       const TeamCalendarTab(),
       const LeaveAnalyticsTab(),
     ];
@@ -116,126 +116,122 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Header + Tab bar (pinned) ─────────────────────────────────────
-            Container(
-              color: AppColors.surface,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+            // ── Header (blue hero) ─────────────────────────────────────────────
+            BlueHeroBanner(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 12, 8),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
+                  // Title + subtitle
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Title + subtitle
-                        Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Leave Management', style: AppTextStyles.h4),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Apply, approve and track leave requests',
-                                style: AppTextStyles.caption,
-                              ),
-                            ],
-                          ),
+                        Text('Leave Management',
+                            style:
+                                AppTextStyles.h4.copyWith(color: Colors.white)),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Apply, approve and track leave requests',
+                          style: AppTextStyles.caption.copyWith(
+                              color: Colors.white.withValues(alpha: 0.85)),
                         ),
-                        if (isSystemAdmin) const SizedBox(width: 8),
-                        // Branch selector button
-                        if (isSystemAdmin)
-                          GestureDetector(
-                            onTap: _openBranchSheet,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 160),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 7),
-                              decoration: BoxDecoration(
-                                color: hasFilter
-                                    ? AppColors.primary.withValues(alpha: 0.08)
-                                    : AppColors.backgroundLow,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: hasFilter
-                                      ? AppColors.primary.withValues(alpha: 0.4)
-                                      : AppColors.border,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.business_outlined,
-                                      size: 13,
-                                      color: hasFilter
-                                          ? AppColors.primary
-                                          : AppColors.textSecondary),
-                                  const SizedBox(width: 5),
-                                  ConstrainedBox(
-                                    constraints:
-                                        const BoxConstraints(maxWidth: 80),
-                                    child: Text(
-                                      _branchLabel,
-                                      style: AppTextStyles.caption.copyWith(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: hasFilter
-                                            ? AppColors.primary
-                                            : AppColors.textSecondary,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  if (hasFilter) ...[
-                                    const SizedBox(width: 4),
-                                    Container(
-                                      width: 16,
-                                      height: 16,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primary,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          '${_selectedBranches.length}',
-                                          style: const TextStyle(
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.w800,
-                                              color: Colors.white),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                  const SizedBox(width: 3),
-                                  Icon(Icons.expand_more,
-                                      size: 15,
-                                      color: hasFilter
-                                          ? AppColors.primary
-                                          : AppColors.textHint),
-                                ],
-                              ),
-                            ),
-                          ),
                       ],
                     ),
                   ),
-                  TabBar(
-                    controller: tabController,
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.start,
-                    tabs: tabs,
-                    labelColor: AppColors.primary,
-                    unselectedLabelColor: AppColors.textSecondary,
-                    indicatorColor: AppColors.primary,
-                    indicatorWeight: 2.5,
-                    labelStyle: AppTextStyles.label.copyWith(fontSize: 12),
-                    unselectedLabelStyle:
-                        AppTextStyles.label.copyWith(fontSize: 12),
-                    dividerColor: AppColors.border,
-                    padding: EdgeInsets.zero,
-                  ),
+                  if (isSystemAdmin) const SizedBox(width: 8),
+                  // Branch selector button
+                  if (isSystemAdmin)
+                    GestureDetector(
+                      onTap: _openBranchSheet,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: hasFilter
+                              ? Colors.white
+                              : Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: hasFilter
+                                ? Colors.white
+                                : Colors.white.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.business_outlined,
+                                size: 13,
+                                color: hasFilter
+                                    ? AppColors.primary
+                                    : Colors.white),
+                            const SizedBox(width: 5),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 80),
+                              child: Text(
+                                _branchLabel,
+                                style: AppTextStyles.caption.copyWith(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: hasFilter
+                                      ? AppColors.primary
+                                      : Colors.white,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (hasFilter) ...[
+                              const SizedBox(width: 4),
+                              Container(
+                                width: 16,
+                                height: 16,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '${_selectedBranches.length}',
+                                    style: const TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(width: 3),
+                            Icon(Icons.expand_more,
+                                size: 15,
+                                color: hasFilter
+                                    ? AppColors.primary
+                                    : Colors.white70),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
+              ),
+            ),
+            // ── Tab bar (pinned, plain background) ──────────────────────────────
+            Container(
+              color: AppColors.surface,
+              child: TabBar(
+                controller: tabController,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                tabs: tabs,
+                labelColor: AppColors.primary,
+                unselectedLabelColor: AppColors.textSecondary,
+                indicatorColor: AppColors.primary,
+                indicatorWeight: 2.5,
+                labelStyle: AppTextStyles.label.copyWith(fontSize: 12),
+                unselectedLabelStyle:
+                    AppTextStyles.label.copyWith(fontSize: 12),
+                dividerColor: AppColors.border,
+                padding: EdgeInsets.zero,
               ),
             ),
 
@@ -272,7 +268,8 @@ class _LeaveScreenState extends ConsumerState<LeaveScreen>
                 backgroundColor: AppColors.primary,
                 icon: const Icon(Icons.add, color: Colors.white),
                 label: const Text('Apply My Leave',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w600)),
               ),
       ),
     );
@@ -333,8 +330,7 @@ class _BranchSheetState extends ConsumerState<_BranchSheet> {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
-              Icon(Icons.business_outlined,
-                  size: 15, color: AppColors.primary),
+              Icon(Icons.business_outlined, size: 15, color: AppColors.primary),
               const SizedBox(width: 8),
               Text('FILTER BY BRANCH',
                   style: AppTextStyles.caption.copyWith(
@@ -374,8 +370,7 @@ class _BranchSheetState extends ConsumerState<_BranchSheet> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
             child: Text('Could not load branches. Pull down to retry.',
-                style:
-                    AppTextStyles.caption.copyWith(color: AppColors.error)),
+                style: AppTextStyles.caption.copyWith(color: AppColors.error)),
           )
         else if (branches.isEmpty)
           Padding(

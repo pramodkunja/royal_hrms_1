@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile_app/features/facial_recognition/presentation/widgets/face_capture_bottom_sheet.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/expandable_fab.dart';
@@ -66,6 +67,19 @@ class _VoiceMicOverlayState extends ConsumerState<VoiceMicOverlay> {
 
     final conversation = ref.watch(voiceCommandControllerProvider);
     final controller = ref.read(voiceCommandControllerProvider.notifier);
+
+    // The controller has no BuildContext of its own to open a modal bottom
+    // sheet with — this is the one place in the voice-command flow that
+    // needs one, so the orchestration (open the sheet, feed its result back)
+    // lives here instead. Fires exactly once per transition INTO faceProof
+    // (first ask or any retry — see VoiceCommandController's own comment on
+    // why there's no client-side attempt counter), never on a rebuild that
+    // merely happens to also have phase == faceProof.
+    ref.listen<VoiceConversationState?>(voiceCommandControllerProvider, (previous, next) {
+      final enteredFaceProof = next?.phase == VoicePanelPhase.faceProof &&
+          previous?.phase != VoicePanelPhase.faceProof;
+      if (enteredFaceProof) _openFaceProofCapture(controller);
+    });
 
     // Screens with an expandable multi-action FAB (Employees, Interview
     // List, Attendance's speed dial) grow their mini actions upward past a
@@ -143,6 +157,24 @@ class _VoiceMicOverlayState extends ConsumerState<VoiceMicOverlay> {
       onTap: controller.startListening,
       onTypeTap: controller.openTypedCommand,
     );
+  }
+
+  /// Opens the same facial_recognition capture sheet manual clock-in already
+  /// uses (see attendance_ring_card.dart's own showFaceCaptureSheet call) —
+  /// no consentNoticeText, since verification never collects new biometric
+  /// data and so never needs fresh consent (only self/HR registration does;
+  /// see that sheet's own doc comment). Feeds whatever comes back (a capture
+  /// result, or null if the user cancelled) straight back to the controller,
+  /// which resubmits it to /voice/parse/ and decides what happens next —
+  /// this widget makes no pass/fail judgment of its own.
+  Future<void> _openFaceProofCapture(VoiceCommandController controller) async {
+    final result = await showFaceCaptureSheet(
+      context,
+      title: 'Face ID Verification',
+      subtitle: 'Confirm it\'s you to clock in.',
+    );
+    if (!mounted) return;
+    await controller.submitFaceProofCapture(result);
   }
 }
 

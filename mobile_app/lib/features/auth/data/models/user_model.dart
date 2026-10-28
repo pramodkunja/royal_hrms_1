@@ -14,7 +14,13 @@ class UserModel extends UserEntity {
     required super.mustChangePassword,
     required super.permissions,
     super.onboardingStatus,
+    super.assessmentStatus,
     super.canManageTeam,
+    super.canManageBranch,
+    super.companyCode,
+    super.companyName,
+    super.companyLogoUrl,
+    super.companyBrandColor,
     super.isSuperuser,
   });
 
@@ -35,7 +41,13 @@ class UserModel extends UserEntity {
               .toList() ??
           [],
       onboardingStatus: json['onboarding_status'] as String?,
+      assessmentStatus: json['assessment_status'] as String?,
       canManageTeam: json['can_manage_team'] as bool? ?? false,
+      canManageBranch: json['can_manage_branch'] as bool? ?? false,
+      companyCode: json['company_code'] as String?,
+      companyName: json['company_name'] as String?,
+      companyLogoUrl: json['company_logo_url'] as String?,
+      companyBrandColor: json['company_brand_color'] as String?,
       isSuperuser: json['is_superuser'] as bool? ?? false,
     );
   }
@@ -53,7 +65,13 @@ class UserModel extends UserEntity {
         'must_change_password': mustChangePassword,
         'permissions': permissions,
         'onboarding_status': onboardingStatus,
+        'assessment_status': assessmentStatus,
         'can_manage_team': canManageTeam,
+        'can_manage_branch': canManageBranch,
+        'company_code': companyCode,
+        'company_name': companyName,
+        'company_logo_url': companyLogoUrl,
+        'company_brand_color': companyBrandColor,
         'is_superuser': isSuperuser,
       };
 }

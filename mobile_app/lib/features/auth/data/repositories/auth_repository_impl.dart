@@ -35,8 +35,10 @@ class AuthRepositoryImpl implements AuthRepository {
         _cookieJar = cookieJar;
 
   @override
-  Future<UserEntity> login(String email, String password) async {
-    final response = await _dataSource.login(LoginRequestModel(email: email, password: password));
+  Future<UserEntity> login(String companyCode, String email, String password) async {
+    final response = await _dataSource.login(
+      LoginRequestModel(companyCode: companyCode, email: email, password: password),
+    );
     await _cacheUser(response.user);
     // Persist the access/refresh tokens so AuthInterceptor can send the access
     // token as a Bearer header and drive silent refresh from the stored

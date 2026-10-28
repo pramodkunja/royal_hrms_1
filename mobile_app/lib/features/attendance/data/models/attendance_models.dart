@@ -596,3 +596,51 @@ class HrCorrectionRowModel extends HrCorrectionRowEntity {
     );
   }
 }
+
+class MyCorrectionModel extends MyCorrectionEntity {
+  const MyCorrectionModel({
+    required super.id,
+    required super.date,
+    required super.punchType,
+    super.originalInTime,
+    super.originalOutTime,
+    super.requestedInTime,
+    super.requestedOutTime,
+    required super.reason,
+    super.notes,
+    required super.status,
+    super.l1ApproverName,
+    super.l1Status,
+    super.l1Remarks,
+    super.l2ApproverName,
+    super.l2Status,
+    super.l2Remarks,
+    super.reviewedBy,
+    super.reviewedAt,
+    required super.createdAt,
+  });
+
+  factory MyCorrectionModel.fromJson(Map<String, dynamic> json) {
+    return MyCorrectionModel(
+      id: json['id']?.toString() ?? '',
+      date: json['date'] as String? ?? '',
+      punchType: json['punch_type'] as String? ?? '',
+      originalInTime: json['original_in'] as String?,
+      originalOutTime: json['original_out'] as String?,
+      requestedInTime: json['requested_in'] as String?,
+      requestedOutTime: json['requested_out'] as String?,
+      reason: json['reason'] as String? ?? '',
+      notes: json['notes'] as String?,
+      status: json['status'] as String? ?? '',
+      l1ApproverName: json['l1_approver_name'] as String?,
+      l1Status: json['l1_status'] as String?,
+      l1Remarks: json['l1_remarks'] as String? ?? '',
+      l2ApproverName: json['l2_approver_name'] as String?,
+      l2Status: json['l2_status'] as String?,
+      l2Remarks: json['l2_remarks'] as String? ?? '',
+      reviewedBy: json['reviewed_by'] as String?,
+      reviewedAt: json['reviewed_at'] as String?,
+      createdAt: json['created_at'] as String? ?? '',
+    );
+  }
+}

@@ -81,6 +81,9 @@ class _DashboardShellState extends ConsumerState<DashboardShell> {
         drawer: const AppSidebar(),
         appBar: AppTopBar(
           title: title,
+          // Every route except the Dashboard home screen gets the blue app
+          // bar theme — Dashboard keeps its original plain white bar.
+          isBlueTheme: currentPath != AppRoutes.dashboard,
           onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
           onThemeToggleTap: () => ref.read(themeModeProvider.notifier).toggle(),
           isDarkMode: isDarkMode,

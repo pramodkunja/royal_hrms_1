@@ -86,7 +86,14 @@ class _FilledButton extends StatelessWidget {
                   Icon(leadingIcon, size: 18),
                   const SizedBox(width: 8),
                 ],
-                Text(label, style: AppTextStyles.button.copyWith(color: Colors.white)),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: AppTextStyles.button.copyWith(color: Colors.white),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
     );
@@ -113,7 +120,14 @@ class _OutlineButton extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (leadingIcon != null) ...[Icon(leadingIcon, size: 18), const SizedBox(width: 8)],
-          Text(label, style: AppTextStyles.button.copyWith(color: AppColors.primary)),
+          Flexible(
+            child: Text(
+              label,
+              style: AppTextStyles.button.copyWith(color: AppColors.primary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );
@@ -135,7 +149,14 @@ class _GhostButton extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (leadingIcon != null) ...[Icon(leadingIcon, size: 18), const SizedBox(width: 6)],
-          Text(label, style: AppTextStyles.button.copyWith(color: AppColors.primary)),
+          Flexible(
+            child: Text(
+              label,
+              style: AppTextStyles.button.copyWith(color: AppColors.primary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_text_styles.dart';
 import '../providers/notification_providers.dart';
 import 'notification_panel.dart';
 
@@ -9,7 +10,11 @@ import 'notification_panel.dart';
 /// panel directly under itself (matches web's NotificationBell.tsx, which
 /// renders its dropdown as a `position: absolute` panel under the button).
 class NotificationBellButton extends ConsumerWidget {
-  const NotificationBellButton({super.key});
+  // Defaults to AppColors.textSecondary (the icon's original color, for the
+  // employee-profile screen's own white AppBar) — AppTopBar's now-blue
+  // background passes Colors.white explicitly instead.
+  final Color? color;
+  const NotificationBellButton({super.key, this.color});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -21,7 +26,7 @@ class NotificationBellButton extends ConsumerWidget {
       children: [
         IconButton(
           icon: const Icon(Icons.notifications_outlined),
-          color: AppColors.textSecondary,
+          color: color ?? AppColors.textSecondary,
           onPressed: () => _openPanel(context),
           tooltip: 'Notifications',
         ),
@@ -40,7 +45,7 @@ class NotificationBellButton extends ConsumerWidget {
               child: Text(
                 unreadCount > 99 ? '99+' : '$unreadCount',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: AppTextStyles.labelSmall.copyWith(
                   color: Colors.white,
                   fontSize: 9,
                   fontWeight: FontWeight.w700,

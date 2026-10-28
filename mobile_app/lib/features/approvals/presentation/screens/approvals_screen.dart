@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/blue_hero_banner.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../widgets/attendance_approval_tab.dart';
 import '../widgets/face_registration_approvals_tab.dart';
@@ -66,7 +67,12 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
     // is a much broader read permission most employees have, so this tab
     // was showing up for people who couldn't actually action anything).
     final canApproveCorrections = user?.hasPermission('attendance.create') ?? false;
-    final canApproveTeam = canApproveLeave || canApproveExpense || canApproveCorrections;
+    // wfh.approve — WFH is folded into this same Team Approvals inbox as
+    // one more request kind (matches web's TeamApprovalsSection.tsx), not
+    // given its own tab or screen.
+    final canApproveWfh = user?.hasPermission('wfh.approve') ?? false;
+    final canApproveTeam =
+        canApproveLeave || canApproveExpense || canApproveCorrections || canApproveWfh;
     // Matches web exactly: user.can_manage_team === true || user.is_superuser
     // === true || hasPermission('payroll.view') — no HR-role exclusion /
     // payroll.approve alternative, both of which were undocumented
@@ -90,14 +96,15 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+            BlueHeroBanner(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Approvals', style: AppTextStyles.h4),
+                  Text('Approvals', style: AppTextStyles.h4.copyWith(color: Colors.white)),
                   const SizedBox(height: 2),
-                  Text('Items waiting on your action', style: AppTextStyles.caption),
+                  Text('Items waiting on your action',
+                      style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.85))),
                 ],
               ),
             ),
@@ -125,6 +132,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
                                 canApproveLeave: canApproveLeave,
                                 canApproveExpense: canApproveExpense,
                                 canApproveCorrections: canApproveCorrections,
+                                canApproveWfh: canApproveWfh,
                               ),
                             'face_id' => const FaceRegistrationApprovalsTab(),
                             _ => const AttendanceApprovalTab(),

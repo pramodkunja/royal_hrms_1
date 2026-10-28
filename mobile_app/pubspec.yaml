@@ -1,10 +1,10 @@
 name: mobile_app
 description: "Royal HRMS - Enterprise HR Management System Mobile Application"
-publish_to: 'none'
-version: 1.0.0+1
+publish_to: "none"
+version: 1.0.0+5
 
 environment:
-  sdk: '>=3.5.0 <4.0.0'
+  sdk: ">=3.5.0 <4.0.0"
 
 dependencies:
   flutter:
@@ -45,9 +45,18 @@ dependencies:
   # URL launching (preview / download)
   url_launcher: ^6.3.0
 
-  # Voice commands — native speech-to-text / text-to-speech
+  # Voice commands — native speech-to-text capture; spoken replies are
+  # synthesized server-side (POST /voice/speak/, bilingual EN/HI Sarvam
+  # Bulbul TTS) and played back locally via audioplayers, not
+  # flutter_tts — backend is the single source of truth for which language
+  # to reply in, and an on-device English-only TTS engine can't speak Hindi.
   speech_to_text: ^7.0.0
-  flutter_tts: ^4.2.2
+  # Fixed-duration mic re-capture for the Hindi-STT fallback retry
+  # (POST /voice/transcribe-fallback/) — records a short WAV clip when a
+  # voice-sourced transcript comes back as a final no_match.
+  record: ^7.1.1
+  # Local playback of the raw audio/wav bytes POST /voice/speak/ returns.
+  audioplayers: ^6.8.1
 
   # Face ID registration/verification — live camera preview + capture,
   # on-device face detection for liveness cues (blink / head-turn), and a
@@ -69,6 +78,7 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^4.0.0
   flutter_native_splash: ^2.4.4
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
@@ -84,6 +94,26 @@ flutter:
 flutter_native_splash:
   color: "#FFFFFF"
   image: assets/images/Royal_logo.png
+  # Android 12+ masks the splash icon to a centre circle — the 3:2 wordmark
+  # gets its "R" and "L" clipped, so use the emblem (same as launcher icon).
   android_12:
     color: "#FFFFFF"
-    image: assets/images/Royal_logo.png
+    image: assets/icon/android12_splash.png
+
+# Config for `dart run flutter_launcher_icons` — generates the Android
+# launcher icons (legacy mipmaps + API 26+ adaptive icon). Sources live in
+# assets/icon/ (not bundled into the app) and are the "O" people emblem from
+# the official Royal_logo.png wordmark — the full wordmark is unreadable at
+# launcher size. Foreground emblem sits inside the adaptive 66dp safe zone so
+# no launcher mask shape crops it. assets/icon/play_store_icon_512.png is the
+# matching Play Console listing icon.
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: false
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
+  # Padding is baked into the foreground PNG — the plugin's default 16% inset
+  # would shrink the emblem to ~39% of the canvas.
+  adaptive_icon_foreground_inset: 0

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/document_entity.dart';
+import '../../../../shared/widgets/stat_card.dart';
 
 class DocumentStatsRow extends StatelessWidget {
   final DocumentStatsEntity stats;
@@ -10,33 +10,29 @@ class DocumentStatsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      _StatData(
+      StatCard(
         label: 'Total Documents',
-        value: '${stats.total}',
+        count: stats.total,
         icon: Icons.folder_outlined,
         color: AppColors.primary,
-        bg: const Color(0xFFEBF0FA),
       ),
-      _StatData(
+      StatCard(
         label: 'Policies',
-        value: '${stats.policy}',
+        count: stats.policy,
         icon: Icons.policy_outlined,
         color: const Color(0xFF219653),
-        bg: const Color(0xFFE8F7EF),
       ),
-      _StatData(
+      StatCard(
         label: 'Forms',
-        value: '${stats.form}',
+        count: stats.form,
         icon: Icons.description_outlined,
         color: AppColors.info,
-        bg: const Color(0xFFE3F4F6),
       ),
-      _StatData(
+      StatCard(
         label: 'Templates',
-        value: '${stats.template}',
+        count: stats.template,
         icon: Icons.picture_as_pdf_outlined,
         color: AppColors.warning,
-        bg: const Color(0xFFFEF3C7),
       ),
     ];
 
@@ -49,7 +45,7 @@ class DocumentStatsRow extends StatelessWidget {
         childAspectRatio: 2.5,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        children: items.map((d) => _StatCard(data: d)).toList(),
+        children: items,
       ),
     );
   }
@@ -78,75 +74,6 @@ class DocumentStatsRowShimmer extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _StatData {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final Color bg;
-  const _StatData({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-    required this.bg,
-  });
-}
-
-class _StatCard extends StatelessWidget {
-  final _StatData data;
-  const _StatCard({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.cardShadow,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: data.bg,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(data.icon, color: data.color, size: 19),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  data.value,
-                  style: AppTextStyles.h4.copyWith(
-                    color: data.color,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 18,
-                  ),
-                ),
-                Text(
-                  data.label,
-                  style: AppTextStyles.caption.copyWith(fontSize: 10),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

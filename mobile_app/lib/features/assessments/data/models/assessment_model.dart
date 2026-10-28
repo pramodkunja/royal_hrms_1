@@ -288,12 +288,22 @@ class AssessmentFormData {
   String description;
   bool isActive;
   bool isDefault;
+  int passPercentage;
+  // null = inherit the org-wide default from Settings → Assessment Config;
+  // 0 = unlimited attempts (per-assessment override) — matches
+  // AssessmentCreateSerializer.validate_max_attempts on the backend.
+  int? maxAttempts;
+  // null = inherit the org-wide default (which may itself be null = no limit).
+  int? timeLimitMins;
 
   AssessmentFormData({
     this.title = '',
     this.description = '',
     this.isActive = true,
     this.isDefault = false,
+    this.passPercentage = 70,
+    this.maxAttempts,
+    this.timeLimitMins,
   });
 
   factory AssessmentFormData.fromModel(AssessmentModel model) => AssessmentFormData(
@@ -301,6 +311,9 @@ class AssessmentFormData {
     description: model.description,
     isActive: model.isActive,
     isDefault: model.isDefault,
+    passPercentage: model.passPercentage,
+    maxAttempts: model.maxAttempts,
+    timeLimitMins: model.timeLimitMins,
   );
 
   Map<String, dynamic> toJson() => {
@@ -308,11 +321,25 @@ class AssessmentFormData {
     'description': description.trim(),
     'is_active': isActive,
     'is_default': isDefault,
+    'pass_percentage': passPercentage,
+    'max_attempts': maxAttempts,
+    'time_limit_mins': timeLimitMins,
   };
 
-  /// Mirrors the reference web screen's exact copy: "Title is required."
+  /// Mirrors the backend's own validators (AssessmentCreateSerializer) so a
+  /// bad value fails fast client-side with the same message the API would
+  /// otherwise return after a round trip.
   String? validate() {
     if (title.trim().isEmpty) return 'Title is required.';
+    if (passPercentage < 1 || passPercentage > 100) {
+      return 'Pass % must be between 1 and 100.';
+    }
+    if (maxAttempts != null && maxAttempts! < 0) {
+      return 'Max Attempts cannot be negative. Use 0 for unlimited.';
+    }
+    if (timeLimitMins != null && timeLimitMins! < 1) {
+      return 'Time Limit must be at least 1 minute.';
+    }
     return null;
   }
 }

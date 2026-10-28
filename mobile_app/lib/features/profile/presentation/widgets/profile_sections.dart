@@ -1,11 +1,19 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../data/models/my_profile_model.dart';
 import '../providers/profile_providers.dart';
 import 'profile_widgets.dart';
+
+// Mirrors backend's User.PROFILE_PHOTO_MIN_SIZE/MAX_SIZE (accounts/models.py)
+// so an out-of-range file is caught here instead of round-tripping to the
+// API for a 422.
+const int _kPhotoMinBytes = 100 * 1024;
+const int _kPhotoMaxBytes = 200 * 1024;
 
 String _s(String? v) => (v == null || v.isEmpty) ? '—' : v;
 
@@ -32,7 +40,7 @@ String _fmtFileSize(int bytes) {
 
 // ── Personal information ─────────────────────────────────────────────────────────
 
-class ProfilePersonalSection extends StatefulWidget {
+class ProfilePersonalSection extends ConsumerStatefulWidget {
   final MyProfileModel profile;
   final TextEditingController phoneCtrl;
 
@@ -43,11 +51,105 @@ class ProfilePersonalSection extends StatefulWidget {
   });
 
   @override
-  State<ProfilePersonalSection> createState() => _ProfilePersonalSectionState();
+  ConsumerState<ProfilePersonalSection> createState() => _ProfilePersonalSectionState();
 }
 
-class _ProfilePersonalSectionState extends State<ProfilePersonalSection> {
+class _ProfilePersonalSectionState extends ConsumerState<ProfilePersonalSection> {
   bool _showMore = false;
+  bool _uploadingPhoto = false;
+
+  void _showSnack(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      backgroundColor: isError ? AppColors.error : null,
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+
+  Future<void> _pickAndUploadPhoto(ImageSource source) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: source, imageQuality: 90);
+    if (picked == null) return;
+
+    final file = File(picked.path);
+    final ext = picked.path.split('.').last.toLowerCase();
+    if (ext != 'jpg' && ext != 'jpeg' && ext != 'png') {
+      _showSnack('Only JPG and PNG files are allowed.', isError: true);
+      return;
+    }
+    final size = await file.length();
+    if (size < _kPhotoMinBytes) {
+      _showSnack(
+        'Image is too small (${(size / 1024).toStringAsFixed(0)} KB). Minimum size is 100 KB.',
+        isError: true,
+      );
+      return;
+    }
+    if (size > _kPhotoMaxBytes) {
+      _showSnack(
+        'Image is too large (${(size / 1024).toStringAsFixed(0)} KB). Maximum size is 200 KB.',
+        isError: true,
+      );
+      return;
+    }
+
+    setState(() => _uploadingPhoto = true);
+    final error = await ref.read(myProfileProvider.notifier).uploadPhoto(file);
+    if (!mounted) return;
+    setState(() => _uploadingPhoto = false);
+    _showSnack(error ?? 'Profile photo updated.', isError: error != null);
+  }
+
+  Future<void> _removePhoto() async {
+    setState(() => _uploadingPhoto = true);
+    final error = await ref.read(myProfileProvider.notifier).removePhoto();
+    if (!mounted) return;
+    setState(() => _uploadingPhoto = false);
+    _showSnack(error ?? 'Profile photo removed.', isError: error != null);
+  }
+
+  Future<void> _showPhotoOptions() async {
+    final hasPhoto = (widget.profile.photoUrl ?? '').isNotEmpty;
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take Photo'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _pickAndUploadPhoto(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from Gallery'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _pickAndUploadPhoto(ImageSource.gallery);
+              },
+            ),
+            if (hasPhoto)
+              ListTile(
+                leading: Icon(Icons.delete_outline, color: AppColors.error),
+                title: Text('Remove Photo', style: TextStyle(color: AppColors.error)),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _removePhoto();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,15 +163,57 @@ class _ProfilePersonalSectionState extends State<ProfilePersonalSection> {
           // Avatar + name row
           Row(
             children: [
-              CircleAvatar(
-                radius: 30,
-                backgroundColor: p.avatarColor,
-                child: Text(
-                  p.initials,
-                  style: AppTextStyles.h3.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
+              GestureDetector(
+                onTap: _uploadingPhoto ? null : _showPhotoOptions,
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 30,
+                      backgroundColor: p.avatarColor,
+                      backgroundImage: (p.photoUrl ?? '').isNotEmpty
+                          ? NetworkImage(p.photoUrl!)
+                          : null,
+                      child: (p.photoUrl ?? '').isEmpty
+                          ? Text(
+                              p.initials,
+                              style: AppTextStyles.h3.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            )
+                          : null,
+                    ),
+                    if (_uploadingPhoto)
+                      Positioned.fill(
+                        child: CircleAvatar(
+                          radius: 30,
+                          backgroundColor: Colors.black.withValues(alpha: 0.4),
+                          child: const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation(Colors.white),
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.surface, width: 2),
+                          ),
+                          child: const Icon(Icons.camera_alt, size: 11, color: Colors.white),
+                        ),
+                      ),
+                  ],
                 ),
               ),
               const SizedBox(width: 14),
@@ -131,7 +275,7 @@ class _ProfilePersonalSectionState extends State<ProfilePersonalSection> {
               style: TextButton.styleFrom(
                 foregroundColor: AppColors.primary,
                 padding: const EdgeInsets.symmetric(horizontal: 4),
-                textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                textStyle: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
                 visualDensity: VisualDensity.compact,
               ),
             ),
@@ -471,7 +615,7 @@ class ProfileChangePasswordSection extends StatelessWidget {
                 side: BorderSide(color: AppColors.primary),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 textStyle:
-                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
           ),

@@ -37,6 +37,31 @@ class TodayAttendanceNotifier
     state = await AsyncValue.guard(() => _repo.getToday());
   }
 
+  /// Returns null if the location is allowed, or a user-facing rejection
+  /// message otherwise — same {null|message} contract as punch() below, so
+  /// callers can handle both identically. Read-only; does not touch `state`.
+  /// Callers should run this BEFORE opening face capture and before the
+  /// real punch() call — see AttendanceRingCard._toggleClock — but it never
+  /// replaces punch()'s own authoritative, independent geofence check.
+  Future<String?> checkGeofence({
+    required String attendanceMode,
+    double? latitude,
+    double? longitude,
+    double? accuracy,
+  }) async {
+    try {
+      await _repo.checkGeofence(
+        attendanceMode: attendanceMode,
+        latitude: latitude,
+        longitude: longitude,
+        accuracy: accuracy,
+      );
+      return null;
+    } catch (e) {
+      return friendlyAttendanceError(e);
+    }
+  }
+
   /// Returns null on success, or a user-facing error message on failure.
   /// `faceEmbedding`/`livenessPassed`/`livenessScore`/`captureSessionId` are
   /// only ever populated by the caller when Face ID Verification is
@@ -164,12 +189,24 @@ class AttendanceCorrectionAction {
             notes: notes,
           );
       _ref.invalidate(attendanceCalendarProvider);
+      _ref.invalidate(myCorrectionsProvider);
       return null;
     } catch (e) {
       return friendlyAttendanceError(e);
     }
   }
 }
+
+// ── My Attendance — own correction-request history ──────────────────────────────
+//
+// Distinct from hrCorrectionsProvider below: this is the employee's own past
+// requests (GET /attendance/corrections/my/), read-only status tracking —
+// no can_action/approve-reject affordance, since an employee never reviews
+// their own request.
+final myCorrectionsProvider =
+    FutureProvider.autoDispose<List<MyCorrectionEntity>>((ref) {
+  return ref.watch(attendanceRepositoryProvider).getMyCorrections();
+});
 
 // ── HR Attendance — shared filters ──────────────────────────────────────────────
 

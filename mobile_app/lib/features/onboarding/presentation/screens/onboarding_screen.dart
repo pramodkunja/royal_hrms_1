@@ -8,6 +8,12 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/validators/form_validators.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../facial_recognition/domain/entities/face_registration_entity.dart';
+import '../../../facial_recognition/presentation/controllers/face_registration_controller.dart';
+import '../../../facial_recognition/presentation/providers/facial_recognition_providers.dart';
+import '../../../facial_recognition/presentation/state/face_registration_state.dart';
+import '../../../facial_recognition/presentation/widgets/face_capture_bottom_sheet.dart';
+import '../../../facial_recognition/presentation/widgets/face_consent_text.dart';
 import '../../domain/entities/onboarding_entity.dart';
 import '../providers/onboarding_providers.dart';
 import '../widgets/step_indicator.dart';
@@ -21,6 +27,12 @@ class OnboardingScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(onboardingProfileProvider);
     final currentStep = ref.watch(onboardingStepProvider);
+    // Defaults to false while the toggle is still loading, same as web's
+    // useState(false) before its own fetch resolves — see FACE_STEP in
+    // app/onboarding/page.tsx.
+    final includeFaceStep =
+        ref.watch(faceVerificationStatusProvider).valueOrNull?.isMandatory ?? false;
+    final totalSteps = includeFaceStep ? kTotalSteps + 1 : kTotalSteps;
 
     void goBack() {
       if (currentStep > 0) {
@@ -35,6 +47,7 @@ class OnboardingScreen extends ConsumerWidget {
           children: [
             _OnboardingHeader(
               currentStep: currentStep,
+              includeFaceStep: includeFaceStep,
               onLogout: () async {
                 await ref.read(authStateProvider.notifier).logout();
               },
@@ -50,13 +63,16 @@ class OnboardingScreen extends ConsumerWidget {
                 data: (profile) => _StepContent(
                   profile: profile,
                   currentStep: currentStep,
+                  includeFaceStep: includeFaceStep,
                   onPrevious: currentStep > 0 ? goBack : null,
+                  onContinueToFaceStep: () =>
+                      ref.read(onboardingStepProvider.notifier).state = kTotalSteps,
                   onStepSaved: (step, data) async {
                     final err = await ref
                         .read(onboardingProfileProvider.notifier)
                         .saveStep(step, data);
                     if (err == null && context.mounted) {
-                      if (step < kTotalSteps - 1) {
+                      if (step < totalSteps - 1) {
                         ref.read(onboardingStepProvider.notifier).state =
                             step + 1;
                       }
@@ -111,10 +127,12 @@ class OnboardingScreen extends ConsumerWidget {
 class _OnboardingHeader extends StatelessWidget {
   const _OnboardingHeader({
     required this.currentStep,
+    required this.includeFaceStep,
     required this.onLogout,
   });
 
   final int currentStep;
+  final bool includeFaceStep;
   final VoidCallback onLogout;
 
   @override
@@ -159,7 +177,7 @@ class _OnboardingHeader extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      kStepLabels[currentStep],
+                      currentStep < kTotalSteps ? kStepLabels[currentStep] : kFaceStepLabel,
                       style: AppTextStyles.bodySmall
                           .copyWith(color: Colors.white.withValues(alpha: 0.82)),
                     ),
@@ -188,7 +206,7 @@ class _OnboardingHeader extends StatelessWidget {
             borderRadius: BorderRadius.circular(18),
             boxShadow: AppColors.cardShadow,
           ),
-          child: OnboardingStepIndicator(currentStep: currentStep),
+          child: OnboardingStepIndicator(currentStep: currentStep, includeFaceStep: includeFaceStep),
         ),
       ],
     );
@@ -199,7 +217,9 @@ class _StepContent extends StatelessWidget {
   const _StepContent({
     required this.profile,
     required this.currentStep,
+    required this.includeFaceStep,
     required this.onPrevious,
+    required this.onContinueToFaceStep,
     required this.onStepSaved,
     required this.onUpload,
     required this.onDelete,
@@ -209,7 +229,9 @@ class _StepContent extends StatelessWidget {
 
   final OnboardingProfileEntity profile;
   final int currentStep;
+  final bool includeFaceStep;
   final VoidCallback? onPrevious;
+  final VoidCallback onContinueToFaceStep;
   final Future<String?> Function(int step, Map<String, dynamic> data)
       onStepSaved;
   final Future<String?> Function(String docType, PlatformFile file) onUpload;
@@ -249,6 +271,15 @@ class _StepContent extends StatelessWidget {
           documents: profile.documents,
           onUpload: onUpload,
           onDelete: onDelete,
+          onSaveDraft: onSaveDraft,
+          onSubmit: onSubmit,
+          onPrevious: onPrevious,
+          hasFaceStep: includeFaceStep,
+          onContinueToFaceStep: onContinueToFaceStep,
+        );
+      case 5:
+        if (!includeFaceStep) return const SizedBox.shrink();
+        return _FaceIdStep(
           onSaveDraft: onSaveDraft,
           onSubmit: onSubmit,
           onPrevious: onPrevious,

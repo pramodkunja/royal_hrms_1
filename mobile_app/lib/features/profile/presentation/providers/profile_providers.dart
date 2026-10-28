@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
@@ -59,6 +60,30 @@ class MyProfileNotifier extends AutoDisposeAsyncNotifier<MyProfileModel> {
       state = AsyncData(
         current?.applyUpdate(data) ?? await _ds.fetchMyProfile(),
       );
+      return null;
+    } catch (e) {
+      return friendlyProfileError(e);
+    }
+  }
+
+  /// Returns null on success, a user-facing error message on failure.
+  Future<String?> uploadPhoto(File file) async {
+    final current = state.valueOrNull;
+    try {
+      final newUrl = await _ds.uploadPhoto(file);
+      if (current != null) state = AsyncData(current.copyWithPhotoUrl(newUrl));
+      return null;
+    } catch (e) {
+      return friendlyProfileError(e);
+    }
+  }
+
+  /// Returns null on success, a user-facing error message on failure.
+  Future<String?> removePhoto() async {
+    final current = state.valueOrNull;
+    try {
+      await _ds.removePhoto();
+      if (current != null) state = AsyncData(current.copyWithPhotoUrl(null));
       return null;
     } catch (e) {
       return friendlyProfileError(e);

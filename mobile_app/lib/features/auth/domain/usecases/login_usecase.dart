@@ -6,7 +6,7 @@ class LoginUseCase {
 
   const LoginUseCase(this._repository);
 
-  Future<UserEntity> call(String email, String password) {
-    return _repository.login(email.trim().toLowerCase(), password);
+  Future<UserEntity> call(String companyCode, String email, String password) {
+    return _repository.login(companyCode.trim(), email.trim().toLowerCase(), password);
   }
 }

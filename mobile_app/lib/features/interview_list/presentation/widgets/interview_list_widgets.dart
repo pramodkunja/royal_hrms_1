@@ -1,20 +1,5 @@
 part of '../screens/interview_list_screen.dart';
 
-class _Header extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Interview List', style: AppTextStyles.h4),
-        const SizedBox(height: 2),
-        Text('Manage all interview candidates and their status',
-            style: AppTextStyles.caption.copyWith(fontSize: 11)),
-      ]),
-    );
-  }
-}
-
 class _InfoBanner extends StatelessWidget {
   const _InfoBanner();
 
@@ -32,15 +17,14 @@ class _InfoBanner extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.info_outline,
-                size: 16, color: AppColors.info),
+            Icon(Icons.info_outline, size: 16, color: AppColors.info),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 'Move candidates through the pipeline stages. '
                 'Send portal login to selected candidates so they can fill their onboarding wizard.',
-                style: AppTextStyles.caption.copyWith(
-                    color: AppColors.info, fontSize: 11),
+                style: AppTextStyles.caption
+                    .copyWith(color: AppColors.info, fontSize: 11),
               ),
             ),
           ],
@@ -57,12 +41,11 @@ class _EmptyView extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.people_outline,
-              size: 48, color: AppColors.textHint),
+          Icon(Icons.people_outline, size: 48, color: AppColors.textHint),
           const SizedBox(height: 12),
           Text('No candidates found',
-              style: AppTextStyles.label
-                  .copyWith(color: AppColors.textSecondary)),
+              style:
+                  AppTextStyles.label.copyWith(color: AppColors.textSecondary)),
         ],
       ),
     );
@@ -82,12 +65,10 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline,
-                size: 48, color: AppColors.error),
+            Icon(Icons.error_outline, size: 48, color: AppColors.error),
             const SizedBox(height: 12),
             Text(message,
-                style: AppTextStyles.bodySmall,
-                textAlign: TextAlign.center),
+                style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
             const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: onRetry,
@@ -108,60 +89,28 @@ class _StatsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Row(children: [
-        Expanded(
-            child: _StatCard('Total', stats.total,
-                Icons.groups_outlined, AppColors.primary)),
-        const SizedBox(width: 10),
-        Expanded(
-            child: _StatCard('Pending', stats.pending,
-                Icons.access_time_outlined, AppColors.warning)),
-        const SizedBox(width: 10),
-        Expanded(
-            child: _StatCard('Selected', stats.selected,
-                Icons.how_to_reg_outlined, AppColors.success)),
-        const SizedBox(width: 10),
-        Expanded(
-            child: _StatCard('Rejected', stats.rejected,
-                Icons.person_off_outlined, AppColors.error)),
-      ]),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String label;
-  final int value;
-  final IconData icon;
-  final Color color;
-  const _StatCard(this.label, this.value, this.icon, this.color);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.cardShadow,
-      ),
-      child: Column(children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8)),
-          child: Icon(icon, size: 16, color: color),
-        ),
-        const SizedBox(height: 6),
-        Text('$value',
-            style: AppTextStyles.h4.copyWith(
-                fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-        Text(label,
-            style: AppTextStyles.caption
-                .copyWith(fontSize: 10, color: AppColors.textHint)),
+      padding: const EdgeInsets.only(top: 16),
+      child: StatCardRow(cards: [
+        StatCard(
+            icon: Icons.groups_outlined,
+            count: stats.total,
+            label: 'Total',
+            color: AppColors.primary),
+        StatCard(
+            icon: Icons.access_time_outlined,
+            count: stats.pending,
+            label: 'Pending',
+            color: AppColors.warning),
+        StatCard(
+            icon: Icons.how_to_reg_outlined,
+            count: stats.selected,
+            label: 'Selected',
+            color: AppColors.success),
+        StatCard(
+            icon: Icons.person_off_outlined,
+            count: stats.rejected,
+            label: 'Rejected',
+            color: AppColors.error),
       ]),
     );
   }
@@ -195,8 +144,7 @@ class _StatsShimmer extends StatelessWidget {
 class _SearchFilter extends ConsumerWidget {
   final String statusFilter;
   final String search;
-  const _SearchFilter(
-      {required this.statusFilter, required this.search});
+  const _SearchFilter({required this.statusFilter, required this.search});
 
   static const _tabs = [
     ('all', 'All'),
@@ -208,33 +156,13 @@ class _SearchFilter extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Column(children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      BlueHeroBanner(
         child: TextField(
           onChanged: (v) =>
               ref.read(candidateSearchProvider.notifier).state = v,
           style: AppTextStyles.bodySmall,
-          decoration: InputDecoration(
-            hintText: 'Search candidate...',
-            hintStyle: AppTextStyles.bodySmall
-                .copyWith(color: AppColors.textHint),
-            prefixIcon: Icon(Icons.search,
-                size: 18, color: AppColors.textHint),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            filled: true,
-            fillColor: AppColors.surface,
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: AppColors.border)),
-            enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: AppColors.border)),
-            focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(
-                    color: AppColors.primary, width: 1.5)),
-          ),
+          decoration:
+              heroSearchFieldDecoration(hintText: 'Search candidate...'),
         ),
       ),
       const SizedBox(height: 10),
@@ -260,30 +188,22 @@ class _SearchFilter extends ConsumerWidget {
                 // network hiccup, replaces the list with an error view —
                 // making the tabs look broken/unresponsive instead of the
                 // instant client-side filter switch they're meant to be.
-                ref
-                    .read(candidateStatusFilterProvider.notifier)
-                    .state = key;
+                ref.read(candidateStatusFilterProvider.notifier).state = key;
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 decoration: BoxDecoration(
-                  color: isActive
-                      ? AppColors.primary
-                      : AppColors.surface,
+                  color: isActive ? AppColors.primary : AppColors.surface,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                      color: isActive
-                          ? AppColors.primary
-                          : AppColors.border),
+                      color: isActive ? AppColors.primary : AppColors.border),
                 ),
                 child: Text(
                   label,
                   style: AppTextStyles.labelSmall.copyWith(
-                    color: isActive
-                        ? Colors.white
-                        : AppColors.textSecondary,
+                    color: isActive ? Colors.white : AppColors.textSecondary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),

@@ -159,44 +159,37 @@ class _EmployeeCodeFormState extends State<_EmployeeCodeForm> {
             ),
             const SizedBox(height: 14),
 
-            Row(
-              children: [
-                Expanded(
-                  child: _buildField(
-                    controller: _paddingCtrl,
-                    label: 'Zero Padding',
-                    hint: '3–8',
-                    icon: Icons.format_list_numbered_outlined,
-                    errorText: widget.errors['padding'],
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    onChanged: (_) => _notify(),
-                    validator: (v) {
-                      final n = int.tryParse(v ?? '');
-                      if (n == null || n < 3 || n > 8) return 'Must be 3–8';
-                      return null;
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildField(
-                    controller: _startCtrl,
-                    label: 'Next Sequence',
-                    hint: 'e.g. 1',
-                    icon: Icons.tag,
-                    errorText: widget.errors['startNumber'],
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    onChanged: (_) => _notify(),
-                    validator: (v) {
-                      final n = int.tryParse(v ?? '');
-                      if (n == null || n < 1) return 'Must be ≥ 1';
-                      return null;
-                    },
-                  ),
-                ),
-              ],
+            _buildField(
+              controller: _paddingCtrl,
+              label: 'Zero Padding',
+              hint: '3–8',
+              icon: Icons.format_list_numbered_outlined,
+              errorText: widget.errors['padding'],
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onChanged: (_) => _notify(),
+              validator: (v) {
+                final n = int.tryParse(v ?? '');
+                if (n == null || n < 3 || n > 8) return 'Must be 3–8';
+                return null;
+              },
+            ),
+            const SizedBox(height: 14),
+
+            _buildField(
+              controller: _startCtrl,
+              label: 'Next Sequence',
+              hint: 'e.g. 1',
+              icon: Icons.tag,
+              errorText: widget.errors['startNumber'],
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onChanged: (_) => _notify(),
+              validator: (v) {
+                final n = int.tryParse(v ?? '');
+                if (n == null || n < 1) return 'Must be ≥ 1';
+                return null;
+              },
             ),
 
             const SizedBox(height: 24),
@@ -290,6 +283,17 @@ class _PreviewCard extends StatelessWidget {
               Text('Live Preview', style: AppTextStyles.caption.copyWith(
                 color: Colors.white70, letterSpacing: 0.5,
               )),
+              const Spacer(),
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.person_outline, size: 16, color: Colors.white70),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -338,8 +342,10 @@ class _ExamplesRow extends StatelessWidget {
           Text('Generated codes will look like:',
             style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
           const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          Wrap(
+            alignment: WrapAlignment.spaceEvenly,
+            spacing: 8,
+            runSpacing: 8,
             children: examples.map((code) => _CodeBubble(code: code)).toList(),
           ),
         ],

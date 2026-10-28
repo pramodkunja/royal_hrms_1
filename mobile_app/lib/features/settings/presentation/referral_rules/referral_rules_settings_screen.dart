@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/app_loading_widget.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../branches/presentation/widgets/branch_dlg_header.dart';
 import '../../../referrals/domain/entities/referral_entity.dart';
@@ -35,7 +36,7 @@ class ReferralRulesSettingsScreen extends ConsumerWidget {
             )
           : null,
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const AppLoadingWidget(),
         error: (e, _) => _ErrorView(message: friendlyReferralError(e), onRetry: () => ref.invalidate(referralRulesAdminProvider)),
         data: (rules) {
           return RefreshIndicator(
@@ -486,7 +487,11 @@ class _ErrorView extends StatelessWidget {
             const SizedBox(height: 6),
             Text(message, style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
             const SizedBox(height: 16),
-            TextButton(onPressed: onRetry, child: const Text('Retry')),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Retry'),
+            ),
           ],
         ),
       ),

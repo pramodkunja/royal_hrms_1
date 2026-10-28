@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../shared/widgets/blue_hero_banner.dart';
+import '../../../shared/widgets/stat_card.dart';
 import '../data/models/announcement_model.dart';
 import 'providers/announcement_providers.dart';
 import 'widgets/announcement_card.dart';
@@ -29,10 +31,10 @@ class AnnouncementsScreen extends ConsumerWidget {
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error:   (err, _) => _ErrorView(message: err.toString()),
-        data:    (page) => _Body(
-          page:     page,
-          onEdit:   (a) => _openSheet(context, ref, a),
+        error: (err, _) => _ErrorView(message: err.toString()),
+        data: (page) => _Body(
+          page: page,
+          onEdit: (a) => _openSheet(context, ref, a),
           onDelete: (a) => _confirmDelete(context, ref, a),
         ),
       ),
@@ -60,8 +62,7 @@ class AnnouncementsScreen extends ConsumerWidget {
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: const Text('Delete announcement?'),
-        content: Text(
-            'Delete "${ann.title}"? This cannot be undone.'),
+        content: Text('Delete "${ann.title}"? This cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -76,8 +77,7 @@ class AnnouncementsScreen extends ConsumerWidget {
       ),
     );
     if (ok != true || !context.mounted) return;
-    final error =
-        await ref.read(announcementsProvider.notifier).remove(ann.id);
+    final error = await ref.read(announcementsProvider.notifier).remove(ann.id);
     if (context.mounted && error != null) {
       _toast(context, error, false);
     }
@@ -100,7 +100,8 @@ class _Body extends ConsumerWidget {
   final void Function(AnnouncementModel) onEdit;
   final void Function(AnnouncementModel) onDelete;
 
-  const _Body({required this.page, required this.onEdit, required this.onDelete});
+  const _Body(
+      {required this.page, required this.onEdit, required this.onDelete});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -109,6 +110,22 @@ class _Body extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        BlueHeroBanner(
+          child: Row(
+            children: [
+              const Icon(Icons.campaign_outlined,
+                  size: 20, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Company-wide updates and news for your team.',
+                  style: AppTextStyles.caption
+                      .copyWith(color: Colors.white.withValues(alpha: 0.9)),
+                ),
+              ),
+            ],
+          ),
+        ),
         _StatsRow(stats: page.stats),
         _CategoryFilter(selected: selectedCategory),
         if (page.announcements.isEmpty)
@@ -123,7 +140,7 @@ class _Body extends ConsumerWidget {
                 final ann = page.announcements[i];
                 return AnnouncementCard(
                   announcement: ann,
-                  onEdit:   () => onEdit(ann),
+                  onEdit: () => onEdit(ann),
                   onDelete: () => onDelete(ann),
                 );
               },
@@ -149,20 +166,22 @@ class _StatsRow extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _StatCard(
+                child: StatCard(
                   icon: Icons.campaign_outlined,
                   count: stats.totalCount,
                   label: 'Total Posts',
                   color: AppColors.primary,
+                  width: null,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _StatCard(
+                child: StatCard(
                   icon: Icons.push_pin_outlined,
                   count: stats.pinnedCount,
                   label: 'Pinned',
                   color: const Color(0xFFC99A2E),
+                  width: null,
                 ),
               ),
             ],
@@ -171,87 +190,25 @@ class _StatsRow extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _StatCard(
+                child: StatCard(
                   icon: Icons.favorite_border,
                   count: stats.totalReactions,
                   label: 'Reactions',
                   color: const Color(0xFFD4487B),
+                  width: null,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _StatCard(
+                child: StatCard(
                   icon: Icons.visibility_outlined,
                   count: stats.totalViews,
                   label: 'Total Views',
                   color: const Color(0xFF0D7490),
+                  width: null,
                 ),
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final IconData icon;
-  final int count;
-  final String label;
-  final Color color;
-  const _StatCard({required this.icon, required this.count, required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.cardShadow,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, size: 22, color: color),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$count',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                    height: 1.0,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
           ),
         ],
       ),
@@ -268,11 +225,15 @@ class _CategoryFilter extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     const categories = [
-      (value: null,          label: 'All Posts',    icon: Icons.article_outlined),
-      (value: 'general',     label: 'General',      icon: Icons.campaign_outlined),
-      (value: 'policy',      label: 'Policy',       icon: Icons.gavel_outlined),
-      (value: 'event',       label: 'Event',        icon: Icons.event_outlined),
-      (value: 'celebration', label: 'Celebration',  icon: Icons.celebration_outlined),
+      (value: null, label: 'All Posts', icon: Icons.article_outlined),
+      (value: 'general', label: 'General', icon: Icons.campaign_outlined),
+      (value: 'policy', label: 'Policy', icon: Icons.gavel_outlined),
+      (value: 'event', label: 'Event', icon: Icons.event_outlined),
+      (
+        value: 'celebration',
+        label: 'Celebration',
+        icon: Icons.celebration_outlined
+      ),
     ];
 
     return SizedBox(
@@ -283,19 +244,19 @@ class _CategoryFilter extends ConsumerWidget {
         itemCount: categories.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
-          final cat      = categories[i];
+          final cat = categories[i];
           final isActive = selected == cat.value;
           return GestureDetector(
-            onTap: () => ref
-                .read(announcementCategoryProvider.notifier)
-                .state = cat.value,
+            onTap: () => ref.read(announcementCategoryProvider.notifier).state =
+                cat.value,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: isActive ? AppColors.primary : AppColors.surface,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: isActive ? AppColors.primary : AppColors.border),
+                border: Border.all(
+                    color: isActive ? AppColors.primary : AppColors.border),
                 boxShadow: isActive ? AppColors.cardShadow : null,
               ),
               child: Row(
@@ -338,12 +299,14 @@ class _EmptyView extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 72, height: 72,
+              width: 72,
+              height: 72,
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Icon(Icons.campaign_outlined, size: 36, color: AppColors.primary),
+              child: Icon(Icons.campaign_outlined,
+                  size: 36, color: AppColors.primary),
             ),
             const SizedBox(height: 16),
             Text('No announcements yet', style: AppTextStyles.h4),
@@ -376,7 +339,9 @@ class _ErrorView extends StatelessWidget {
             const SizedBox(height: 12),
             Text('Could not load announcements', style: AppTextStyles.h4),
             const SizedBox(height: 6),
-            Text(message, style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
+            Text(message,
+                style: AppTextStyles.bodySecondary,
+                textAlign: TextAlign.center),
           ],
         ),
       ),

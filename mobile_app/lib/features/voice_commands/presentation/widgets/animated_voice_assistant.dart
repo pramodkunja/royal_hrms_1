@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_text_styles.dart';
 
 /// Purely presentational animated "assistant character" that replaces the
 /// old static mic icon. Owns no voice/business logic whatsoever — it just
@@ -177,13 +178,12 @@ class _AnimatedVoiceAssistantState extends State<AnimatedVoiceAssistant>
                             child: SizedBox(
                               width: coreSize,
                               height: coreSize,
-                              // The provided idle-loop character asset — its
-                              // own frames already carry blinking/idling
-                              // motion, so this widget only adds the
-                              // container-level float/breathe/glow/bounce on
-                              // top of it, no hand-drawn face on top.
+                              // The provided idle character asset — this
+                              // widget adds the container-level
+                              // float/breathe/glow/bounce on top of it, no
+                              // hand-drawn face on top.
                               child: Image.asset(
-                                'assets/animations/Assistant.gif',
+                                'assets/images/Bot.png',
                                 fit: BoxFit.contain,
                                 gaplessPlayback: true,
                               ),
@@ -260,7 +260,7 @@ class _ThinkingDots extends StatelessWidget {
       ),
       child: Text(
         'Thinking${'.' * visibleDots}',
-        style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600),
+        style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -285,7 +285,7 @@ class _SpeechBubble extends StatelessWidget {
           message,
           maxLines: 3,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 12.5, height: 1.3),
+          style: AppTextStyles.bodySmall.copyWith(fontSize: 12.5, height: 1.3),
         ),
       ),
     );

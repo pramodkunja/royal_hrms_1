@@ -10,6 +10,7 @@ import '../models/email_template_model.dart';
 import '../models/employee_code_model.dart';
 import '../models/leave_import_model.dart';
 import '../models/leave_policy_model.dart';
+import '../models/onboarding_field_config_model.dart';
 import '../models/roles_model.dart';
 import '../models/smtp_model.dart';
 
@@ -241,6 +242,61 @@ class SettingsRemoteDataSource {
 
   Future<void> deleteDepartment(int id) async {
     await _dio.delete(ApiConstants.departmentDetail(id));
+  }
+
+  // ── Onboarding Fields (wizard steps 0-3) ──────────────────────────────────
+
+  Future<List<OnboardingFieldConfigModel>> fetchOnboardingFields() async {
+    final res = await _dio.get(ApiConstants.settingsOnboardingFields);
+    return _toList(_unwrap(res.data))
+        .map((e) => OnboardingFieldConfigModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<OnboardingFieldConfigModel> createOnboardingField(
+      OnboardingFieldFormData form) async {
+    final res = await _dio.post(ApiConstants.settingsOnboardingFields, data: form.toJson());
+    return OnboardingFieldConfigModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  Future<OnboardingFieldConfigModel> updateOnboardingField(
+      String fieldKey, Map<String, dynamic> patch) async {
+    final res = await _dio.patch(
+      ApiConstants.settingsOnboardingFieldDetail(fieldKey),
+      data: patch,
+    );
+    return OnboardingFieldConfigModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  Future<void> deleteOnboardingField(String fieldKey) async {
+    await _dio.delete(ApiConstants.settingsOnboardingFieldDetail(fieldKey));
+  }
+
+  // ── Document Types (wizard step 4 — Documents) ────────────────────────────
+
+  Future<List<DocumentTypeConfigModel>> fetchDocumentTypes() async {
+    final res = await _dio.get(ApiConstants.settingsDocumentTypes);
+    return _toList(_unwrap(res.data))
+        .map((e) => DocumentTypeConfigModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<DocumentTypeConfigModel> createDocumentType(DocumentTypeFormData form) async {
+    final res = await _dio.post(ApiConstants.settingsDocumentTypes, data: form.toJson());
+    return DocumentTypeConfigModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  Future<DocumentTypeConfigModel> updateDocumentType(
+      String typeKey, Map<String, dynamic> patch) async {
+    final res = await _dio.patch(
+      ApiConstants.settingsDocumentTypeDetail(typeKey),
+      data: patch,
+    );
+    return DocumentTypeConfigModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  Future<void> deleteDocumentType(String typeKey) async {
+    await _dio.delete(ApiConstants.settingsDocumentTypeDetail(typeKey));
   }
 
   // ── Leave Policy ───────────────────────────────────────────────────────────

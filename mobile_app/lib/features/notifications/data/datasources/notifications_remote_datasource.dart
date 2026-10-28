@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../models/notification_model.dart';
+import '../models/notification_settings_model.dart';
 
 class NotificationsRemoteDataSource {
   final Dio _dio;
@@ -26,6 +27,16 @@ class NotificationsRemoteDataSource {
 
   Future<void> markAllRead() async {
     await _dio.patch(ApiConstants.notificationsReadAll);
+  }
+
+  Future<NotificationSettingsModel> fetchSettings() async {
+    final res = await _dio.get(ApiConstants.notificationSettings);
+    return NotificationSettingsModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  Future<NotificationSettingsModel> updateSettings(NotificationSettingsModel settings) async {
+    final res = await _dio.patch(ApiConstants.notificationSettings, data: settings.toJson());
+    return NotificationSettingsModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
   dynamic _unwrap(dynamic body) {

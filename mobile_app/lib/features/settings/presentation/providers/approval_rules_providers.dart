@@ -26,8 +26,8 @@ class ApprovalRulesNotifier extends AutoDisposeAsyncNotifier<List<ApprovalRuleMo
 
   Future<String?> updateRule({
     required String workflowType,
-    required String l1ApproverRole,
-    required String l2ApproverRole,
+    required int l1ApproverRole,
+    required int? l2ApproverRole,
   }) async {
     try {
       final updated = await _ds.updateRule(

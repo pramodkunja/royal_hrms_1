@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/app_loading_widget.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../branches/presentation/widgets/branch_dlg_header.dart';
 import '../../data/models/assessment_config_model.dart';
@@ -24,7 +25,7 @@ class AssessmentConfigScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       appBar: const SettingsAppBar(title: 'Assessment Config'),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const AppLoadingWidget(),
         error: (e, _) => _ErrorView(message: e.toString(), onRetry: () => ref.invalidate(assessmentConfigProvider)),
         data: (config) => _Body(config: config, canEdit: canEdit),
       ),
@@ -57,7 +58,7 @@ class _Body extends ConsumerWidget {
       (
         field: _FieldKey.passPercentage,
         icon: Icons.percent,
-        color: const Color(0xFF1E4E8C),
+        color: AppColors.primary,
         label: 'Pass Percentage',
         desc: 'Minimum score a candidate must achieve to pass an assessment',
         value: '${config.defaultPassPercentage}%',
@@ -65,7 +66,7 @@ class _Body extends ConsumerWidget {
       (
         field: _FieldKey.maxAttempts,
         icon: Icons.refresh,
-        color: const Color(0xFF1B8A6B),
+        color: AppColors.success,
         label: 'Maximum Attempts',
         desc: 'How many times a candidate can retake before being locked out (0 = unlimited)',
         value: config.maxAttempts == 0 ? 'Unlimited' : '${config.maxAttempts}',
@@ -73,7 +74,7 @@ class _Body extends ConsumerWidget {
       (
         field: _FieldKey.timeLimit,
         icon: Icons.schedule_outlined,
-        color: const Color(0xFFB5651D),
+        color: AppColors.warning,
         label: 'Time Limit',
         desc: 'Whether assessments are timed globally and the default maximum duration',
         value: config.timeLimitMins != null ? '${config.timeLimitMins} min' : 'No limit',
@@ -467,7 +468,11 @@ class _ErrorView extends StatelessWidget {
             const SizedBox(height: 6),
             Text(message, style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
             const SizedBox(height: 16),
-            TextButton(onPressed: onRetry, child: const Text('Retry')),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Retry'),
+            ),
           ],
         ),
       ),

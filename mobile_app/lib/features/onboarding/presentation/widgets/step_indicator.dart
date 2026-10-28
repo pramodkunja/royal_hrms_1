@@ -22,33 +22,48 @@ const List<IconData> kStepIcons = [
   Icons.folder_copy_outlined,
 ];
 
+// Appended after Documents only when the org's Face ID Verification toggle
+// is mandatory (see faceVerificationStatusProvider) — mirrors web's FACE_STEP
+// (app/onboarding/page.tsx), always the last step so steps 0-4 never shift.
+const String kFaceStepLabel = 'Face ID';
+const IconData kFaceStepIcon = Icons.face_outlined;
+
 /// Connected step-circle wizard: a single line linking every circle fills up
 /// to however far the user has progressed. The current step additionally
 /// carries a soft secondary-colour halo so all three theme accents (primary
 /// for progress, secondary for "you are here", success for done) read
 /// intentionally rather than as one flat brand colour throughout.
 class OnboardingStepIndicator extends StatelessWidget {
-  const OnboardingStepIndicator({super.key, required this.currentStep});
+  const OnboardingStepIndicator({
+    super.key,
+    required this.currentStep,
+    this.includeFaceStep = false,
+  });
 
   final int currentStep;
+  final bool includeFaceStep;
 
   static const double _circleSize = 38;
   static const double _haloSize = 50;
 
   @override
   Widget build(BuildContext context) {
+    final totalSteps = includeFaceStep ? kTotalSteps + 1 : kTotalSteps;
+    final stepLabels = includeFaceStep ? [...kStepLabels, kFaceStepLabel] : kStepLabels;
+    final stepIcons = includeFaceStep ? [...kStepIcons, kFaceStepIcon] : kStepIcons;
+
     return Column(
       children: [
         Row(
           children: [
             Text(
-              'Step ${currentStep + 1} of $kTotalSteps',
+              'Step ${currentStep + 1} of $totalSteps',
               style: AppTextStyles.labelSmall
                   .copyWith(color: AppColors.textSecondary),
             ),
             const Spacer(),
             Text(
-              '${(((currentStep) / (kTotalSteps - 1)) * 100).round()}% complete',
+              '${(((currentStep) / (totalSteps - 1)) * 100).round()}% complete',
               style: AppTextStyles.labelSmall.copyWith(
                 color: AppColors.secondary,
                 fontWeight: FontWeight.w700,
@@ -78,7 +93,7 @@ class OnboardingStepIndicator extends StatelessWidget {
                 right: _haloSize / 2,
                 child: FractionallySizedBox(
                   alignment: Alignment.centerLeft,
-                  widthFactor: currentStep / (kTotalSteps - 1),
+                  widthFactor: currentStep / (totalSteps - 1),
                   child: Container(
                     height: 4,
                     decoration: BoxDecoration(
@@ -93,9 +108,9 @@ class OnboardingStepIndicator extends StatelessWidget {
               Positioned.fill(
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: List.generate(kTotalSteps, (i) {
+                  children: List.generate(totalSteps, (i) {
                     return _StepCircle(
-                      icon: kStepIcons[i],
+                      icon: stepIcons[i],
                       isCurrent: i == currentStep,
                       isDone: i < currentStep,
                     );
@@ -107,12 +122,12 @@ class OnboardingStepIndicator extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Row(
-          children: List.generate(kTotalSteps, (i) {
+          children: List.generate(totalSteps, (i) {
             final isCurrent = i == currentStep;
             final isDone = i < currentStep;
             return Expanded(
               child: Text(
-                kStepLabels[i],
+                stepLabels[i],
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

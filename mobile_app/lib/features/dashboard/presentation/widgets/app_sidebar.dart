@@ -281,7 +281,7 @@ class _InitialsAvatar extends StatelessWidget {
       child: Center(
         child: Text(
           _initials(name),
-          style: TextStyle(
+          style: AppTextStyles.label.copyWith(
             color: Colors.white,
             fontSize: size * 0.38,
             fontWeight: FontWeight.w600,

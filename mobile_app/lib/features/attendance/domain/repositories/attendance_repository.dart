@@ -2,6 +2,15 @@ import '../entities/attendance_entity.dart';
 
 abstract class AttendanceRepository {
   // My Attendance
+  // Read-only pre-punch validation — see AttendanceRemoteDataSource's own
+  // doc comment. Throws on rejection; returns normally (nothing to read)
+  // when the location is allowed.
+  Future<void> checkGeofence({
+    required String attendanceMode,
+    double? latitude,
+    double? longitude,
+    double? accuracy,
+  });
   Future<TodayAttendanceEntity> punch({
     required String punchType,
     required String attendanceMode,
@@ -105,6 +114,7 @@ abstract class AttendanceRepository {
     String? status,
   });
   Future<void> reviewCorrection(String id, {required bool approve, String? remarks});
+  Future<List<MyCorrectionEntity>> getMyCorrections();
 
   // Invalid Punch actions
   Future<List<HrUserEntity>> getHrUsers({String? branch});

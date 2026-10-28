@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/blue_hero_banner.dart';
 import '../../../dashboard/presentation/widgets/dashboard_section.dart';
 import '../../../profile/presentation/providers/profile_providers.dart';
 import '../../../settings/presentation/providers/settings_providers.dart';
@@ -35,8 +36,18 @@ class _MyPayslipScreenState extends ConsumerState<MyPayslipScreen> {
   bool _acknowledging = false;
 
   static const _kMonthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
 
   String _monthLabel(String isoDate) {
@@ -48,7 +59,20 @@ class _MyPayslipScreenState extends ConsumerState<MyPayslipScreen> {
   String _shortDate(String isoDate) {
     final parsed = DateTime.tryParse(isoDate);
     if (parsed == null) return isoDate;
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
     return '${parsed.day} ${months[parsed.month - 1]} ${parsed.year}';
   }
 
@@ -63,62 +87,73 @@ class _MyPayslipScreenState extends ConsumerState<MyPayslipScreen> {
       },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('My Payslips', style: AppTextStyles.h3),
-            const SizedBox(height: 4),
-            Text(
-              'View your monthly salary breakdown',
-              style: AppTextStyles.bodySecondary,
+            BlueHeroBanner(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('My Payslips',
+                      style: AppTextStyles.h3.copyWith(color: Colors.white)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'View your monthly salary breakdown',
+                    style: AppTextStyles.bodySecondary
+                        .copyWith(color: Colors.white.withValues(alpha: 0.85)),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
-            payslipsAsync.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.symmetric(vertical: 48),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              error: (e, _) => SectionError(
-                message: friendlyPayrollError(e),
-                onRetry: () => ref.invalidate(myPayslipsProvider),
-              ),
-              data: (payslips) {
-                if (payslips.isEmpty) {
-                  return SectionCard(
-                    title: 'Payslips',
-                    icon: Icons.receipt_long_outlined,
-                    accentColor: AppColors.primary,
-                    child: const SectionMessage(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+              child: payslipsAsync.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 48),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (e, _) => SectionError(
+                  message: friendlyPayrollError(e),
+                  onRetry: () => ref.invalidate(myPayslipsProvider),
+                ),
+                data: (payslips) {
+                  if (payslips.isEmpty) {
+                    return SectionCard(
+                      title: 'Payslips',
                       icon: Icons.receipt_long_outlined,
-                      label: 'No payslips available yet.',
-                    ),
+                      accentColor: AppColors.primary,
+                      child: const SectionMessage(
+                        icon: Icons.receipt_long_outlined,
+                        label: 'No payslips available yet.',
+                      ),
+                    );
+                  }
+                  final selected = payslips.firstWhere(
+                    (p) => p.id == _selectedId,
+                    orElse: () => payslips.first,
                   );
-                }
-                final selected = payslips.firstWhere(
-                  (p) => p.id == _selectedId,
-                  orElse: () => payslips.first,
-                );
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _MonthSelector(
-                      payslips: payslips,
-                      selectedId: selected.id,
-                      monthLabel: _monthLabel,
-                      onSelect: (id) => setState(() => _selectedId = id),
-                    ),
-                    const SizedBox(height: 14),
-                    _PayslipDetailCard(
-                      payslip: selected,
-                      monthLabel: _monthLabel(selected.cycleStart),
-                      payDateLabel: _shortDate(selected.payDate),
-                      acknowledging: _acknowledging,
-                      onAcknowledge: () => _acknowledge(selected.id),
-                    ),
-                  ],
-                );
-              },
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _MonthSelector(
+                        payslips: payslips,
+                        selectedId: selected.id,
+                        monthLabel: _monthLabel,
+                        onSelect: (id) => setState(() => _selectedId = id),
+                      ),
+                      const SizedBox(height: 14),
+                      _PayslipDetailCard(
+                        payslip: selected,
+                        monthLabel: _monthLabel(selected.cycleStart),
+                        payDateLabel: _shortDate(selected.payDate),
+                        acknowledging: _acknowledging,
+                        onAcknowledge: () => _acknowledge(selected.id),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -243,15 +278,19 @@ class _PayslipDetailCard extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           companyAsync.maybeWhen(
-            data: (company) => _CompanyLine(companyName: company.companyName, cin: company.cin),
+            data: (company) => _CompanyLine(
+                companyName: company.companyName, cin: company.cin),
             orElse: () => const SizedBox.shrink(),
           ),
           const SizedBox(height: 4),
-          Text('Pay date: $payDateLabel', style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+          Text('Pay date: $payDateLabel',
+              style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
           const SizedBox(height: 14),
           profileAsync.maybeWhen(
             data: (profile) => _EmployeeMetaGrid(
-              employeeIdCode: payslip.employeeIdCode.isNotEmpty ? payslip.employeeIdCode : profile.employeeId,
+              employeeIdCode: payslip.employeeIdCode.isNotEmpty
+                  ? payslip.employeeIdCode
+                  : profile.employeeId,
               employeeName: profile.fullName,
               department: profile.department,
               bankName: profile.detail.bankName,
@@ -274,10 +313,12 @@ class _PayslipDetailCard extends ConsumerWidget {
           ],
           const SizedBox(height: 16),
           _NetPayBanner(payslip: payslip),
-          if (payslip.payslipPdfUrl != null && payslip.payslipPdfUrl!.isNotEmpty) ...[
+          if (payslip.payslipPdfUrl != null &&
+              payslip.payslipPdfUrl!.isNotEmpty) ...[
             const SizedBox(height: 12),
             OutlinedButton.icon(
-              onPressed: () => launchUrl(Uri.parse(payslip.payslipPdfUrl!), mode: LaunchMode.externalApplication),
+              onPressed: () => launchUrl(Uri.parse(payslip.payslipPdfUrl!),
+                  mode: LaunchMode.externalApplication),
               icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
               label: const Text('Open PDF'),
             ),
@@ -288,15 +329,19 @@ class _PayslipDetailCard extends ConsumerWidget {
               onPressed: acknowledging ? null : onAcknowledge,
               icon: acknowledging
                   ? const SizedBox(
-                      width: 16, height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
                     )
                   : const Icon(Icons.check_circle_outline, size: 18),
-              label: Text(acknowledging ? 'Acknowledging…' : 'Acknowledge Payslip'),
+              label: Text(
+                  acknowledging ? 'Acknowledging…' : 'Acknowledge Payslip'),
               style: FilledButton.styleFrom(
                 minimumSize: const Size(double.infinity, 46),
                 backgroundColor: AppColors.primary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
             ),
           ],
@@ -343,7 +388,8 @@ class _StatusChip extends StatelessWidget {
       ),
       child: Text(
         payslipStatusLabel(status),
-        style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700),
+        style: AppTextStyles.caption
+            .copyWith(color: AppColors.primary, fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -387,22 +433,27 @@ class _EmployeeMetaGrid extends StatelessWidget {
     return Wrap(
       spacing: 20,
       runSpacing: 10,
-      children: items.map((item) => SizedBox(
-        width: 140,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(item.$1, style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
-            const SizedBox(height: 2),
-            Text(
-              item.$2,
-              style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      )).toList(),
+      children: items
+          .map((item) => SizedBox(
+                width: 140,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.$1,
+                        style: AppTextStyles.caption
+                            .copyWith(color: AppColors.textHint)),
+                    const SizedBox(height: 2),
+                    Text(
+                      item.$2,
+                      style: AppTextStyles.label
+                          .copyWith(fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ))
+          .toList(),
     );
   }
 }
@@ -417,25 +468,36 @@ class _StatsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final stats = [
       ('Working Days', payslip.totalWorkingDays.toString()),
-      ('Paid Days', payslip.paidDays.toStringAsFixed(payslip.paidDays == payslip.paidDays.roundToDouble() ? 0 : 1)),
-      ('Loss of Pay', payslip.lopDays.toStringAsFixed(payslip.lopDays == payslip.lopDays.roundToDouble() ? 0 : 1)),
+      (
+        'Paid Days',
+        payslip.paidDays.toStringAsFixed(
+            payslip.paidDays == payslip.paidDays.roundToDouble() ? 0 : 1)
+      ),
+      (
+        'Loss of Pay',
+        payslip.lopDays.toStringAsFixed(
+            payslip.lopDays == payslip.lopDays.roundToDouble() ? 0 : 1)
+      ),
     ];
     return Row(
-      children: stats.map((s) => Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(s.$2, style: AppTextStyles.h4),
-            const SizedBox(height: 2),
-            Text(
-              s.$1,
-              style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      )).toList(),
+      children: stats
+          .map((s) => Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(s.$2, style: AppTextStyles.h4),
+                    const SizedBox(height: 2),
+                    Text(
+                      s.$1,
+                      style: AppTextStyles.caption
+                          .copyWith(color: AppColors.textSecondary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ))
+          .toList(),
     );
   }
 }
@@ -521,12 +583,17 @@ class _MoneySection extends StatelessWidget {
           Text(
             title,
             style: AppTextStyles.caption.copyWith(
-              fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.6,
+              color: color,
             ),
           ),
           const SizedBox(height: 8),
           if (rows.isEmpty)
-            Text('None', style: AppTextStyles.caption.copyWith(color: AppColors.textHint))
+            Text('None',
+                style:
+                    AppTextStyles.caption.copyWith(color: AppColors.textHint))
           else
             ...rows.map((r) => Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
@@ -540,7 +607,8 @@ class _MoneySection extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      Text(formatPayslipCurrency(r.$2), style: AppTextStyles.body),
+                      Text(formatPayslipCurrency(r.$2),
+                          style: AppTextStyles.body),
                     ],
                   ),
                 )),
@@ -548,11 +616,14 @@ class _MoneySection extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(totalLabel, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
+                child: Text(totalLabel,
+                    style: AppTextStyles.label
+                        .copyWith(fontWeight: FontWeight.w700)),
               ),
               Text(
                 formatPayslipCurrency(total),
-                style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w800, color: color),
+                style: AppTextStyles.label
+                    .copyWith(fontWeight: FontWeight.w800, color: color),
               ),
             ],
           ),
@@ -581,7 +652,8 @@ class _ReimbursementLine extends StatelessWidget {
           Expanded(child: Text('Reimbursements', style: AppTextStyles.label)),
           Text(
             formatPayslipCurrency(amount),
-            style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, color: AppColors.info),
+            style: AppTextStyles.label
+                .copyWith(fontWeight: FontWeight.w700, color: AppColors.info),
           ),
         ],
       ),
@@ -598,7 +670,8 @@ class _NetPayBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final denom = payslip.grossEarnings + payslip.totalDeductions;
-    final ratio = denom <= 0 ? 0.0 : (payslip.grossEarnings / denom).clamp(0.0, 1.0);
+    final ratio =
+        denom <= 0 ? 0.0 : (payslip.grossEarnings / denom).clamp(0.0, 1.0);
 
     return Container(
       width: double.infinity,
@@ -625,7 +698,8 @@ class _NetPayBanner extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             formatPayslipCurrency(payslip.netPay),
-            style: AppTextStyles.h2.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+            style: AppTextStyles.h2
+                .copyWith(color: Colors.white, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 10),
           ClipRRect(
@@ -643,11 +717,13 @@ class _NetPayBanner extends StatelessWidget {
             children: [
               Text(
                 'Deductions ${formatPayslipCurrency(payslip.totalDeductions)}',
-                style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.6)),
+                style: AppTextStyles.caption
+                    .copyWith(color: Colors.white.withValues(alpha: 0.6)),
               ),
               Text(
                 'Gross ${formatPayslipCurrency(payslip.grossEarnings)}',
-                style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.6)),
+                style: AppTextStyles.caption
+                    .copyWith(color: Colors.white.withValues(alpha: 0.6)),
               ),
             ],
           ),

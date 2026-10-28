@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/stat_card.dart';
 import '../../data/models/email_template_model.dart';
 import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
@@ -111,6 +112,7 @@ class _EmailTemplatesScreenState extends ConsumerState<EmailTemplatesScreen> {
       children: [
         const EmailBrandingCard(),
         _SubHeader(),
+        _StatsRow(templates: templates),
         _SearchBar(
           controller: _searchCtrl,
           onChanged: (v) => setState(() => _search = v.toLowerCase()),
@@ -314,6 +316,42 @@ class _SubHeader extends StatelessWidget {
         'Customize transactional email messages sent by Royal HRMS',
         style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
       ),
+    );
+  }
+}
+
+// ── Stats row ─────────────────────────────────────────────────────────────────
+
+class _StatsRow extends StatelessWidget {
+  final List<EmailTemplateModel> templates;
+  const _StatsRow({required this.templates});
+
+  @override
+  Widget build(BuildContext context) {
+    final active = templates.where((t) => t.isActive).length;
+    final custom = templates.where((t) => !t.isBuiltin).length;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: StatCardRow(cards: [
+        StatCard(
+          icon: Icons.mail_outline,
+          count: templates.length,
+          label: 'Total',
+          color: AppColors.primary,
+        ),
+        StatCard(
+          icon: Icons.check_circle_outline,
+          count: active,
+          label: 'Active',
+          color: AppColors.success,
+        ),
+        StatCard(
+          icon: Icons.edit_note_outlined,
+          count: custom,
+          label: 'Custom',
+          color: AppColors.warning,
+        ),
+      ]),
     );
   }
 }

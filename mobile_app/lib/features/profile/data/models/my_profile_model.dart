@@ -131,6 +131,7 @@ class MyProfileModel extends MyProfileEntity {
     required super.dateJoined,
     required super.onboardingStatus,
     required super.assessmentStatus,
+    super.photoUrl,
     required super.detail,
   });
 
@@ -151,6 +152,7 @@ class MyProfileModel extends MyProfileEntity {
       dateJoined: json['date_joined'] as String? ?? '',
       onboardingStatus: json['onboarding_status'] as String? ?? '',
       assessmentStatus: json['assessment_status'] as String? ?? '',
+      photoUrl: json['profile_photo_url'] as String?,
       detail: MyProfileDetailModel.fromJson(profile),
     );
   }
@@ -199,6 +201,7 @@ class MyProfileModel extends MyProfileEntity {
       dateJoined: dateJoined,
       onboardingStatus: onboardingStatus,
       assessmentStatus: assessmentStatus,
+      photoUrl: photoUrl,
       detail: detailModel.copyWithEditable(
         currentAddress: data.currentAddress,
         permanentAddress: data.permanentAddress,
@@ -207,6 +210,29 @@ class MyProfileModel extends MyProfileEntity {
         emergencyPhone: data.emergencyPhone,
         emergencyEmail: data.emergencyEmail,
       ),
+    );
+  }
+
+  /// Applies a successful photo upload/remove locally so the avatar updates
+  /// immediately without a second round-trip — mirrors [applyUpdate].
+  MyProfileModel copyWithPhotoUrl(String? newPhotoUrl) {
+    return MyProfileModel(
+      id: id,
+      fullName: fullName,
+      email: email,
+      phone: phone,
+      employeeId: employeeId,
+      department: department,
+      designation: designation,
+      branch: branch,
+      roleName: roleName,
+      roleDisplay: roleDisplay,
+      dateOfJoining: dateOfJoining,
+      dateJoined: dateJoined,
+      onboardingStatus: onboardingStatus,
+      assessmentStatus: assessmentStatus,
+      photoUrl: newPhotoUrl,
+      detail: detail,
     );
   }
 }

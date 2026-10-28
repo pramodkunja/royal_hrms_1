@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/blue_hero_banner.dart';
+import '../../../../shared/widgets/stat_card.dart';
 import '../../data/models/assessment_model.dart';
 import '../providers/assessments_providers.dart';
 import '../widgets/assessment_card.dart';
@@ -31,23 +33,48 @@ class _AssessmentsScreenState extends ConsumerState<AssessmentsScreen> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            const SliverToBoxAdapter(child: _Header()),
             assessmentsAsync.when(
-              loading: () => SliverFillRemaining(
-                child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+              // SliverToBoxAdapter (not SliverFillRemaining) for every
+              // non-list state — SliverFillRemaining centers its child in
+              // the *entire* remaining viewport, which on a tall phone
+              // strands a small card in a sea of blank space no matter how
+              // it's styled. Sizing to actual content keeps it anchored
+              // under the header like the populated list is.
+              loading: () => const SliverToBoxAdapter(
+                child: Column(children: [_Header(), _LoadingView()]),
               ),
-              error: (e, _) => SliverFillRemaining(
-                child: _ErrorView(
-                  message: e.toString(),
-                  onRetry: () => ref.invalidate(assessmentsProvider),
+              error: (e, _) => SliverToBoxAdapter(
+                child: Column(
+                  children: [
+                    const _Header(),
+                    _ErrorView(
+                      message: e.toString(),
+                      onRetry: () => ref.invalidate(assessmentsProvider),
+                    ),
+                  ],
                 ),
               ),
               data: (assessments) => assessments.isEmpty
-                  ? SliverFillRemaining(child: _EmptyView(onAdd: () => _openForm(null)))
+                  ? SliverToBoxAdapter(
+                      child: Column(
+                        children: [
+                          const _Header(),
+                          _EmptyView(onAdd: () => _openForm(null)),
+                        ],
+                      ),
+                    )
                   : SliverList(
                       delegate: SliverChildListDelegate([
+                        // Hero, then stats in normal flow below it (not
+                        // overlapping) — the overlap trick relied on a
+                        // hardcoded hero height that undershot the real
+                        // rendered height of wrapping text, which visibly
+                        // covered the description and let it spill out past
+                        // the hero's rounded bottom. Matches the safe
+                        // pattern every other hero'd screen already uses.
+                        const _Header(),
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           child: _OverallStatsRow(assessments: assessments),
                         ),
                         Padding(
@@ -55,12 +82,14 @@ class _AssessmentsScreenState extends ConsumerState<AssessmentsScreen> {
                           child: Column(
                             children: assessments
                                 .map((a) => Padding(
-                                      padding: const EdgeInsets.only(bottom: 12),
+                                      padding:
+                                          const EdgeInsets.only(bottom: 12),
                                       child: AssessmentCard(
                                         assessment: a,
                                         isExpanded: _expandedId == a.id,
                                         onToggleResults: () => setState(
-                                          () => _expandedId = _expandedId == a.id ? null : a.id,
+                                          () => _expandedId =
+                                              _expandedId == a.id ? null : a.id,
                                         ),
                                         onItems: () => _openItems(a),
                                         onAssign: () => _openAssign(a),
@@ -77,13 +106,26 @@ class _AssessmentsScreenState extends ConsumerState<AssessmentsScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openForm(null),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('New Assessment', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      // Only shown once there's at least one assessment — the empty state
+      // already has its own "Create Assessment" button front and center, so
+      // showing this FAB too just duplicated the same action twice on one
+      // screen. Once the list is non-empty, this becomes the quick way to
+      // add another without scrolling back to the top.
+      floatingActionButton: assessmentsAsync.maybeWhen(
+        data: (assessments) => assessments.isEmpty
+            ? null
+            : FloatingActionButton.extended(
+                onPressed: () => _openForm(null),
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                icon: const Icon(Icons.add),
+                label: const Text('New Assessment',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+              ),
+        orElse: () => null,
       ),
     );
   }
@@ -113,7 +155,8 @@ class _AssessmentsScreenState extends ConsumerState<AssessmentsScreen> {
     );
     // Item counts (item_count) shown on the card can change after managing
     // items — refresh this assessment's row so the counter stays accurate.
-    if (mounted) await ref.read(assessmentsProvider.notifier).refreshOne(assessment.id);
+    if (mounted)
+      await ref.read(assessmentsProvider.notifier).refreshOne(assessment.id);
   }
 
   Future<void> _openAssign(AssessmentModel assessment) async {
@@ -136,7 +179,9 @@ class _AssessmentsScreenState extends ConsumerState<AssessmentsScreen> {
         title: const Text('Delete Assessment?'),
         content: Text('Delete "${assessment.title}"? This cannot be undone.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () => Navigator.pop(dialogContext, true),
@@ -146,7 +191,9 @@ class _AssessmentsScreenState extends ConsumerState<AssessmentsScreen> {
       ),
     );
     if (ok != true || !mounted) return;
-    final error = await ref.read(assessmentsProvider.notifier).removeAssessment(assessment.id);
+    final error = await ref
+        .read(assessmentsProvider.notifier)
+        .removeAssessment(assessment.id);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(error ?? '"${assessment.title}" deleted.'),
@@ -167,11 +214,35 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-      child: Text(
-        'Build pre-onboarding assessments and assign them to candidates.',
-        style: AppTextStyles.bodySecondary,
+    return BlueHeroBanner(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.assignment_outlined,
+                size: 18, color: Colors.white),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'Build pre-onboarding assessments and assign them to candidates.',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.bodySecondary
+                    .copyWith(color: Colors.white.withValues(alpha: 0.9)),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -185,66 +256,151 @@ class _OverallStatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final assigned = assessments.fold<int>(0, (sum, a) => sum + a.assignedCount);
+    final assigned =
+        assessments.fold<int>(0, (sum, a) => sum + a.assignedCount);
     final pending = assessments.fold<int>(0, (sum, a) => sum + a.pendingCount);
-    final inProgress = assessments.fold<int>(0, (sum, a) => sum + a.inProgressCount);
-    final completed = assessments.fold<int>(0, (sum, a) => sum + a.completedCount);
+    final inProgress =
+        assessments.fold<int>(0, (sum, a) => sum + a.inProgressCount);
+    final completed =
+        assessments.fold<int>(0, (sum, a) => sum + a.completedCount);
 
     final stats = [
       // The total assessment count from the backend wasn't surfaced
       // anywhere in this row before — only the per-candidate aggregates
       // were shown.
-      (label: 'Total Assessments', value: assessments.length, icon: Icons.fact_check_outlined, color: const Color(0xFF1E4E8C)),
-      (label: 'Total Assigned', value: assigned, icon: Icons.people_outline, color: AppColors.primary),
-      (label: 'Pending', value: pending, icon: Icons.access_time, color: AppColors.warning),
-      (label: 'In Progress', value: inProgress, icon: Icons.edit_outlined, color: AppColors.info),
-      (label: 'Completed', value: completed, icon: Icons.check_circle_outline, color: AppColors.success),
+      (
+        label: 'Total Assessments',
+        value: assessments.length,
+        icon: Icons.fact_check_outlined,
+        color: const Color(0xFF1E4E8C)
+      ),
+      (
+        label: 'Total Assigned',
+        value: assigned,
+        icon: Icons.people_outline,
+        color: AppColors.primary
+      ),
+      (
+        label: 'Pending',
+        value: pending,
+        icon: Icons.access_time,
+        color: AppColors.warning
+      ),
+      (
+        label: 'In Progress',
+        value: inProgress,
+        icon: Icons.edit_outlined,
+        color: AppColors.info
+      ),
+      (
+        label: 'Completed',
+        value: completed,
+        icon: Icons.check_circle_outline,
+        color: AppColors.success
+      ),
     ];
 
-    return SizedBox(
-      // Tall enough for icon (26) + number (20, height:1) + gap (6) + label
-      // (~15) + vertical padding (24) with margin to spare — a tighter box
-      // here previously clipped the label by a few px on some font metrics.
-      height: 104,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: stats.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (_, i) {
-          final s = stats[i];
-          return Container(
-            width: 130,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: s.color.withValues(alpha: 0.18)),
-              boxShadow: [BoxShadow(color: s.color.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2))],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 26,
-                  height: 26,
-                  decoration: BoxDecoration(color: s.color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(7)),
-                  child: Icon(s.icon, size: 14, color: s.color),
-                ),
-                const SizedBox(height: 8),
-                Text('${s.value}', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: s.color, height: 1)),
-                const SizedBox(height: 4),
-                Text(s.label, style: AppTextStyles.caption.copyWith(fontSize: 10), maxLines: 1, overflow: TextOverflow.ellipsis),
-              ],
-            ),
-          );
-        },
+    // Shared StatCard/StatCardRow — same visual design as the Employees
+    // screen's directory-stats strip (148-wide cards, 40x40 icon tile,
+    // fontSize 22 count). Values/icons/colors unchanged, only the card
+    // chrome now matches the rest of the app.
+    return StatCardRow(
+      cards: stats
+          .map((s) => StatCard(
+                icon: s.icon,
+                count: s.value,
+                label: s.label,
+                color: s.color,
+              ))
+          .toList(),
+    );
+  }
+}
+
+// ── Loading / Empty / Error ──────────────────────────────────────────────────
+//
+// All three share _StateCard for their outer chrome (radius, padding,
+// border, shadow) so they read as one consistent design instead of three
+// separately hand-rolled layouts — the same card language AssessmentCard
+// and _OverallStatsRow's tiles already use elsewhere on this screen.
+
+class _StateCard extends StatelessWidget {
+  final Widget child;
+  const _StateCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+          boxShadow: AppColors.cardShadow,
+        ),
+        child: child,
       ),
     );
   }
 }
 
-// ── Empty / Error ─────────────────────────────────────────────────────────────
+/// A round icon badge with a soft gradient fill — shared by the loading/
+/// empty/error states so each is distinguished only by its color and icon,
+/// not by three different treatments.
+class _StateIconBadge extends StatelessWidget {
+  final Widget child;
+  final Color color;
+  const _StateIconBadge({required this.child, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withValues(alpha: 0.16),
+            color.withValues(alpha: 0.06)
+          ],
+        ),
+        shape: BoxShape.circle,
+      ),
+      child: Center(child: child),
+    );
+  }
+}
+
+class _LoadingView extends StatelessWidget {
+  const _LoadingView();
+
+  @override
+  Widget build(BuildContext context) {
+    return _StateCard(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _StateIconBadge(
+            color: AppColors.primary,
+            child: SizedBox(
+              width: 26,
+              height: 26,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2.5, color: AppColors.primary),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text('Loading assessments…', style: AppTextStyles.bodySecondary),
+        ],
+      ),
+    );
+  }
+}
 
 class _EmptyView extends StatelessWidget {
   final VoidCallback onAdd;
@@ -252,42 +408,40 @@ class _EmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Icon(Icons.assignment_outlined, size: 36, color: AppColors.primary),
-            ),
-            const SizedBox(height: 16),
-            Text('No assessments yet', style: AppTextStyles.h4),
-            const SizedBox(height: 6),
-            Text(
-              'Create your first assessment to assign to candidates during onboarding.',
-              style: AppTextStyles.bodySecondary,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
+    return _StateCard(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _StateIconBadge(
+            color: AppColors.primary,
+            child: Icon(Icons.assignment_outlined,
+                size: 32, color: AppColors.primary),
+          ),
+          const SizedBox(height: 20),
+          Text('No assessments yet',
+              style: AppTextStyles.h3, textAlign: TextAlign.center),
+          const SizedBox(height: 8),
+          Text(
+            'Create your first assessment to assign to candidates during onboarding.',
+            style: AppTextStyles.bodySecondary,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
               onPressed: onAdd,
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Create Assessment'),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -300,25 +454,37 @@ class _ErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
-            const SizedBox(height: 12),
-            Text('Could not load assessments', style: AppTextStyles.h4),
-            const SizedBox(height: 6),
-            Text(message, style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
+    return _StateCard(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _StateIconBadge(
+            color: AppColors.error,
+            child: Icon(Icons.cloud_off_outlined,
+                size: 30, color: AppColors.error),
+          ),
+          const SizedBox(height: 20),
+          Text('Could not load assessments',
+              style: AppTextStyles.h3, textAlign: TextAlign.center),
+          const SizedBox(height: 8),
+          Text(message,
+              style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh, size: 18),
               label: const Text('Retry'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.error,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

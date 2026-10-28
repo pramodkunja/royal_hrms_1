@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../models/my_profile_model.dart';
@@ -16,6 +17,26 @@ class ProfileRemoteDataSource {
 
   Future<void> updateMyProfile(MyProfileUpdateData data) async {
     await _dio.patch(ApiConstants.myProfile, data: data.toJson());
+  }
+
+  // ── Profile photo ─────────────────────────────────────────────────────────
+
+  /// Returns the new `profile_photo_url` (or null if the backend somehow
+  /// omits it) — matches `ProfilePhotoView.post`'s response shape.
+  Future<String?> uploadPhoto(File file) async {
+    final formData = FormData.fromMap({
+      'photo': await MultipartFile.fromFile(
+        file.path,
+        filename: file.path.split('/').last,
+      ),
+    });
+    final res = await _dio.post(ApiConstants.myProfilePhoto, data: formData);
+    final data = _unwrap(res.data) as Map<String, dynamic>;
+    return data['profile_photo_url'] as String?;
+  }
+
+  Future<void> removePhoto() async {
+    await _dio.delete(ApiConstants.myProfilePhoto);
   }
 
   // ── Change password ───────────────────────────────────────────────────────

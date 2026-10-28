@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io' show Platform;
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -13,30 +12,12 @@ import 'package:mobile_app/core/theme/app_text_styles.dart';
 import 'package:mobile_app/core/utils/device_identifier.dart';
 import 'package:mobile_app/features/attendance/domain/entities/attendance_entity.dart';
 import 'package:mobile_app/features/attendance/presentation/providers/attendance_providers.dart';
+import 'package:mobile_app/features/attendance/presentation/widgets/attendance_ring.dart';
 import 'package:mobile_app/features/facial_recognition/domain/entities/face_registration_entity.dart';
 import 'package:mobile_app/features/facial_recognition/presentation/capture/face_capture_state.dart';
 import 'package:mobile_app/features/facial_recognition/presentation/providers/facial_recognition_providers.dart';
 import 'package:mobile_app/features/facial_recognition/presentation/widgets/face_capture_bottom_sheet.dart';
 import 'dashboard_section.dart';
-
-// No per-org "standard shift length" is exposed by any API this app calls —
-// the ring needs *some* fixed reference to call "100%", so this is a plain
-// 8-hour workday, same assumption a plain "hours today" stat elsewhere in
-// the app would make implicitly. Working past it just holds the ring at a
-// full 100% rather than wrapping or overflowing.
-const _kFullShiftSeconds = 8 * 3600;
-
-/// The most recent clock-*out* of the day, or null if the employee hasn't
-/// punched out yet (still clocked in on a single IN, or a punch-mode day
-/// with no OUT recorded at all). Deliberately not `punches.last` — that's
-/// just whatever event happened most recently regardless of type, which on
-/// a still-clocked-in day is the same IN punch as `punches.first`.
-PunchEntryEntity? _lastOutPunch(List<PunchEntryEntity> punches) {
-  for (final p in punches.reversed) {
-    if (p.type == 'OUT') return p;
-  }
-  return null;
-}
 
 /// Today's Attendance card — a segmented circular progress ring (left) that
 /// fills as the work day progresses, plus Clock In/Out, Attendance, and
@@ -91,7 +72,7 @@ class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard>
     super.dispose();
   }
 
-  double get _targetFraction => (_liveTotalSeconds / _kFullShiftSeconds).clamp(0.0, 1.0);
+  double get _targetFraction => (_liveTotalSeconds / kFullShiftSeconds).clamp(0.0, 1.0);
 
   void _animateRingToTarget() {
     _ringTween = Tween<double>(begin: _displayedFraction, end: _targetFraction);
@@ -132,16 +113,16 @@ class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard>
           'Contact your HR representative or manager to get registered.';
     }
 
-    if (!mounted) throw 'Face ID verification was cancelled.';
+    if (!mounted) throw 'Face ID check was cancelled.';
     // No consentNoticeText — clock-in verification never collects new
     // biometric data, so it never needs fresh consent (only self/HR
     // registration does).
     final result = await showFaceCaptureSheet(
       context,
-      title: 'Face ID Verification',
-      subtitle: 'Confirm it\'s you to clock in.',
+      title: 'Face ID Check',
+      subtitle: 'Quick face check before clocking in.',
     );
-    if (result?.captured.embedding == null) throw 'Face ID verification was cancelled.';
+    if (result?.captured.embedding == null) throw 'Face ID check was cancelled.';
     return result!.captured;
   }
 
@@ -149,6 +130,41 @@ class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard>
     if (_punching) return;
     setState(() => _punching = true);
 
+    // 1. GPS first — the geofence pre-check below needs it, and so does the
+    //    real punch call later; fetching it once up front means both reuse
+    //    the exact same reading instead of taking two separate fixes a few
+    //    seconds apart.
+    final position = await ref.read(locationServiceProvider).getCurrentPosition();
+    if (!mounted) return;
+
+    // 2. Geofence pre-check — reject an out-of-geofence (or missing-GPS,
+    //    for a branch that requires it) attempt immediately, before ever
+    //    opening face capture or spending a round trip on the real punch
+    //    call that would reject it a moment later anyway. Matches the
+    //    ordering already fixed on web (commit db599c9: geofence before
+    //    face capture) and already enforced by the voice clock-in flow
+    //    (apps.voice_commands.conversation_clock_in_face). Run for every
+    //    attempt, not only when face verification is mandatory — it's a
+    //    cheap read-only check and every clock-in benefits from failing
+    //    fast, not just the ones that would otherwise waste a capture cycle.
+    final geofenceError = await ref.read(todayAttendanceProvider.notifier).checkGeofence(
+          attendanceMode: 'office',
+          latitude: position?.latitude,
+          longitude: position?.longitude,
+          accuracy: position?.accuracy,
+        );
+    if (geofenceError != null) {
+      if (!mounted) return;
+      setState(() => _punching = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(geofenceError), backgroundColor: AppColors.error),
+      );
+      return;
+    }
+    if (!mounted) return;
+
+    // 3. Face capture — only now that location is confirmed valid, and
+    //    only when the org-wide toggle actually requires it (unchanged gate).
     FaceCaptureUiState? faceCapture;
     try {
       faceCapture = await _runFaceCaptureIfRequired();
@@ -162,9 +178,11 @@ class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard>
     }
     if (!mounted) return;
 
-    final position = await ref.read(locationServiceProvider).getCurrentPosition();
-    if (!mounted) return;
-
+    // 4. The real punch — still sends the same location and face data, and
+    //    is still independently, authoritatively re-validated server-side
+    //    (PunchService.record_punch runs the identical GeofencingService.
+    //    validate() again) regardless of step 2 having already passed; this
+    //    pre-check is a UX optimization only, never a substitute for it.
     final error = await ref.read(todayAttendanceProvider.notifier).punch(
           isCurrentlyClockedIn: today.isClockedIn,
           attendanceMode: 'office',
@@ -220,7 +238,7 @@ class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard>
     return SectionCard(
       title: "Today's Attendance",
       icon: Icons.access_time_outlined,
-      accentColor: const Color(0xFF1B8A6B),
+      accentColor: AppColors.success,
       child: todayAsync.when(
         data: (today) {
           return Column(
@@ -229,7 +247,7 @@ class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard>
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  _AttendanceRing(fraction: _displayedFraction, isClockedIn: today.isClockedIn, elapsedSeconds: _liveTotalSeconds),
+                  AttendanceRing(fraction: _displayedFraction, isClockedIn: today.isClockedIn, elapsedSeconds: _liveTotalSeconds),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
@@ -269,7 +287,7 @@ class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard>
                 Row(
                   children: [
                     Expanded(
-                      child: _PunchStat(label: 'First Punch', punch: today.punches.first),
+                      child: PunchStatTile(label: 'First Punch', punch: today.punches.first),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -279,9 +297,9 @@ class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard>
                       // would silently repeat the IN punch (and look like a
                       // fabricated second data point) on every day the
                       // employee hasn't clocked out yet.
-                      child: switch (_lastOutPunch(today.punches)) {
-                        final out? => _PunchStat(label: 'Last Punch', punch: out),
-                        _ => const _PunchStatPlaceholder(label: 'Last Punch'),
+                      child: switch (lastOutPunch(today.punches)) {
+                        final out? => PunchStatTile(label: 'Last Punch', punch: out),
+                        _ => const PunchStatPlaceholderTile(label: 'Last Punch'),
                       },
                     ),
                   ],
@@ -292,7 +310,7 @@ class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard>
                   style: AppTextStyles.label.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 8),
-                ...today.punches.map((p) => _PunchLogRow(punch: p)),
+                ...today.punches.map((p) => PunchLogRow(punch: p)),
               ],
             ],
           );
@@ -302,150 +320,6 @@ class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard>
           message: friendlyAttendanceError(e),
           onRetry: () => ref.invalidate(todayAttendanceProvider),
         ),
-      ),
-    );
-  }
-}
-
-/// One of the two "First Punch" / "Last Punch" tiles below the ring — a
-/// compact IN/OUT-colored summary of the earliest and most recent punch of
-/// the day (same [PunchEntryEntity] list the full Punch Log renders below).
-/// Styled after this card's own Clock In/Out button: same green-IN/red-OUT
-/// colors and the same solid icon-on-color treatment, just as a static tile.
-class _PunchStat extends StatelessWidget {
-  final String label;
-  final PunchEntryEntity punch;
-
-  const _PunchStat({required this.label, required this.punch});
-
-  @override
-  Widget build(BuildContext context) {
-    final isIn = punch.type == 'IN';
-    final color = isIn ? AppColors.success : AppColors.error;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            child: Icon(isIn ? Icons.login : Icons.logout, size: 15, color: Colors.white),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  punch.time,
-                  style: AppTextStyles.h4.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w800),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  label,
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Stand-in for [_PunchStat] when there's no last-OUT punch yet — same
-/// shape and sizing so the two-tile row doesn't jump around, but neutral
-/// (grey, dashed-style icon) rather than falsely repeating another value.
-class _PunchStatPlaceholder extends StatelessWidget {
-  final String label;
-
-  const _PunchStatPlaceholder({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.backgroundMid,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(color: AppColors.textHint, shape: BoxShape.circle),
-            child: const Icon(Icons.logout, size: 15, color: Colors.white),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '—',
-                  style: AppTextStyles.h4.copyWith(color: AppColors.textHint, fontWeight: FontWeight.w800),
-                ),
-                Text(
-                  label,
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// One row of the Punch Log — every punch event of the day, in order. Uses
-/// the same colored icon-on-circle language as [_PunchStat] above it, just
-/// smaller, so the whole punch section reads as one consistent design.
-class _PunchLogRow extends StatelessWidget {
-  final PunchEntryEntity punch;
-
-  const _PunchLogRow({required this.punch});
-
-  @override
-  Widget build(BuildContext context) {
-    final isIn = punch.type == 'IN';
-    final color = isIn ? AppColors.success : AppColors.error;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            child: Icon(isIn ? Icons.login : Icons.logout, size: 12, color: Colors.white),
-          ),
-          const SizedBox(width: 10),
-          Text(punch.time, style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              punch.location.isNotEmpty ? punch.location : '—',
-              style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -508,139 +382,3 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-class _AttendanceRing extends StatelessWidget {
-  final double fraction;
-  final bool isClockedIn;
-  final int elapsedSeconds;
-
-  const _AttendanceRing({required this.fraction, required this.isClockedIn, required this.elapsedSeconds});
-
-  // Not `static const`/`static final` — AppColors' fields are plain mutable
-  // statics that get reassigned on a light/dark theme switch, so caching
-  // them once would freeze this ring on whichever theme was active at
-  // first build.
-  List<Color> get _segmentColors => [
-        AppColors.success,
-        AppColors.info,
-        AppColors.secondary,
-        AppColors.warning,
-      ];
-
-  String get _elapsedLabel {
-    final h = elapsedSeconds ~/ 3600;
-    final m = (elapsedSeconds % 3600) ~/ 60;
-    return '${h}h ${m.toString().padLeft(2, '0')}m';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 108,
-      height: 108,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CustomPaint(
-            size: const Size(108, 108),
-            painter: _SegmentedRingPainter(fraction: fraction, segmentColors: _segmentColors, strokeWidth: 10),
-          ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isClockedIn ? Icons.timer_outlined : Icons.timer_off_outlined,
-                size: 14,
-                color: isClockedIn ? AppColors.success : AppColors.textHint,
-              ),
-              const SizedBox(height: 3),
-              Text(_elapsedLabel, style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w800)),
-              Text(
-                '${(fraction * 100).round()}%',
-                style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Paints the ring as 4 separate quarter-arcs with a clear gap between each
-/// — one distinct break per 25% — so it reads as 4 filled milestones of a
-/// work day rather than one plain continuous circle. Each quadrant has its
-/// own color and only starts filling once progress reaches its own 25%
-/// band. The actively-filling segment gets a soft sheen along its arc and a
-/// small glowing "head" at its leading tip, so the fill reads as motion
-/// rather than a flat static bar snapping into place.
-class _SegmentedRingPainter extends CustomPainter {
-  final double fraction; // 0..1 overall progress toward a full shift.
-  final List<Color> segmentColors; // one per quadrant, exactly 4.
-  final double strokeWidth;
-
-  _SegmentedRingPainter({required this.fraction, required this.segmentColors, required this.strokeWidth});
-
-  // Widened from the original 8° so the break at every 25% mark (0/90/180/
-  // 270°) reads clearly as 4 separate milestones rather than a thin seam.
-  static const _gapDegrees = 16.0;
-  static const _segmentSweepDegrees = 90.0 - _gapDegrees;
-
-  double _deg2rad(double deg) => deg * math.pi / 180;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final radius = (math.min(size.width, size.height) - strokeWidth) / 2;
-    final rect = Rect.fromCircle(center: center, radius: radius);
-
-    final track = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-    final fill = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    for (var i = 0; i < 4; i++) {
-      final startDeg = -90 + i * 90 + _gapDegrees / 2;
-      final startRad = _deg2rad(startDeg);
-
-      track.color = segmentColors[i].withValues(alpha: 0.15);
-      canvas.drawArc(rect, startRad, _deg2rad(_segmentSweepDegrees), false, track);
-
-      final segmentProgress = (fraction * 4 - i).clamp(0.0, 1.0);
-      if (segmentProgress <= 0) continue;
-
-      final sweepRad = _deg2rad(_segmentSweepDegrees * segmentProgress);
-
-      // A light-to-base sheen along the fill, brightest at the leading
-      // edge — reads as a beam of light traveling forward rather than a
-      // flat color filling in.
-      fill.shader = SweepGradient(
-        startAngle: startRad,
-        endAngle: startRad + sweepRad + 0.001, // avoid a zero-sweep shader
-        colors: [segmentColors[i], Color.lerp(segmentColors[i], Colors.white, 0.4)!],
-      ).createShader(rect);
-      canvas.drawArc(rect, startRad, sweepRad, false, fill);
-      fill.shader = null;
-
-      // Glowing head at the tip of whichever segment is actively filling —
-      // skipped once a segment is fully complete, since there's no motion
-      // left to draw attention to there.
-      if (segmentProgress < 1.0) {
-        final tipAngle = startRad + sweepRad;
-        final tip = center + Offset(math.cos(tipAngle), math.sin(tipAngle)) * radius;
-
-        final glow = Paint()
-          ..color = segmentColors[i].withValues(alpha: 0.55)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-        canvas.drawCircle(tip, strokeWidth * 0.9, glow);
-        canvas.drawCircle(tip, strokeWidth * 0.32, Paint()..color = Colors.white);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _SegmentedRingPainter oldDelegate) => oldDelegate.fraction != fraction;
-}

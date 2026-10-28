@@ -80,6 +80,7 @@ class MyProfileEntity {
   final String dateJoined;
   final String onboardingStatus;
   final String assessmentStatus;
+  final String? photoUrl;
   final MyProfileDetailEntity detail;
 
   const MyProfileEntity({
@@ -97,6 +98,7 @@ class MyProfileEntity {
     required this.dateJoined,
     required this.onboardingStatus,
     required this.assessmentStatus,
+    this.photoUrl,
     required this.detail,
   });
 }

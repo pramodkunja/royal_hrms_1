@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -18,6 +19,12 @@ class AssessmentFormDialog extends StatefulWidget {
 class _AssessmentFormDialogState extends State<AssessmentFormDialog> {
   late final TextEditingController _titleCtrl;
   late final TextEditingController _descCtrl;
+  // String-backed (not int) so the field can be genuinely blank — matches
+  // the backend/web semantics where blank means "inherit the org-wide
+  // default from Settings → Assessment Config", not zero.
+  late final TextEditingController _passPercentageCtrl;
+  late final TextEditingController _maxAttemptsCtrl;
+  late final TextEditingController _timeLimitCtrl;
   late bool _isActive;
   late bool _isDefault;
   bool _saving = false;
@@ -30,6 +37,12 @@ class _AssessmentFormDialogState extends State<AssessmentFormDialog> {
     super.initState();
     _titleCtrl = TextEditingController(text: widget.assessment?.title ?? '');
     _descCtrl = TextEditingController(text: widget.assessment?.description ?? '');
+    _passPercentageCtrl =
+        TextEditingController(text: '${widget.assessment?.passPercentage ?? 70}');
+    _maxAttemptsCtrl =
+        TextEditingController(text: widget.assessment?.maxAttempts?.toString() ?? '');
+    _timeLimitCtrl =
+        TextEditingController(text: widget.assessment?.timeLimitMins?.toString() ?? '');
     _isActive = widget.assessment?.isActive ?? true;
     _isDefault = widget.assessment?.isDefault ?? false;
   }
@@ -38,6 +51,9 @@ class _AssessmentFormDialogState extends State<AssessmentFormDialog> {
   void dispose() {
     _titleCtrl.dispose();
     _descCtrl.dispose();
+    _passPercentageCtrl.dispose();
+    _maxAttemptsCtrl.dispose();
+    _timeLimitCtrl.dispose();
     super.dispose();
   }
 
@@ -81,6 +97,50 @@ class _AssessmentFormDialogState extends State<AssessmentFormDialog> {
                       style: AppTextStyles.body,
                       maxLines: 3,
                       decoration: _dec('Description (optional)'),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _passPercentageCtrl,
+                            style: AppTextStyles.body,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            onChanged: (_) => setState(() => _error = null),
+                            decoration: _dec('Pass % *', hint: '70'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _maxAttemptsCtrl,
+                            style: AppTextStyles.body,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            onChanged: (_) => setState(() => _error = null),
+                            decoration: _dec('Max Attempts', hint: 'Use global'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _timeLimitCtrl,
+                            style: AppTextStyles.body,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            onChanged: (_) => setState(() => _error = null),
+                            decoration: _dec('Time Limit (min)', hint: 'None'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Leave Max Attempts / Time Limit blank to inherit the global '
+                      'default from Settings → Assessment Config.',
+                      style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
                     ),
                     const SizedBox(height: 12),
                     _ToggleRow(
@@ -148,6 +208,15 @@ class _AssessmentFormDialogState extends State<AssessmentFormDialog> {
       description: _descCtrl.text,
       isActive: _isActive,
       isDefault: _isDefault,
+      passPercentage: int.tryParse(_passPercentageCtrl.text.trim()) ?? 0,
+      // Blank means "inherit the global default" — mirrors web's
+      // `form.max_attempts !== "" ? Number(...) : null` exactly.
+      maxAttempts: _maxAttemptsCtrl.text.trim().isEmpty
+          ? null
+          : int.tryParse(_maxAttemptsCtrl.text.trim()),
+      timeLimitMins: _timeLimitCtrl.text.trim().isEmpty
+          ? null
+          : int.tryParse(_timeLimitCtrl.text.trim()),
     );
     final validationError = form.validate();
     if (validationError != null) {

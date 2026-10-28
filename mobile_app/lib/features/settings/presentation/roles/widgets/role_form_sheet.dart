@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../../shared/widgets/app_loading_widget.dart';
 import '../../../data/models/roles_model.dart';
 import '../../providers/settings_providers.dart';
 import 'permission_tree.dart';
@@ -141,8 +142,14 @@ class _RoleFormSheetState extends State<RoleFormSheet> {
                   _buildSlugField(),
                   const SizedBox(height: 16),
                   permsAsync.when(
-                    loading: () => const Center(child: CircularProgressIndicator()),
-                    error: (e, _) => Text(e.toString(), style: AppTextStyles.caption),
+                    loading: () => const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: AppLoadingWidget(),
+                    ),
+                    error: (e, _) => Text(
+                      'Could not load permissions: $e',
+                      style: AppTextStyles.caption.copyWith(color: AppColors.error),
+                    ),
                     data: (all) => _buildPermissionsSection(all),
                   ),
                   const SizedBox(height: 20),

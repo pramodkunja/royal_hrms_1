@@ -53,6 +53,14 @@ class FacialRecognitionRemoteDataSource {
       'liveness_passed': livenessPassed,
       if (livenessScore != null) 'liveness_score': livenessScore,
       'consent_acknowledged': consentAcknowledged,
+      // Mobile always captures exactly one still photo (see
+      // face_capture_controller.dart — no multi-frame averaging loop like
+      // web's lib/faceApi/multiFrameCapture.ts), so this is a plain fact,
+      // not an approximation. capture_variance is deliberately NOT sent —
+      // it's a pairwise-distance-between-frames measurement that has no
+      // meaning for a single frame; sending 0 would misleadingly read as
+      // "measured and found identical" rather than "never measured".
+      'capture_frame_count': 1,
     });
     return FaceRegistrationModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
@@ -131,6 +139,9 @@ class FacialRecognitionRemoteDataSource {
       'liveness_passed': livenessPassed,
       if (livenessScore != null) 'liveness_score': livenessScore,
       'consent_acknowledged': consentAcknowledged,
+      // See submitRegistration's own comment — same single-photo capture,
+      // same reason capture_variance is omitted rather than sent as 0.
+      'capture_frame_count': 1,
     });
     return FaceRegistrationModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }

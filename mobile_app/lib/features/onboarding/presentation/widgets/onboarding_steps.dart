@@ -962,6 +962,30 @@ const List<Map<String, String>> kDocTypes = [
   {'value': 'experience_letter', 'label': 'Experience Letter'},
 ];
 
+/// Shared "Submit for Approval?" confirmation — used by whichever step owns
+/// the final Submit action (Documents when there's no Face ID step, the
+/// Face ID step when there is one — see hasFaceStep).
+Future<bool> _confirmSubmitForApproval(BuildContext context) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text('Submit for Approval?'),
+      content: const Text(
+        'Once submitted, your profile will be reviewed by HR. You cannot make changes after submission.',
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel')),
+        FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Submit')),
+      ],
+    ),
+  );
+  return confirmed == true;
+}
+
 class _DocumentsStep extends StatefulWidget {
   const _DocumentsStep({
     required this.documents,
@@ -970,6 +994,8 @@ class _DocumentsStep extends StatefulWidget {
     required this.onSaveDraft,
     required this.onSubmit,
     required this.onPrevious,
+    required this.hasFaceStep,
+    required this.onContinueToFaceStep,
   });
 
   final List<OnboardingDocEntity> documents;
@@ -978,6 +1004,13 @@ class _DocumentsStep extends StatefulWidget {
   final Future<void> Function() onSaveDraft;
   final Future<void> Function() onSubmit;
   final VoidCallback? onPrevious;
+  // When true, a Face ID step follows this one and owns the real Submit
+  // action (mirrors web: Documents is only ever the last step, with its own
+  // Submit button, when the org's Face ID toggle is off — see FACE_STEP in
+  // app/onboarding/page.tsx). When true, this step's primary action is just
+  // "Continue" to the Face ID step instead.
+  final bool hasFaceStep;
+  final VoidCallback onContinueToFaceStep;
 
   @override
   State<_DocumentsStep> createState() => _DocumentsStepState();
@@ -1019,24 +1052,8 @@ class _DocumentsStepState extends State<_DocumentsStep> {
   }
 
   Future<void> _handleSubmit() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Submit for Approval?'),
-        content: const Text(
-          'Once submitted, your profile will be reviewed by HR. You cannot make changes after submission.',
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Submit')),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
+    if (!await _confirmSubmitForApproval(context)) return;
+    if (!mounted) return;
     setState(() => _submitting = true);
     await widget.onSubmit();
     if (mounted) setState(() => _submitting = false);
@@ -1047,6 +1064,8 @@ class _DocumentsStepState extends State<_DocumentsStep> {
     await widget.onSaveDraft();
     if (mounted) setState(() => _savingDraft = false);
   }
+
+  void _handleContinue() => widget.onContinueToFaceStep();
 
   @override
   Widget build(BuildContext context) {
@@ -1109,42 +1128,66 @@ class _DocumentsStepState extends State<_DocumentsStep> {
           ),
         ),
         _StickyFooter(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: double.infinity,
-                child: _PrimaryButton(
-                  label: 'Submit for Approval',
-                  loading: _submitting,
-                  onPressed: _handleSubmit,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  if (widget.onPrevious != null) ...[
-                    Expanded(
-                      child: _SecondaryButton(
+          child: widget.hasFaceStep
+              // A Face ID step follows — this is no longer the last step, so
+              // it gets the same plain "Previous / Save & Continue" footer as
+              // every other non-final step (Personal/Education/Bank/
+              // Emergency), not the Submit/Save Draft pair.
+              ? Row(
+                  children: [
+                    if (widget.onPrevious != null) ...[
+                      _SecondaryButton(
                         label: 'Previous',
                         icon: Icons.arrow_back,
                         onPressed: widget.onPrevious,
                       ),
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(
+                      child: _PrimaryButton(
+                        label: 'Save & Continue',
+                        icon: Icons.arrow_forward,
+                        onPressed: _handleContinue,
+                      ),
                     ),
-                    const SizedBox(width: 12),
                   ],
-                  Expanded(
-                    child: _SecondaryButton(
-                      label: 'Save Draft',
-                      loading: _savingDraft,
-                      onPressed: _handleSaveDraft,
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: _PrimaryButton(
+                        label: 'Submit for Approval',
+                        loading: _submitting,
+                        onPressed: _handleSubmit,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        if (widget.onPrevious != null) ...[
+                          Expanded(
+                            child: _SecondaryButton(
+                              label: 'Previous',
+                              icon: Icons.arrow_back,
+                              onPressed: widget.onPrevious,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+                        Expanded(
+                          child: _SecondaryButton(
+                            label: 'Save Draft',
+                            loading: _savingDraft,
+                            onPressed: _handleSaveDraft,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
         ),
       ],
     );
@@ -1315,6 +1358,234 @@ class _UploadedChip extends StatelessWidget {
                   Icon(Icons.close, size: 14, color: AppColors.textSecondary),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Step 5 — Face ID (only inserted when the org's Face ID Verification
+// toggle is mandatory — see includeFaceStep in onboarding_screen.dart).
+// Always the last step, and owns the real Submit for Approval / Save Draft
+// actions in that case (Documents' footer becomes a plain "Continue" when
+// this step exists — see _DocumentsStep.hasFaceStep). Reuses the exact same
+// self-submit capture flow as ProfileFaceIdSection (same controller, same
+// consent text, same endpoint) — first-time registration during onboarding
+// and later self-service registration from Profile are the same backend
+// call. ────────────────────────────────────────────────────────────────────
+
+class _FaceIdStep extends ConsumerStatefulWidget {
+  const _FaceIdStep({
+    required this.onSaveDraft,
+    required this.onSubmit,
+    required this.onPrevious,
+  });
+
+  final Future<void> Function() onSaveDraft;
+  final Future<void> Function() onSubmit;
+  final VoidCallback? onPrevious;
+
+  @override
+  ConsumerState<_FaceIdStep> createState() => _FaceIdStepState();
+}
+
+class _FaceIdStepState extends ConsumerState<_FaceIdStep> {
+  bool _submitting = false;
+  bool _savingDraft = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(
+        () => ref.read(faceRegistrationControllerProvider.notifier).loadStatus());
+  }
+
+  Future<void> _openCaptureFlow({required String title, required String subtitle}) async {
+    final controller = ref.read(faceRegistrationControllerProvider.notifier);
+    controller.startCapture();
+    final result = await showFaceCaptureSheet(
+      context,
+      title: title,
+      subtitle: subtitle,
+      consentNoticeText: kFaceConsentNoticeEmployee,
+    );
+    if (!mounted) return;
+    if (result?.captured.embedding != null) {
+      await controller.submit(result!.captured, consentAcknowledged: result.consentAcknowledged);
+      if (mounted &&
+          ref.read(faceRegistrationControllerProvider).phase == FaceRegistrationPhase.error) {
+        final message = ref.read(faceRegistrationControllerProvider).errorMessage;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message ?? 'Could not save your face ID.'), backgroundColor: AppColors.error),
+        );
+      }
+    } else {
+      controller.cancelCapture();
+    }
+  }
+
+  Future<void> _handleSubmit() async {
+    if (!await _confirmSubmitForApproval(context)) return;
+    if (!mounted) return;
+    setState(() => _submitting = true);
+    await widget.onSubmit();
+    if (mounted) setState(() => _submitting = false);
+  }
+
+  Future<void> _handleSaveDraft() async {
+    setState(() => _savingDraft = true);
+    await widget.onSaveDraft();
+    if (mounted) setState(() => _savingDraft = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final regState = ref.watch(faceRegistrationControllerProvider);
+    final busy = regState.phase == FaceRegistrationPhase.capturing ||
+        regState.phase == FaceRegistrationPhase.submitting;
+    // OnboardingView._submit (backend) gates on FaceRegistrationRequest
+    // .exists() with no status filter — pending/approved/rejected all count.
+    // Mirrors web's canSubmit = !faceMandatory || Boolean(faceRegistration);
+    // this step only ever renders when faceMandatory is already true.
+    final canSubmit = regState.registration != null;
+
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionCard(
+                  icon: Icons.face_outlined,
+                  title: 'Face ID Registration',
+                  subtitle: 'Your organisation requires a registered face ID for clock-in/out. '
+                      'Register once here — we run a quick liveness check, then send it to HR '
+                      'for approval. You won\'t be able to submit your profile until this is done.',
+                  children: [_FaceIdStatusRow(regState: regState, busy: busy, onCapture: _openCaptureFlow)],
+                ),
+              ],
+            ),
+          ),
+        ),
+        _StickyFooter(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: _PrimaryButton(
+                  label: 'Submit for Approval',
+                  loading: _submitting,
+                  onPressed: canSubmit ? _handleSubmit : null,
+                ),
+              ),
+              if (!canSubmit) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Register your Face ID above to enable submission.',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  if (widget.onPrevious != null) ...[
+                    Expanded(
+                      child: _SecondaryButton(
+                        label: 'Previous',
+                        icon: Icons.arrow_back,
+                        onPressed: widget.onPrevious,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  Expanded(
+                    child: _SecondaryButton(
+                      label: 'Save Draft',
+                      loading: _savingDraft,
+                      onPressed: _handleSaveDraft,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Status card mirroring web's TabFaceId exactly: title text keyed off the
+/// registration's status, and an action slot that's hidden (replaced by
+/// "Awaiting review") while pending — no re-submit affordance for a request
+/// already in HR's queue, same rule as ProfileFaceIdSection.
+class _FaceIdStatusRow extends StatelessWidget {
+  const _FaceIdStatusRow({required this.regState, required this.busy, required this.onCapture});
+
+  final FaceRegistrationUiState regState;
+  final bool busy;
+  final Future<void> Function({required String title, required String subtitle}) onCapture;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = regState.registration?.status;
+    final label = switch (status) {
+      FaceRegistrationStatus.approved => 'Face ID approved',
+      FaceRegistrationStatus.pending => 'Face ID submitted — pending HR approval',
+      FaceRegistrationStatus.rejected => 'Face ID rejected — please register again',
+      null => 'Face ID not yet registered',
+    };
+    final registered = status != null;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: registered ? AppColors.successContainer.withValues(alpha: 0.35) : AppColors.backgroundLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: registered ? AppColors.success.withValues(alpha: 0.4) : AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: registered ? AppColors.success.withValues(alpha: 0.15) : AppColors.surface,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.face_outlined, size: 18, color: registered ? AppColors.success : AppColors.textSecondary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(label, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(width: 8),
+          if (status == FaceRegistrationStatus.pending)
+            Text('Awaiting review',
+                style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w700))
+          else
+            OutlinedButton(
+              onPressed: busy
+                  ? null
+                  : () => onCapture(
+                        title: status == null ? 'Register My Face' : 'Update My Face',
+                        subtitle: status == null
+                            ? 'This registers your Face ID for clock-in verification.'
+                            : 'This replaces your current Face ID and needs re-approval.',
+                      ),
+              child: busy
+                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                  : Text(switch (status) {
+                      FaceRegistrationStatus.approved => 'Update',
+                      FaceRegistrationStatus.rejected => 'Register Again',
+                      _ => 'Register Face ID',
+                    }),
+            ),
         ],
       ),
     );

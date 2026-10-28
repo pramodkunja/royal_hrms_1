@@ -11,16 +11,22 @@ import '../../../expenses/presentation/providers/expense_providers.dart'
 import '../../../leave/domain/entities/leave_entity.dart';
 import '../../../leave/presentation/providers/leave_providers.dart'
     show leaveRepositoryProvider;
+import '../../../wfh/domain/entities/wfh_entity.dart';
+import '../../../wfh/presentation/providers/wfh_providers.dart'
+    show wfhRepositoryProvider;
 
 // Ports web's app/dashboard/approvals/page.tsx "Team Approvals" tab — a
 // unified inbox merging Leave requests + Expense claims + Attendance
-// Corrections into ONE list. There is no backend endpoint that aggregates
-// the three — this composes the existing /leave/requests/, /expenses/ and
-// /attendance/corrections/ endpoints client-side, same as the web page does.
+// Corrections + Work From Home requests into ONE list (matching web's
+// TeamApprovalsSection.tsx, which folds `wfh` in as one of its request
+// kinds alongside leave/expense/attendance_correction). There is no backend
+// endpoint that aggregates these — this composes the existing
+// /leave/requests/, /expenses/, /attendance/corrections/ and /wfh/requests/
+// endpoints client-side, same as the web page does.
 
 // ── Unified item model (presentation-layer glue, not a clean-arch entity) ──────
 
-enum UnifiedApprovalKind { leave, expense, attendanceCorrection }
+enum UnifiedApprovalKind { leave, expense, attendanceCorrection, wfh }
 
 class UnifiedApprovalItem {
   final UnifiedApprovalKind kind;
@@ -43,6 +49,7 @@ class UnifiedApprovalItem {
   final LeaveRequestEntity? leave;
   final ExpenseModel? expense;
   final HrCorrectionRowEntity? correction;
+  final WfhRequestEntity? wfh;
 
   const UnifiedApprovalItem({
     required this.kind,
@@ -62,6 +69,7 @@ class UnifiedApprovalItem {
     this.leave,
     this.expense,
     this.correction,
+    this.wfh,
   });
 
   bool get isPending =>
@@ -132,6 +140,34 @@ class UnifiedApprovalItem {
       correction: c,
     );
   }
+
+  factory UnifiedApprovalItem.fromWfh(WfhRequestEntity r) {
+    final days = _inclusiveDays(r.startDate, r.endDate);
+    return UnifiedApprovalItem(
+      kind: UnifiedApprovalKind.wfh,
+      sourceId: r.id,
+      employeeName: r.employeeName,
+      employeeCode: r.employeeCode,
+      department: r.employeeDept,
+      secondaryText: r.employeeBranch,
+      typeLabel: 'WFH',
+      primaryLine: r.locationLabel.isNotEmpty ? r.locationLabel : 'Work From Home',
+      secondaryLine: '${r.startDate} – ${r.endDate}',
+      tertiaryLine: '$days day${days == 1 ? '' : 's'}',
+      reason: r.reason,
+      status: r.status,
+      submittedAt: _parseDate(r.createdAt),
+      canAction: r.canApprove,
+      wfh: r,
+    );
+  }
+}
+
+int _inclusiveDays(String startIso, String endIso) {
+  final start = DateTime.tryParse(startIso);
+  final end = DateTime.tryParse(endIso);
+  if (start == null || end == null) return 0;
+  return end.difference(start).inDays + 1;
 }
 
 DateTime _parseDate(String? iso) {
@@ -157,6 +193,15 @@ class UnifiedTeamApprovalsNotifier
     // gate the Team Approvals tab itself (see approvals_screen.dart); an
     // approver without it shouldn't get a 403 from the corrections fetch.
     final canCorrection = user?.hasPermission('attendance.create') ?? false;
+    // wfh.approve — mirrors leave.approve/expenses.approve exactly (backend
+    // migration 0088 grants wfh.approve to the same roles that hold
+    // leave.approve, so this is never a real-world mismatch). Deliberately
+    // NOT OR'd with canManageTeam/isSuperuser here — passing scope=team
+    // without the real wfh.approve permission makes the backend silently
+    // fall back to the caller's OWN requests (see
+    // WorkFromHomeRequestListCreateView.get), which would leak the viewer's
+    // own rows into this "team" inbox instead of erroring.
+    final canWfh = user?.hasPermission('wfh.approve') ?? false;
 
     final results = await Future.wait<dynamic>([
       canLeave
@@ -183,6 +228,12 @@ class UnifiedTeamApprovalsNotifier
               (status: 'all', branch: null, department: null),
             ).future)
           : Future.value(<HrCorrectionRowEntity>[]),
+      canWfh
+          ? ref
+              .read(wfhRepositoryProvider)
+              .getWfhRequestsPaginated(scope: 'team', pageSize: 100)
+              .then((page) => page.results)
+          : Future.value(<WfhRequestEntity>[]),
     ]);
 
     final leaveItems = (results[0] as List<LeaveRequestEntity>)
@@ -191,8 +242,10 @@ class UnifiedTeamApprovalsNotifier
         .map(UnifiedApprovalItem.fromExpense);
     final correctionItems = (results[2] as List<HrCorrectionRowEntity>)
         .map(UnifiedApprovalItem.fromCorrection);
+    final wfhItems = (results[3] as List<WfhRequestEntity>)
+        .map(UnifiedApprovalItem.fromWfh);
 
-    return [...leaveItems, ...expenseItems, ...correctionItems];
+    return [...leaveItems, ...expenseItems, ...correctionItems, ...wfhItems];
   }
 
   Future<void> refresh() async {
@@ -218,6 +271,11 @@ class UnifiedTeamApprovalsNotifier
               remarks: remarks,
             );
         break;
+      case UnifiedApprovalKind.wfh:
+        await ref
+            .read(wfhRepositoryProvider)
+            .approveWfhRequest(item.sourceId, remarks: remarks);
+        break;
     }
   }
 
@@ -237,6 +295,11 @@ class UnifiedTeamApprovalsNotifier
               approve: false,
               remarks: remarks,
             );
+        break;
+      case UnifiedApprovalKind.wfh:
+        await ref
+            .read(wfhRepositoryProvider)
+            .rejectWfhRequest(item.sourceId, remarks: remarks);
         break;
     }
   }
@@ -290,7 +353,7 @@ class UnifiedTeamApprovalsNotifier
 
 // ── Screen-local filter / UI state ──────────────────────────────────────────────
 
-enum ApprovalsTypeTab { all, leave, expense, attendanceCorrection }
+enum ApprovalsTypeTab { all, leave, expense, attendanceCorrection, wfh }
 
 UnifiedApprovalKind? _kindForTab(ApprovalsTypeTab tab) => switch (tab) {
       ApprovalsTypeTab.all => null,
@@ -298,6 +361,7 @@ UnifiedApprovalKind? _kindForTab(ApprovalsTypeTab tab) => switch (tab) {
       ApprovalsTypeTab.expense => UnifiedApprovalKind.expense,
       ApprovalsTypeTab.attendanceCorrection =>
         UnifiedApprovalKind.attendanceCorrection,
+      ApprovalsTypeTab.wfh => UnifiedApprovalKind.wfh,
     };
 
 final approvalsSearchQueryProvider = StateProvider.autoDispose<String>((ref) => '');
@@ -370,11 +434,13 @@ class ApprovalsSummaryCounts {
   final int leavePending;
   final int expensePending;
   final int correctionPending;
+  final int wfhPending;
   const ApprovalsSummaryCounts({
     required this.pendingTotal,
     required this.leavePending,
     required this.expensePending,
     required this.correctionPending,
+    required this.wfhPending,
   });
 }
 
@@ -385,11 +451,13 @@ final approvalsSummaryCountsProvider = Provider.autoDispose<ApprovalsSummaryCoun
   final leave = countFor(UnifiedApprovalKind.leave);
   final expense = countFor(UnifiedApprovalKind.expense);
   final correction = countFor(UnifiedApprovalKind.attendanceCorrection);
+  final wfh = countFor(UnifiedApprovalKind.wfh);
   return ApprovalsSummaryCounts(
-    pendingTotal: leave + expense + correction,
+    pendingTotal: leave + expense + correction + wfh,
     leavePending: leave,
     expensePending: expense,
     correctionPending: correction,
+    wfhPending: wfh,
   );
 });
 
@@ -402,6 +470,7 @@ final approvalsTypeTabCountsProvider =
     ApprovalsTypeTab.leave: counts.leavePending,
     ApprovalsTypeTab.expense: counts.expensePending,
     ApprovalsTypeTab.attendanceCorrection: counts.correctionPending,
+    ApprovalsTypeTab.wfh: counts.wfhPending,
   };
 });
 

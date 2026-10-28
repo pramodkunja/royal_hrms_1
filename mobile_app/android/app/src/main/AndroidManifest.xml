@@ -17,7 +17,7 @@
          that callback-stealing bug and makes DashboardShell's
          exit-confirmation PopScope fire reliably every time. -->
     <application
-        android:label="ROYAL HRMS"
+        android:label="Royal HRMS"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:enableOnBackInvokedCallback="false">

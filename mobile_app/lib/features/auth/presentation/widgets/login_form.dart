@@ -20,12 +20,14 @@ class LoginForm extends ConsumerStatefulWidget {
 
 class _LoginFormState extends ConsumerState<LoginForm> {
   final _formKey = GlobalKey<FormState>();
+  final _companyCodeCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   bool _showPassword = false;
 
   @override
   void dispose() {
+    _companyCodeCtrl.dispose();
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
     super.dispose();
@@ -34,9 +36,11 @@ class _LoginFormState extends ConsumerState<LoginForm> {
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    await ref
-        .read(authStateProvider.notifier)
-        .login(_emailCtrl.text.trim(), _passwordCtrl.text);
+    await ref.read(authStateProvider.notifier).login(
+          _companyCodeCtrl.text.trim(),
+          _emailCtrl.text.trim(),
+          _passwordCtrl.text,
+        );
 
     // Imperative navigation: runs after the async login call completes,
     // so we are never inside a build phase here. ref.listen in build() can
@@ -92,6 +96,15 @@ class _LoginFormState extends ConsumerState<LoginForm> {
         children: [
           if (errorMessage != null) _ErrorBanner(message: errorMessage),
           if (errorMessage != null) const SizedBox(height: 16),
+          AppTextField(
+            label: 'Company Code',
+            hint: 'e.g. ROYAL01',
+            controller: _companyCodeCtrl,
+            textInputAction: TextInputAction.next,
+            validator: (value) => FormValidators.required(value, fieldName: 'Company code'),
+            enabled: !isLoading,
+          ),
+          const SizedBox(height: 16),
           AppTextField(
             label: 'Email Address',
             hint: 'you@company.com',

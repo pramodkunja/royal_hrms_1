@@ -13,10 +13,11 @@ import 'profile_widgets.dart';
 
 /// Ports web's "Face Registration" card on ProfileClient.tsx exactly (see
 /// hooks/useFaceRegistrationCard.ts for the state precedence this mirrors):
-/// initial registration only happens through HR (there's no self-service
-/// "Register" here, matching web) — this card only ever offers "Update My
-/// Face" once an employee is already approved or was rejected, and shows a
-/// contact-HR message otherwise.
+/// the toggle-off ("disabled") state shows a contact-admin message with no
+/// action, and every other state offers a capture button — "Register My
+/// Face" the first time (faceCardState "not_registered"), "Update My Face"
+/// once a registration already exists (approved/rejected), matching web's
+/// `mode={faceCardState === "not_registered" ? "register" : "update"}`.
 class ProfileFaceIdSection extends ConsumerStatefulWidget {
   const ProfileFaceIdSection({super.key});
 
@@ -31,13 +32,19 @@ class _ProfileFaceIdSectionState extends ConsumerState<ProfileFaceIdSection> {
     Future.microtask(() => ref.read(faceRegistrationControllerProvider.notifier).loadStatus());
   }
 
-  Future<void> _openUpdateFlow() async {
+  /// Backs both the first-time "Register My Face" button and the
+  /// post-registration "Update My Face" one — both go through the exact same
+  /// self-submit capture flow (POST /attendance/face-registration/ via
+  /// FaceRegistrationController.submit), only the sheet's copy differs. A
+  /// first-time submission and a replacement submission are the same backend
+  /// call; the endpoint doesn't distinguish them.
+  Future<void> _openCaptureFlow({required String title, required String subtitle}) async {
     final controller = ref.read(faceRegistrationControllerProvider.notifier);
     controller.startCapture();
     final result = await showFaceCaptureSheet(
       context,
-      title: 'Update My Face',
-      subtitle: 'This replaces your current Face ID and needs re-approval.',
+      title: title,
+      subtitle: subtitle,
       consentNoticeText: kFaceConsentNoticeEmployee,
     );
 
@@ -47,7 +54,7 @@ class _ProfileFaceIdSectionState extends ConsumerState<ProfileFaceIdSection> {
       if (mounted && ref.read(faceRegistrationControllerProvider).phase == FaceRegistrationPhase.error) {
         final message = ref.read(faceRegistrationControllerProvider).errorMessage;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message ?? 'Could not update your face ID.'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(message ?? 'Could not save your face ID.'), backgroundColor: AppColors.error),
         );
       }
     } else {
@@ -82,24 +89,29 @@ class _ProfileFaceIdSectionState extends ConsumerState<ProfileFaceIdSection> {
     }
 
     final busy = regState.phase == FaceRegistrationPhase.capturing || regState.phase == FaceRegistrationPhase.submitting;
-    final (title, subtitle, iconColor, showUpdateButton) = switch (regState.phase) {
+    // isRegisterMode picks the sheet copy and button label ("Register My
+    // Face" vs "Update My Face") — otherwise both buttons do the exact same
+    // thing (see _openCaptureFlow's own doc comment).
+    final (title, subtitle, iconColor, showActionButton, isRegisterMode) = switch (regState.phase) {
       FaceRegistrationPhase.approved => (
-          'Face ID registered', 'Required for clock-in/out — already verified.', AppColors.success, true,
+          'Face ID registered', 'Required for clock-in/out.', AppColors.success, true, false,
         ),
       FaceRegistrationPhase.pending || FaceRegistrationPhase.capturing || FaceRegistrationPhase.submitting => (
-          'Face ID pending HR approval', 'You\'ll be able to clock in with it once it\'s approved.', AppColors.warning, false,
+          'Face ID pending HR approval', 'You\'ll be able to clock in with it once it\'s approved.', AppColors.warning, false, false,
         ),
       FaceRegistrationPhase.rejected => (
           'Face ID registration was rejected',
           regState.registration?.notes.isNotEmpty == true ? regState.registration!.notes : 'Please update and resubmit.',
           AppColors.error,
           true,
+          false,
         ),
       FaceRegistrationPhase.idle || FaceRegistrationPhase.error => (
           'Face ID not yet registered',
-          'Face ID is registered during onboarding. Contact HR to register your face ID.',
+          'Register your face to clock in and out with Face ID.',
           AppColors.textHint,
-          false,
+          true,
+          true,
         ),
     };
 
@@ -119,16 +131,25 @@ class _ProfileFaceIdSectionState extends ConsumerState<ProfileFaceIdSection> {
               FaceStatusBadge(status: regState.registration?.status),
             ],
           ),
-          if (showUpdateButton) ...[
+          if (showActionButton) ...[
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: busy ? null : _openUpdateFlow,
+                onPressed: busy
+                    ? null
+                    : () => _openCaptureFlow(
+                          title: isRegisterMode ? 'Register My Face' : 'Update My Face',
+                          subtitle: isRegisterMode
+                              ? 'This registers your Face ID for clock-in verification.'
+                              : 'This replaces your current Face ID and needs re-approval.',
+                        ),
                 icon: busy
                     ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.camera_alt_outlined, size: 16),
-                label: Text(busy ? 'Updating…' : 'Update My Face'),
+                label: Text(busy
+                    ? (isRegisterMode ? 'Registering…' : 'Updating…')
+                    : (isRegisterMode ? 'Register My Face' : 'Update My Face')),
               ),
             ),
           ],

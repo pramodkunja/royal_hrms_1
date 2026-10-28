@@ -7,6 +7,20 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
   AttendanceRepositoryImpl(this._ds);
 
   @override
+  Future<void> checkGeofence({
+    required String attendanceMode,
+    double? latitude,
+    double? longitude,
+    double? accuracy,
+  }) =>
+      _ds.checkGeofence(
+        attendanceMode: attendanceMode,
+        latitude: latitude,
+        longitude: longitude,
+        accuracy: accuracy,
+      );
+
+  @override
   Future<TodayAttendanceEntity> punch({
     required String punchType,
     required String attendanceMode,
@@ -216,6 +230,9 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
   @override
   Future<void> reviewCorrection(String id, {required bool approve, String? remarks}) =>
       _ds.reviewCorrection(id, approve: approve, remarks: remarks);
+
+  @override
+  Future<List<MyCorrectionEntity>> getMyCorrections() => _ds.fetchMyCorrections();
 
   @override
   Future<List<HrUserEntity>> getHrUsers({String? branch}) =>

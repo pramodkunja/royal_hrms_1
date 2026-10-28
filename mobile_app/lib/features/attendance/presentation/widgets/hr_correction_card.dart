@@ -158,7 +158,7 @@ class _HrCorrectionCardState extends State<HrCorrectionCard> {
               Divider(height: 1, color: AppColors.border),
               const SizedBox(height: 8),
               if (record.l1Status != null)
-                _StageLine(
+                StageLine(
                   level: 'Manager',
                   approverName: record.l1ApproverName,
                   status: record.l1Status,
@@ -166,7 +166,7 @@ class _HrCorrectionCardState extends State<HrCorrectionCard> {
                 ),
               if (record.l2Status != null) ...[
                 const SizedBox(height: 6),
-                _StageLine(
+                StageLine(
                   level: 'HR',
                   approverName: record.l2ApproverName,
                   status: record.l2Status,
@@ -251,12 +251,13 @@ class _KV extends StatelessWidget {
       );
 }
 
-class _StageLine extends StatelessWidget {
+class StageLine extends StatelessWidget {
   final String level;
   final String? approverName;
   final String? status;
   final String remarks;
-  const _StageLine({
+  const StageLine({
+    super.key,
     required this.level,
     required this.approverName,
     required this.status,

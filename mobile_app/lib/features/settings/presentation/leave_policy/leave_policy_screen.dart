@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/stat_card.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../leave/domain/entities/leave_entity.dart';
 import '../../../leave/presentation/widgets/leave_type_icons.dart';
@@ -68,8 +69,9 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
     super.initState();
     final role = ref.read(authStateProvider).valueOrNull?.user?.role;
     _showCarryForward = role != null && kCarryForwardRoles.contains(role);
-    _tabController = TabController(length: _showCarryForward ? 4 : 3, vsync: this)
-      ..addListener(() => setState(() {}));
+    _tabController =
+        TabController(length: _showCarryForward ? 4 : 3, vsync: this)
+          ..addListener(() => setState(() {}));
   }
 
   @override
@@ -91,7 +93,8 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
                 icon: const Icon(Icons.file_upload_outlined, size: 20),
                 color: AppColors.textSecondary,
                 tooltip: 'Import Opening Balances',
-                onPressed: () => context.push(AppRoutes.settingsLeaveBalanceImport),
+                onPressed: () =>
+                    context.push(AppRoutes.settingsLeaveBalanceImport),
               )
             : null,
         bottom: TabBar(
@@ -102,7 +105,8 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
             _iconTab(Icons.beach_access_outlined, 'Leave Types'),
             _iconTab(Icons.rule_outlined, 'Leave Policy'),
             _iconTab(Icons.paid_outlined, 'Credit Rules'),
-            if (_showCarryForward) _iconTab(Icons.repeat_rounded, 'Carry Forward'),
+            if (_showCarryForward)
+              _iconTab(Icons.repeat_rounded, 'Carry Forward'),
           ],
           labelColor: AppColors.primary,
           unselectedLabelColor: AppColors.textSecondary,
@@ -121,7 +125,8 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
             icon: const Icon(Icons.add),
             label: const Text('Add Leave Type',
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
         2 => FloatingActionButton.extended(
             onPressed: () => _creditRulesKey.currentState?.openAdd(),
@@ -130,7 +135,8 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
             icon: const Icon(Icons.add),
             label: const Text('Add Rule',
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
         _ => null,
       },
@@ -235,8 +241,9 @@ class _PolicyTabState extends ConsumerState<_PolicyTab> {
     if (ok != true) return;
 
     setState(() => _deleting = true);
-    final result =
-        await ref.read(leavePoliciesProvider.notifier).deletePolicy(p.leaveType);
+    final result = await ref
+        .read(leavePoliciesProvider.notifier)
+        .deletePolicy(p.leaveType);
     if (!mounted) return;
     setState(() => _deleting = false);
     if (result != null) {
@@ -315,83 +322,23 @@ class _StatsRow extends StatelessWidget {
     final all = policies;
     final active = all.where((p) => p.isActive).length;
     final carryFwd = all.where((p) => p.canCarryForward).length;
-    return Row(
-      children: [
-        Expanded(
-          child: _StatCard(
-              icon: Icons.beach_access_outlined,
-              count: all.length,
-              label: 'Total Types',
-              color: AppColors.primary),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatCard(
-              icon: Icons.check_circle_outline,
-              count: active,
-              label: 'Active',
-              color: AppColors.success),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatCard(
-              icon: Icons.repeat_rounded,
-              count: carryFwd,
-              label: 'Carry Forward',
-              color: AppColors.warning),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final IconData icon;
-  final int count;
-  final String label;
-  final Color color;
-  const _StatCard(
-      {required this.icon,
-      required this.count,
-      required this.label,
-      required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.18)),
-        boxShadow: [
-          BoxShadow(color: color.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 26,
-            height: 26,
-            decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(7)),
-            child: Icon(icon, size: 14, color: color),
-          ),
-          const SizedBox(height: 8),
-          Text('$count',
-              style: TextStyle(
-                  fontSize: 19, fontWeight: FontWeight.w800, color: color, height: 1)),
-          const SizedBox(height: 2),
-          Text(label,
-              style: AppTextStyles.caption
-                  .copyWith(fontSize: 10, color: AppColors.textHint),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
-        ],
-      ),
-    );
+    return StatCardRow(padding: EdgeInsets.zero, cards: [
+      StatCard(
+          icon: Icons.beach_access_outlined,
+          count: all.length,
+          label: 'Total Types',
+          color: AppColors.primary),
+      StatCard(
+          icon: Icons.check_circle_outline,
+          count: active,
+          label: 'Active',
+          color: AppColors.success),
+      StatCard(
+          icon: Icons.repeat_rounded,
+          count: carryFwd,
+          label: 'Carry Forward',
+          color: AppColors.warning),
+    ]);
   }
 }
 
@@ -469,7 +416,8 @@ class _PolicyCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: isBuiltIn
                                 ? AppColors.backgroundLow
-                                : AppColors.textSecondary.withValues(alpha: 0.10),
+                                : AppColors.textSecondary
+                                    .withValues(alpha: 0.10),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(shortLabel,
@@ -574,8 +522,8 @@ class _PolicyCard extends StatelessWidget {
               ),
               if (policy.policyNote.isNotEmpty)
                 Text(policy.policyNote,
-                    style: AppTextStyles.caption.copyWith(
-                        fontSize: 11, color: AppColors.textSecondary),
+                    style: AppTextStyles.caption
+                        .copyWith(fontSize: 11, color: AppColors.textSecondary),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis),
             ],
@@ -675,8 +623,7 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.cloud_off_outlined,
-                size: 48, color: AppColors.textHint),
+            Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
             const SizedBox(height: 12),
             Text('Could not load', style: AppTextStyles.h4),
             const SizedBox(height: 6),

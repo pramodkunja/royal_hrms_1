@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/blue_hero_banner.dart';
 import '../../../../shared/widgets/expandable_fab.dart';
+import '../../../../shared/widgets/stat_card.dart';
 import '../../domain/entities/candidate_entity.dart';
 import '../providers/interview_providers.dart';
 import '../widgets/candidate_card.dart';
@@ -43,8 +45,15 @@ class _InterviewListScreenState extends ConsumerState<InterviewListScreen> {
             },
             child: CustomScrollView(
               slivers: [
-                // ── Header ──────────────────────────────────────────────────
-                SliverToBoxAdapter(child: _Header()),
+                // ── Search + filter (hero first — no separate "Interview
+                // List" title here anymore, that duplicated the app bar's
+                // own title) ───────────────────────────────────────────────
+                SliverToBoxAdapter(
+                  child: _SearchFilter(
+                    statusFilter: statusFilter,
+                    search: search,
+                  ),
+                ),
 
                 // ── Stats ────────────────────────────────────────────────────
                 SliverToBoxAdapter(
@@ -57,14 +66,6 @@ class _InterviewListScreenState extends ConsumerState<InterviewListScreen> {
 
                 // ── Info banner ───────────────────────────────────────────
                 const SliverToBoxAdapter(child: _InfoBanner()),
-
-                // ── Search + filter ───────────────────────────────────────
-                SliverToBoxAdapter(
-                  child: _SearchFilter(
-                    statusFilter: statusFilter,
-                    search: search,
-                  ),
-                ),
 
                 // ── List ─────────────────────────────────────────────────
                 listAsync.when(

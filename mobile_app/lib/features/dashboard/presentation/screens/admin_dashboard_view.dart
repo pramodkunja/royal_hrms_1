@@ -434,7 +434,7 @@ class _AnnouncementCard extends ConsumerWidget {
 
     return SectionCard(
       title: 'Latest Announcement',
-      icon: Icons.campaign_outlined,
+      iconWidget: const SectionIconAsset('assets/images/Announcement.png'),
       accentColor: AppColors.primary,
       child: announcementAsync.when(
         data: (announcement) {
@@ -445,7 +445,7 @@ class _AnnouncementCard extends ConsumerWidget {
           // comes back instead of a clean null.
           if (announcement == null || announcement.title.isEmpty) {
             return const SectionMessage(
-              icon: Icons.campaign_outlined,
+              iconWidget: SectionIconAsset('assets/images/Announcement.png', size: 28),
               label: 'No announcements yet',
             );
           }
@@ -481,7 +481,7 @@ class _AnnouncementCard extends ConsumerWidget {
           );
         },
         loading: () => const SectionMessage(
-          icon: Icons.campaign_outlined,
+          iconWidget: SectionIconAsset('assets/images/Announcement.png', size: 28),
           label: 'Loading…',
         ),
         error: (e, _) => SectionError(
@@ -692,13 +692,13 @@ class _TodaysBirthdaysCard extends ConsumerWidget {
 
     return SectionCard(
       title: "Today's Birthdays",
-      icon: Icons.cake_outlined,
+      iconWidget: const SectionIconAsset('assets/images/Birthday.png'),
       accentColor: AppColors.primary,
       child: birthdaysAsync.when(
         data: (list) {
           if (list.isEmpty) {
             return const SectionMessage(
-              icon: Icons.cake_outlined,
+              iconWidget: SectionIconAsset('assets/images/Birthday.png', size: 28),
               label: 'No birthdays today',
             );
           }
@@ -712,7 +712,7 @@ class _TodaysBirthdaysCard extends ConsumerWidget {
           );
         },
         loading: () => const SectionMessage(
-          icon: Icons.cake_outlined,
+          iconWidget: SectionIconAsset('assets/images/Birthday.png', size: 28),
           label: 'Loading…',
         ),
         error: (e, _) => SectionError(
@@ -733,13 +733,13 @@ class _UpcomingBirthdaysCard extends ConsumerWidget {
 
     return SectionCard(
       title: 'Upcoming Birthdays',
-      icon: Icons.celebration_outlined,
+      iconWidget: const SectionIconAsset('assets/images/Birthday.png'),
       accentColor: AppColors.primary,
       child: birthdaysAsync.when(
         data: (list) {
           if (list.isEmpty) {
             return const SectionMessage(
-              icon: Icons.calendar_month_outlined,
+              iconWidget: SectionIconAsset('assets/images/Birthday.png', size: 28),
               label: 'No upcoming birthdays',
             );
           }
@@ -753,7 +753,7 @@ class _UpcomingBirthdaysCard extends ConsumerWidget {
           );
         },
         loading: () => const SectionMessage(
-          icon: Icons.celebration_outlined,
+          iconWidget: SectionIconAsset('assets/images/Birthday.png', size: 28),
           label: 'Loading…',
         ),
         error: (e, _) => SectionError(

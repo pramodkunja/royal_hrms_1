@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/app_loading_widget.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../branches/presentation/widgets/branch_dlg_header.dart';
 import '../../data/models/approval_rule_model.dart';
+import '../../data/models/roles_model.dart';
 import '../providers/approval_rules_providers.dart';
+import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
 import '../widgets/settings_page_header.dart';
 
@@ -18,14 +21,6 @@ const _kWorkflowIcons = <String, IconData>{
   'loan': Icons.payments_outlined,
   'attendance_correction': Icons.edit_calendar_outlined,
 };
-
-// The 3 approver roles a rule's L1/L2 can be set to — matches backend's
-// ApprovalWorkflowRule.APPROVER_ROLE_CHOICES exactly.
-const _kApproverRoles = <(String, String)>[
-  ('reporting_manager', 'Reporting Manager'),
-  ('hr_manager', 'HR Manager'),
-  ('admin', 'Admin'),
-];
 
 class ApprovalRulesScreen extends ConsumerWidget {
   const ApprovalRulesScreen({super.key});
@@ -40,7 +35,7 @@ class ApprovalRulesScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       appBar: const SettingsAppBar(title: 'Approval Rules'),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const AppLoadingWidget(),
         error: (e, _) => _ErrorView(
           message: friendlyApprovalRulesError(e),
           onRetry: () => ref.invalidate(approvalRulesProvider),
@@ -90,7 +85,7 @@ class ApprovalRulesScreen extends ConsumerWidget {
         insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 40),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        child: _RuleEditorDialog(rule: rule, ref: ref),
+        child: _RuleEditorDialog(rule: rule),
       ),
     );
   }
@@ -107,7 +102,7 @@ class _RuleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasL2 = rule.l2ApproverRole.isNotEmpty;
+    final hasL2 = rule.l2ApproverRole != null;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -212,19 +207,18 @@ class _ApproverChip extends StatelessWidget {
 
 // ── Edit dialog ────────────────────────────────────────────────────────────────
 
-class _RuleEditorDialog extends StatefulWidget {
+class _RuleEditorDialog extends ConsumerStatefulWidget {
   final ApprovalRuleModel rule;
-  final WidgetRef ref;
 
-  const _RuleEditorDialog({required this.rule, required this.ref});
+  const _RuleEditorDialog({required this.rule});
 
   @override
-  State<_RuleEditorDialog> createState() => _RuleEditorDialogState();
+  ConsumerState<_RuleEditorDialog> createState() => _RuleEditorDialogState();
 }
 
-class _RuleEditorDialogState extends State<_RuleEditorDialog> {
-  late String _l1;
-  late String _l2; // '' = single level
+class _RuleEditorDialogState extends ConsumerState<_RuleEditorDialog> {
+  late int? _l1;
+  late int? _l2; // null = single level
   bool _saving = false;
   String? _error;
 
@@ -235,15 +229,32 @@ class _RuleEditorDialogState extends State<_RuleEditorDialog> {
     _l2 = widget.rule.l2ApproverRole;
   }
 
+  // Backend Role ids drift over time (roles get renamed/deactivated) — if the
+  // currently-assigned role isn't in the active list, keep it selectable so
+  // the dropdown doesn't crash on a value with no matching item.
+  List<DropdownMenuItem<int?>> _roleItems(List<RoleModel> roles, int? currentId, String currentLabel) {
+    final items = roles
+        .map((r) => DropdownMenuItem<int?>(value: r.id as int, child: Text(r.displayName, overflow: TextOverflow.ellipsis)))
+        .toList();
+    if (currentId != null && !roles.any((r) => r.id == currentId)) {
+      items.insert(0, DropdownMenuItem<int?>(value: currentId, child: Text(currentLabel, overflow: TextOverflow.ellipsis)));
+    }
+    return items;
+  }
+
   Future<void> _save() async {
+    if (_l1 == null) {
+      setState(() => _error = 'Select an L1 approver role.');
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
     });
 
-    final error = await widget.ref.read(approvalRulesProvider.notifier).updateRule(
+    final error = await ref.read(approvalRulesProvider.notifier).updateRule(
           workflowType: widget.rule.workflowType,
-          l1ApproverRole: _l1,
+          l1ApproverRole: _l1!,
           l2ApproverRole: _l2,
         );
 
@@ -260,6 +271,8 @@ class _RuleEditorDialogState extends State<_RuleEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final roles = (ref.watch(rolesProvider).valueOrNull ?? []).where((r) => r.isActive).toList();
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: Column(
@@ -293,23 +306,21 @@ class _RuleEditorDialogState extends State<_RuleEditorDialog> {
                     ],
                     _Field(
                       label: 'L1 Approver Role *',
-                      child: DropdownButtonFormField<String>(
+                      child: DropdownButtonFormField<int?>(
                         initialValue: _l1,
                         isExpanded: true,
                         decoration: const InputDecoration(
                           isDense: true,
                           contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                         ),
-                        items: _kApproverRoles
-                            .map((r) => DropdownMenuItem(value: r.$1, child: Text(r.$2, overflow: TextOverflow.ellipsis)))
-                            .toList(),
-                        onChanged: (v) => setState(() => _l1 = v ?? _l1),
+                        items: _roleItems(roles, _l1, widget.rule.l1ApproverLabel),
+                        onChanged: (v) => setState(() => _l1 = v),
                       ),
                     ),
                     const SizedBox(height: 12),
                     _Field(
                       label: 'L2 Approver Role (leave blank for single-level)',
-                      child: DropdownButtonFormField<String>(
+                      child: DropdownButtonFormField<int?>(
                         initialValue: _l2,
                         isExpanded: true,
                         decoration: const InputDecoration(
@@ -317,12 +328,10 @@ class _RuleEditorDialogState extends State<_RuleEditorDialog> {
                           contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                         ),
                         items: [
-                          const DropdownMenuItem(value: '', child: Text('— Single level (no L2) —')),
-                          ..._kApproverRoles.map(
-                            (r) => DropdownMenuItem(value: r.$1, child: Text(r.$2, overflow: TextOverflow.ellipsis)),
-                          ),
+                          const DropdownMenuItem(value: null, child: Text('— Single level (no L2) —')),
+                          ..._roleItems(roles, _l2, widget.rule.l2ApproverLabel),
                         ],
-                        onChanged: (v) => setState(() => _l2 = v ?? ''),
+                        onChanged: (v) => setState(() => _l2 = v),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -393,7 +402,11 @@ class _ErrorView extends StatelessWidget {
             const SizedBox(height: 6),
             Text(message, style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
             const SizedBox(height: 16),
-            TextButton(onPressed: onRetry, child: const Text('Retry')),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Retry'),
+            ),
           ],
         ),
       ),

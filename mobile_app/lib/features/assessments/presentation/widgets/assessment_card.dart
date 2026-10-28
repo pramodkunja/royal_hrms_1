@@ -30,7 +30,9 @@ class AssessmentCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
+        // Matches the 16-radius scale used by the stat tiles and the
+        // loading/empty/error state cards on the Assessments screen.
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
         boxShadow: AppColors.cardShadow,
       ),

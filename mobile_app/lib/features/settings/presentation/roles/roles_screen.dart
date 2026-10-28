@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/app_loading_widget.dart';
 import '../../data/models/roles_model.dart';
 import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
@@ -44,7 +45,7 @@ class RolesScreen extends ConsumerWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       body: rolesAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const AppLoadingWidget(),
         error: (e, _) => _ErrorView(message: e.toString()),
         data: (roles) => _buildBody(context, ref, roles, permsAsync),
       ),
@@ -78,7 +79,7 @@ class RolesScreen extends ConsumerWidget {
         permsAsync.when(
           loading: () => const Padding(
             padding: EdgeInsets.all(32),
-            child: Center(child: CircularProgressIndicator()),
+            child: AppLoadingWidget(),
           ),
           error: (_, __) => const SizedBox.shrink(),
           data: (perms) => _PermissionMatrixSection(roles: roles, permissions: perms),
@@ -205,8 +206,11 @@ class _RoleRow extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: isSystem
-                        ? [const Color(0xFF9B51E0), const Color(0xFF7B3FBF)]
-                        : [AppColors.primary, const Color(0xFF2A6ACC)],
+                        ? [
+                            AppColors.accentPurple,
+                            AppColors.accentPurple.withValues(alpha: 0.75),
+                          ]
+                        : [AppColors.primary, AppColors.primaryLight],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -232,7 +236,7 @@ class _RoleRow extends StatelessWidget {
                           ),
                         ),
                         if (isSystem)
-                          const _SmallBadge(label: 'System', color: Color(0xFF9B51E0)),
+                          _SmallBadge(label: 'System', color: AppColors.accentPurple),
                       ],
                     ),
                     const SizedBox(height: 2),

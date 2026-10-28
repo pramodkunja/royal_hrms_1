@@ -125,7 +125,7 @@ class _FaceCaptureCameraViewState extends ConsumerState<FaceCaptureCameraView> {
                       ),
                     ),
                     child: Text(
-                      _liveHint(state.phase, widget.instructionText),
+                      _liveHint(state, widget.instructionText),
                       textAlign: TextAlign.center,
                       style: AppTextStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
                     ),
@@ -145,9 +145,13 @@ class _FaceCaptureCameraViewState extends ConsumerState<FaceCaptureCameraView> {
     );
   }
 
-  String _liveHint(FaceCapturePhase phase, String instructionText) {
-    return switch (phase) {
-      FaceCapturePhase.detecting => instructionText,
+  String _liveHint(FaceCaptureUiState state, String instructionText) {
+    return switch (state.phase) {
+      // liveHint (set by the pre-liveness distance/frontality/multi-face
+      // checks — see face_capture_controller.dart's _handleFaces) takes
+      // priority over the caller's static instruction whenever there's
+      // something specific to correct; falls back to it otherwise.
+      FaceCapturePhase.detecting => state.liveHint ?? instructionText,
       FaceCapturePhase.livenessChecking => 'Blink, or slowly turn your head',
       _ => '',
     };
@@ -186,6 +190,13 @@ class _StatusCard extends StatelessWidget {
           Icons.replay_outlined, state.message ?? 'Could not confirm liveness in time.', AppColors.error, true,
         ),
       FaceCapturePhase.extractingEmbedding => (Icons.hourglass_top_outlined, 'Processing…', AppColors.primary, false),
+      // Recoverable, expected — a lighting/eye-occlusion check on the
+      // captured photo didn't pass, not something actually broken (see this
+      // phase's own doc comment in face_capture_state.dart). Same "Try
+      // again" shape as livenessFailed, just its own icon/message.
+      FaceCapturePhase.qualityFailed => (
+          Icons.wb_sunny_outlined, state.message ?? 'Capture quality check failed.', AppColors.warning, true,
+        ),
       FaceCapturePhase.ready => (Icons.check_circle_outline, 'Captured', AppColors.success, false),
       FaceCapturePhase.error => (
           Icons.error_outline, state.message ?? 'Something went wrong.', AppColors.error, true,

@@ -15,8 +15,8 @@ class ApprovalRulesRemoteDataSource {
 
   Future<ApprovalRuleModel> updateRule({
     required String workflowType,
-    required String l1ApproverRole,
-    required String l2ApproverRole,
+    required int l1ApproverRole,
+    required int? l2ApproverRole,
   }) async {
     final res = await _dio.patch(
       ApiConstants.settingsApprovalRules,

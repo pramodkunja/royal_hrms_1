@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/blue_hero_banner.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/face_employee_entity.dart';
 import '../../domain/entities/face_registration_entity.dart';
@@ -180,42 +181,27 @@ class _FaceIdRegistrationsScreenState extends ConsumerState<FaceIdRegistrationsS
       body: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            BlueHeroBanner(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Face ID Registrations', style: AppTextStyles.h4),
+                  Text('Face ID Registrations',
+                      style: AppTextStyles.h4.copyWith(color: Colors.white)),
                   const SizedBox(height: 2),
                   Text(
                     'Register or update an employee\'s face ID in person — approved immediately.',
-                    style: AppTextStyles.caption,
+                    style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.85)),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _searchCtrl,
+                    onChanged: _onSearchChanged,
+                    decoration: heroSearchFieldDecoration(hintText: 'Search by name, email or ID…'),
                   ),
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              child: TextField(
-                controller: _searchCtrl,
-                onChanged: _onSearchChanged,
-                decoration: InputDecoration(
-                  hintText: 'Search by name, email or ID…',
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: AppColors.surface,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AppColors.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AppColors.border),
-                  ),
-                ),
-              ),
-            ),
+            const SizedBox(height: 4),
             // Deliberately no AnimatedSwitcher here — it lays children out
             // inside a Stack, which hands non-positioned children LOOSE
             // constraints instead of tight ones. A scrollable (ListView /

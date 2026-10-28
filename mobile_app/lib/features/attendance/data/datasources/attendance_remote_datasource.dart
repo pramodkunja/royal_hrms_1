@@ -24,6 +24,23 @@ class AttendanceRemoteDataSource {
 
   // ── My Attendance ──────────────────────────────────────────────────────────
 
+  // Read-only — writes nothing, unlike punch() below. Throws (DioException,
+  // 403) on an out-of-geofence/missing-GPS rejection, same shape callers
+  // already parse via parseDioException for punch() itself.
+  Future<void> checkGeofence({
+    required String attendanceMode,
+    double? latitude,
+    double? longitude,
+    double? accuracy,
+  }) async {
+    await _dio.post(ApiConstants.attendanceGeofenceCheck, data: {
+      'attendance_mode': attendanceMode,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (accuracy != null) 'accuracy': accuracy,
+    });
+  }
+
   Future<TodayAttendanceModel> punch({
     required String punchType,
     required String attendanceMode,
@@ -300,6 +317,16 @@ class AttendanceRemoteDataSource {
       'page_size': 100,
     });
     return _unwrapList(res.data).map(HrCorrectionRowModel.fromJson).toList();
+  }
+
+  // Own correction requests + status/approver history — distinct from the
+  // HR inbox above (no employee-identity fields; carries original_in/
+  // original_out alongside requested_in/requested_out instead).
+  Future<List<MyCorrectionModel>> fetchMyCorrections() async {
+    final res = await _dio.get(ApiConstants.attendanceMyCorrections, queryParameters: {
+      'page_size': 100,
+    });
+    return _unwrapList(res.data).map(MyCorrectionModel.fromJson).toList();
   }
 
   Future<void> reviewCorrection(String id, {required bool approve, String? remarks}) async {

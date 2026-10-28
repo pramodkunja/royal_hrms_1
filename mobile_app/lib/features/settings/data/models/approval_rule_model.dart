@@ -5,9 +5,11 @@
 class ApprovalRuleModel {
   final String workflowType;
   final String workflowLabel;
-  final String l1ApproverRole;
+  // Role FK primary key (see ApprovalWorkflowRuleSerializer.get_l1_approver_role
+  // / get_l2_approver_role on the backend) — NOT a slug/choice string.
+  final int? l1ApproverRole;
   final String l1ApproverLabel;
-  final String l2ApproverRole; // '' = single-level (no L2)
+  final int? l2ApproverRole; // null = single-level (no L2)
   final String l2ApproverLabel;
 
   const ApprovalRuleModel({
@@ -23,9 +25,9 @@ class ApprovalRuleModel {
     return ApprovalRuleModel(
       workflowType: json['workflow_type'] as String? ?? '',
       workflowLabel: json['workflow_label'] as String? ?? '',
-      l1ApproverRole: json['l1_approver_role'] as String? ?? '',
+      l1ApproverRole: json['l1_approver_role'] as int?,
       l1ApproverLabel: json['l1_approver_label'] as String? ?? '',
-      l2ApproverRole: json['l2_approver_role'] as String? ?? '',
+      l2ApproverRole: json['l2_approver_role'] as int?,
       l2ApproverLabel: json['l2_approver_label'] as String? ?? '',
     );
   }

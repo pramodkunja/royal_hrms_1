@@ -5,33 +5,37 @@ class OrgChartRemoteDataSource {
   final Dio _dio;
   OrgChartRemoteDataSource(this._dio);
 
-  Future<List<Map<String, dynamic>>> fetchEmployees() async {
+  /// Hits the same `GET /org-chart/` endpoint the web app uses. [branch] is
+  /// sent as-is (backend matches it case-insensitively); omit for the
+  /// server's default scope (own branch, or all branches for company-scope
+  /// viewers).
+  Future<Map<String, dynamic>> fetchOrgChart({String? branch}) async {
     final res = await _dio.get(
-      ApiConstants.employees,
-      queryParameters: {'page_size': 200},
+      ApiConstants.orgChart,
+      queryParameters: (branch != null && branch.isNotEmpty)
+          ? {'branch': branch}
+          : null,
     );
     final data = _unwrap(res.data);
-    if (data is Map<String, dynamic>) {
-      final results = data['results'] as List<dynamic>? ?? [];
-      return results.cast<Map<String, dynamic>>();
-    }
-    if (data is List) {
-      return data.cast<Map<String, dynamic>>();
-    }
-    return [];
+    return data is Map<String, dynamic> ? data : {};
   }
 
-  Future<String> fetchCompanyName() async {
-    try {
-      final res = await _dio.get(ApiConstants.settingsCompany);
-      final data = _unwrap(res.data);
-      if (data is Map<String, dynamic>) {
-        return data['name'] as String? ?? 'Royal HRMS';
-      }
-      return 'Royal HRMS';
-    } catch (_) {
-      return 'Royal HRMS';
-    }
+  /// Branch names for the company-scope branch picker — same source the web
+  /// app's branch dropdown uses.
+  Future<List<String>> fetchBranchNames() async {
+    final res = await _dio.get(
+      ApiConstants.branches,
+      queryParameters: {'page_size': 100},
+    );
+    final data = _unwrap(res.data);
+    final results = data is Map<String, dynamic>
+        ? (data['results'] as List<dynamic>? ?? [])
+        : (data is List ? data : const []);
+    return results
+        .cast<Map<String, dynamic>>()
+        .map((b) => b['branch_name'] as String? ?? '')
+        .where((name) => name.isNotEmpty)
+        .toList();
   }
 
   dynamic _unwrap(dynamic body) {

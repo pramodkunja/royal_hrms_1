@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../widgets/settings_page_header.dart';
 
 // ── Tab definitions ───────────────────────────────────────────────────────────
 
@@ -16,11 +17,11 @@ class _TabMeta {
 }
 
 const _kTabs = [
-  _TabMeta(_Tab.all,     'All Settings',  Icons.grid_view_rounded),
-  _TabMeta(_Tab.company, 'Company',       Icons.business_outlined),
-  _TabMeta(_Tab.modules, 'Modules',       Icons.layers_outlined),
-  _TabMeta(_Tab.comm,    'Communication', Icons.mail_outline),
-  _TabMeta(_Tab.system,  'System',        Icons.storage_outlined),
+  _TabMeta(_Tab.all, 'All Settings', Icons.grid_view_rounded),
+  _TabMeta(_Tab.company, 'Company', Icons.business_outlined),
+  _TabMeta(_Tab.modules, 'Modules', Icons.layers_outlined),
+  _TabMeta(_Tab.comm, 'Communication', Icons.mail_outline),
+  _TabMeta(_Tab.system, 'System', Icons.storage_outlined),
 ];
 
 // ── Tile definitions ──────────────────────────────────────────────────────────
@@ -34,9 +35,13 @@ class _Tile {
   final String desc;
   final String? route;
   const _Tile({
-    required this.cat, required this.icon,
-    required this.iconColor, required this.iconBg,
-    required this.label, required this.desc, this.route,
+    required this.cat,
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.label,
+    required this.desc,
+    this.route,
   });
 }
 
@@ -44,28 +49,36 @@ const _kTiles = <_Tile>[
   // Company
   _Tile(
     cat: _Tab.company,
-    icon: Icons.business_outlined, iconColor: Color(0xFF1E4E8C), iconBg: Color(0xFFEBF0FA),
+    icon: Icons.business_outlined,
+    iconColor: Color(0xFF1E4E8C),
+    iconBg: Color(0xFFEBF0FA),
     label: 'Company Info',
     desc: 'Name, GST, address and registration details',
     route: AppRoutes.settingsCompany,
   ),
   _Tile(
     cat: _Tab.company,
-    icon: Icons.account_tree_outlined, iconColor: Color(0xFF1B8A6B), iconBg: Color(0xFFE6F5F0),
+    icon: Icons.account_tree_outlined,
+    iconColor: Color(0xFF1B8A6B),
+    iconBg: Color(0xFFE6F5F0),
     label: 'Depts & Designations',
     desc: 'Organisation structure and job titles',
     route: AppRoutes.settingsDepartments,
   ),
   _Tile(
     cat: _Tab.company,
-    icon: Icons.shield_outlined, iconColor: Color(0xFF6B3FA0), iconBg: Color(0xFFF0EBF9),
+    icon: Icons.shield_outlined,
+    iconColor: Color(0xFF6B3FA0),
+    iconBg: Color(0xFFF0EBF9),
     label: 'Roles & Permissions',
     desc: 'Role-based access control for all users',
     route: AppRoutes.settingsRoles,
   ),
   _Tile(
     cat: _Tab.company,
-    icon: Icons.badge_outlined, iconColor: Color(0xFF0E7C86), iconBg: Color(0xFFE5F4F5),
+    icon: Icons.badge_outlined,
+    iconColor: Color(0xFF0E7C86),
+    iconBg: Color(0xFFE5F4F5),
     label: 'Employee ID Format',
     desc: 'Prefix, padding and starting sequence',
     route: AppRoutes.settingsEmployeeCode,
@@ -73,77 +86,108 @@ const _kTiles = <_Tile>[
   // Modules
   _Tile(
     cat: _Tab.modules,
-    icon: Icons.beach_access_outlined, iconColor: Color(0xFFB5651D), iconBg: Color(0xFFFAF0E6),
+    icon: Icons.beach_access_outlined,
+    iconColor: Color(0xFFB5651D),
+    iconBg: Color(0xFFFAF0E6),
     label: 'Leave Policy',
     desc: 'Leave types, accruals, credit and encashment',
     route: AppRoutes.settingsLeavePolicy,
   ),
   _Tile(
     cat: _Tab.modules,
-    icon: Icons.access_time_outlined, iconColor: Color(0xFF006064), iconBg: Color(0xFFE0F4F4),
+    icon: Icons.access_time_outlined,
+    iconColor: Color(0xFF006064),
+    iconBg: Color(0xFFE0F4F4),
     label: 'Attendance Rules',
     desc: 'Shift timings, late marks and overtime',
     route: AppRoutes.settingsAttendanceRules,
   ),
   _Tile(
     cat: _Tab.modules,
-    icon: Icons.calendar_month_outlined, iconColor: Color(0xFFB5651D), iconBg: Color(0xFFFEF3C7),
+    icon: Icons.calendar_month_outlined,
+    iconColor: Color(0xFFB5651D),
+    iconBg: Color(0xFFFEF3C7),
     label: 'Holiday Calendar',
     desc: 'Manage national, regional and company holidays',
     route: AppRoutes.settingsHolidayCalendar,
   ),
   _Tile(
     cat: _Tab.modules,
-    icon: Icons.card_giftcard_outlined, iconColor: Color(0xFF7C3AED), iconBg: Color(0xFFF1EBFC),
+    icon: Icons.checklist_outlined,
+    iconColor: Color(0xFF0E7C86),
+    iconBg: Color(0xFFE5F4F5),
+    label: 'Onboarding Fields',
+    desc:
+        'Show, hide or require fields and document types on the onboarding wizard',
+    route: AppRoutes.settingsOnboardingFields,
+  ),
+  _Tile(
+    cat: _Tab.modules,
+    icon: Icons.card_giftcard_outlined,
+    iconColor: Color(0xFF7C3AED),
+    iconBg: Color(0xFFF1EBFC),
     label: 'Referral Rules',
     desc: 'Manage the rules and bonus details shown on the Referral page',
     route: AppRoutes.settingsReferralRules,
   ),
   _Tile(
     cat: _Tab.modules,
-    icon: Icons.fact_check_outlined, iconColor: Color(0xFF00695C), iconBg: Color(0xFFE0F2F1),
+    icon: Icons.fact_check_outlined,
+    iconColor: Color(0xFF00695C),
+    iconBg: Color(0xFFE0F2F1),
     label: 'Assessment Config',
     desc: 'Pass percentage, attempt limits and time settings',
     route: AppRoutes.settingsAssessmentConfig,
   ),
   _Tile(
     cat: _Tab.modules,
-    icon: Icons.rule_folder_outlined, iconColor: Color(0xFF1B3A6B), iconBg: Color(0xFFEBF0FA),
+    icon: Icons.rule_folder_outlined,
+    iconColor: Color(0xFF1B3A6B),
+    iconBg: Color(0xFFEBF0FA),
     label: 'Approval Rules',
     desc: 'Who approves leave, expenses, resignation and loans',
     route: AppRoutes.settingsApprovalRules,
   ),
-  _Tile(
-    cat: _Tab.modules,
-    icon: Icons.people_outline, iconColor: Color(0xFF37474F), iconBg: Color(0xFFECEFF1),
-    label: 'Recruitment Config',
-    desc: 'Interview stages and evaluation criteria',
-  ),
+  // _Tile(
+  //   cat: _Tab.modules,
+  //   icon: Icons.people_outline, iconColor: Color(0xFF37474F), iconBg: Color(0xFFECEFF1),
+  //   label: 'Recruitment Config',
+  //   desc: 'Interview stages and evaluation criteria',
+  // ),
   // Communication
   _Tile(
     cat: _Tab.comm,
-    icon: Icons.dns_outlined, iconColor: Color(0xFF2A6ACC), iconBg: Color(0xFFEBF2FF),
+    icon: Icons.dns_outlined,
+    iconColor: Color(0xFF2A6ACC),
+    iconBg: Color(0xFFEBF2FF),
     label: 'SMTP Settings',
     desc: 'Outgoing email server configuration',
     route: AppRoutes.settingsSmtp,
   ),
   _Tile(
     cat: _Tab.comm,
-    icon: Icons.mail_outline, iconColor: Color(0xFFC0392B), iconBg: Color(0xFFFAEAE8),
+    icon: Icons.mail_outline,
+    iconColor: Color(0xFFC0392B),
+    iconBg: Color(0xFFFAEAE8),
     label: 'Email Templates',
     desc: 'Customise all transactional emails',
     route: AppRoutes.settingsEmailTemplates,
   ),
   _Tile(
     cat: _Tab.comm,
-    icon: Icons.notifications_outlined, iconColor: Color(0xFFE65100), iconBg: Color(0xFFFFF3E0),
+    icon: Icons.notifications_outlined,
+    iconColor: Color(0xFFE65100),
+    iconBg: Color(0xFFFFF3E0),
     label: 'Notifications',
     desc: 'In-app and email notification preferences',
+    route: AppRoutes.settingsNotifications,
   ),
   // System
   _Tile(
     cat: _Tab.system,
-    icon: Icons.history_rounded, iconColor: Color(0xFF5D4037), iconBg: Color(0xFFF3EDE8),
+    icon: Icons.history_rounded,
+    iconColor: Color(0xFF5D4037),
+    iconBg: Color(0xFFF3EDE8),
     label: 'Audit Log',
     desc: 'View all system actions and changes',
     route: AppRoutes.settingsAuditLog,
@@ -157,16 +201,41 @@ class _Section {
   final IconData icon;
   final Color color;
   final List<_Tile> tiles;
-  const _Section({required this.label, required this.icon, required this.color, required this.tiles});
+  const _Section(
+      {required this.label,
+      required this.icon,
+      required this.color,
+      required this.tiles});
 }
 
-({String label, IconData icon, Color color}) _sectionMeta(_Tab tab) => switch (tab) {
-  _Tab.company => (label: 'Company Settings', icon: Icons.business_outlined, color: const Color(0xFF1E4E8C)),
-  _Tab.modules => (label: 'Module Configuration', icon: Icons.layers_outlined, color: const Color(0xFF4A148C)),
-  _Tab.comm    => (label: 'Communication', icon: Icons.mail_outline, color: const Color(0xFFC0392B)),
-  _Tab.system  => (label: 'System', icon: Icons.storage_outlined, color: const Color(0xFF5D4037)),
-  _Tab.all     => (label: 'All Settings', icon: Icons.grid_view_rounded, color: AppColors.primary),
-};
+({String label, IconData icon, Color color}) _sectionMeta(_Tab tab) =>
+    switch (tab) {
+      _Tab.company => (
+          label: 'Company Settings',
+          icon: Icons.business_outlined,
+          color: AppColors.primary
+        ),
+      _Tab.modules => (
+          label: 'Module Configuration',
+          icon: Icons.layers_outlined,
+          color: const Color(0xFF4A148C)
+        ),
+      _Tab.comm => (
+          label: 'Communication',
+          icon: Icons.mail_outline,
+          color: AppColors.error
+        ),
+      _Tab.system => (
+          label: 'System',
+          icon: Icons.storage_outlined,
+          color: const Color(0xFF5D4037)
+        ),
+      _Tab.all => (
+          label: 'All Settings',
+          icon: Icons.grid_view_rounded,
+          color: AppColors.primary
+        ),
+    };
 
 List<_Section> _grouped(List<_Tile> tiles) {
   final map = <_Tab, List<_Tile>>{};
@@ -175,7 +244,8 @@ List<_Section> _grouped(List<_Tile> tiles) {
   }
   return map.entries.map((e) {
     final meta = _sectionMeta(e.key);
-    return _Section(label: meta.label, icon: meta.icon, color: meta.color, tiles: e.value);
+    return _Section(
+        label: meta.label, icon: meta.icon, color: meta.color, tiles: e.value);
   }).toList();
 }
 
@@ -191,24 +261,35 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   _Tab _active = _Tab.all;
 
-  List<_Tile> get _filtered =>
-      _active == _Tab.all ? _kTiles : _kTiles.where((t) => t.cat == _active).toList();
+  List<_Tile> get _filtered => _active == _Tab.all
+      ? _kTiles
+      : _kTiles.where((t) => t.cat == _active).toList();
 
   @override
   Widget build(BuildContext context) {
     final sections = _active == _Tab.all
         ? _grouped(_filtered)
-        : [_Section(
-            label: '',
-            icon: Icons.settings_outlined,
-            color: AppColors.primary,
-            tiles: _filtered,
-          )];
+        : [
+            _Section(
+              label: '',
+              icon: Icons.settings_outlined,
+              color: AppColors.primary,
+              tiles: _filtered,
+            )
+          ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Header(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          child: SettingsPageHeader(
+            icon: Icons.settings_outlined,
+            title: 'Settings',
+            subtitle: 'Configure all Royal HRMS modules',
+            trailing: _HeaderStat(count: _kTiles.length, label: 'Options'),
+          ),
+        ),
         const SizedBox(height: 4),
         _TabBar(active: _active, onSelect: (t) => setState(() => _active = t)),
         const SizedBox(height: 2),
@@ -253,59 +334,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-// ── Header ────────────────────────────────────────────────────────────────────
-
-class _Header extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1B3A6B), Color(0xFF2A5298)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF1B3A6B).withValues(alpha: 0.28),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.settings_outlined, color: Colors.white, size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Settings',
-                    style: AppTextStyles.h3.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 3),
-                Text('Configure all Royal HRMS modules',
-                    style: AppTextStyles.caption.copyWith(color: Colors.white70)),
-              ],
-            ),
-          ),
-          _HeaderStat(count: _kTiles.length, label: 'Options'),
-        ],
-      ),
-    );
-  }
-}
+// ── Header stat (trailing chip in the SettingsPageHeader) ────────────────────
 
 class _HeaderStat extends StatelessWidget {
   final int count;
@@ -324,8 +353,12 @@ class _HeaderStat extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('$count', style: AppTextStyles.h4.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
-          Text(label, style: AppTextStyles.caption.copyWith(color: Colors.white70, fontSize: 10)),
+          Text('$count',
+              style: AppTextStyles.h4
+                  .copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
+          Text(label,
+              style: AppTextStyles.caption
+                  .copyWith(color: Colors.white70, fontSize: 10)),
         ],
       ),
     );
@@ -345,19 +378,21 @@ class _TabBar extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F2F5),
+        color: AppColors.backgroundLow,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E6EB)),
+        border: Border.all(color: AppColors.border),
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: _kTabs.map((tab) => _TabItem(
-            tab: tab,
-            isActive: tab.id == active,
-            onTap: () => onSelect(tab.id),
-          )).toList(),
+          children: _kTabs
+              .map((tab) => _TabItem(
+                    tab: tab,
+                    isActive: tab.id == active,
+                    onTap: () => onSelect(tab.id),
+                  ))
+              .toList(),
         ),
       ),
     );
@@ -368,7 +403,8 @@ class _TabItem extends StatelessWidget {
   final _TabMeta tab;
   final bool isActive;
   final VoidCallback onTap;
-  const _TabItem({required this.tab, required this.isActive, required this.onTap});
+  const _TabItem(
+      {required this.tab, required this.isActive, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -383,7 +419,12 @@ class _TabItem extends StatelessWidget {
           color: isActive ? const Color(0xFF1B3A6B) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           boxShadow: isActive
-              ? [BoxShadow(color: const Color(0xFF1B3A6B).withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 2))]
+              ? [
+                  BoxShadow(
+                      color: const Color(0xFF1B3A6B).withValues(alpha: 0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2))
+                ]
               : null,
         ),
         child: Row(
@@ -392,13 +433,13 @@ class _TabItem extends StatelessWidget {
             Icon(
               tab.icon,
               size: 15,
-              color: isActive ? Colors.white : const Color(0xFF64748B),
+              color: isActive ? Colors.white : AppColors.textSecondary,
             ),
             const SizedBox(width: 6),
             Text(
               tab.label,
               style: AppTextStyles.caption.copyWith(
-                color: isActive ? Colors.white : const Color(0xFF64748B),
+                color: isActive ? Colors.white : AppColors.textSecondary,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                 fontSize: 12.5,
               ),
@@ -423,7 +464,8 @@ class _SectionLabel extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 28, height: 28,
+            width: 28,
+            height: 28,
             decoration: BoxDecoration(
               color: section.color.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(7),
@@ -476,7 +518,7 @@ class _TileCard extends StatelessWidget {
                 _TileIcon(
                   icon: tile.icon,
                   iconColor: isAvailable ? tile.iconColor : AppColors.textHint,
-                  bgColor: isAvailable ? tile.iconBg : const Color(0xFFF5F5F5),
+                  bgColor: isAvailable ? tile.iconBg : AppColors.backgroundLow,
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -490,7 +532,9 @@ class _TileCard extends StatelessWidget {
                               tile.label,
                               style: AppTextStyles.label.copyWith(
                                 fontWeight: FontWeight.w600,
-                                color: isAvailable ? AppColors.textPrimary : AppColors.textHint,
+                                color: isAvailable
+                                    ? AppColors.textPrimary
+                                    : AppColors.textHint,
                               ),
                             ),
                           ),
@@ -501,7 +545,9 @@ class _TileCard extends StatelessWidget {
                       Text(
                         tile.desc,
                         style: AppTextStyles.caption.copyWith(
-                          color: isAvailable ? AppColors.textSecondary : AppColors.textHint,
+                          color: isAvailable
+                              ? AppColors.textSecondary
+                              : AppColors.textHint,
                           height: 1.4,
                         ),
                         maxLines: 2,
@@ -513,12 +559,14 @@ class _TileCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 if (isAvailable)
                   Container(
-                    width: 28, height: 28,
+                    width: 28,
+                    height: 28,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF0F2F5),
+                      color: AppColors.backgroundLow,
                       borderRadius: BorderRadius.circular(7),
                     ),
-                    child: const Icon(Icons.chevron_right, color: Color(0xFF94A3B8), size: 18),
+                    child: Icon(Icons.chevron_right,
+                        color: AppColors.textHint, size: 18),
                   ),
               ],
             ),
@@ -533,12 +581,14 @@ class _TileIcon extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
   final Color bgColor;
-  const _TileIcon({required this.icon, required this.iconColor, required this.bgColor});
+  const _TileIcon(
+      {required this.icon, required this.iconColor, required this.bgColor});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 46, height: 46,
+      width: 46,
+      height: 46,
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(12),

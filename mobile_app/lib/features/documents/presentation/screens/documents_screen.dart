@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/document_entity.dart';
 import '../providers/document_providers.dart';
 import '../widgets/document_card.dart';
@@ -22,16 +21,25 @@ class DocumentsScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openUpload(context),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.upload_file_outlined),
-        label: const Text(
-          'Upload',
-          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      // Hidden once the list is empty — DocumentEmptyView already has its
+      // own "Upload Document" button front and center there, so showing
+      // this FAB too just duplicated the same action twice on one screen
+      // (the same fix Assessments got for its "Create Assessment" button).
+      floatingActionButton: docsAsync.maybeWhen(
+        data: (_) => filtered.isEmpty
+            ? null
+            : FloatingActionButton.extended(
+                onPressed: () => _openUpload(context),
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                icon: const Icon(Icons.upload_file_outlined),
+                label: const Text(
+                  'Upload',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+        orElse: () => null,
       ),
       body: RefreshIndicator(
         color: AppColors.primary,
@@ -43,16 +51,12 @@ class DocumentsScreen extends ConsumerWidget {
         },
         child: CustomScrollView(
           slivers: [
-            // ── Title ────────────────────────────────────────────────────────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Text(
-                  'Document Center',
-                  style: AppTextStyles.h4,
-                ),
-              ),
-            ),
+            // ── Hero (search + filter) ───────────────────────────────────────
+            // No separate "Document Center" title here — that's already the
+            // app bar's own title (AppTopBar), so repeating it as plain text
+            // right below was pure duplication. Hero comes first, matching
+            // Employees' own order (hero, then stats), not stats-then-hero.
+            const SliverToBoxAdapter(child: DocumentFilterBar()),
 
             // ── Stats ────────────────────────────────────────────────────────
             SliverToBoxAdapter(
@@ -62,9 +66,6 @@ class DocumentsScreen extends ConsumerWidget {
                 data: (stats) => DocumentStatsRow(stats: stats),
               ),
             ),
-
-            // ── Filter bar ───────────────────────────────────────────────────
-            const SliverToBoxAdapter(child: DocumentFilterBar()),
 
             // ── Document grid or states ──────────────────────────────────────
             docsAsync.when(

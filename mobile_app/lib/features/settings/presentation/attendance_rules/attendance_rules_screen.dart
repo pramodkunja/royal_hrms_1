@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/app_loading_widget.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/models/attendance_settings_model.dart';
 import '../providers/settings_providers.dart';
@@ -94,7 +95,7 @@ class _AttendanceRulesScreenState extends ConsumerState<AttendanceRulesScreen> {
       backgroundColor: AppColors.background,
       appBar: const SettingsAppBar(title: 'Attendance Rules'),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const AppLoadingWidget(),
         error: (e, _) => _ErrorView(message: e.toString(), onRetry: () => ref.invalidate(attendanceSettingsProvider)),
         data: (serverModel) {
           final current = _edited ?? serverModel;
@@ -421,7 +422,7 @@ class _WorkingHoursCard extends StatelessWidget {
     return _SectionCard(
       icon: Icons.schedule_outlined,
       title: 'Working Hours',
-      accentColor: const Color(0xFF1E4E8C),
+      accentColor: AppColors.primary,
       canEdit: canEdit,
       saving: saving,
       busy: busy,
@@ -625,7 +626,7 @@ class _PunchRulesCard extends StatelessWidget {
     return _SectionCard(
       icon: Icons.fingerprint,
       title: 'Punch Rules',
-      accentColor: const Color(0xFF0E7C86),
+      accentColor: AppColors.info,
       canEdit: canEdit,
       saving: saving,
       busy: busy,
@@ -685,7 +686,7 @@ class _OvertimeRulesCard extends StatelessWidget {
     return _SectionCard(
       icon: Icons.trending_up,
       title: 'Overtime Rules',
-      accentColor: const Color(0xFF1B8A6B),
+      accentColor: AppColors.success,
       canEdit: canEdit,
       saving: saving,
       busy: busy,
@@ -745,7 +746,7 @@ class _LateMarkCard extends StatelessWidget {
     return _SectionCard(
       icon: Icons.warning_amber_outlined,
       title: 'Late Mark & LOP Rule',
-      accentColor: const Color(0xFFC0392B),
+      accentColor: AppColors.error,
       headerTrailing: const _CriticalBadge(),
       canEdit: canEdit,
       saving: saving,
@@ -808,7 +809,7 @@ class _AbsenceAlertCard extends StatelessWidget {
     return _SectionCard(
       icon: Icons.notifications_active_outlined,
       title: 'Absence Alert',
-      accentColor: const Color(0xFFB5651D),
+      accentColor: AppColors.warning,
       headerTrailing: Switch(
         value: section.isEnabled,
         onChanged: canEdit ? (v) => onChanged(section.copyWith(isEnabled: v)) : null,
@@ -920,7 +921,11 @@ class _ErrorView extends StatelessWidget {
             const SizedBox(height: 6),
             Text(message, style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
             const SizedBox(height: 16),
-            TextButton(onPressed: onRetry, child: const Text('Retry')),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Retry'),
+            ),
           ],
         ),
       ),

@@ -3,6 +3,22 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../data/models/employee_model.dart';
 
+// (background, foreground, display label) for a status — shared by the top
+// accent bar and the status pill so both agree (top bar = status color,
+// exactly like the reference design's amber bar on the Onboarding card and
+// green bar on the Active card; the employee's own avatar color is a
+// separate, per-person identity color, not tied to status).
+(Color, Color, String) _statusStyle(String status) => switch (status) {
+      'active'     => (AppColors.successContainer, AppColors.success,  'Active'),
+      'onboarding' => (AppColors.warningContainer, AppColors.warning,  'Onboarding'),
+      'inactive'   => (AppColors.errorContainer,   AppColors.error,    'Inactive'),
+      _            => (AppColors.border,            AppColors.textHint, status),
+    };
+
+/// A compact, portrait "directory" card — a status-colored top accent bar,
+/// a big centered avatar, name/ID/role stacked and centered, a status pill,
+/// and two square icon-only actions at the bottom. Meant to sit in a
+/// 2-column grid rather than as a full-width row.
 class EmployeeCard extends StatelessWidget {
   final EmployeeModel employee;
   final VoidCallback? onView;
@@ -20,163 +36,101 @@ class EmployeeCard extends StatelessWidget {
     final name = employee.fullName.isEmpty
         ? '${employee.firstName} ${employee.lastName}'.trim()
         : employee.fullName;
+    final (_, statusColor, _) = _statusStyle(employee.status);
 
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        // Matches the app's other card radius (12 — Dashboard's SectionCard,
-        // the theme's own CardTheme) rather than this card's previous
-        // one-off 16.
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
         boxShadow: AppColors.cardShadow,
       ),
       clipBehavior: Clip.antiAlias,
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ── Colored left accent strip ──────────────────────────────
-            Container(
-              width: 4,
-              decoration: BoxDecoration(
-                color: employee.avatarColor,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  bottomLeft: Radius.circular(12),
+      // Plain (non-Expanded, mainAxisSize.min) content — this card renders
+      // inside a SliverGrid tile (bounded/tight height) when the directory
+      // is in grid view, but the SAME card also renders inside a SliverList
+      // (unbounded height) when the grid/list toggle is switched to list
+      // view. An Expanded/spaceBetween layout here worked in the grid but
+      // crashed in the list ("non-zero flex but incoming height constraints
+      // are unbounded") — sizing to intrinsic content height works in both:
+      // the grid tile just leaves a little blank space below the buttons
+      // when content is shorter than the tile, and the list sizes each row
+      // to exactly its own content.
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Status-colored top accent bar ───────────────────────────────
+          Container(height: 4, color: statusColor),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 16, 10, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _Avatar(employee: employee),
+                const SizedBox(height: 10),
+                Text(
+                  name,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.label.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
-              ),
-            ),
-
-            // ── Card body ──────────────────────────────────────────────
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                if (employee.employeeId.isNotEmpty) ...[
+                  const SizedBox(height: 5),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '#${employee.employeeId}',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.primary),
+                    ),
+                  ),
+                ],
+                if (employee.designation.isNotEmpty) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    employee.designation,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontSize: 11.5),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                _StatusBadge(status: employee.status),
+                const SizedBox(height: 14),
+                Row(
                   children: [
-                    // ── Top: Avatar + Info + Status ──────────────────────
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _Avatar(employee: employee),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                name,
-                                style: AppTextStyles.label.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
-                                  color: AppColors.textPrimary,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 3),
-                              if (employee.employeeId.isNotEmpty)
-                                Text(
-                                  '#${employee.employeeId}',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: employee.avatarColor,
-                                  ),
-                                ),
-                              if (employee.designation.isNotEmpty) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  employee.designation,
-                                  style: AppTextStyles.caption.copyWith(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        _StatusBadge(status: employee.status),
-                      ],
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // ── Middle: Branch + Department ──────────────────────
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 9),
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _InfoItem(
-                              icon: Icons.location_on_outlined,
-                              label: 'BRANCH',
-                              value: employee.branch.isEmpty
-                                  ? '—'
-                                  : employee.branch,
-                            ),
-                          ),
-                          Container(
-                            width: 1,
-                            height: 28,
-                            margin: const EdgeInsets.symmetric(horizontal: 10),
-                            color: AppColors.border,
-                          ),
-                          Expanded(
-                            child: _InfoItem(
-                              icon: Icons.business_outlined,
-                              label: 'DEPT',
-                              value: employee.department.isEmpty
-                                  ? '—'
-                                  : employee.department,
-                            ),
-                          ),
-                        ],
+                    Expanded(
+                      child: _SquareIconButton(
+                        icon: Icons.remove_red_eye_outlined,
+                        filled: false,
+                        onTap: onView,
                       ),
                     ),
-
-                    const SizedBox(height: 10),
-
-                    // ── Bottom: Action buttons ───────────────────────────
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _ActionBtn(
-                            icon: Icons.remove_red_eye_outlined,
-                            label: 'View Profile',
-                            onTap: onView,
-                            filled: false,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _ActionBtn(
-                            icon: Icons.edit_outlined,
-                            label: 'Edit Details',
-                            onTap: onEdit,
-                            filled: true,
-                          ),
-                        ),
-                      ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _SquareIconButton(
+                        icon: Icons.edit_outlined,
+                        filled: true,
+                        onTap: onEdit,
+                      ),
                     ),
                   ],
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -191,22 +145,18 @@ class _Avatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 52,
-      height: 52,
+      width: 64,
+      height: 64,
       decoration: BoxDecoration(
-        color: employee.avatarColor.withValues(alpha: 0.15),
+        color: employee.avatarColor.withValues(alpha: 0.16),
         shape: BoxShape.circle,
-        border: Border.all(
-          color: employee.avatarColor.withValues(alpha: 0.30),
-          width: 1.5,
-        ),
       ),
       child: Center(
         child: Text(
           employee.initials,
           style: TextStyle(
             color: employee.avatarColor,
-            fontSize: 18,
+            fontSize: 20,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -223,23 +173,19 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (bg, fg, label) = switch (status) {
-      'active'     => (AppColors.successContainer, AppColors.success,  'Active'),
-      'onboarding' => (AppColors.warningContainer, AppColors.warning,  'Onboarding'),
-      'inactive'   => (AppColors.errorContainer,   AppColors.error,    'Inactive'),
-      _            => (AppColors.border,            AppColors.textHint, status),
-    };
+    final (bg, fg, label) = _statusStyle(status);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
-        label,
+        label.toUpperCase(),
         style: TextStyle(
           fontSize: 10,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.3,
           color: fg,
         ),
       ),
@@ -247,108 +193,40 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-// ── Info item (icon + label + value stacked) ──────────────────────────────────
+// ── Square icon-only action button ────────────────────────────────────────────
 
-class _InfoItem extends StatelessWidget {
+class _SquareIconButton extends StatelessWidget {
   final IconData icon;
-  final String label;
-  final String value;
-  const _InfoItem({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 2),
-          child: Icon(icon, size: 13, color: AppColors.textHint),
-        ),
-        const SizedBox(width: 5),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: AppTextStyles.caption.copyWith(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textHint,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: AppTextStyles.label.copyWith(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Action button ─────────────────────────────────────────────────────────────
-
-class _ActionBtn extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
   final bool filled;
+  final VoidCallback? onTap;
 
-  const _ActionBtn({
+  const _SquareIconButton({
     required this.icon,
-    required this.label,
+    required this.filled,
     this.onTap,
-    this.filled = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        decoration: BoxDecoration(
-          color: filled ? AppColors.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: filled
-                ? AppColors.primary
-                : AppColors.primary.withValues(alpha: 0.30),
+    return Material(
+      color: filled ? AppColors.primary : Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Container(
+          height: 38,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: filled ? AppColors.primary : AppColors.primary.withValues(alpha: 0.30),
+            ),
           ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 14,
-              color: filled ? Colors.white : AppColors.primary,
-            ),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: filled ? Colors.white : AppColors.primary,
-              ),
-            ),
-          ],
+          child: Icon(
+            icon,
+            size: 17,
+            color: filled ? Colors.white : AppColors.primary,
+          ),
         ),
       ),
     );

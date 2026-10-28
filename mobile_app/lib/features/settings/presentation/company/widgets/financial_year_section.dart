@@ -195,7 +195,7 @@ class _Card extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-            color: const Color(0xFF0E7C86),
+            color: AppColors.info,
             child: Row(
               children: [
                 Container(

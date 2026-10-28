@@ -7,6 +7,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/validators/form_validators.dart';
 import '../../../../shared/widgets/app_error_state.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../separation/presentation/widgets/profile_separation_section.dart';
 import '../../data/models/my_profile_model.dart';
 import '../providers/profile_providers.dart';
 import '../widgets/profile_face_id_section.dart';
@@ -211,6 +212,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             phoneCtrl: _phoneCtrl,
                           ),
                           const SizedBox(height: 16),
+                          const ProfileSeparationSection(),
+                          const SizedBox(height: 16),
                           ProfileAddressSection(
                             currentAddressCtrl: _currentAddressCtrl,
                             permanentAddressCtrl: _permanentAddressCtrl,
@@ -291,8 +294,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               backgroundColor: AppColors.primary,
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              textStyle: const TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w600),
+              textStyle: AppTextStyles.bodySmall
+                  .copyWith(fontWeight: FontWeight.w600),
             ),
           ),
         ],

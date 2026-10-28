@@ -380,6 +380,57 @@ class HrCorrectionRowEntity {
   });
 }
 
+// An employee's own correction request (GET /attendance/corrections/my/) —
+// distinct from HrCorrectionRowEntity above, which is the HR/manager review
+// inbox (all employees, with a canAction approve/reject affordance). This is
+// always the caller's own request, so it carries no employee-identity
+// fields, but does carry `original*Time` (the punch as it was originally
+// recorded) alongside `requested*Time` (what the employee is asking to
+// change it to) — mirrors web's MyCorrectionRequest (my-requests/_data.ts).
+class MyCorrectionEntity {
+  final String id;
+  final String date;
+  final String punchType;
+  final String? originalInTime;
+  final String? originalOutTime;
+  final String? requestedInTime;
+  final String? requestedOutTime;
+  final String reason;
+  final String? notes;
+  final String status;
+  final String? l1ApproverName;
+  final String? l1Status;
+  final String l1Remarks;
+  final String? l2ApproverName;
+  final String? l2Status;
+  final String l2Remarks;
+  final String? reviewedBy;
+  final String? reviewedAt;
+  final String createdAt;
+
+  const MyCorrectionEntity({
+    required this.id,
+    required this.date,
+    required this.punchType,
+    this.originalInTime,
+    this.originalOutTime,
+    this.requestedInTime,
+    this.requestedOutTime,
+    required this.reason,
+    this.notes,
+    required this.status,
+    this.l1ApproverName,
+    this.l1Status,
+    this.l1Remarks = '',
+    this.l2ApproverName,
+    this.l2Status,
+    this.l2Remarks = '',
+    this.reviewedBy,
+    this.reviewedAt,
+    required this.createdAt,
+  });
+}
+
 class HrUserEntity {
   final String id;
   final String employeeId;

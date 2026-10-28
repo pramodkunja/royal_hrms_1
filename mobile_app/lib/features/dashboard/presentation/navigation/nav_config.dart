@@ -52,20 +52,32 @@ const kAllNav = <NavEntry>[
 
   NavSection('Workforce'),
   NavItem(id: 'employees',        icon: Icons.badge_outlined,                  label: 'Employees',        path: '/dashboard/employees',        permission: 'employees.view'),
-  NavItem(id: 'org-chart',        icon: Icons.account_tree_outlined,           label: 'Org Chart',        path: '/dashboard/org-chart',        permission: 'employees.view'),
+  NavItem(id: 'org-chart',        icon: Icons.account_tree_outlined,           label: 'Org Chart',        path: '/dashboard/org-chart',        permission: 'org_chart.view'),
   NavItem(id: 'branches',         icon: Icons.business_outlined,               label: 'Branches',         path: '/dashboard/branches',         permission: 'branches.view'),
 
   NavSection('Time & Pay'),
   NavItem(id: 'attendance',       icon: Icons.access_time_outlined,            label: 'Attendance',       path: '/dashboard/attendance',       permission: 'attendance.view', excludeRoles: ['employee']),
   NavItem(id: 'leave',            icon: Icons.beach_access_outlined,           label: 'Leave Management', path: '/dashboard/leave',            permission: 'leave.view'),
+  NavItem(id: 'wfh',              icon: Icons.home_work_outlined,              label: 'Work From Home',   path: '/dashboard/wfh',              permission: 'wfh.view'),
   NavItem(id: 'expenses',         icon: Icons.account_balance_wallet_outlined, label: 'Expenses',         path: '/dashboard/expenses',         permission: 'expenses.view'),
 
   NavSection('HR Ops'),
   // Backend's approval endpoints authorize on 'leave.approve' OR 'expenses.approve'
-  // (any one grants access) and HR/HR Admin manage approvals through their own
-  // dedicated workflows, not this generic link — matches web's navConfig.ts exactly.
-  NavItem(id: 'approvals',        icon: Icons.checklist_outlined,              label: 'Approvals',        path: '/dashboard/approvals',        anyOfPermissions: ['leave.approve', 'expenses.approve'], excludeRoles: ['hr', 'hr_admin']),
-  NavItem(id: 'separation',       icon: Icons.exit_to_app_outlined,            label: 'Separation & FnF', path: '/dashboard/separation',       permission: 'employees.view'),
+  // OR 'wfh.approve' (any one grants access) and HR/HR Admin manage approvals
+  // through their own dedicated workflows, not this generic link. web's
+  // navConfig.ts omits 'wfh.approve' here (a known gap — WFH approvals were
+  // folded into this same page without updating its nav gate); mobile's
+  // Approvals screen genuinely includes WFH as a Team Approvals request kind,
+  // so its nav entry must actually grant access to a WFH-only approver.
+  NavItem(id: 'approvals',        icon: Icons.checklist_outlined,              label: 'Approvals',        path: '/dashboard/approvals',        anyOfPermissions: ['leave.approve', 'expenses.approve', 'wfh.approve'], excludeRoles: ['hr', 'hr_admin']),
+  // permission: null, matching web's navConfig.ts exactly — every employee
+  // can create and view their own separation request, not just HR/managers
+  // (the backend's separation endpoints only require IsAuthenticated for
+  // self-service; separation.approve is checked separately, per-action, for
+  // approving/managing someone else's request). This item used to be gated
+  // on 'employees.view' (an HR/manager-only permission), which incorrectly
+  // hid the entire self-service flow from regular employees.
+  NavItem(id: 'separation',       icon: Icons.exit_to_app_outlined,            label: 'Separation & Exit', path: '/dashboard/separation',       permission: null),
   NavItem(id: 'documents',        icon: Icons.folder_outlined,                 label: 'Document Center',  path: '/dashboard/documents',        permission: 'documents.view'),
   // Backend also accepts settings.edit as a superset of this permission
   // (see apps/attendance/views/face_registration.py::_has_perm) — settings.edit
@@ -142,9 +154,10 @@ const kPageTitles = <String, String>{
   '/dashboard/branches':        'Branch Management',
   '/dashboard/attendance':      'Attendance & Time',
   '/dashboard/leave':           'Leave Management',
+  '/dashboard/wfh':             'Work From Home',
   '/dashboard/expenses':        'Expense Claims',
   '/dashboard/approvals':       'Team Approvals',
-  '/dashboard/separation':      'Separation & FnF',
+  '/dashboard/separation':      'Separation & Exit',
   '/dashboard/documents':       'Document Center',
   '/dashboard/face-id-registrations': 'Face ID Registrations',
   '/dashboard/my-attendance':   'My Attendance',

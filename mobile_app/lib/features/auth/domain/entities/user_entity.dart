@@ -11,7 +11,15 @@ class UserEntity {
   final bool mustChangePassword;
   final List<String> permissions;
   final String? onboardingStatus;
+  final String? assessmentStatus;
   final bool canManageTeam;
+  final bool canManageBranch;
+  // Populated by the multi-tenant login response (apps/accounts/views.py
+  // LoginView) — the company the authenticated user's schema belongs to.
+  final String? companyCode;
+  final String? companyName;
+  final String? companyLogoUrl;
+  final String? companyBrandColor;
   // is_superuser — backend computes this as `user.is_superuser or
   // 'settings.edit' in permissions` (apps/accounts/views.py login response)
   // and it's the same signal web's permission gates check directly
@@ -34,15 +42,24 @@ class UserEntity {
     required this.mustChangePassword,
     required this.permissions,
     this.onboardingStatus,
+    this.assessmentStatus,
     this.canManageTeam = false,
+    this.canManageBranch = false,
+    this.companyCode,
+    this.companyName,
+    this.companyLogoUrl,
+    this.companyBrandColor,
     this.isSuperuser = false,
   });
 
+  // Mirrors web's gate (frontend/proxy.ts, login/page.tsx): superusers are
+  // exempt from onboarding regardless of onboarding_status.
   bool get needsOnboarding =>
-      onboardingStatus == 'pending' || onboardingStatus == 'draft';
+      !isSuperuser &&
+      (onboardingStatus == 'pending' || onboardingStatus == 'draft');
   bool get awaitingApproval => onboardingStatus == 'submitted';
   bool get onboardingComplete => onboardingStatus == 'complete';
-  bool get onboardingRejected => onboardingStatus == 'rejected';
+  bool get onboardingRejected => !isSuperuser && onboardingStatus == 'rejected';
 
   bool hasPermission(String permission) => permissions.contains(permission);
 
@@ -59,7 +76,13 @@ class UserEntity {
         mustChangePassword: mustChangePassword,
         permissions: permissions,
         onboardingStatus: onboardingStatus ?? this.onboardingStatus,
+        assessmentStatus: assessmentStatus,
         canManageTeam: canManageTeam,
+        canManageBranch: canManageBranch,
+        companyCode: companyCode,
+        companyName: companyName,
+        companyLogoUrl: companyLogoUrl,
+        companyBrandColor: companyBrandColor,
         isSuperuser: isSuperuser,
       );
 

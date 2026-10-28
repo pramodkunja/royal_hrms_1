@@ -328,6 +328,7 @@ class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
         UnifiedApprovalKind.leave => Icons.event_busy_outlined,
         UnifiedApprovalKind.expense => Icons.receipt_long_outlined,
         UnifiedApprovalKind.attendanceCorrection => Icons.fact_check_outlined,
+        UnifiedApprovalKind.wfh => Icons.home_work_outlined,
       };
 
   Widget _sectionLabel(String text) => Text(text,
@@ -367,6 +368,36 @@ class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
           _kv('Requested In', c.requestedInTime ?? '—'),
           _kv('Requested Out', c.requestedOutTime ?? '—'),
           if ((c.notes ?? '').isNotEmpty) _kv('Notes', c.notes!),
+        ];
+      case UnifiedApprovalKind.wfh:
+        final w = item.wfh!;
+        return [
+          _kv('Dates', '${w.startDate} → ${w.endDate}'),
+          if (w.locationLabel.isNotEmpty) _kv('Location', w.locationLabel),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                    width: 110,
+                    child: Text('Coordinates',
+                        style: AppTextStyles.caption
+                            .copyWith(fontSize: 11, color: AppColors.textHint))),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _openUrl(
+                        'https://maps.google.com/?q=${w.latitude},${w.longitude}'),
+                    child: Text(
+                      '${w.latitude.toStringAsFixed(6)}, ${w.longitude.toStringAsFixed(6)} · View on map',
+                      style: AppTextStyles.body.copyWith(
+                          fontSize: 12.5, color: AppColors.primary, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ];
     }
   }
@@ -449,14 +480,26 @@ class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
       ];
     }
 
-    final l1Status = item.kind == UnifiedApprovalKind.leave ? item.leave?.l1Status : item.correction?.l1Status;
-    final l1Name = item.kind == UnifiedApprovalKind.leave
-        ? item.leave?.l1ApproverName
-        : item.correction?.l1ApproverName;
-    final l2Status = item.kind == UnifiedApprovalKind.leave ? item.leave?.l2Status : item.correction?.l2Status;
-    final l2Name = item.kind == UnifiedApprovalKind.leave
-        ? item.leave?.l2ApproverName
-        : item.correction?.l2ApproverName;
+    final l1Status = switch (item.kind) {
+      UnifiedApprovalKind.leave => item.leave?.l1Status,
+      UnifiedApprovalKind.wfh => item.wfh?.l1Status,
+      _ => item.correction?.l1Status,
+    };
+    final l1Name = switch (item.kind) {
+      UnifiedApprovalKind.leave => item.leave?.l1ApproverName,
+      UnifiedApprovalKind.wfh => item.wfh?.l1ApproverName,
+      _ => item.correction?.l1ApproverName,
+    };
+    final l2Status = switch (item.kind) {
+      UnifiedApprovalKind.leave => item.leave?.l2Status,
+      UnifiedApprovalKind.wfh => item.wfh?.l2Status,
+      _ => item.correction?.l2Status,
+    };
+    final l2Name = switch (item.kind) {
+      UnifiedApprovalKind.leave => item.leave?.l2ApproverName,
+      UnifiedApprovalKind.wfh => item.wfh?.l2ApproverName,
+      _ => item.correction?.l2ApproverName,
+    };
 
     final rows = <Widget>[submitted];
     rows.add(const SizedBox(height: 8));
@@ -483,6 +526,9 @@ class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
     if (item.kind == UnifiedApprovalKind.attendanceCorrection) {
       return (item.correction?.l1Remarks.isNotEmpty ?? false) || (item.correction?.l2Remarks.isNotEmpty ?? false);
     }
+    if (item.kind == UnifiedApprovalKind.wfh) {
+      return (item.wfh?.l1Remarks.isNotEmpty ?? false) || (item.wfh?.l2Remarks.isNotEmpty ?? false);
+    }
     return false;
   }
 
@@ -494,6 +540,9 @@ class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
     } else if (item.kind == UnifiedApprovalKind.attendanceCorrection) {
       if (item.correction!.l1Remarks.isNotEmpty) comments.add('Manager: "${item.correction!.l1Remarks}"');
       if (item.correction!.l2Remarks.isNotEmpty) comments.add('HR: "${item.correction!.l2Remarks}"');
+    } else if (item.kind == UnifiedApprovalKind.wfh) {
+      if (item.wfh!.l1Remarks.isNotEmpty) comments.add('Manager: "${item.wfh!.l1Remarks}"');
+      if (item.wfh!.l2Remarks.isNotEmpty) comments.add('HR: "${item.wfh!.l2Remarks}"');
     }
     return comments
         .map((c) => Padding(

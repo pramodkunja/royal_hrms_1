@@ -13,17 +13,35 @@ final orgChartRepositoryProvider = Provider<OrgChartRepository>((ref) {
   return OrgChartRepositoryImpl(ref.watch(orgChartDataSourceProvider));
 });
 
-final orgChartProvider = AsyncNotifierProvider.autoDispose<
-    OrgChartNotifier, OrgChartEntity>(OrgChartNotifier.new);
+/// Selected branch for the company-scope branch picker. Null = "All
+/// Branches" (the server-side default when no `?branch=` is sent).
+final orgChartSelectedBranchProvider =
+    StateProvider.autoDispose<String?>((ref) => null);
+
+final orgChartProvider =
+    AsyncNotifierProvider.autoDispose<OrgChartNotifier, OrgChartEntity>(
+  OrgChartNotifier.new,
+);
 
 class OrgChartNotifier extends AutoDisposeAsyncNotifier<OrgChartEntity> {
   OrgChartRepository get _repo => ref.read(orgChartRepositoryProvider);
 
   @override
-  Future<OrgChartEntity> build() => _repo.getOrgChart();
+  Future<OrgChartEntity> build() {
+    final branch = ref.watch(orgChartSelectedBranchProvider);
+    return _repo.getOrgChart(branch: branch);
+  }
 
   Future<void> refresh() async {
+    final branch = ref.read(orgChartSelectedBranchProvider);
     state = const AsyncLoading();
-    state = await AsyncValue.guard(() => _repo.getOrgChart());
+    state = await AsyncValue.guard(() => _repo.getOrgChart(branch: branch));
   }
 }
+
+/// Branch names for the picker — only ever watched once the loaded chart's
+/// scope is company-wide (branch-scope viewers never see the picker).
+final orgChartBranchNamesProvider =
+    FutureProvider.autoDispose<List<String>>((ref) {
+  return ref.read(orgChartRepositoryProvider).getBranchNames();
+});

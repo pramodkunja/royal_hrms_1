@@ -17,7 +17,7 @@ class ApiConfig {
   ApiConfig._();
 
   // ─── The one value to change when switching environments ─────────────────
-  static const Environment current = Environment.local;
+  static const Environment current = Environment.production;
 
   /// The environment actually in effect. A release build (`flutter build`/
   /// `flutter run --release`) always resolves to [Environment.production]
@@ -51,12 +51,12 @@ class ApiConfig {
   //     has no way to resolve "localhost" as this machine.
   // `localBaseUrlNative` is the one you swap between the last three based on
   // which native target you're currently running. Currently set for
-  // physical-device-over-Wi-Fi testing (this Mac's LAN IP as of 2026-08-13 —
+  // physical-device-over-Wi-Fi testing (this Mac's LAN IP as of 2026-08-25 —
   // re-check with `ipconfig getifaddr en0` if it's stale, e.g. after
   // reconnecting to Wi-Fi).
   static const String localBaseUrlWeb = 'http://localhost:8000/api';
-  static const String localBaseUrlNative = 'http://192.168.0.109:8000/api';
-  static const String productionBaseUrl = 'https://royalhrms.nxsys.in/api';
+  static const String localBaseUrlNative = 'http://192.168.0.106:8000/api';
+  static const String productionBaseUrl = 'https://royalhrms.com/api/';
 
   /// The active base URL for [current]. This is the only place the app
   /// resolves which backend to talk to.

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/stat_card.dart';
 import '../../../attendance/domain/entities/attendance_entity.dart';
 import '../../../attendance/presentation/providers/attendance_providers.dart';
 import '../../data/models/employee_model.dart';
@@ -33,8 +34,18 @@ const _kStatusShortCode = <String, String>{
 };
 
 const _kMonthNames = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 // ── Widget ────────────────────────────────────────────────────────────────────
@@ -109,62 +120,39 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
   Widget _buildStatCards(AsyncValue<AttendanceStatsEntity> statsAsync) {
     return statsAsync.when(
       data: (stats) {
-        final workingDays = stats.workingDays > 0 ? stats.workingDays : 1;
         final cards = [
-          _StatData(
-            label: 'Days Present',
-            value: '${stats.daysPresent}',
-            sub: 'of $workingDays working days',
+          StatCard(
             icon: Icons.person_outline,
-            iconColor: AppColors.success,
-            iconBg: AppColors.successContainer,
-            progress: (stats.daysPresent / workingDays).clamp(0.0, 1.0),
-            progressColor: AppColors.success,
+            count: stats.daysPresent,
+            label: 'Days Present',
+            color: AppColors.success,
           ),
-          _StatData(
-            label: 'Late Arrivals',
-            value: '${stats.lateArrivals}',
-            sub: '${stats.lopPending} LOP pending',
+          StatCard(
             icon: Icons.access_alarm_outlined,
-            iconColor: AppColors.warning,
-            iconBg: AppColors.warningContainer,
-            progress: (stats.lateArrivals / workingDays).clamp(0.0, 1.0),
-            progressColor: AppColors.warning,
+            count: stats.lateArrivals,
+            label: 'Late Arrivals',
+            color: AppColors.warning,
           ),
-          _StatData(
-            label: 'Avg Hours / Day',
-            value: stats.avgHoursPerDay.toStringAsFixed(1),
-            sub: 'This month',
+          StatCard(
             icon: Icons.access_time_outlined,
-            iconColor: AppColors.info,
-            iconBg: AppColors.infoContainer,
-            progress: (stats.avgHoursPerDay / 10).clamp(0.0, 1.0),
-            progressColor: AppColors.info,
+            count: stats.avgHoursPerDay.round(),
+            valueText: stats.avgHoursPerDay.toStringAsFixed(1),
+            label: 'Avg Hours / Day',
+            color: AppColors.info,
           ),
-          _StatData(
-            label: 'Attendance %',
-            value: '${stats.attendancePercentage.round()}%',
-            sub: 'This month',
+          StatCard(
             icon: Icons.bar_chart_outlined,
-            iconColor: AppColors.success,
-            iconBg: AppColors.successContainer,
-            progress: (stats.attendancePercentage / 100).clamp(0.0, 1.0),
-            progressColor: AppColors.success,
+            count: stats.attendancePercentage.round(),
+            valueText: '${stats.attendancePercentage.round()}%',
+            label: 'Attendance %',
+            color: AppColors.success,
           ),
         ];
 
-        return SizedBox(
-          height: 115,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: cards.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 10),
-            itemBuilder: (_, i) => _StatCard(data: cards[i]),
-          ),
-        );
+        return StatCardRow(cards: cards, padding: EdgeInsets.zero);
       },
       loading: () => const SizedBox(
-        height: 115,
+        height: 88,
         child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
       ),
       error: (e, _) => SizedBox(
@@ -261,7 +249,8 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
 
   // ── Calendar / History card (read-only: no Regularize action anywhere) ───
 
-  Widget _buildCalendarCard(AsyncValue<AttendanceCalendarEntity> calendarAsync) {
+  Widget _buildCalendarCard(
+      AsyncValue<AttendanceCalendarEntity> calendarAsync) {
     final daysInMonth = DateUtils.getDaysInMonth(_month.year, _month.month);
     final firstWd = DateTime(_month.year, _month.month, 1).weekday % 7;
     final today = DateTime.now();
@@ -370,8 +359,8 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
               data: (calendar) => Padding(
                 padding: const EdgeInsets.fromLTRB(10, 0, 10, 14),
                 child: Container(
-                  decoration:
-                      BoxDecoration(border: Border.all(color: AppColors.border)),
+                  decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border)),
                   child: GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -474,8 +463,7 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title:
-            Text('${_kMonthNames[_month.month - 1]} $day, ${_month.year}'),
+        title: Text('${_kMonthNames[_month.month - 1]} $day, ${_month.year}'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -498,102 +486,6 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Stat card (mirrors my_attendance_screen.dart's _StatData/_StatCard) ──────
-
-class _StatData {
-  final String label;
-  final String value;
-  final String sub;
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBg;
-  final double progress;
-  final Color progressColor;
-  const _StatData({
-    required this.label,
-    required this.value,
-    required this.sub,
-    required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    required this.progress,
-    required this.progressColor,
-  });
-}
-
-class _StatCard extends StatelessWidget {
-  final _StatData data;
-  const _StatCard({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 155,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  data.label,
-                  style:
-                      TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: data.iconBg,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                alignment: Alignment.center,
-                child: Icon(data.icon, size: 15, color: data.iconColor),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            data.value,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-              height: 1.1,
-            ),
-          ),
-          Text(
-            data.sub,
-            style:
-                TextStyle(fontSize: 10, color: AppColors.textHint, height: 1.2),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const Spacer(),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(2),
-            child: LinearProgressIndicator(
-              value: data.progress,
-              backgroundColor: AppColors.backgroundMid,
-              valueColor: AlwaysStoppedAnimation(data.progressColor),
-              minHeight: 3,
-            ),
           ),
         ],
       ),
@@ -661,7 +553,8 @@ class _AnimatedCellValue extends StatelessWidget {
       tween: Tween(begin: 0, end: target.toDouble()),
       duration: const Duration(milliseconds: 700),
       curve: Curves.easeOutCubic,
-      builder: (context, animated, _) => Text('${animated.round()}', style: style),
+      builder: (context, animated, _) =>
+          Text('${animated.round()}', style: style),
     );
   }
 }
@@ -820,8 +713,8 @@ class _CalTabButton extends StatelessWidget {
               ? AppColors.primary.withValues(alpha: 0.10)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border:
-              Border.all(color: selected ? AppColors.primary : AppColors.border),
+          border: Border.all(
+              color: selected ? AppColors.primary : AppColors.border),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -876,8 +769,7 @@ class _HistoryRow extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                         color: AppColors.textPrimary)),
                 Text(row.day,
-                    style:
-                        TextStyle(fontSize: 10, color: AppColors.textHint)),
+                    style: TextStyle(fontSize: 10, color: AppColors.textHint)),
               ],
             ),
           ),
@@ -893,8 +785,9 @@ class _HistoryRow extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color:
-                            _isLateArrival ? AppColors.error : AppColors.textPrimary,
+                        color: _isLateArrival
+                            ? AppColors.error
+                            : AppColors.textPrimary,
                       ),
                     ),
                     Text(' → ',
@@ -927,7 +820,9 @@ class _HistoryRow extends StatelessWidget {
                   child: Text(
                     row.status,
                     style: TextStyle(
-                        fontSize: 10, fontWeight: FontWeight.w700, color: color),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: color),
                   ),
                 ),
               ],
@@ -955,13 +850,13 @@ class _DetailRow extends StatelessWidget {
             SizedBox(
               width: 90,
               child: Text(label,
-                  style: TextStyle(
-                      fontSize: 12, color: AppColors.textSecondary)),
+                  style:
+                      TextStyle(fontSize: 12, color: AppColors.textSecondary)),
             ),
             Expanded(
               child: Text(value,
-                  style:
-                      const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600)),
             ),
           ],
         ),

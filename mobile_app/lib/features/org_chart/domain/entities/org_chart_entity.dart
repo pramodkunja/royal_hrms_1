@@ -1,43 +1,52 @@
-import 'package:flutter/material.dart';
+/// Mirrors the shape returned by `GET /api/org-chart/` exactly — see
+/// `OrgChartView`/`_build_org_chart_group` on the backend. The chart is
+/// intentionally two flat levels (root, then departments with a head + flat
+/// member list), not a recursive manager→report tree.
+enum OrgChartScope { branch, company }
 
-class OrgMemberEntity {
+class OrgPersonEntity {
   final String id;
-  final String fullName;
-  final String department;
+  final String employeeId;
+  final String name;
   final String designation;
-  final String role;
 
-  const OrgMemberEntity({
+  const OrgPersonEntity({
     required this.id,
-    required this.fullName,
-    required this.department,
+    required this.employeeId,
+    required this.name,
     required this.designation,
-    required this.role,
   });
 }
 
-class DepartmentNodeEntity {
-  final String name;
-  final Color color;
-  final OrgMemberEntity? head;
-  final List<OrgMemberEntity> members;
+class OrgDepartmentEntity {
+  final int id;
+  final String label;
+  final OrgPersonEntity? head;
+  final List<OrgPersonEntity> members;
 
-  const DepartmentNodeEntity({
-    required this.name,
-    required this.color,
+  const OrgDepartmentEntity({
+    required this.id,
+    required this.label,
     this.head,
     required this.members,
   });
 }
 
-class OrgChartEntity {
-  final OrgMemberEntity? managingDirector;
-  final String companyName;
-  final List<DepartmentNodeEntity> departments;
+class OrgChartGroupEntity {
+  final String branch;
+  final OrgPersonEntity? root;
+  final List<OrgDepartmentEntity> departments;
 
-  const OrgChartEntity({
-    this.managingDirector,
-    required this.companyName,
+  const OrgChartGroupEntity({
+    required this.branch,
+    this.root,
     required this.departments,
   });
+}
+
+class OrgChartEntity {
+  final OrgChartScope scope;
+  final List<OrgChartGroupEntity> groups;
+
+  const OrgChartEntity({required this.scope, required this.groups});
 }

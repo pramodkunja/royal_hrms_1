@@ -20,16 +20,18 @@ class TeamApprovalsTab extends ConsumerWidget {
   final bool canApproveLeave;
   final bool canApproveExpense;
   final bool canApproveCorrections;
+  final bool canApproveWfh;
   const TeamApprovalsTab({
     super.key,
     required this.canApproveLeave,
     required this.canApproveExpense,
     this.canApproveCorrections = false,
+    this.canApproveWfh = false,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!canApproveLeave && !canApproveExpense && !canApproveCorrections) {
+    if (!canApproveLeave && !canApproveExpense && !canApproveCorrections && !canApproveWfh) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),

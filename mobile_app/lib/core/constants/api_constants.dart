@@ -73,6 +73,18 @@ class ApiConstants {
   // Settings — Audit Log
   static const String settingsAudit = '/settings/audit/';
 
+  // Settings — Onboarding Fields (steps 0-3) & Document Types (step 4) —
+  // matches backend OnboardingFieldConfigView / DocumentTypeConfigView.
+  static const String settingsOnboardingFields = '/settings/onboarding-fields/';
+  static String settingsOnboardingFieldDetail(String fieldKey) =>
+      '/settings/onboarding-fields/$fieldKey/';
+  static const String settingsDocumentTypes = '/settings/document-types/';
+  static String settingsDocumentTypeDetail(String typeKey) =>
+      '/settings/document-types/$typeKey/';
+
+  // Organisation Chart
+  static const String orgChart = '/org-chart/';
+
   // Employees
   static const String employees = '/employees/';
   static const String employeeBulkImport = '/employees/bulk-import/';
@@ -101,6 +113,9 @@ class ApiConstants {
   // My Profile (self-service) — matches backend MyProfileView
   static const String myProfile = '/employees/me/';
 
+  // My Profile photo (self-service) — matches backend ProfilePhotoView
+  static const String myProfilePhoto = '/employees/me/photo/';
+
   // Announcements
   static const String announcements = '/announcements/';
   static String announcementDetail(String id) => '/announcements/$id/';
@@ -128,6 +143,12 @@ class ApiConstants {
   // `portal_user__employee_id` when the path segment isn't purely digits.
   static String candidateSendEmail(String id) =>
       '/recruitment/candidates/$id/send-email/';
+
+  // Email Log — matches backend /api/recruitment/emails/ (apps/recruitment/
+  // urls.py). This is the ONLY email-logging feature in the backend; it is
+  // Recruitment-scoped (candidate emails only) and gated on recruitment.view
+  // — there is no general HRMS-wide email log.
+  static const String emailLogs = '/recruitment/emails/';
 
   // Referrals — matches backend /api/recruitment/referrals/...
   static const String referrals =
@@ -213,6 +234,43 @@ class ApiConstants {
       '/leave/policy/$leaveType/';
   static const String leaveBalanceCredit = '/leave/balance/credit/';
 
+  // Separation & Exit — matches backend /api/separation/... (apps/hrms/urls.py).
+  // The mobile/web user-facing name is "Separation & Exit"; the backend model
+  // and these paths keep their original "separation" naming (there never was
+  // an "fnf" URL prefix — see apps/hrms/models.py SeparationRequest) so no
+  // renaming is needed here for backend compatibility.
+  static const String separationTypes = '/separation/types/';
+  static const String separationReasons = '/separation/reasons/';
+  static const String separationRequests = '/separation/requests/';
+  static String separationRequestDetail(String id) =>
+      '/separation/requests/$id/';
+  static String separationStageAction(String requestId, String stageId) =>
+      '/separation/requests/$requestId/stages/$stageId/action/';
+  static String separationTasks(String requestId) =>
+      '/separation/requests/$requestId/tasks/';
+  static String separationTaskDetail(String requestId, String taskId) =>
+      '/separation/requests/$requestId/tasks/$taskId/';
+  static String separationClearances(String requestId) =>
+      '/separation/requests/$requestId/clearances/';
+  static String separationClearanceAction(
+          String requestId, String clearanceId) =>
+      '/separation/requests/$requestId/clearances/$clearanceId/action/';
+  static String separationDocuments(String requestId) =>
+      '/separation/requests/$requestId/documents/';
+  static String separationDocumentDetail(
+          String requestId, String documentId) =>
+      '/separation/requests/$requestId/documents/$documentId/';
+  static String separationActivities(String requestId) =>
+      '/separation/requests/$requestId/activities/';
+
+  // Work From Home — matches backend /api/wfh/... (apps/hrms/urls.py).
+  static const String wfhRequests = '/wfh/requests/';
+  static String wfhRequestDetail(dynamic id) => '/wfh/requests/$id/';
+  static String wfhRequestAction(dynamic id) => '/wfh/requests/$id/approve/';
+  static const String wfhSavedLocations = '/wfh/saved-locations/';
+  static String wfhSavedLocationDetail(dynamic id) =>
+      '/wfh/saved-locations/$id/';
+
   // Opening Balance & History bulk import (one-time historical migration
   // tool) — matches web's API.leave.balanceImport*.
   static const String leaveBalanceImport = '/leave/balance/import/';
@@ -239,6 +297,11 @@ class ApiConstants {
       '/expenses/$expenseNumber/';
 
   // Attendance — My Attendance (employee self-service), matches backend /api/attendance/...
+  // geofence-check is a read-only pre-punch validation (views/geofence_check.py)
+  // — the SAME GeofencingService.validate() the punch itself re-runs
+  // authoritatively; this lets the clock-in UI reject an out-of-geofence
+  // attempt before ever opening face capture, without writing anything.
+  static const String attendanceGeofenceCheck = '/attendance/geofence-check/';
   static const String attendancePunch = '/attendance/punch/';
   static const String attendanceToday = '/attendance/today/';
   static const String attendanceStats = '/attendance/stats/';
@@ -251,6 +314,7 @@ class ApiConstants {
   static const String notificationsUnreadCount = '/notifications/unread-count/';
   static const String notificationsReadAll = '/notifications/read-all/';
   static String notificationRead(String id) => '/notifications/$id/read/';
+  static const String notificationSettings = '/notifications/settings/';
 
   // HRMS — Birthdays widget (hrms app is mounted at the API root, not
   // under a '/hrms/' prefix — see config/urls.py: path('api/', include('apps.hrms.urls')))
@@ -269,6 +333,10 @@ class ApiConstants {
   static const String attendanceHrCorrections = '/attendance/corrections/';
   static String attendanceHrCorrectionReview(String id) =>
       '/attendance/corrections/$id/review/';
+
+  // Attendance — employee's own correction-request history (status +
+  // L1/L2 approver breakdown), distinct from the HR inbox above.
+  static const String attendanceMyCorrections = '/attendance/corrections/my/';
 
   // Attendance — Invalid Punch actions (assign/discard/convert)
   static String attendanceInvalidPunchAssign(String id) =>
@@ -358,6 +426,13 @@ class ApiConstants {
   // dispatches every intent server-side; see registry/intents_en.yaml for
   // the full intent list).
   static const String voiceParse = '/voice/parse/';
+  // Backend TTS reply (apps/voice_commands/views_speak.py) — JSON in
+  // ({text, language_code}), raw audio/wav bytes out on success.
+  static const String voiceSpeak = '/voice/speak/';
+  // Hindi-STT retry (apps/voice_commands/views_transcribe.py) — multipart
+  // {audio: <clip>} in, {transcript, language_probability,
+  // was_language_hinted, detected_language} out.
+  static const String voiceTranscribeFallback = '/voice/transcribe-fallback/';
 
   // Facial Recognition — matches apps/attendance's real face-registration/
   // face-verification endpoints exactly (there is no image-upload or

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/app_loading_widget.dart';
 import '../../data/models/audit_model.dart';
 import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
@@ -60,7 +61,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
             ),
           Expanded(
             child: async.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const AppLoadingWidget(),
               error: (e, _) => _ErrorView(message: e.toString()),
               data: (page) => page.entries.isEmpty
                   ? const _EmptyView()
@@ -436,7 +437,7 @@ class _AuditCard extends StatelessWidget {
                                 const SizedBox(width: 4),
                                 Expanded(
                                   child: Text(
-                                    'ID: \${entry.objectId}',
+                                    'ID: ${entry.objectId}',
                                     style: AppTextStyles.caption
                                         .copyWith(fontSize: 11),
                                     maxLines: 1,

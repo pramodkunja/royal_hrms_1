@@ -24,6 +24,8 @@ import '../../features/settings/presentation/approval_rules/approval_rules_scree
 import '../../features/settings/presentation/leave_policy/leave_balance_import_screen.dart';
 import '../../features/settings/presentation/referral_rules/referral_rules_settings_screen.dart';
 import '../../features/settings/presentation/assessment_config/assessment_config_screen.dart';
+import '../../features/settings/presentation/notification_settings/notification_settings_screen.dart';
+import '../../features/settings/presentation/onboarding_fields/onboarding_fields_screen.dart';
 import '../../features/announcements/presentation/announcements_screen.dart';
 import '../../features/employees/presentation/employees_screen.dart';
 import '../../features/employees/presentation/screens/employee_bulk_import_screen.dart';
@@ -41,12 +43,18 @@ import '../../features/assessments/presentation/screens/assessments_screen.dart'
 import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../../features/onboarding/presentation/screens/awaiting_approval_screen.dart';
 import '../../features/leave/presentation/screens/leave_screen.dart';
+import '../../features/separation/domain/entities/separation_entity.dart';
+import '../../features/separation/presentation/screens/separation_detail_screen.dart';
+import '../../features/separation/presentation/screens/separation_screen.dart';
+import '../../features/wfh/presentation/screens/wfh_screen.dart';
 import '../../features/expenses/presentation/screens/expense_screen.dart';
 import '../../features/approvals/presentation/screens/approvals_screen.dart';
 import '../../features/attendance/presentation/screens/attendance_screen.dart';
 import '../../features/attendance/presentation/screens/my_attendance_screen.dart';
 import '../../features/payroll/presentation/screens/my_payslip_screen.dart';
 import '../../features/referrals/presentation/screens/referrals_screen.dart';
+import '../../features/email_log/presentation/screens/email_log_screen.dart';
+import '../../features/my_requests/presentation/screens/my_requests_screen.dart';
 
 // ─── Route path constants ─────────────────────────────────────────────────────
 
@@ -74,9 +82,12 @@ class AppRoutes {
   static const String branches = '/dashboard/branches';
   static const String attendance = '/dashboard/attendance';
   static const String leave = '/dashboard/leave';
+  static const String wfh = '/dashboard/wfh';
   static const String expenses = '/dashboard/expenses';
   static const String approvals = '/dashboard/approvals';
   static const String separation = '/dashboard/separation';
+  static String separationDetailPath(String requestId) =>
+      '/dashboard/separation/$requestId';
   static const String documents = '/dashboard/documents';
   static const String faceIdRegistrations = '/dashboard/face-id-registrations';
   static const String myAttendance = '/dashboard/my-attendance';
@@ -105,6 +116,8 @@ class AppRoutes {
   static const String settingsReferralRules = '/settings/referral-rules';
   static const String settingsAssessmentConfig = '/settings/assessment-config';
   static const String settingsApprovalRules = '/settings/approval-rules';
+  static const String settingsNotifications = '/settings/notifications';
+  static const String settingsOnboardingFields = '/settings/onboarding-fields';
   static const String settingsLeaveBalanceImport =
       '/settings/leave-policy/import-balances';
 
@@ -133,6 +146,7 @@ class AppRoutes {
     settingsEmailTemplates,
     settingsHolidayCalendar,
     settingsLeavePolicy,
+    settingsOnboardingFields,
     settingsReferralRules,
     settingsRoles,
     settingsSmtp,
@@ -330,6 +344,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const ReferralRulesSettingsScreen(),
       ),
       GoRoute(
+        path: AppRoutes.settingsNotifications,
+        builder: (_, __) => const NotificationSettingsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.settingsOnboardingFields,
+        builder: (_, __) => const OnboardingFieldsScreen(),
+      ),
+      GoRoute(
         path: AppRoutes.settingsAssessmentConfig,
         builder: (_, __) => const AssessmentConfigScreen(),
       ),
@@ -386,10 +408,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.emailLogs,
             pageBuilder: (_, state) => NoTransitionPage(
-              key: state.pageKey,
-              child: const PlaceholderScreen(
-                  title: 'Email Logs', icon: Icons.mail_outline),
-            ),
+                key: state.pageKey, child: const EmailLogScreen()),
           ),
 
           // Workforce
@@ -430,6 +449,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 NoTransitionPage(key: state.pageKey, child: const LeaveScreen()),
           ),
           GoRoute(
+            path: AppRoutes.wfh,
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: const WfhScreen()),
+          ),
+          GoRoute(
             path: AppRoutes.expenses,
             pageBuilder: (_, state) =>
                 NoTransitionPage(key: state.pageKey, child: const ExpenseScreen()),
@@ -443,11 +467,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.separation,
-            pageBuilder: (_, state) => NoTransitionPage(
-              key: state.pageKey,
-              child: const PlaceholderScreen(
-                  title: 'Separation & FnF', icon: Icons.exit_to_app_outlined),
-            ),
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: const SeparationScreen()),
+            routes: [
+              GoRoute(
+                path: ':requestId',
+                builder: (context, state) => SeparationDetailScreen(
+                  requestId: state.pathParameters['requestId']!,
+                  initial: state.extra as SeparationRequestEntity?,
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: AppRoutes.documents,
@@ -479,10 +509,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.myRequests,
             pageBuilder: (_, state) => NoTransitionPage(
-              key: state.pageKey,
-              child: const PlaceholderScreen(
-                  title: 'My Requests', icon: Icons.inbox_outlined),
-            ),
+                key: state.pageKey, child: const MyRequestsScreen()),
           ),
           GoRoute(
             path: AppRoutes.profile,
