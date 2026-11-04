@@ -9,6 +9,7 @@ import '../../../profile/presentation/providers/profile_providers.dart';
 import '../../../settings/presentation/providers/settings_providers.dart';
 import '../../data/models/payslip_model.dart';
 import '../providers/payroll_providers.dart';
+import '../widgets/payslip_queries_section.dart';
 
 /// Employee-facing "My Payslips" — restored after the wider admin Payroll
 /// module (Run Payroll, Payroll Rules) was removed from mobile. Unlike the
@@ -84,6 +85,7 @@ class _MyPayslipScreenState extends ConsumerState<MyPayslipScreen> {
       onRefresh: () async {
         ref.invalidate(myPayslipsProvider);
         ref.invalidate(myProfileProvider);
+        ref.invalidate(myPayslipQueriesProvider);
       },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -149,6 +151,11 @@ class _MyPayslipScreenState extends ConsumerState<MyPayslipScreen> {
                         payDateLabel: _shortDate(selected.payDate),
                         acknowledging: _acknowledging,
                         onAcknowledge: () => _acknowledge(selected.id),
+                      ),
+                      const SizedBox(height: 14),
+                      PayslipQueriesSection(
+                        payslip: selected,
+                        monthLabel: _monthLabel(selected.cycleStart),
                       ),
                     ],
                   );
@@ -347,7 +354,7 @@ class _PayslipDetailCard extends ConsumerWidget {
           ],
           const SizedBox(height: 14),
           Text(
-            'This is a system-generated payslip. For any query, please contact HR.',
+            'This is a system-generated payslip. Queries on it are listed below.',
             style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
           ),
         ],

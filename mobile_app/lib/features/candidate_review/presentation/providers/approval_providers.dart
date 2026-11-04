@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart' show DioException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
 import '../../data/datasources/approval_datasource.dart';
@@ -30,6 +31,10 @@ class ApprovalsNotifier extends AutoDisposeAsyncNotifier<List<ApprovalUser>> {
     String remarks = '',
     String? department,
     String? designation,
+    String? uanNumber,
+    String? nameAsPerAadhar,
+    String? panNumber,
+    String? assessmentId,
   }) async {
     try {
       await _ds.approveOrReject(
@@ -38,6 +43,10 @@ class ApprovalsNotifier extends AutoDisposeAsyncNotifier<List<ApprovalUser>> {
         remarks: remarks,
         department: department,
         designation: designation,
+        uanNumber: uanNumber,
+        nameAsPerAadhar: nameAsPerAadhar,
+        panNumber: panNumber,
+        assessmentId: assessmentId,
       );
       // Remove the acted-on user from the local list immediately
       state = AsyncData(
@@ -50,6 +59,9 @@ class ApprovalsNotifier extends AutoDisposeAsyncNotifier<List<ApprovalUser>> {
   }
 
   String _msg(Object e) {
+    // The server's own message (e.g. an invalid or already-registered PAN,
+    // a missing department) — never a value the user typed.
+    if (e is DioException) return parseDioException(e).message;
     final s = e.toString();
     if (s.contains('403')) return 'You do not have permission to perform this action.';
     if (s.contains('404')) return 'User not found.';

@@ -7,6 +7,7 @@ import '../../../../shared/widgets/app_error_state.dart';
 import '../../../../shared/widgets/app_loading_widget.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/separation_entity.dart';
+import '../notice_period.dart';
 import '../providers/separation_providers.dart';
 import '../widgets/separation_activity_section.dart';
 import '../widgets/separation_approval_section.dart';
@@ -205,6 +206,11 @@ class _SeparationDetailScreenState
                         ('Proposed Last Working Day',
                             formatSeparationDate(r.proposedLastWorkingDay)),
                         ('Notice Period', '${r.noticePeriodDays} days'),
+                        // Web SeparationDetailsSection: the employee's assigned
+                        // notice period and the expected last working day
+                        // (request date + notice), both from the server.
+                        ('Assigned Notice Period', formatNoticePeriod(r.assignedNoticePeriodDays)),
+                        ('Expected Last Working Day', formatNoticeDate(r.expectedLastWorkingDay)),
                         if (r.comments.isNotEmpty) ('Comments', r.comments),
                       ],
                       trailingChild: r.documentUrl != null
@@ -274,7 +280,7 @@ class _SeparationDetailScreenState
 
                     // ── Approval ──────────────────────────────────────────
                     SeparationApprovalSection(
-                        requestId: r.id, stages: r.approvalStages),
+                        requestId: r.id, stages: r.approvalStages, employeeName: r.employeeName),
                     const SizedBox(height: 12),
 
                     // ── KT / Handover ─────────────────────────────────────

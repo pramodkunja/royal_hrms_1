@@ -157,6 +157,7 @@ AppException parseDioException(DioException error) {
           ? AccountLockedException(serverMessage)
           : const AccountLockedException();
     }
+    if (isModuleDisabledMessage(serverMessage)) return ModuleDisabledException(serverMessage!);
     return serverMessage != null ? ForbiddenException(serverMessage) : const ForbiddenException();
   }
   if (statusCode == 404) {
@@ -189,7 +190,36 @@ AppException parseDioException(DioException error) {
 /// hand-rolled per-feature error-formatting so every screen shows
 /// consistent copy for the same underlying failure.
 String userFriendlyMessage(Object error) {
+  if (error is ModuleDisabledException) {
+    return error.message.trim().isEmpty ? kModuleDisabledFallback : error.message;
+  }
   if (error is AppException) return error.message;
-  if (error is DioException) return parseDioException(error).message;
+  if (error is DioException) return userFriendlyMessage(parseDioException(error));
   return 'Something went wrong. Please try again.';
+}
+
+/// What kind of failure [error] is, so a screen can tell a switched-off
+/// module apart from missing access, a connection problem or a server fault
+/// (and from an empty result, which is not an error at all).
+enum AppErrorKind { moduleDisabled, forbidden, network, server, unknown }
+
+/// The backend's disabled-module message carried by [error], or null.
+/// Also recognises it when a feature re-threw the server's message as a
+/// plain `Exception(message)`.
+String? moduleDisabledMessage(Object error) {
+  final e = error is DioException ? parseDioException(error) : error;
+  if (e is ModuleDisabledException) return userFriendlyMessage(e);
+  if (e is AppException) return null;
+  final text = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '').trim();
+  return isModuleDisabledMessage(text) ? text : null;
+}
+
+AppErrorKind appErrorKind(Object error) {
+  if (moduleDisabledMessage(error) != null) return AppErrorKind.moduleDisabled;
+  final e = error is DioException ? parseDioException(error) : error;
+  if (e is ForbiddenException || e is UnauthorizedException) return AppErrorKind.forbidden;
+  if (e is NoInternetException) return AppErrorKind.network;
+  if (e is NetworkException && e.statusCode == null) return AppErrorKind.network;
+  if (e is ServerException) return AppErrorKind.server;
+  return AppErrorKind.unknown;
 }

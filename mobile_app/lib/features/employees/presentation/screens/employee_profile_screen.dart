@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/permissions/permission_providers.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../notifications/presentation/widgets/notification_bell_button.dart';
 import '../../../../shared/widgets/app_button.dart';
@@ -141,6 +142,9 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
   Widget build(BuildContext context) {
     final emp = widget.employee;
     final isProfileTab = _tabCtrl.index == 0;
+    // Editing and activating/deactivating need employees.edit (web
+    // employees/[id]/page.tsx canEdit); without it the profile is read-only.
+    final canEdit = ref.watch(permissionProvider('employees.edit'));
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -163,7 +167,7 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
         automaticallyImplyLeading: false,
         leadingWidth: 44,
       ),
-      bottomNavigationBar: isProfileTab
+      bottomNavigationBar: isProfileTab && canEdit
           ? _BottomBar(
               onCancel: () => Navigator.of(context).pop(),
               onSave: _onSave,
@@ -178,7 +182,7 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
                 employee: emp,
                 isActive: _isActive,
                 isToggling: _toggling,
-                onToggle: _onToggle,
+                onToggle: canEdit ? _onToggle : null,
               ),
             ),
           ),
@@ -216,7 +220,7 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
         body: TabBarView(
           controller: _tabCtrl,
           children: [
-            _ProfileTab(employee: emp, onEdit: _onSave),
+            _ProfileTab(employee: emp, onEdit: canEdit ? _onSave : null),
             EmployeeLeaveTab(employee: emp),
             EmployeeAttendanceTab(employee: emp),
             _ApprovalMatrixTab(employee: emp),
@@ -257,7 +261,7 @@ class _ProfileCard extends StatelessWidget {
   final EmployeeModel employee;
   final bool isActive;
   final bool isToggling;
-  final ValueChanged<bool> onToggle;
+  final ValueChanged<bool>? onToggle; // null: read-only
 
   const _ProfileCard({
     required this.employee,
@@ -568,7 +572,7 @@ class _InfoCell extends StatelessWidget {
 
 class _ProfileTab extends StatefulWidget {
   final EmployeeModel employee;
-  final VoidCallback onEdit;
+  final VoidCallback? onEdit; // null: read-only
   const _ProfileTab({required this.employee, required this.onEdit});
 
   @override
@@ -706,7 +710,7 @@ class _ProfileTabState extends State<_ProfileTab> {
                         ),
                       ),
                       const Spacer(),
-                      if (_sub == 0)
+                      if (_sub == 0 && widget.onEdit != null)
                         InkWell(
                           onTap: widget.onEdit,
                           borderRadius: BorderRadius.circular(8),

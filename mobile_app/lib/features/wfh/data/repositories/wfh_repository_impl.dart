@@ -1,4 +1,5 @@
 import '../../domain/entities/wfh_entity.dart';
+import '../../domain/entities/wfh_medical_proof.dart';
 import '../../domain/repositories/wfh_repository.dart';
 import '../datasources/wfh_remote_datasource.dart';
 
@@ -38,6 +39,8 @@ class WfhRepositoryImpl implements WfhRepository {
     String? locationLabel,
     required double latitude,
     required double longitude,
+    bool isMedical = false,
+    WfhMedicalProof? medicalProof,
   }) =>
       _ds.createWfhRequest(
         startDate: startDate,
@@ -46,6 +49,8 @@ class WfhRepositoryImpl implements WfhRepository {
         locationLabel: locationLabel,
         latitude: latitude,
         longitude: longitude,
+        isMedical: isMedical,
+        medicalProof: medicalProof,
       );
 
   @override

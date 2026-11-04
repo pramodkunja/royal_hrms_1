@@ -7,6 +7,7 @@ import '../../../../shared/widgets/stat_card.dart';
 import '../providers/expense_providers.dart';
 import '../widgets/expense_list_item.dart';
 import '../widgets/expense_form_sheet.dart';
+import 'package:mobile_app/shared/widgets/app_error_state.dart';
 
 // ── Filter tab ────────────────────────────────────────────────────────────────
 
@@ -113,8 +114,9 @@ class ExpenseScreen extends ConsumerWidget {
                         ),
                       ),
                       error: (err, __) => SliverToBoxAdapter(
-                        child: _ErrorState(
-                          message: err.toString(),
+                        child: AppErrorState.forError(
+                          err,
+                          title: 'Failed to load expenses',
                           onRetry: () => ref.invalidate(expenseListProvider),
                         ),
                       ),
@@ -347,36 +349,3 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-// ── Error state ───────────────────────────────────────────────────────────────
-
-class _ErrorState extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-  const _ErrorState({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 40),
-          Icon(Icons.wifi_off_outlined, size: 48, color: AppColors.textHint),
-          const SizedBox(height: 12),
-          Text('Failed to load expenses',
-              style: AppTextStyles.label.copyWith(color: AppColors.error)),
-          const SizedBox(height: 6),
-          Text(message,
-              style: AppTextStyles.caption, textAlign: TextAlign.center),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh, size: 16),
-            label: const Text('Try Again'),
-          ),
-        ],
-      ),
-    );
-  }
-}

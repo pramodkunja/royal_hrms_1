@@ -117,14 +117,18 @@ class EmployeeCard extends StatelessWidget {
                         onTap: onView,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _SquareIconButton(
-                        icon: Icons.edit_outlined,
-                        filled: true,
-                        onTap: onEdit,
+                    // Shown only to users allowed to edit (null otherwise).
+                    if (onEdit != null) ...[
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _SquareIconButton(
+                          key: const Key('employee-card-edit'),
+                          icon: Icons.edit_outlined,
+                          filled: true,
+                          onTap: onEdit,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ],
@@ -201,6 +205,7 @@ class _SquareIconButton extends StatelessWidget {
   final VoidCallback? onTap;
 
   const _SquareIconButton({
+    super.key,
     required this.icon,
     required this.filled,
     this.onTap,

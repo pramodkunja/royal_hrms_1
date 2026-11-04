@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile_app/core/router/access_control.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
@@ -336,6 +337,7 @@ class _ActionQueueCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final queueAsync = ref.watch(hrActionQueueProvider);
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
 
     return SectionCard(
       title: 'Action Queue',
@@ -343,11 +345,69 @@ class _ActionQueueCard extends ConsumerWidget {
       accentColor: AppColors.warning,
       child: queueAsync.when(
         data: (queue) {
+          // Each row opens a permission-gated screen; rows the user can't
+          // open are left out (route permissions, access_control.dart).
+          // `counted` rows are the ones the backend sums into total_pending
+          // (HRActionQueueView), so the total shown matches the visible rows.
+          final rows = [
+            (path: AppRoutes.candidateReview, counted: true, row: ActionRow(
+              icon: Icons.how_to_reg_outlined,
+              iconColor: AppColors.info,
+              title: 'Candidate Reviews',
+              count: queue.candidateReviews,
+              onTap: () => goToDashboardSection(context, AppRoutes.candidateReview),
+            )),
+            (path: AppRoutes.leave, counted: true, row: ActionRow(
+              icon: Icons.beach_access_outlined,
+              iconColor: AppColors.success,
+              title: 'Leave Approvals',
+              count: queue.leaveApprovals,
+              onTap: () => goToDashboardSection(context, AppRoutes.leave),
+            )),
+            (path: AppRoutes.approvals, counted: true, row: ActionRow(
+              icon: Icons.edit_calendar_outlined,
+              iconColor: AppColors.error,
+              title: 'Attendance Corrections',
+              count: queue.attendanceCorrections,
+              onTap: () => goToDashboardSection(context, AppRoutes.approvals),
+            )),
+            (path: AppRoutes.expenses, counted: true, row: ActionRow(
+              icon: Icons.account_balance_wallet_outlined,
+              iconColor: AppColors.warning,
+              title: 'Expense Claims',
+              count: queue.expenseClaims,
+              onTap: () => goToDashboardSection(context, AppRoutes.expenses),
+            )),
+            (path: AppRoutes.employees, counted: true, row: ActionRow(
+              icon: Icons.person_add_alt_outlined,
+              iconColor: AppColors.primary,
+              title: 'Onboarding Reviews',
+              count: queue.onboardingReviews,
+              // No dedicated onboarding-review screen exists in this app
+              // yet, so this opens the Employees list pre-filtered to
+              // status=onboarding — the same fallback the Admin dashboard
+              // uses for the identical tile.
+              onTap: () {
+                ref.read(employeeFiltersProvider.notifier).state =
+                    const EmployeeFilters(status: 'onboarding');
+                goToDashboardSection(context, AppRoutes.employees);
+              },
+            )),
+            (path: AppRoutes.separation, counted: false, row: ActionRow(
+              icon: Icons.logout_outlined,
+              iconColor: AppColors.secondary,
+              title: 'Separation Requests',
+              count: queue.separationRequests,
+              onTap: () => goToDashboardSection(context, AppRoutes.separation),
+            )),
+          ].where((r) => canAccessPath(user, r.path)).toList();
+          final total = rows.where((r) => r.counted).fold<int>(0, (sum, r) => sum + r.row.count);
+
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${queue.totalPending}',
+                '$total',
                 style: AppTextStyles.h2,
               ),
               Text(
@@ -355,61 +415,10 @@ class _ActionQueueCard extends ConsumerWidget {
                 style: AppTextStyles.caption,
               ),
               const SizedBox(height: 16),
-              ActionRow(
-                icon: Icons.how_to_reg_outlined,
-                iconColor: AppColors.info,
-                title: 'Candidate Reviews',
-                count: queue.candidateReviews,
-                onTap: () => goToDashboardSection(context, AppRoutes.candidateReview),
-              ),
-              const Divider(height: 24),
-              ActionRow(
-                icon: Icons.beach_access_outlined,
-                iconColor: AppColors.success,
-                title: 'Leave Approvals',
-                count: queue.leaveApprovals,
-                onTap: () => goToDashboardSection(context, AppRoutes.leave),
-              ),
-              const Divider(height: 24),
-              ActionRow(
-                icon: Icons.edit_calendar_outlined,
-                iconColor: AppColors.error,
-                title: 'Attendance Corrections',
-                count: queue.attendanceCorrections,
-                onTap: () => goToDashboardSection(context, AppRoutes.approvals),
-              ),
-              const Divider(height: 24),
-              ActionRow(
-                icon: Icons.account_balance_wallet_outlined,
-                iconColor: AppColors.warning,
-                title: 'Expense Claims',
-                count: queue.expenseClaims,
-                onTap: () => goToDashboardSection(context, AppRoutes.expenses),
-              ),
-              const Divider(height: 24),
-              ActionRow(
-                icon: Icons.person_add_alt_outlined,
-                iconColor: AppColors.primary,
-                title: 'Onboarding Reviews',
-                count: queue.onboardingReviews,
-                // No dedicated onboarding-review screen exists in this app
-                // yet, so this opens the Employees list pre-filtered to
-                // status=onboarding — the same fallback the Admin dashboard
-                // uses for the identical tile.
-                onTap: () {
-                  ref.read(employeeFiltersProvider.notifier).state =
-                      const EmployeeFilters(status: 'onboarding');
-                  goToDashboardSection(context, AppRoutes.employees);
-                },
-              ),
-              const Divider(height: 24),
-              ActionRow(
-                icon: Icons.logout_outlined,
-                iconColor: AppColors.secondary,
-                title: 'Separation Requests',
-                count: queue.separationRequests,
-                onTap: () => goToDashboardSection(context, AppRoutes.separation),
-              ),
+              for (var i = 0; i < rows.length; i++) ...[
+                if (i > 0) const Divider(height: 24),
+                rows[i].row,
+              ],
             ],
           );
         },

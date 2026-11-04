@@ -97,6 +97,11 @@ class OnboardingProfileEntity {
   final OnboardingEmergencyEntity emergency;
   final List<OnboardingDocEntity> documents;
 
+  /// Every saved value by field_key as text — built-in profile fields and
+  /// custom_field_values alike (web keeps them as strings the same way), so
+  /// the admin-configured steps can show whichever fields are configured.
+  final Map<String, String> values;
+
   const OnboardingProfileEntity({
     required this.status,
     required this.currentStep,
@@ -105,6 +110,7 @@ class OnboardingProfileEntity {
     required this.bank,
     required this.emergency,
     required this.documents,
+    this.values = const {},
   });
 
   static OnboardingProfileEntity empty() => const OnboardingProfileEntity(

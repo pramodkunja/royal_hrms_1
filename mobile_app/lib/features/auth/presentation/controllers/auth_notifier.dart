@@ -58,4 +58,12 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     if (user == null) return;
     state = AsyncData(AuthState(user: user.copyWith(onboardingStatus: status)));
   }
+
+  /// The server's assessment_status (see syncAssessmentGate and the onboarding
+  /// approval handover). Re-runs the router's redirect, like the above.
+  void updateAssessmentStatus(String status) {
+    final user = state.value?.user;
+    if (user == null || user.assessmentStatus == status) return;
+    state = AsyncData(AuthState(user: user.copyWith(assessmentStatus: status)));
+  }
 }

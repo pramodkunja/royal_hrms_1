@@ -1,10 +1,45 @@
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../models/assessment_model.dart';
+import '../models/assessment_portal_models.dart';
+import '../models/my_assessment_model.dart';
 
 class AssessmentsRemoteDataSource {
   final Dio _dio;
   AssessmentsRemoteDataSource(this._dio);
+
+  // ── My assessments (employee self-service) ─────────────────────────────────
+
+  /// GET /assessments/my/ — every assignment of the signed-in user, unpaged.
+  Future<MyAssessments> fetchMyAssessments() async {
+    final res = await _dio.get(ApiConstants.assessmentsMy);
+    return MyAssessments.fromJson(_unwrap(res.data));
+  }
+
+  /// POST /assessments/<a>/respond/<item>/ — saves one response at once.
+  /// Videos send no body; quizzes send the chosen option (a–d).
+  Future<AssessmentRespondResult> respondToItem(
+    String assignmentId,
+    String itemId, {
+    String? selectedOption,
+  }) async {
+    final res = await _dio.post(
+      ApiConstants.assessmentRespond(assignmentId, itemId),
+      data: selectedOption == null ? <String, dynamic>{} : {'selected_option': selectedOption},
+    );
+    return AssessmentRespondResult.fromJson(_unwrap(res.data));
+  }
+
+  /// POST /assessments/<a>/complete/ — the server grades the attempt.
+  Future<AssessmentCompleteResult> completeAssessment(String assignmentId) async {
+    final res = await _dio.post(ApiConstants.assessmentComplete(assignmentId));
+    return AssessmentCompleteResult.fromJson(_unwrap(res.data));
+  }
+
+  /// POST /assessments/<a>/retry/ — resets a completed attempt.
+  Future<void> retryAssessment(String assignmentId) async {
+    await _dio.post(ApiConstants.assessmentRetry(assignmentId));
+  }
 
   // ── Assessments ────────────────────────────────────────────────────────────
 

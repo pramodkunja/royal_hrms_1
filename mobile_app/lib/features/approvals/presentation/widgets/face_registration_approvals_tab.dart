@@ -6,6 +6,8 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../facial_recognition/domain/entities/face_registration_entity.dart';
 import '../../../facial_recognition/presentation/providers/facial_recognition_providers.dart';
 import '../../../facial_recognition/presentation/widgets/face_status_badge.dart';
+import 'package:mobile_app/shared/widgets/app_error_state.dart';
+import 'package:mobile_app/core/network/api_client.dart';
 
 const _kMonthShort = [
   '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
@@ -26,7 +28,7 @@ class FaceRegistrationApprovalsTab extends ConsumerWidget {
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not review request: $e'), backgroundColor: AppColors.error),
+        SnackBar(content: Text(userFriendlyMessage(e)), backgroundColor: AppColors.error),
       );
     }
   }
@@ -38,8 +40,8 @@ class FaceRegistrationApprovalsTab extends ConsumerWidget {
 
     return pendingAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => _ErrorView(
-        message: '$e',
+      error: (e, _) => AppErrorState.forError(
+        e,
         onRetry: () => ref.invalidate(facePendingRegistrationsProvider),
       ),
       data: (result) {
@@ -232,27 +234,3 @@ class _PendingRowState extends State<_PendingRow> {
   }
 }
 
-class _ErrorView extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-  const _ErrorView({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, size: 40, color: AppColors.error),
-            const SizedBox(height: 12),
-            Text(message, style: AppTextStyles.body, textAlign: TextAlign.center),
-            const SizedBox(height: 14),
-            FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh, size: 16), label: const Text('Retry')),
-          ],
-        ),
-      ),
-    );
-  }
-}

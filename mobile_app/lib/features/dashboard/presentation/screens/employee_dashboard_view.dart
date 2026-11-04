@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile_app/core/router/access_control.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
@@ -13,6 +14,9 @@ import '../providers/dashboard_providers.dart';
 import '../widgets/attendance_ring_card.dart';
 import '../widgets/dashboard_section.dart';
 import '../widgets/quick_access.dart';
+import 'package:mobile_app/features/documents/presentation/providers/document_providers.dart'
+    show pendingAcknowledgementsProvider;
+import 'package:mobile_app/features/documents/presentation/widgets/pending_acknowledgements.dart';
 
 /// Full Employee-role dashboard — a pixel-level port of web's
 /// `EmployeeDashboard.tsx`: `EmpConsole` (dark hero card: greeting, clock
@@ -41,6 +45,7 @@ class EmployeeDashboardView extends ConsumerWidget {
       ref.invalidate(employeeActionItemsProvider);
       ref.invalidate(employeeRecentRequestsProvider);
       ref.invalidate(sharedAnnouncementProvider);
+      ref.invalidate(pendingAcknowledgementsProvider);
       if (canViewBirthdays) ref.invalidate(birthdaysProvider);
     }
 
@@ -63,6 +68,8 @@ class EmployeeDashboardView extends ConsumerWidget {
           children: [
             const _EmpConsoleCard(),
             const SizedBox(height: 20),
+            // Company Policy etc. still to acknowledge — nothing when none.
+            const PendingAcknowledgementsBanner(),
             const AttendanceRingCard(),
             const SizedBox(height: 20),
             QuickAccessCard(items: kQuickItemsEmployee),
@@ -660,6 +667,13 @@ class _EmpActionItemsCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final itemsAsync = ref.watch(employeeActionItemsProvider);
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
+    // The item itself stays visible (it is information the server sent);
+    // only the shortcut is dropped when the user can't open its screen.
+    String? routeFor(String actionType) {
+      final route = _routeFor(actionType);
+      return route != null && canAccessPath(user, route) ? route : null;
+    }
 
     return SectionCard(
       title: 'Action Items',
@@ -689,7 +703,7 @@ class _EmpActionItemsCard extends ConsumerWidget {
                   icon: _iconFor(response.actionItems[i].actionType),
                   color: _colorFor(response.actionItems[i].actionType),
                   done: _isDone(response.actionItems[i]),
-                  route: _routeFor(response.actionItems[i].actionType),
+                  route: routeFor(response.actionItems[i].actionType),
                 ),
               ],
             ],
@@ -847,6 +861,7 @@ class _EmpRecentRequestsCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final requestsAsync = ref.watch(employeeRecentRequestsProvider);
+    final canApplyLeave = canAccessPath(ref.watch(authStateProvider).valueOrNull?.user, AppRoutes.leave);
 
     return SectionCard(
       title: 'Recent Requests',
@@ -864,7 +879,7 @@ class _EmpRecentRequestsCard extends ConsumerWidget {
         data: (response) {
           if (response.requests.isEmpty) {
             return GestureDetector(
-              onTap: () => goToDashboardSection(context, AppRoutes.leave),
+              onTap: canApplyLeave ? () => goToDashboardSection(context, AppRoutes.leave) : null,
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Center(
@@ -873,10 +888,11 @@ class _EmpRecentRequestsCard extends ConsumerWidget {
                       style: AppTextStyles.bodySecondary,
                       children: [
                         const TextSpan(text: 'No requests yet. '),
-                        TextSpan(
-                          text: 'Apply leave',
-                          style: AppTextStyles.body.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
-                        ),
+                        if (canApplyLeave)
+                          TextSpan(
+                            text: 'Apply leave',
+                            style: AppTextStyles.body.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
+                          ),
                       ],
                     ),
                     textAlign: TextAlign.center,
@@ -1277,11 +1293,16 @@ class _BirthdayRow extends StatelessWidget {
 
 // ── Quick Links (unchanged from the previous generic dashboard) ────────────
 
-class _QuickLinksCard extends StatelessWidget {
+class _QuickLinksCard extends ConsumerWidget {
   const _QuickLinksCard();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Only links the user may open (route permissions, access_control.dart);
+    // the card disappears if none remain.
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
+    final links = _kQuickLinksEmployee.where((l) => canAccessPath(user, l.path)).toList();
+    if (links.isEmpty) return const SizedBox.shrink();
     return SectionCard(
       title: 'Quick Links',
       icon: Icons.link_rounded,
@@ -1290,7 +1311,7 @@ class _QuickLinksCard extends StatelessWidget {
         shrinkWrap: true,
         primary: false,
         physics: const NeverScrollableScrollPhysics(),
-        itemCount: _kQuickLinksEmployee.length,
+        itemCount: links.length,
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
           mainAxisSpacing: 10,
@@ -1298,7 +1319,7 @@ class _QuickLinksCard extends StatelessWidget {
           mainAxisExtent: 46,
         ),
         itemBuilder: (context, index) {
-          final link = _kQuickLinksEmployee[index];
+          final link = links[index];
           return GestureDetector(
             onTap: () => goToDashboardSection(context, link.path),
             child: Container(

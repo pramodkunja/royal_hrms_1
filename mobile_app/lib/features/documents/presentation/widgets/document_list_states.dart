@@ -3,7 +3,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 
 class DocumentEmptyView extends StatelessWidget {
-  final VoidCallback onUpload;
+  /// Null when the user may not upload (documents.create): no button.
+  final VoidCallback? onUpload;
   const DocumentEmptyView({super.key, required this.onUpload});
 
   @override
@@ -30,11 +31,14 @@ class DocumentEmptyView extends StatelessWidget {
               style: AppTextStyles.h4.copyWith(color: AppColors.textSecondary)),
           const SizedBox(height: 6),
           Text(
-            'Upload policies, forms, and templates\nfor your team.',
+            onUpload != null
+                ? 'Upload policies, forms, and templates\nfor your team.'
+                : 'No documents have been shared yet.',
             style: AppTextStyles.bodySmall
                 .copyWith(color: AppColors.textHint),
             textAlign: TextAlign.center,
           ),
+          if (onUpload != null) ...[
           const SizedBox(height: 20),
           FilledButton.icon(
             onPressed: onUpload,
@@ -46,6 +50,7 @@ class DocumentEmptyView extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10)),
             ),
           ),
+          ],
         ],
       ),
     );

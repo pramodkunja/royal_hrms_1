@@ -11,6 +11,7 @@ abstract class SeparationRepository {
     String? employeeId,
     String? separationType,
     int page = 1,
+    int? pageSize,
   });
 
   Future<SeparationRequestEntity> getRequestById(String id);

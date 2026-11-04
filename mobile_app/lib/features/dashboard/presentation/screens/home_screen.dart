@@ -15,29 +15,34 @@ import '../widgets/quick_access.dart';
 import 'admin_dashboard_view.dart';
 import 'employee_dashboard_view.dart';
 import 'hr_dashboard_view.dart';
+import 'manager_dashboard_view.dart';
 
-/// Role router — resolves the signed-in user's role category and renders
-/// the matching dashboard. Mirrors web's `resolveRole()` branch in
+/// Role router — resolves the signed-in user's dashboard category from
+/// their flags and permissions ([resolveDashboardCategory]) and renders the
+/// matching dashboard. Mirrors web's `resolveDashboard()` in
 /// `app/dashboard/page.tsx`, which renders one of `EmployeeDashboard`,
-/// `HRDashboard`, `AdminDashboard`, or `ManagerDashboard`.
+/// `HRDashboard`, `AdminDashboard`, or `ManagerDashboard`. This is the only
+/// place any per-role dashboard view is built — no route opens one
+/// directly — so a user only ever gets the view whose endpoints the server
+/// grants them.
 ///
-/// Manager falls back to [_GenericDashboardView] (the dashboard this screen
-/// used for every role before the per-role port) rather than a dedicated
-/// view — web's `ManagerDashboard.tsx` has no real backend behind it (every
-/// stat/list is hardcoded mock data except its birthday widget), so there's
-/// nothing genuine to port for that role yet.
+/// Manager gets [ManagerDashboardView], backed by GET /dashboard/manager/
+/// (production ManagerDashboardView), as web's `ManagerDashboard.tsx` is.
+/// [_GenericDashboardView] remains only as the fallback for an unknown
+/// category.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authStateProvider).valueOrNull?.user;
-    final category = resolveRoleCategory(user?.role ?? '');
+    final category = resolveDashboardCategory(user);
 
     return switch (category) {
       'employee' => const EmployeeDashboardView(),
       'admin' => const AdminDashboardView(),
       'hr' => const HrDashboardView(),
+      'manager' => const ManagerDashboardView(),
       _ => const _GenericDashboardView(),
     };
   }
@@ -52,7 +57,7 @@ class _GenericDashboardView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authStateProvider).valueOrNull?.user;
     final permissions = user?.permissions ?? const [];
-    final category = resolveRoleCategory(user?.role ?? '');
+    final category = resolveDashboardCategory(user);
     final quickAccess = kQuickItemsByRole[category]!;
     final canViewBirthdays = permissions.contains('employees.view');
 

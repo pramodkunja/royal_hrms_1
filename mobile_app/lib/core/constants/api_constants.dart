@@ -126,6 +126,10 @@ class ApiConstants {
   static const String documentStats = '/documents/stats/';
   static const String documents = '/documents/';
   static String documentDetail(int id) => '/documents/$id/';
+  // Company Policy acknowledgement (accounts/views_policy.py).
+  static const String documentPendingAcknowledgements = '/documents/pending-acknowledgements/';
+  static String documentAcknowledge(int id) => '/documents/$id/acknowledge/';
+  static String documentAcknowledgements(int id) => '/documents/$id/acknowledgements/';
 
   // Candidates / Interview List
   static const String candidateStats = '/recruitment/candidates/stats/';
@@ -168,6 +172,24 @@ class ApiConstants {
   static String assessmentItemDetail(String itemId) =>
       '/assessments/items/$itemId/';
   static const String assessmentAssign = '/assessments/assign/';
+  // The signed-in user's own assignments (self-service; any signed-in user —
+  // apps/assessments/views/portal.py MyAssessmentView). Not paginated.
+  static const String assessmentsMy = '/assessments/my/';
+  // Admin-configured onboarding (accounts/urls.py): field and document-type
+  // configuration, and files for custom "file" fields.
+  static const String onboardingFieldConfig = '/onboarding/field-config/';
+  static const String onboardingDocumentTypeConfig = '/onboarding/document-type-config/';
+  static const String onboardingCustomFileFields = '/onboarding/custom-file-fields/';
+  static String onboardingCustomFileFieldDetail(int id) => '/onboarding/custom-file-fields/$id/';
+  // Taking an assessment (portal.py): save one item's response (video:
+  // empty body; quiz: {"selected_option": "a"–"d"}), grade the attempt,
+  // and reset a completed attempt for another try.
+  static String assessmentRespond(String assignmentId, String itemId) =>
+      '/assessments/$assignmentId/respond/$itemId/';
+  static String assessmentComplete(String assignmentId) =>
+      '/assessments/$assignmentId/complete/';
+  static String assessmentRetry(String assignmentId) =>
+      '/assessments/$assignmentId/retry/';
   static const String assessmentEmailTemplateOptions =
       '/assessments/email-template-options/';
 
@@ -196,6 +218,9 @@ class ApiConstants {
   static const String myPayslips = '/payroll/my-payslips/';
   static String acknowledgePayslip(String id) => '/payroll/my-payslips/$id/acknowledge/';
   static String payslipDetail(String id) => '/payroll/payslips/$id/';
+  // Payslip queries (PayslipQueryListView): GET ?mine=1 = the employee's
+  // own queries in every status; POST {payslip, description} raises one.
+  static const String payslipQueries = '/payroll/queries/';
 
   // Holiday Calendar — matches backend /api/leave/holidays/
   static const String holidays = '/leave/holidays/';
@@ -208,6 +233,10 @@ class ApiConstants {
   static const String branchStats = '/branch/branches/stats/';
   static const String branchDistribution = '/branch/branches/distribution/';
   static const String branches = '/branch/branches/';
+
+  // Company Contact Matrix (accounts/urls.py → views_policy.py).
+  static const String companyContacts = '/company-contacts/';
+  static String companyContactDetail(int id) => '/company-contacts/$id/';
   static String branchDetail(int id) => '/branch/branches/$id/';
 
   // Employee Onboarding
@@ -268,6 +297,9 @@ class ApiConstants {
   static String wfhRequestDetail(dynamic id) => '/wfh/requests/$id/';
   static String wfhRequestAction(dynamic id) => '/wfh/requests/$id/approve/';
   static const String wfhSavedLocations = '/wfh/saved-locations/';
+  // WFH daily work report (apps/hrms/views/wfh_reports.py).
+  static const String wfhReports = '/wfh/reports/';
+  static String wfhReportReview(int id) => '/wfh/reports/$id/review/';
   static String wfhSavedLocationDetail(dynamic id) =>
       '/wfh/saved-locations/$id/';
 
@@ -393,6 +425,8 @@ class ApiConstants {
       '/dashboard/system-admin/audit-logs/';
 
   static const String dashboardHrKpis = '/dashboard/hr/kpis/';
+  // Manager dashboard — every widget in one response (ManagerDashboardView).
+  static const String dashboardManager = '/dashboard/manager/';
   static const String dashboardHrAttendanceSummary =
       '/dashboard/hr/attendance-summary/';
   static const String dashboardHrActionQueue = '/dashboard/hr/action-queue/';

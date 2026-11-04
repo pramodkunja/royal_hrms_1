@@ -22,6 +22,8 @@ class WfhRequestEntity {
   final String createdAt;
   final bool canApprove; // can_approve — backend-computed
   final bool canCancel; // can_cancel — backend-computed
+  final bool isMedical; // is_medical — WFH for medical reasons
+  final String? supportingDocumentUrl; // supporting_document_url — medical proof
 
   const WfhRequestEntity({
     required this.id,
@@ -47,6 +49,8 @@ class WfhRequestEntity {
     this.createdAt = '',
     this.canApprove = false,
     this.canCancel = false,
+    this.isMedical = false,
+    this.supportingDocumentUrl,
   });
 
   bool get isPending => status == 'pending' || status == 'l2_pending';

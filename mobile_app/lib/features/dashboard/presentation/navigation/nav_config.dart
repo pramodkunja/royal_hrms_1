@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_app/core/router/access_control.dart';
+import 'package:mobile_app/features/auth/domain/entities/user_entity.dart';
 
 // ─── Sealed nav entry types ──────────────────────────────────────────────────
 // Dart port of the TypeScript NavEntry union from frontend/lib/navConfig.ts.
@@ -20,7 +22,6 @@ final class NavItem extends NavEntry {
   final String path;
   final String? permission; // null (with anyOfPermissions also null) = always visible
   final List<String>? anyOfPermissions; // visible if user holds ANY of these
-  final List<String>? excludeRoles; // hidden for these role names regardless of permission
   final String? badge;
 
   const NavItem({
@@ -30,7 +31,6 @@ final class NavItem extends NavEntry {
     required this.path,
     this.permission,
     this.anyOfPermissions,
-    this.excludeRoles,
     this.badge,
   });
 }
@@ -42,7 +42,10 @@ final class NavItem extends NavEntry {
 const kAllNav = <NavEntry>[
   NavSection('Main'),
   NavItem(id: 'dashboard',        icon: Icons.dashboard_outlined,              label: 'Dashboard',        path: '/dashboard',                  permission: null),
-  NavItem(id: 'announcements',    icon: Icons.campaign_outlined,               label: 'Announcements',    path: '/dashboard/announcements',    permission: 'announcements.view'),
+  // permission: null, matching web's navConfig.ts — every signed-in employee
+  // reads the announcements targeted at them (the backend filters by
+  // audience); posting/editing stay gated by announcements.create/edit/delete.
+  NavItem(id: 'announcements',    icon: Icons.campaign_outlined,               label: 'Announcements',    path: '/dashboard/announcements',    permission: null),
 
   NavSection('Recruitment'),
   NavItem(id: 'interview-list',   icon: Icons.people_outline,                  label: 'Interview List',   path: '/dashboard/interview-list',   permission: 'recruitment.view'),
@@ -56,20 +59,26 @@ const kAllNav = <NavEntry>[
   NavItem(id: 'branches',         icon: Icons.business_outlined,               label: 'Branches',         path: '/dashboard/branches',         permission: 'branches.view'),
 
   NavSection('Time & Pay'),
-  NavItem(id: 'attendance',       icon: Icons.access_time_outlined,            label: 'Attendance',       path: '/dashboard/attendance',       permission: 'attendance.view', excludeRoles: ['employee']),
+  // The team/HR attendance screen — 'attendance.create', matching web's
+  // navConfig.ts (it replaces the old role-name exclusion of 'employee'; the
+  // default employee role no longer holds attendance.view/create, backend
+  // migrations 0029/0042). Everyone's own attendance is 'My Attendance'.
+  NavItem(id: 'attendance',       icon: Icons.access_time_outlined,            label: 'Attendance',       path: '/dashboard/attendance',       permission: 'attendance.create'),
   NavItem(id: 'leave',            icon: Icons.beach_access_outlined,           label: 'Leave Management', path: '/dashboard/leave',            permission: 'leave.view'),
   NavItem(id: 'wfh',              icon: Icons.home_work_outlined,              label: 'Work From Home',   path: '/dashboard/wfh',              permission: 'wfh.view'),
   NavItem(id: 'expenses',         icon: Icons.account_balance_wallet_outlined, label: 'Expenses',         path: '/dashboard/expenses',         permission: 'expenses.view'),
 
   NavSection('HR Ops'),
   // Backend's approval endpoints authorize on 'leave.approve' OR 'expenses.approve'
-  // OR 'wfh.approve' (any one grants access) and HR/HR Admin manage approvals
-  // through their own dedicated workflows, not this generic link. web's
-  // navConfig.ts omits 'wfh.approve' here (a known gap — WFH approvals were
-  // folded into this same page without updating its nav gate); mobile's
-  // Approvals screen genuinely includes WFH as a Team Approvals request kind,
-  // so its nav entry must actually grant access to a WFH-only approver.
-  NavItem(id: 'approvals',        icon: Icons.checklist_outlined,              label: 'Approvals',        path: '/dashboard/approvals',        anyOfPermissions: ['leave.approve', 'expenses.approve', 'wfh.approve'], excludeRoles: ['hr', 'hr_admin']),
+  // OR 'wfh.approve' (any one grants access). web's navConfig.ts omits
+  // 'wfh.approve' here (a known gap — WFH approvals were folded into this same
+  // page without updating its nav gate); mobile's Approvals screen genuinely
+  // includes WFH as a Team Approvals request kind, so its nav entry must
+  // actually grant access to a WFH-only approver. No role-name exclusion: as
+  // on web, HR roles holding these permissions see Approvals too.
+  // separation.approve: separation requests are part of the same inbox
+  // (web approvals/page.tsx gate).
+  NavItem(id: 'approvals',        icon: Icons.checklist_outlined,              label: 'Approvals',        path: '/dashboard/approvals',        anyOfPermissions: ['leave.approve', 'expenses.approve', 'wfh.approve', 'separation.approve']),
   // permission: null, matching web's navConfig.ts exactly — every employee
   // can create and view their own separation request, not just HR/managers
   // (the backend's separation endpoints only require IsAuthenticated for
@@ -92,8 +101,11 @@ const kAllNav = <NavEntry>[
   // plus the 'payroll.view_own' permission it checks itself server-side
   // (seeded for every role), not a client-side nav-visibility gate.
   NavItem(id: 'my-payslip',       icon: Icons.receipt_long_outlined,           label: 'My Payslips',      path: '/dashboard/my-payslip',       permission: null),
+  NavItem(id: 'my-assessments',   icon: Icons.assignment_turned_in_outlined,   label: 'My Assessments',   path: '/dashboard/my-assessments',   permission: null),
   NavItem(id: 'referrals',        icon: Icons.person_add_alt_1_outlined,       label: 'My Referrals',     path: '/dashboard/referrals',        permission: null),
   NavItem(id: 'my-requests',      icon: Icons.inbox_outlined,                  label: 'My Requests',      path: '/dashboard/my-requests',      permission: null),
+  // Every signed-in employee (web navConfig "contacts"): who to contact for HR matters.
+  NavItem(id: 'contacts',         icon: Icons.contact_phone_outlined,          label: 'Contact Matrix',   path: '/dashboard/contacts',         permission: null),
   NavItem(id: 'profile',          icon: Icons.account_circle_outlined,         label: 'My Profile',       path: '/dashboard/profile',          permission: null),
 
   NavSection('System'),
@@ -107,10 +119,11 @@ const kAllNav = <NavEntry>[
 
 // ─── Dart port of TypeScript buildNav() ──────────────────────────────────────
 // Filters kAllNav to items the user can see, suppressing sections that would
-// be empty. Mirrors the logic in frontend/lib/navConfig.ts exactly.
+// be empty. Mirrors frontend/lib/navConfig.ts, using the backend's own
+// permission rule (userHasPermission: superuser / settings.edit pass every
+// check) and never the role name. No user → only the always-visible items.
 
-List<NavEntry> buildNav(List<String> permissions, {String? role}) {
-  final permSet = <String>{...permissions};
+List<NavEntry> buildNav(UserEntity? user) {
   final result = <NavEntry>[];
   NavSection? pendingSection;
   var sectionHasItem = false;
@@ -121,13 +134,12 @@ List<NavEntry> buildNav(List<String> permissions, {String? role}) {
         pendingSection = entry;
         sectionHasItem = false;
       case NavItem():
-        final permVisible = entry.anyOfPermissions != null
-            ? entry.anyOfPermissions!.any(permSet.contains)
-            : (entry.permission == null || permSet.contains(entry.permission!));
-        final roleVisible = role == null ||
-            entry.excludeRoles == null ||
-            !entry.excludeRoles!.contains(role);
-        if (permVisible && roleVisible) {
+        // Not built for mobile yet (access_control.dart: kUnavailablePaths).
+        if (isUnavailablePath(entry.path)) continue;
+        final visible = entry.anyOfPermissions != null
+            ? userHasAnyPermission(user, entry.anyOfPermissions!)
+            : (entry.permission == null || userHasPermission(user, entry.permission!));
+        if (visible) {
           if (pendingSection != null && !sectionHasItem) {
             result.add(pendingSection);
           }
@@ -148,6 +160,7 @@ const kPageTitles = <String, String>{
   '/dashboard/interview-list':  'Interview List',
   '/dashboard/candidate-review':'Candidate Review & Onboarding',
   '/dashboard/assessments':     'Assessment Management',
+  '/dashboard/my-assessments':  'My Assessments',
   '/dashboard/email-logs':      'Email Logs',
   '/dashboard/employees':       'Employees',
   '/dashboard/org-chart':       'Organisation Chart',
@@ -164,6 +177,7 @@ const kPageTitles = <String, String>{
   '/dashboard/my-payslip':      'My Payslips',
   '/dashboard/referrals':       'My Referrals',
   '/dashboard/my-requests':     'My Requests',
+  '/dashboard/contacts':        'Contact Matrix',
   '/dashboard/profile':         'My Profile',
   '/dashboard/reports':         'Reports',
   '/dashboard/settings':        'Settings',

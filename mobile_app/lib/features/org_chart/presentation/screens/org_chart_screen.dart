@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/router/access_control.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_error_state.dart';
 import '../../../../shared/widgets/blue_hero_banner.dart';
+import '../../../auth/domain/entities/user_entity.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/org_chart_entity.dart';
 import '../providers/org_chart_providers.dart';
 import '../widgets/org_dept_card.dart';
@@ -27,14 +30,25 @@ const _kDeptPalette = [
 class OrgChartScreen extends ConsumerWidget {
   const OrgChartScreen({super.key});
 
-  void _openProfile(BuildContext context, OrgPersonEntity person) {
+  void _openProfile(BuildContext context, UserEntity? user, OrgPersonEntity person) {
     if (person.employeeId.isEmpty) return;
-    context.push(AppRoutes.employeeProfilePath(person.employeeId));
+    final path = AppRoutes.employeeProfilePath(person.employeeId);
+    // Employee profiles need employees.view (route permissions,
+    // access_control.dart). Without it the router would bounce the user to
+    // the dashboard, so explain instead of navigating.
+    if (!canAccessPath(user, path)) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text("You don't have access to employee profiles.")));
+      return;
+    }
+    context.push(path);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final chartAsync = ref.watch(orgChartProvider);
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -69,7 +83,7 @@ class OrgChartScreen extends ConsumerWidget {
                         message: 'There are no active employees to display yet.',
                       ),
                     )
-                  : SliverToBoxAdapter(child: _OrgGroups(chart: chart, onTapPerson: (p) => _openProfile(context, p))),
+                  : SliverToBoxAdapter(child: _OrgGroups(chart: chart, onTapPerson: (p) => _openProfile(context, user, p))),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 32)),
           ],

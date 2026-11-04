@@ -94,6 +94,15 @@ class _WfhRequestDetailSheetState
     );
   }
 
+  // Same pattern as the Document Center's file links (document_detail_dialog).
+  Future<void> _openProof(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
   Future<void> _openMap(double lat, double lng) async {
     final uri = Uri.parse('https://maps.google.com/?q=$lat,$lng');
     if (await canLaunchUrl(uri)) {
@@ -249,6 +258,34 @@ class _WfhRequestDetailSheetState
                       const SizedBox(height: 3),
                       Text(r.reason.isNotEmpty ? r.reason : '—',
                           style: AppTextStyles.body.copyWith(fontSize: 13)),
+                      if (r.isMedical) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(Icons.medical_services_outlined, size: 14, color: AppColors.textSecondary),
+                            const SizedBox(width: 6),
+                            Text('WFH for medical reasons',
+                                style: AppTextStyles.caption.copyWith(fontSize: 11.5)),
+                          ],
+                        ),
+                        if (r.supportingDocumentUrl != null) ...[
+                          const SizedBox(height: 4),
+                          InkWell(
+                            key: const Key('wfh-medical-proof-link'),
+                            onTap: () => _openProof(r.supportingDocumentUrl!),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.description_outlined, size: 14, color: AppColors.primary),
+                                const SizedBox(width: 4),
+                                Text('Medical proof',
+                                    style: AppTextStyles.caption.copyWith(
+                                        fontSize: 11.5, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
 
                       const SizedBox(height: 14),
                       Divider(height: 1, color: AppColors.border),

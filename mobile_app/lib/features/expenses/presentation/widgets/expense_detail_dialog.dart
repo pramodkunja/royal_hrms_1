@@ -6,6 +6,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../data/models/expense_model.dart';
 import '../providers/expense_providers.dart';
 import 'expense_list_item.dart';
+import 'package:mobile_app/core/network/api_client.dart';
 
 // ignore_for_file: use_build_context_synchronously
 
@@ -118,7 +119,8 @@ class ExpenseDetailDialog extends ConsumerWidget {
                       Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: Text(
-                          'Could not refresh — showing last known details.',
+                          'Could not refresh — showing last known details. '
+                          '${userFriendlyMessage(detailAsync.error!)}',
                           style: AppTextStyles.caption
                               .copyWith(color: AppColors.error),
                         ),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
 import '../../data/datasources/payroll_remote_datasource.dart';
 import '../../data/models/payslip_model.dart';
+import '../../data/models/payslip_query_model.dart';
 
 final payrollDataSourceProvider = Provider<PayrollRemoteDataSource>((ref) {
   return PayrollRemoteDataSource(ref.watch(dioProvider));
@@ -41,6 +42,35 @@ class MyPayslipsNotifier extends AutoDisposeAsyncNotifier<List<PayslipModel>> {
     }
   }
 }
+
+// ── Payslip queries ───────────────────────────────────────────────────────────
+
+/// The signed-in employee's own payslip queries (every status).
+final myPayslipQueriesProvider = FutureProvider.autoDispose<List<PayslipQueryModel>>(
+  (ref) => ref.watch(payrollDataSourceProvider).fetchMyQueries(),
+);
+
+/// Raises a query; null on success, else the server's message. On success
+/// the queries and the payslips (now "queried") are reloaded.
+class PayslipQueryActions {
+  PayslipQueryActions(this._ref);
+  final Ref _ref;
+
+  Future<String?> raise({required String payslipId, required String description}) async {
+    final problem = validatePayslipQueryText(description);
+    if (problem != null) return problem;
+    try {
+      await _ref.read(payrollDataSourceProvider).raiseQuery(payslipId: payslipId, description: description);
+      _ref.invalidate(myPayslipQueriesProvider);
+      _ref.invalidate(myPayslipsProvider);
+      return null;
+    } catch (e) {
+      return friendlyPayrollError(e);
+    }
+  }
+}
+
+final payslipQueryActionsProvider = Provider<PayslipQueryActions>((ref) => PayslipQueryActions(ref));
 
 // ── Error helper ──────────────────────────────────────────────────────────────
 

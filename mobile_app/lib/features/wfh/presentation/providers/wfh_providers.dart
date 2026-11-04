@@ -4,6 +4,7 @@ import '../../../../core/network/api_client.dart';
 import '../../data/datasources/wfh_remote_datasource.dart';
 import '../../data/repositories/wfh_repository_impl.dart';
 import '../../domain/entities/wfh_entity.dart';
+import '../../domain/entities/wfh_medical_proof.dart';
 import '../../domain/repositories/wfh_repository.dart';
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
@@ -42,6 +43,8 @@ class WfhMyRequestsNotifier
     String? locationLabel,
     required double latitude,
     required double longitude,
+    bool isMedical = false,
+    WfhMedicalProof? medicalProof,
   }) async {
     try {
       final created = await ref.read(wfhRepositoryProvider).createWfhRequest(
@@ -51,6 +54,8 @@ class WfhMyRequestsNotifier
             locationLabel: locationLabel,
             latitude: latitude,
             longitude: longitude,
+            isMedical: isMedical,
+            medicalProof: medicalProof,
           );
       state = AsyncData([created, ...state.valueOrNull ?? []]);
       return null;

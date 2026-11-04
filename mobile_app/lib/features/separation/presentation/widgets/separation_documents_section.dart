@@ -8,6 +8,7 @@ import '../../../../shared/widgets/app_button.dart';
 import '../../domain/entities/separation_entity.dart';
 import '../providers/separation_providers.dart';
 import 'separation_status.dart';
+import 'package:mobile_app/core/network/api_client.dart';
 
 const _kMaxDocBytes = 5 * 1024 * 1024;
 const _kAllowedDocExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
@@ -166,7 +167,7 @@ class _SeparationDocumentsSectionState
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2))),
             ),
-            error: (_, __) => Text('Could not load documents.',
+            error: (e, __) => Text(userFriendlyMessage(e),
                 style: AppTextStyles.caption.copyWith(color: AppColors.error)),
           ),
           if (widget.canUpload)

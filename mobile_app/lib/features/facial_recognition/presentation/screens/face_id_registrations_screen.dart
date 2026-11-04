@@ -13,6 +13,7 @@ import '../providers/facial_recognition_providers.dart';
 import '../widgets/face_capture_bottom_sheet.dart';
 import '../widgets/face_consent_text.dart';
 import '../widgets/face_status_badge.dart';
+import 'package:mobile_app/shared/widgets/app_error_state.dart';
 
 /// HR-assisted registration — HR captures an employee's face in person and
 /// it's approved immediately (mirrors web's app/dashboard/face-id-registrations/page.tsx).
@@ -30,6 +31,8 @@ class _FaceIdRegistrationsScreenState extends ConsumerState<FaceIdRegistrationsS
   Timer? _debounce;
   List<FaceEmployeeEntity> _employees = [];
   bool _loadingEmployees = false;
+  // A failed search is shown as such, never as "No employees match."
+  Object? _employeesError;
 
   FaceEmployeeEntity? _selected;
   FaceRegistrationEntity? _status;
@@ -55,14 +58,20 @@ class _FaceIdRegistrationsScreenState extends ConsumerState<FaceIdRegistrationsS
   }
 
   Future<void> _search(String query) async {
-    setState(() => _loadingEmployees = true);
+    setState(() {
+      _loadingEmployees = true;
+      _employeesError = null;
+    });
     try {
       final results = await ref.read(facialRecognitionRepositoryProvider).searchEmployees(query);
       if (!mounted) return;
       setState(() => _employees = results);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      setState(() => _employees = []);
+      setState(() {
+        _employees = [];
+        _employeesError = e;
+      });
     } finally {
       if (mounted) setState(() => _loadingEmployees = false);
     }
@@ -222,6 +231,9 @@ class _FaceIdRegistrationsScreenState extends ConsumerState<FaceIdRegistrationsS
   Widget _employeeList() {
     if (_loadingEmployees) {
       return const Center(child: CircularProgressIndicator());
+    }
+    if (_employeesError != null) {
+      return AppErrorState.forError(_employeesError!, onRetry: () => _search(_searchCtrl.text));
     }
     if (_employees.isEmpty) {
       return Center(

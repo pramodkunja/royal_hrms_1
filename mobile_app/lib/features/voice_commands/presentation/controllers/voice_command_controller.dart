@@ -12,11 +12,13 @@ import 'package:record/record.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
+import 'package:mobile_app/features/auth/presentation/providers/auth_providers.dart';
 import 'package:mobile_app/features/facial_recognition/presentation/widgets/face_capture_bottom_sheet.dart';
 
 import '../../../../core/network/api_client.dart' show parseDioException;
 import '../../domain/entities/voice_result_entity.dart';
 import '../../domain/entities/voice_transcribe_fallback_entity.dart';
+import '../providers/voice_access_provider.dart';
 import '../providers/voice_mute_provider.dart';
 import '../providers/voice_providers.dart';
 import '../state/voice_conversation_state.dart';
@@ -113,7 +115,21 @@ class VoiceCommandController extends Notifier<VoiceConversationState?> {
     return null;
   }
 
+  /// False when the signed-in user may not use voice at all (see
+  /// isVoiceAssistantAllowed) — e.g. a forced password change is pending.
+  /// Checked by every entry point and by every path that reaches the
+  /// backend, so hiding the mic is never the only barrier: a call from any
+  /// other widget, a quick-action chip, a typed answer, a face-proof
+  /// callback or a late speech-engine callback is refused too. Any open
+  /// conversation is closed so nothing keeps running.
+  bool _ensureAllowed() {
+    if (isVoiceAssistantAllowed(ref.read(authStateProvider).valueOrNull)) return true;
+    if (state != null) close();
+    return false;
+  }
+
   Future<void> startListening() async {
+    if (!_ensureAllowed()) return;
     _autoCloseTimer?.cancel();
 
     if (!_speechInitialized) {
@@ -153,6 +169,7 @@ class VoiceCommandController extends Notifier<VoiceConversationState?> {
   /// mid-conversation. Same backend call either way (transcript is
   /// transcript); this only changes how the panel looks while composing it.
   void openTypedCommand() {
+    if (!_ensureAllowed()) return;
     _autoCloseTimer?.cancel();
     state = const VoiceConversationState(phase: VoicePanelPhase.typing);
   }
@@ -213,6 +230,10 @@ class VoiceCommandController extends Notifier<VoiceConversationState?> {
     bool? sttUsedLanguageHint,
     String? sttDetectedLanguage,
   }) async {
+    // The single funnel to /voice/parse/ (spoken commands, typed answers,
+    // quick-action chips, face-proof resubmissions) — never sent for a user
+    // who may not use voice.
+    if (!_ensureAllowed()) return;
     state = VoiceConversationState(
       transcript: transcript,
       phase: VoicePanelPhase.transcript,
@@ -408,6 +429,8 @@ class VoiceCommandController extends Notifier<VoiceConversationState?> {
   /// no_match branch above. Tries the Hindi-STT retry directly instead of
   /// silently giving up (mirrors web's attemptSilentSpeechFallback).
   Future<void> _attemptSilentFallback() async {
+    // Records the mic and calls /voice/transcribe-fallback/ — same gate.
+    if (!_ensureAllowed()) return;
     state = const VoiceConversationState(phase: VoicePanelPhase.retrying);
     try {
       final repo = ref.read(voiceRepositoryProvider);

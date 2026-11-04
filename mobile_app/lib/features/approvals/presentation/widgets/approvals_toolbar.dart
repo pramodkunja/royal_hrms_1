@@ -46,6 +46,7 @@ class ApprovalsTypeTabsRow extends ConsumerWidget {
         ApprovalsTypeTab.expense => 'Expense',
         ApprovalsTypeTab.attendanceCorrection => 'Attendance Correction',
         ApprovalsTypeTab.wfh => 'WFH',
+        ApprovalsTypeTab.separation => 'Separation',
       };
 }
 

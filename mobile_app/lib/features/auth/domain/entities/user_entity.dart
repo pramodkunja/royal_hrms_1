@@ -61,9 +61,21 @@ class UserEntity {
   bool get onboardingComplete => onboardingStatus == 'complete';
   bool get onboardingRejected => !isSuperuser && onboardingStatus == 'rejected';
 
+  /// Web's onboarding assessment gate (frontend/proxy.ts needsAssessments):
+  /// onboarding approved, an assessment still pending, and not a team
+  /// manager, branch manager or superuser (the backend auto-assigns default
+  /// assessments to every new employee record, managers included, so web
+  /// exempts those roles itself).
+  bool get needsAssessments =>
+      onboardingStatus == 'complete' &&
+      assessmentStatus == 'pending' &&
+      !canManageTeam &&
+      !canManageBranch &&
+      !isSuperuser;
+
   bool hasPermission(String permission) => permissions.contains(permission);
 
-  UserEntity copyWith({String? onboardingStatus}) => UserEntity(
+  UserEntity copyWith({String? onboardingStatus, String? assessmentStatus}) => UserEntity(
         id: id,
         email: email,
         fullName: fullName,
@@ -76,7 +88,7 @@ class UserEntity {
         mustChangePassword: mustChangePassword,
         permissions: permissions,
         onboardingStatus: onboardingStatus ?? this.onboardingStatus,
-        assessmentStatus: assessmentStatus,
+        assessmentStatus: assessmentStatus ?? this.assessmentStatus,
         canManageTeam: canManageTeam,
         canManageBranch: canManageBranch,
         companyCode: companyCode,

@@ -80,6 +80,9 @@ class PayslipModel {
   // change.
   final String? payslipPdfUrl;
 
+  /// Until when a query may be raised on this payslip (null: no limit).
+  final String? queryDeadline;
+
   const PayslipModel({
     required this.id,
     required this.cycleStart,
@@ -106,6 +109,7 @@ class PayslipModel {
     required this.netPay,
     required this.status,
     this.payslipPdfUrl,
+    this.queryDeadline,
   });
 
   factory PayslipModel.fromJson(Map<String, dynamic> json) {
@@ -138,6 +142,7 @@ class PayslipModel {
       netPay: _money(json['net_pay']),
       status: json['status'] as String? ?? 'draft',
       payslipPdfUrl: json['payslip_pdf'] as String?,
+      queryDeadline: json['query_deadline'] as String?,
     );
   }
 
@@ -169,5 +174,6 @@ class PayslipModel {
     netPay: netPay,
     status: status ?? this.status,
     payslipPdfUrl: payslipPdfUrl,
+    queryDeadline: queryDeadline,
   );
 }

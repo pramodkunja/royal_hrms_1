@@ -37,14 +37,27 @@ class ApprovalRemoteDataSource {
     String remarks = '',
     String? department,
     String? designation,
+    String? uanNumber,
+    String? nameAsPerAadhar,
+    String? panNumber,
+    String? assessmentId,
   }) async {
+    bool has(String? v) => v != null && v.trim().isNotEmpty;
     await _dio.post(
       ApiConstants.onboardingApprove(userId),
       data: {
         'decision': decision,
         'remarks': remarks,
-        if (department != null && department.isNotEmpty) 'department': department,
-        if (designation != null && designation.isNotEmpty) 'designation': designation,
+        if (has(department)) 'department': department,
+        if (has(designation)) 'designation': designation,
+        // Optional approval extras (OnboardingApprovalView): sent only when
+        // filled, as web does; the server keeps the profile value otherwise.
+        if (has(uanNumber)) 'uan_number': uanNumber!.trim(),
+        if (has(nameAsPerAadhar)) 'name_as_per_aadhar': nameAsPerAadhar!.trim(),
+        if (has(panNumber)) 'pan_number': panNumber!.trim().toUpperCase(),
+        // The backend's current field (it still accepts a single
+        // assessment_id from older callers).
+        if (has(assessmentId)) 'assessment_ids': [assessmentId],
       },
     );
   }

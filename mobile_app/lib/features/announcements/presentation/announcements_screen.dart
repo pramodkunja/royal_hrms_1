@@ -8,6 +8,9 @@ import '../data/models/announcement_model.dart';
 import 'providers/announcement_providers.dart';
 import 'widgets/announcement_card.dart';
 import 'widgets/post_announcement_sheet.dart';
+import '../../auth/presentation/providers/auth_providers.dart';
+import 'announcement_permissions.dart';
+import 'package:mobile_app/shared/widgets/app_error_state.dart';
 
 class AnnouncementsScreen extends ConsumerWidget {
   const AnnouncementsScreen({super.key});
@@ -15,10 +18,13 @@ class AnnouncementsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(announcementsProvider);
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
+    final canPost = canPostAnnouncements(user);
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: !canPost ? null : FloatingActionButton.extended(
+        key: const Key('post-announcement'),
         onPressed: () => _openSheet(context, ref, null),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
@@ -31,9 +37,14 @@ class AnnouncementsScreen extends ConsumerWidget {
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => _ErrorView(message: err.toString()),
+        error: (err, _) => AppErrorState.forError(
+          err,
+          title: 'Could not load announcements',
+          onRetry: () => ref.invalidate(announcementsProvider),
+        ),
         data: (page) => _Body(
           page: page,
+          canPost: canPost,
           onEdit: (a) => _openSheet(context, ref, a),
           onDelete: (a) => _confirmDelete(context, ref, a),
         ),
@@ -99,13 +110,15 @@ class _Body extends ConsumerWidget {
   final AnnouncementPage page;
   final void Function(AnnouncementModel) onEdit;
   final void Function(AnnouncementModel) onDelete;
+  final bool canPost;
 
   const _Body(
-      {required this.page, required this.onEdit, required this.onDelete});
+      {required this.page, required this.onEdit, required this.onDelete, required this.canPost});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedCategory = ref.watch(announcementCategoryProvider);
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -128,25 +141,103 @@ class _Body extends ConsumerWidget {
         ),
         _StatsRow(stats: page.stats),
         _CategoryFilter(selected: selectedCategory),
-        if (page.announcements.isEmpty)
-          const Expanded(child: _EmptyView())
-        else
-          Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-              itemCount: page.announcements.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (_, i) {
-                final ann = page.announcements[i];
-                return AnnouncementCard(
-                  announcement: ann,
-                  onEdit: () => onEdit(ann),
-                  onDelete: () => onDelete(ann),
-                );
-              },
-            ),
+        Expanded(
+          // Pull to refresh reloads from page 1 (both for the list and the
+          // empty state, which is made scrollable for it).
+          child: RefreshIndicator(
+            onRefresh: () => ref.read(announcementsProvider.notifier).refresh(),
+            child: page.announcements.isEmpty
+                ? LayoutBuilder(
+                    builder: (context, c) => SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: SizedBox(height: c.maxHeight, child: _EmptyView(canPost: canPost)),
+                    ),
+                  )
+                : NotificationListener<ScrollNotification>(
+                    // Infinite scroll, as elsewhere in the app: the next page
+                    // is requested as the end of the list comes into view.
+                    onNotification: (n) {
+                      // Read the current state, not this build's snapshot: a
+                      // notification can arrive after a failed page but
+                      // before the rebuild, and must not retry on its own.
+                      final now = ref.read(announcementsProvider).valueOrNull;
+                      if (n.metrics.extentAfter < 400 &&
+                          now != null &&
+                          now.hasMore &&
+                          !now.loadingMore &&
+                          now.loadMoreError == null) {
+                        ref.read(announcementsProvider.notifier).loadMore();
+                      }
+                      return false;
+                    },
+                    child: ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                      itemCount: page.announcements.length + 1,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (_, i) {
+                        if (i == page.announcements.length) return _ListFooter(page: page);
+                        final ann = page.announcements[i];
+                        final actions = announcementActions(ann, user);
+                        return AnnouncementCard(
+                          announcement: ann,
+                          onEdit: actions.edit ? () => onEdit(ann) : null,
+                          onDelete: actions.delete ? () => onDelete(ann) : null,
+                        );
+                      },
+                    ),
+                  ),
           ),
+        ),
       ],
+    );
+  }
+}
+
+/// Below the last announcement: loading the next page, its failure with
+/// Retry, a Load more fallback (when the list is too short to scroll), or
+/// the end of the list.
+class _ListFooter extends ConsumerWidget {
+  const _ListFooter({required this.page});
+  final AnnouncementPage page;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(announcementsProvider.notifier);
+    if (page.loadingMore) {
+      return const Padding(
+        key: Key('announcements-loading-more'),
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))),
+      );
+    }
+    if (page.loadMoreError != null) {
+      return Padding(
+        key: const Key('announcements-load-more-error'),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(children: [
+          Text(page.loadMoreError!,
+              textAlign: TextAlign.center, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+          TextButton(onPressed: notifier.loadMore, child: const Text('Retry')),
+        ]),
+      );
+    }
+    if (page.hasMore) {
+      return Center(
+        child: TextButton(
+          key: const Key('announcements-load-more'),
+          onPressed: notifier.loadMore,
+          child: const Text('Load more'),
+        ),
+      );
+    }
+    if (page.totalPages <= 1) return const SizedBox.shrink();
+    return Padding(
+      key: const Key('announcements-end'),
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: Text("You're all caught up", style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+      ),
     );
   }
 }
@@ -288,7 +379,8 @@ class _CategoryFilter extends ConsumerWidget {
 // ── Empty / Error ─────────────────────────────────────────────────────────────
 
 class _EmptyView extends StatelessWidget {
-  const _EmptyView();
+  final bool canPost;
+  const _EmptyView({required this.canPost});
 
   @override
   Widget build(BuildContext context) {
@@ -312,36 +404,10 @@ class _EmptyView extends StatelessWidget {
             Text('No announcements yet', style: AppTextStyles.h4),
             const SizedBox(height: 6),
             Text(
-              'Be the first to post an announcement.',
+              canPost ? 'Be the first to post an announcement.' : 'Nothing has been posted yet.',
               style: AppTextStyles.bodySecondary,
               textAlign: TextAlign.center,
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ErrorView extends StatelessWidget {
-  final String message;
-  const _ErrorView({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textHint),
-            const SizedBox(height: 12),
-            Text('Could not load announcements', style: AppTextStyles.h4),
-            const SizedBox(height: 6),
-            Text(message,
-                style: AppTextStyles.bodySecondary,
-                textAlign: TextAlign.center),
           ],
         ),
       ),

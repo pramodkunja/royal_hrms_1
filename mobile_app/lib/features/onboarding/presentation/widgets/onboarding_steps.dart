@@ -18,83 +18,6 @@ const List<String> kStepTitles = [
   'Documents',
 ];
 
-// ─── Shared input decorator ────────────────────────────────────────────────
-
-InputDecoration _fieldDec(String label, {String? hint, IconData? icon}) =>
-    InputDecoration(
-      labelText: label,
-      hintText: hint,
-      floatingLabelBehavior: FloatingLabelBehavior.always,
-      labelStyle: AppTextStyles.label.copyWith(color: AppColors.textSecondary),
-      floatingLabelStyle: AppTextStyles.label.copyWith(
-          color: AppColors.primary, fontWeight: FontWeight.w600),
-      prefixIcon: icon != null
-          ? Icon(icon, size: 18, color: AppColors.textSecondary)
-          : null,
-      filled: true,
-      fillColor: AppColors.backgroundLow,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-      border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppColors.border)),
-      enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppColors.border)),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppColors.primary, width: 1.8)),
-      errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppColors.error)),
-      focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppColors.error, width: 1.8)),
-      errorStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.error),
-    );
-
-Widget _fieldRow(Widget left, Widget right) => Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: left),
-        const SizedBox(width: 14),
-        Expanded(child: right),
-      ],
-    );
-
-class _DropdownInput extends StatelessWidget {
-  const _DropdownInput({
-    required this.label,
-    required this.value,
-    required this.items,
-    required this.onChanged,
-  });
-
-  final String label;
-  final String? value;
-  final List<Map<String, String>> items;
-  final ValueChanged<String?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return InputDecorator(
-      decoration: _fieldDec(label),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: items.any((m) => m['value'] == value) ? value : null,
-          isDense: true,
-          isExpanded: true,
-          hint: const Text('Select', style: TextStyle(fontSize: 14)),
-          items: items
-              .map((m) =>
-                  DropdownMenuItem(value: m['value'], child: Text(m['label']!)))
-              .toList(),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-}
-
 // ─── Shared "card section" — icon badge + title + fields ──────────────────
 
 class _SectionCard extends StatelessWidget {
@@ -102,19 +25,17 @@ class _SectionCard extends StatelessWidget {
     required this.icon,
     required this.title,
     this.subtitle,
-    this.iconColor,
     required this.children,
   });
 
   final IconData icon;
   final String title;
   final String? subtitle;
-  final Color? iconColor;
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    final accent = iconColor ?? AppColors.primary;
+    final accent = AppColors.primary;
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: Container(
@@ -174,40 +95,6 @@ class _SectionCard extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Compact tinted note for a single important callout inside a card (e.g.
-/// the bank-details accuracy warning) — themed via AppColors so it reads
-/// correctly in dark mode too, unlike a one-off hardcoded amber container.
-class _InlineNote extends StatelessWidget {
-  const _InlineNote(this.text, {this.icon = Icons.info_outline});
-
-  final String text;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.warningContainer,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 16, color: AppColors.warning),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.warning),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -337,630 +224,44 @@ class _SecondaryButton extends StatelessWidget {
   }
 }
 
-// ─── Step 0 — Personal Information ────────────────────────────────────────
-
-class _PersonalStep extends StatefulWidget {
-  const _PersonalStep({
-    required this.initial,
-    required this.onSave,
-    required this.onPrevious,
-  });
-
-  final OnboardingPersonalEntity initial;
-  final Future<String?> Function(Map<String, dynamic>) onSave;
-  final VoidCallback? onPrevious;
-
-  @override
-  State<_PersonalStep> createState() => _PersonalStepState();
-}
-
-class _PersonalStepState extends State<_PersonalStep> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _dob;
-  late final TextEditingController _fatherName;
-  late final TextEditingController _currentAddress;
-  late final TextEditingController _permanentAddress;
-  String? _gender;
-  String? _bloodGroup;
-  String? _maritalStatus;
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final p = widget.initial;
-    _dob = TextEditingController(text: p.dateOfBirth ?? '');
-    _fatherName = TextEditingController(text: p.fatherName ?? '');
-    _currentAddress = TextEditingController(text: p.currentAddress ?? '');
-    _permanentAddress = TextEditingController(text: p.permanentAddress ?? '');
-    _gender = p.gender;
-    _bloodGroup = p.bloodGroup;
-    _maritalStatus = p.maritalStatus;
-  }
-
-  @override
-  void dispose() {
-    _dob.dispose();
-    _fatherName.dispose();
-    _currentAddress.dispose();
-    _permanentAddress.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleSave() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _saving = true);
-    final err = await widget.onSave({
-      'date_of_birth': _dob.text.trim(),
-      'gender': _gender,
-      'marital_status': _maritalStatus,
-      'father_name': _fatherName.text.trim(),
-      'blood_group': _bloodGroup,
-      'current_address': _currentAddress.text.trim(),
-      'permanent_address': _permanentAddress.text.trim(),
-    });
-    if (!mounted) return;
-    setState(() => _saving = false);
-    if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(err), backgroundColor: AppColors.error));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _StepFormWrapper(
-      formKey: _formKey,
-      saving: _saving,
-      onSave: _handleSave,
-      onPrevious: widget.onPrevious,
-      children: [
-        _SectionCard(
-          icon: Icons.badge_outlined,
-          title: 'Personal Details',
-          children: [
-            _fieldRow(
-              TextFormField(
-                controller: _dob,
-                decoration: _fieldDec('Date of Birth',
-                    hint: 'dd-mm-yyyy', icon: Icons.calendar_today_outlined),
-                readOnly: true,
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: DateTime(2000),
-                    firstDate: DateTime(1950),
-                    lastDate: DateTime.now(),
-                  );
-                  if (picked != null) {
-                    _dob.text =
-                        '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-                  }
-                },
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-              _DropdownInput(
-                label: 'Gender',
-                value: _gender,
-                items: const [
-                  {'value': 'male', 'label': 'Male'},
-                  {'value': 'female', 'label': 'Female'},
-                  {'value': 'other', 'label': 'Other / Prefer not to say'},
-                ],
-                onChanged: (v) => setState(() => _gender = v),
-              ),
-            ),
-            _fieldRow(
-              _DropdownInput(
-                label: 'Marital Status',
-                value: _maritalStatus,
-                items: const [
-                  {'value': 'single', 'label': 'Single'},
-                  {'value': 'married', 'label': 'Married'},
-                  {'value': 'divorced', 'label': 'Divorced'},
-                  {'value': 'widowed', 'label': 'Widowed'},
-                ],
-                onChanged: (v) => setState(() => _maritalStatus = v),
-              ),
-              _DropdownInput(
-                label: 'Blood Group',
-                value: _bloodGroup,
-                items: const [
-                  {'value': 'A+', 'label': 'A+'},
-                  {'value': 'A-', 'label': 'A-'},
-                  {'value': 'B+', 'label': 'B+'},
-                  {'value': 'B-', 'label': 'B-'},
-                  {'value': 'O+', 'label': 'O+'},
-                  {'value': 'O-', 'label': 'O-'},
-                  {'value': 'AB+', 'label': 'AB+'},
-                  {'value': 'AB-', 'label': 'AB-'},
-                ],
-                onChanged: (v) => setState(() => _bloodGroup = v),
-              ),
-            ),
-            TextFormField(
-              controller: _fatherName,
-              decoration: _fieldDec("Father's Name",
-                  hint: "Father's full name",
-                  icon: Icons.family_restroom_outlined),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
-            ),
-          ],
-        ),
-        _SectionCard(
-          icon: Icons.home_outlined,
-          title: 'Address',
-          iconColor: AppColors.secondary,
-          children: [
-            TextFormField(
-              controller: _currentAddress,
-              decoration: _fieldDec('Current Address',
-                  hint: 'House / Flat no., Street, City, State, PIN',
-                  icon: Icons.location_on_outlined),
-              maxLines: 3,
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
-            ),
-            TextFormField(
-              controller: _permanentAddress,
-              decoration: _fieldDec(
-                'Permanent Address (if different)',
-                hint: 'Leave blank if same as current',
-                icon: Icons.location_city_outlined,
-              ),
-              maxLines: 3,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Step 1 — Education & Experience ──────────────────────────────────────
-
-class _EducationStep extends StatefulWidget {
-  const _EducationStep({
-    required this.initial,
-    required this.onSave,
-    required this.onPrevious,
-  });
-
-  final OnboardingEducationEntity initial;
-  final Future<String?> Function(Map<String, dynamic>) onSave;
-  final VoidCallback? onPrevious;
-
-  @override
-  State<_EducationStep> createState() => _EducationStepState();
-}
-
-class _EducationStepState extends State<_EducationStep> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _qualification;
-  late final TextEditingController _institution;
-  late final TextEditingController _year;
-  late final TextEditingController _specialization;
-  late final TextEditingController _totalExp;
-  late final TextEditingController _prevEmployer;
-  late final TextEditingController _prevDesignation;
-  late final TextEditingController _leavingReason;
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final e = widget.initial;
-    _qualification = TextEditingController(text: e.highestQualification ?? '');
-    _institution = TextEditingController(text: e.institution ?? '');
-    _year = TextEditingController(text: e.yearOfPassing ?? '');
-    _specialization = TextEditingController(text: e.specialization ?? '');
-    _totalExp = TextEditingController(text: e.totalExperienceYears ?? '');
-    _prevEmployer = TextEditingController(text: e.previousEmployer ?? '');
-    _prevDesignation = TextEditingController(text: e.previousDesignation ?? '');
-    _leavingReason = TextEditingController(text: e.leavingReason ?? '');
-  }
-
-  @override
-  void dispose() {
-    for (final c in [
-      _qualification,
-      _institution,
-      _year,
-      _specialization,
-      _totalExp,
-      _prevEmployer,
-      _prevDesignation,
-      _leavingReason,
-    ]) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
-  Future<void> _handleSave() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _saving = true);
-    final err = await widget.onSave({
-      'highest_qualification': _qualification.text.trim(),
-      'institution': _institution.text.trim(),
-      'year_of_passing':
-          _year.text.trim().isNotEmpty ? int.tryParse(_year.text.trim()) : null,
-      'specialization': _specialization.text.trim(),
-      'total_experience_years': _totalExp.text.trim().isNotEmpty
-          ? double.tryParse(_totalExp.text.trim())
-          : null,
-      'previous_employer': _prevEmployer.text.trim(),
-      'previous_designation': _prevDesignation.text.trim(),
-      'leaving_reason': _leavingReason.text.trim(),
-    });
-    if (!mounted) return;
-    setState(() => _saving = false);
-    if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(err), backgroundColor: AppColors.error));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _StepFormWrapper(
-      formKey: _formKey,
-      saving: _saving,
-      onSave: _handleSave,
-      onPrevious: widget.onPrevious,
-      children: [
-        _SectionCard(
-          icon: Icons.school_outlined,
-          title: 'Education',
-          children: [
-            _fieldRow(
-              TextFormField(
-                controller: _qualification,
-                decoration: _fieldDec('Highest Qualification',
-                    hint: 'e.g. B.Tech, MBA',
-                    icon: Icons.workspace_premium_outlined),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-              TextFormField(
-                controller: _specialization,
-                decoration:
-                    _fieldDec('Specialization', hint: 'e.g. Computer Science'),
-              ),
-            ),
-            _fieldRow(
-              TextFormField(
-                controller: _institution,
-                decoration: _fieldDec('Institution / University',
-                    hint: 'College or university name',
-                    icon: Icons.account_balance_outlined),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-              TextFormField(
-                controller: _year,
-                decoration: _fieldDec('Year of Passing', hint: 'e.g. 2020'),
-                keyboardType: TextInputType.number,
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-            ),
-          ],
-        ),
-        _SectionCard(
-          icon: Icons.work_outline,
-          title: 'Work Experience',
-          subtitle: 'Optional — leave blank if this is your first job.',
-          iconColor: AppColors.secondary,
-          children: [
-            _fieldRow(
-              TextFormField(
-                controller: _totalExp,
-                decoration: _fieldDec('Total Experience (years)',
-                    hint: 'e.g. 3.5', icon: Icons.timeline_outlined),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-              ),
-              TextFormField(
-                controller: _prevEmployer,
-                decoration: _fieldDec('Previous Employer',
-                    hint: 'Company name (if any)'),
-              ),
-            ),
-            TextFormField(
-              controller: _prevDesignation,
-              decoration:
-                  _fieldDec('Previous Designation', hint: 'Job title (if any)'),
-            ),
-            TextFormField(
-              controller: _leavingReason,
-              decoration: _fieldDec('Reason for Leaving', hint: 'Optional'),
-              maxLines: 3,
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Step 2 — Bank Details ─────────────────────────────────────────────────
-
-class _BankStep extends StatefulWidget {
-  const _BankStep({
-    required this.initial,
-    required this.onSave,
-    required this.onPrevious,
-  });
-
-  final OnboardingBankEntity initial;
-  final Future<String?> Function(Map<String, dynamic>) onSave;
-  final VoidCallback? onPrevious;
-
-  @override
-  State<_BankStep> createState() => _BankStepState();
-}
-
-class _BankStepState extends State<_BankStep> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _accountHolderName;
-  late final TextEditingController _accountNumber;
-  late final TextEditingController _ifsc;
-  late final TextEditingController _bankName;
-  late final TextEditingController _bankBranchName;
-  String? _accountType;
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final b = widget.initial;
-    _accountHolderName = TextEditingController(text: b.accountHolderName ?? '');
-    _accountNumber = TextEditingController(text: b.accountNumber ?? '');
-    _ifsc = TextEditingController(text: b.ifscCode ?? '');
-    _bankName = TextEditingController(text: b.bankName ?? '');
-    _bankBranchName = TextEditingController(text: b.bankBranchName ?? '');
-    _accountType = b.accountType;
-  }
-
-  @override
-  void dispose() {
-    _accountHolderName.dispose();
-    _accountNumber.dispose();
-    _ifsc.dispose();
-    _bankName.dispose();
-    _bankBranchName.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleSave() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _saving = true);
-    final err = await widget.onSave({
-      'account_holder_name': _accountHolderName.text.trim(),
-      'account_type': _accountType,
-      'account_number': _accountNumber.text.trim(),
-      'ifsc_code': _ifsc.text.trim().toUpperCase(),
-      'bank_name': _bankName.text.trim(),
-      'bank_branch_name': _bankBranchName.text.trim(),
-    });
-    if (!mounted) return;
-    setState(() => _saving = false);
-    if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(err), backgroundColor: AppColors.error));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _StepFormWrapper(
-      formKey: _formKey,
-      saving: _saving,
-      onSave: _handleSave,
-      onPrevious: widget.onPrevious,
-      children: [
-        _SectionCard(
-          icon: Icons.account_balance_outlined,
-          title: 'Bank Account Details',
-          children: [
-            const _InlineNote(
-              'Bank details are used for payroll. Ensure all information matches your passbook exactly.',
-              icon: Icons.warning_amber_rounded,
-            ),
-            _fieldRow(
-              TextFormField(
-                controller: _accountHolderName,
-                decoration: _fieldDec('Account Holder Name',
-                    hint: 'As printed on passbook', icon: Icons.person_outline),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-              _DropdownInput(
-                label: 'Account Type',
-                value: _accountType,
-                items: const [
-                  {'value': 'savings', 'label': 'Savings'},
-                  {'value': 'current', 'label': 'Current'},
-                ],
-                onChanged: (v) => setState(() => _accountType = v),
-              ),
-            ),
-            _fieldRow(
-              TextFormField(
-                controller: _accountNumber,
-                decoration: _fieldDec('Account Number',
-                    hint: 'Bank account number',
-                    icon: Icons.credit_card_outlined),
-                keyboardType: TextInputType.number,
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-              TextFormField(
-                controller: _ifsc,
-                decoration: _fieldDec('IFSC Code', hint: 'e.g. SBIN0001234'),
-                textCapitalization: TextCapitalization.characters,
-                maxLength: 11,
-                buildCounter: (_,
-                        {required currentLength,
-                        required isFocused,
-                        maxLength}) =>
-                    null,
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-            ),
-            _fieldRow(
-              TextFormField(
-                controller: _bankName,
-                decoration: _fieldDec('Bank Name',
-                    hint: 'e.g. State Bank of India',
-                    icon: Icons.account_balance_outlined),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-              TextFormField(
-                controller: _bankBranchName,
-                decoration:
-                    _fieldDec('Branch Name', hint: 'Branch city / locality'),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Step 3 — Emergency Contact ───────────────────────────────────────────
-
-class _EmergencyStep extends StatefulWidget {
-  const _EmergencyStep({
-    required this.initial,
-    required this.onSave,
-    required this.onPrevious,
-  });
-
-  final OnboardingEmergencyEntity initial;
-  final Future<String?> Function(Map<String, dynamic>) onSave;
-  final VoidCallback? onPrevious;
-
-  @override
-  State<_EmergencyStep> createState() => _EmergencyStepState();
-}
-
-class _EmergencyStepState extends State<_EmergencyStep> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _name;
-  late final TextEditingController _relationship;
-  late final TextEditingController _phone;
-  late final TextEditingController _email;
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final e = widget.initial;
-    _name = TextEditingController(text: e.emergencyName ?? '');
-    _relationship = TextEditingController(text: e.emergencyRelationship ?? '');
-    _phone = TextEditingController(text: e.emergencyPhone ?? '');
-    _email = TextEditingController(text: e.emergencyEmail ?? '');
-  }
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _relationship.dispose();
-    _phone.dispose();
-    _email.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleSave() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _saving = true);
-    final err = await widget.onSave({
-      'emergency_name': _name.text.trim(),
-      'emergency_relationship': _relationship.text.trim(),
-      'emergency_phone': _phone.text.trim(),
-      'emergency_email': _email.text.trim(),
-    });
-    if (!mounted) return;
-    setState(() => _saving = false);
-    if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(err), backgroundColor: AppColors.error));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _StepFormWrapper(
-      formKey: _formKey,
-      saving: _saving,
-      onSave: _handleSave,
-      onPrevious: widget.onPrevious,
-      children: [
-        _SectionCard(
-          icon: Icons.contact_emergency_outlined,
-          title: 'Emergency Contact',
-          subtitle:
-              'This person will be contacted in case of an emergency at the workplace.',
-          children: [
-            _fieldRow(
-              TextFormField(
-                controller: _name,
-                decoration: _fieldDec('Contact Name',
-                    hint: 'Full name', icon: Icons.person_outline),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-              TextFormField(
-                controller: _relationship,
-                decoration: _fieldDec('Relationship',
-                    hint: 'e.g. Spouse, Parent, Sibling'),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-            ),
-            _fieldRow(
-              TextFormField(
-                controller: _phone,
-                decoration: _fieldDec('Phone Number',
-                    hint: 'Mobile number', icon: Icons.phone_outlined),
-                keyboardType: TextInputType.phone,
-                validator: (v) =>
-                    FormValidators.lenientPhone(v, required: true),
-              ),
-              TextFormField(
-                controller: _email,
-                decoration: _fieldDec('Email (optional)',
-                    hint: 'email@example.com', icon: Icons.email_outlined),
-                keyboardType: TextInputType.emailAddress,
-                validator: (v) => (v == null || v.trim().isEmpty)
-                    ? null
-                    : FormValidators.email(v),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
+// Steps 0–3 (Personal, Education, Bank, Emergency) are admin-configured —
+// see onboarding_configured_step.dart.
 
 // ─── Step 4 — Documents ───────────────────────────────────────────────────
 
-const List<Map<String, String>> kDocTypes = [
-  {'value': 'pan_card', 'label': 'PAN Card'},
-  {'value': 'aadhaar_card', 'label': 'Aadhaar Card'},
-  {'value': 'degree_certificate', 'label': 'Degree Certificate'},
-  {'value': 'experience_letter', 'label': 'Experience Letter'},
-];
+/// The PAN card document type — its upload first saves the PAN number
+/// (web: handlePanCardUpload; backend: _save_profile_step step 4).
+const kPanCardType = 'pan_card';
+
+/// Backend PAN_RE (accounts/models.py), checked after upper-casing as
+/// normalize_and_validate_pan does.
+final kPanPattern = RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]$');
+
+/// The backend's/web's messages; null when the PAN can be sent.
+String? panNumberError(String value) {
+  final v = value.trim().toUpperCase();
+  if (v.isEmpty) return 'Enter your PAN number before uploading the PAN card.';
+  if (!kPanPattern.hasMatch(v)) return 'Enter a valid PAN (e.g. ABCDE1234F) — 5 letters, 4 digits, 1 letter.';
+  return null;
+}
+
+/// Shows the server's verdict on Save Draft (PATCH /onboarding/step/4/):
+/// it never submits or moves the wizard; it reports whether the required
+/// documents are all present.
+void _showDraftResult(BuildContext context, ({bool ok, String message}) result) =>
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(result.message),
+      backgroundColor: result.ok ? AppColors.success : AppColors.error,
+    ));
+
+/// Labels of visible, required document types with no file uploaded yet
+/// (the backend's own submit check, DocumentTypeConfig visible+required).
+List<String> missingRequiredDocuments(
+        List<DocumentTypeConfigModel> types, List<OnboardingDocEntity> documents) =>
+    [
+      for (final t in types)
+        if (t.visible && t.required && !documents.any((d) => d.docType == t.typeKey)) t.label,
+    ];
 
 /// Shared "Submit for Approval?" confirmation — used by whichever step owns
 /// the final Submit action (Documents when there's no Face ID step, the
@@ -986,9 +287,12 @@ Future<bool> _confirmSubmitForApproval(BuildContext context) async {
   return confirmed == true;
 }
 
-class _DocumentsStep extends StatefulWidget {
+class _DocumentsStep extends ConsumerStatefulWidget {
   const _DocumentsStep({
+    required this.documentTypes,
     required this.documents,
+    required this.panNumber,
+    required this.onSavePan,
     required this.onUpload,
     required this.onDelete,
     required this.onSaveDraft,
@@ -998,10 +302,19 @@ class _DocumentsStep extends StatefulWidget {
     required this.onContinueToFaceStep,
   });
 
+  /// Visible document types from the admin configuration, in order.
+  final List<DocumentTypeConfigModel> documentTypes;
   final List<OnboardingDocEntity> documents;
+
+  /// The saved PAN number (GET /onboarding/ pan_number), shown when PAN
+  /// Card is a configured document type.
+  final String panNumber;
+
+  /// Saves the PAN number; returns an error message or null.
+  final Future<String?> Function(String pan) onSavePan;
   final Future<String?> Function(String docType, PlatformFile file) onUpload;
   final Future<String?> Function(int id) onDelete;
-  final Future<void> Function() onSaveDraft;
+  final Future<({bool ok, String message})> Function() onSaveDraft;
   final Future<void> Function() onSubmit;
   final VoidCallback? onPrevious;
   // When true, a Face ID step follows this one and owns the real Submit
@@ -1013,45 +326,107 @@ class _DocumentsStep extends StatefulWidget {
   final VoidCallback onContinueToFaceStep;
 
   @override
-  State<_DocumentsStep> createState() => _DocumentsStepState();
+  ConsumerState<_DocumentsStep> createState() => _DocumentsStepState();
 }
 
-class _DocumentsStepState extends State<_DocumentsStep> {
+class _DocumentsStepState extends ConsumerState<_DocumentsStep> {
   bool _submitting = false;
   bool _savingDraft = false;
   final _uploading = <String>{};
+  late final _panCtrl = TextEditingController(text: widget.panNumber);
+  String? _panError;
+
+  @override
+  void dispose() {
+    _panCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickAndUpload(String docType) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final file = result.files.first;
-    if (file.size > 5 * 1024 * 1024) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('File must be under 5 MB.'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+    if (_uploading.contains(docType)) return; // one upload per type at a time
+    final isPan = docType == kPanCardType;
+    if (isPan) {
+      // As on web: the PAN number is checked before the file chooser opens.
+      final problem = panNumberError(_panCtrl.text);
+      if (problem != null) {
+        setState(() => _panError = problem);
+        return;
       }
+    }
+    final file = await ref.read(onboardingFilePickerProvider)();
+    if (!mounted || file == null) return;
+    final bytes = file.bytes;
+    final problem = bytes == null ? 'Could not read the file.' : onboardingUploadError(file.name, bytes.length);
+    if (problem != null) {
+      _snack(problem);
       return;
     }
-    setState(() => _uploading.add(docType));
+    setState(() {
+      _uploading.add(docType);
+      if (isPan) _panError = null;
+    });
+    if (isPan) {
+      // Save (and server-validate) the PAN first; the card is only sent once
+      // the number is accepted. What was typed stays either way.
+      final pan = _panCtrl.text.trim().toUpperCase();
+      final panErr = await widget.onSavePan(pan);
+      if (!mounted) return;
+      if (panErr != null) {
+        setState(() {
+          _uploading.remove(docType);
+          _panError = panErr;
+        });
+        return;
+      }
+      _panCtrl.text = pan;
+    }
     final err = await widget.onUpload(docType, file);
     if (!mounted) return;
     setState(() => _uploading.remove(docType));
-    if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(err), backgroundColor: AppColors.error),
+    if (err != null) _snack(err);
+  }
+
+  Widget _panField() => Padding(
+        padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+        child: TextField(
+          key: const Key('onboarding-pan-number'),
+          controller: _panCtrl,
+          enabled: !_uploading.contains(kPanCardType),
+          maxLength: 10,
+          textCapitalization: TextCapitalization.characters,
+          inputFormatters: [_PanUpperCase()],
+          onChanged: (_) {
+            if (_panError != null) setState(() => _panError = null);
+          },
+          decoration: InputDecoration(
+            labelText: 'PAN Number *',
+            hintText: 'e.g. ABCDE1234F',
+            counterText: '',
+            errorText: _panError,
+            errorMaxLines: 3,
+            helperText: _panError == null
+                ? 'Checked against every other employee before the upload goes through — enter it first.'
+                : null,
+            helperMaxLines: 3,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
       );
-    }
+
+  void _snack(String message) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(message), backgroundColor: AppColors.error));
+
+  /// Required document types still missing — checked before leaving the
+  /// step, so the employee hears it here rather than from a failed submit.
+  bool _requiredDocsPresent() {
+    final missing = missingRequiredDocuments(widget.documentTypes, widget.documents);
+    if (missing.isEmpty) return true;
+    _snack('Please upload: ${missing.join(', ')}');
+    return false;
   }
 
   Future<void> _handleSubmit() async {
+    if (_submitting || !_requiredDocsPresent()) return;
     if (!await _confirmSubmitForApproval(context)) return;
     if (!mounted) return;
     setState(() => _submitting = true);
@@ -1060,12 +435,17 @@ class _DocumentsStepState extends State<_DocumentsStep> {
   }
 
   Future<void> _handleSaveDraft() async {
+    if (_savingDraft) return;
     setState(() => _savingDraft = true);
-    await widget.onSaveDraft();
-    if (mounted) setState(() => _savingDraft = false);
+    final result = await widget.onSaveDraft();
+    if (!mounted) return;
+    setState(() => _savingDraft = false);
+    _showDraftResult(context, result);
   }
 
-  void _handleContinue() => widget.onContinueToFaceStep();
+  void _handleContinue() {
+    if (_requiredDocsPresent()) widget.onContinueToFaceStep();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1107,20 +487,30 @@ class _DocumentsStepState extends State<_DocumentsStep> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                ...kDocTypes.map((doc) {
+                if (widget.documentTypes.isEmpty)
+                  Text('No documents are required for onboarding.',
+                      style: AppTextStyles.bodySecondary),
+                ...widget.documentTypes.map((doc) {
                   final uploaded = widget.documents
-                      .where((d) => d.docType == doc['value'])
+                      .where((d) => d.docType == doc.typeKey)
                       .toList();
-                  return Padding(
+                  final card = Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _DocTypeCard(
-                      docType: doc['value']!,
-                      label: doc['label']!,
+                      key: Key('onboarding-doc-${doc.typeKey}'),
+                      docType: doc.typeKey,
+                      label: doc.required ? '${doc.label} *' : doc.label,
+                      allowMultiple: doc.allowMultiple,
                       uploaded: uploaded,
-                      isUploading: _uploading.contains(doc['value']),
-                      onUpload: () => _pickAndUpload(doc['value']!),
+                      isUploading: _uploading.contains(doc.typeKey),
+                      onUpload: () => _pickAndUpload(doc.typeKey),
                       onDelete: widget.onDelete,
                     ),
+                  );
+                  if (doc.typeKey != kPanCardType) return card;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [card, _panField()],
                   );
                 }),
               ],
@@ -1194,10 +584,18 @@ class _DocumentsStepState extends State<_DocumentsStep> {
   }
 }
 
+class _PanUpperCase extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) =>
+      newValue.copyWith(text: newValue.text.toUpperCase());
+}
+
 class _DocTypeCard extends StatelessWidget {
   const _DocTypeCard({
+    super.key,
     required this.docType,
     required this.label,
+    required this.allowMultiple,
     required this.uploaded,
     required this.isUploading,
     required this.onUpload,
@@ -1206,6 +604,7 @@ class _DocTypeCard extends StatelessWidget {
 
   final String docType;
   final String label;
+  final bool allowMultiple;
   final List<OnboardingDocEntity> uploaded;
   final bool isUploading;
   final VoidCallback onUpload;
@@ -1302,7 +701,7 @@ class _DocTypeCard extends StatelessWidget {
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10)),
                               ),
-                              child: Text(hasUpload ? 'Add another' : 'Upload',
+                              child: Text(!hasUpload ? 'Upload' : (allowMultiple ? 'Add another' : 'Replace'),
                                   style: AppTextStyles.labelSmall
                                       .copyWith(fontWeight: FontWeight.w700)),
                             ),
@@ -1381,7 +780,7 @@ class _FaceIdStep extends ConsumerStatefulWidget {
     required this.onPrevious,
   });
 
-  final Future<void> Function() onSaveDraft;
+  final Future<({bool ok, String message})> Function() onSaveDraft;
   final Future<void> Function() onSubmit;
   final VoidCallback? onPrevious;
 
@@ -1433,9 +832,12 @@ class _FaceIdStepState extends ConsumerState<_FaceIdStep> {
   }
 
   Future<void> _handleSaveDraft() async {
+    if (_savingDraft) return;
     setState(() => _savingDraft = true);
-    await widget.onSaveDraft();
-    if (mounted) setState(() => _savingDraft = false);
+    final result = await widget.onSaveDraft();
+    if (!mounted) return;
+    setState(() => _savingDraft = false);
+    _showDraftResult(context, result);
   }
 
   @override

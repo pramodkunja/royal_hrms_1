@@ -8,6 +8,7 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../widgets/attendance_approval_tab.dart';
 import '../widgets/face_registration_approvals_tab.dart';
 import '../widgets/team_approvals_tab.dart';
+import '../../../../core/router/access_control.dart';
 
 // Ports web's app/dashboard/approvals/page.tsx (2026-07-21 change) — the
 // "My Requests" tab was removed there since a standalone /dashboard/my-requests
@@ -71,8 +72,15 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
     // one more request kind (matches web's TeamApprovalsSection.tsx), not
     // given its own tab or screen.
     final canApproveWfh = user?.hasPermission('wfh.approve') ?? false;
-    final canApproveTeam =
-        canApproveLeave || canApproveExpense || canApproveCorrections || canApproveWfh;
+    // separation.approve — web's Team Approvals gate includes it
+    // (approvals/page.tsx useAnyPermission); separation requests join the
+    // same inbox.
+    final canApproveSeparation = userHasPermission(user, 'separation.approve');
+    final canApproveTeam = canApproveLeave ||
+        canApproveExpense ||
+        canApproveCorrections ||
+        canApproveWfh ||
+        canApproveSeparation;
     // Matches web exactly: user.can_manage_team === true || user.is_superuser
     // === true || hasPermission('payroll.view') — no HR-role exclusion /
     // payroll.approve alternative, both of which were undocumented
@@ -133,6 +141,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
                                 canApproveExpense: canApproveExpense,
                                 canApproveCorrections: canApproveCorrections,
                                 canApproveWfh: canApproveWfh,
+                                canApproveSeparation: canApproveSeparation,
                               ),
                             'face_id' => const FaceRegistrationApprovalsTab(),
                             _ => const AttendanceApprovalTab(),

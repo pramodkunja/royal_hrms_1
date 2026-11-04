@@ -138,6 +138,10 @@ class SeparationActions {
     _invalidateLists();
   }
 
+  /// Reloads one request after a refused action, so a stale screen (stage
+  /// already decided by someone else) shows the server's current state.
+  void refreshRequest(String id) => _invalidateRequest(id);
+
   Future<String?> createRequest({
     required String separationType,
     required String reason,

@@ -69,6 +69,12 @@ class SeparationRequestEntity {
   final bool canDelete;
   final bool isOwn;
   final String createdAt;
+  /// The employee's notice period from Settings → Notice Period, or null
+  /// when none is assigned (assigned_notice_period_days).
+  final int? assignedNoticePeriodDays;
+  /// Request date + notice period, an expectation rather than the approved
+  /// date (expected_last_working_day, YYYY-MM-DD), or null.
+  final String? expectedLastWorkingDay;
 
   const SeparationRequestEntity({
     required this.id,
@@ -97,6 +103,8 @@ class SeparationRequestEntity {
     this.canDelete = false,
     this.isOwn = false,
     required this.createdAt,
+    this.assignedNoticePeriodDays,
+    this.expectedLastWorkingDay,
   });
 
   bool get isPending => status == 'pending' || status == 'stage2_pending';
@@ -259,6 +267,8 @@ class EmployeePickerOption {
   final String name;
   final String department;
   final String designation;
+  /// The employee's assigned notice period (notice_period_days), or null.
+  final int? noticePeriodDays;
 
   const EmployeePickerOption({
     required this.code,
@@ -266,5 +276,6 @@ class EmployeePickerOption {
     required this.name,
     required this.department,
     required this.designation,
+    this.noticePeriodDays,
   });
 }

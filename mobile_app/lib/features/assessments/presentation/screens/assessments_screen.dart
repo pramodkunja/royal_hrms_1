@@ -10,6 +10,7 @@ import '../widgets/assessment_card.dart';
 import '../widgets/assessment_form_dialog.dart';
 import '../widgets/assign_dialog.dart';
 import '../widgets/items_manager_dialog.dart';
+import 'package:mobile_app/shared/widgets/app_error_state.dart';
 
 class AssessmentsScreen extends ConsumerStatefulWidget {
   const AssessmentsScreen({super.key});
@@ -47,8 +48,8 @@ class _AssessmentsScreenState extends ConsumerState<AssessmentsScreen> {
                 child: Column(
                   children: [
                     const _Header(),
-                    _ErrorView(
-                      message: e.toString(),
+                    AppErrorState.forError(
+                      e,
                       onRetry: () => ref.invalidate(assessmentsProvider),
                     ),
                   ],
@@ -447,45 +448,3 @@ class _EmptyView extends StatelessWidget {
   }
 }
 
-class _ErrorView extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-  const _ErrorView({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return _StateCard(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _StateIconBadge(
-            color: AppColors.error,
-            child: Icon(Icons.cloud_off_outlined,
-                size: 30, color: AppColors.error),
-          ),
-          const SizedBox(height: 20),
-          Text('Could not load assessments',
-              style: AppTextStyles.h3, textAlign: TextAlign.center),
-          const SizedBox(height: 8),
-          Text(message,
-              style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Retry'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.error,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

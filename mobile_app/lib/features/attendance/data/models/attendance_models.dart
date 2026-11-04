@@ -47,6 +47,7 @@ class PunchEntryModel extends PunchEntryEntity {
 class TodayAttendanceModel extends TodayAttendanceEntity {
   const TodayAttendanceModel({
     required super.isClockedIn,
+    super.dayCompleted = false,
     required super.punches,
     required super.totalSeconds,
     required super.sessionSeconds,
@@ -57,6 +58,10 @@ class TodayAttendanceModel extends TodayAttendanceEntity {
     final rawPunches = json['punches'] as List<dynamic>? ?? [];
     return TodayAttendanceModel(
       isClockedIn: _toBool(json['is_clocked_in']),
+      // Always a boolean in the backend's TodayAttendanceSerializer; an
+      // absent/null value is treated as not completed, as web does
+      // (`session?.day_completed ?? false`).
+      dayCompleted: _toBool(json['day_completed']),
       punches: rawPunches
           .whereType<Map<String, dynamic>>()
           .map(PunchEntryModel.fromJson)

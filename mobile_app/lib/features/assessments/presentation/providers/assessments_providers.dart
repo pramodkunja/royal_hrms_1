@@ -173,6 +173,9 @@ Future<String?> assignCandidateToAssessment(
 // assigned to this candidate.", "Cannot delete an assessment with active
 // candidate assignments." — reach the user verbatim instead of a generic
 // fallback.
+/// Public alias of [_friendly] for the other assessment screens.
+String friendlyAssessmentError(Object e) => _friendly(e);
+
 String _friendly(Object e) {
   if (e is DioException) {
     if (e.type == DioExceptionType.connectionError ||

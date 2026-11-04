@@ -5,6 +5,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/separation_entity.dart';
 import '../providers/separation_providers.dart';
 import 'separation_status.dart';
+import 'package:mobile_app/core/network/api_client.dart';
 
 /// Fixed 4-item clearance checklist (Manager/IT/Finance/HR — auto-created
 /// server-side alongside the request). Each item is a simple approve/reject
@@ -135,7 +136,7 @@ class _SeparationClearanceSectionState
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2))),
             ),
-            error: (_, __) => Text('Could not load clearances.',
+            error: (e, __) => Text(userFriendlyMessage(e),
                 style: AppTextStyles.caption.copyWith(color: AppColors.error)),
           ),
         ],

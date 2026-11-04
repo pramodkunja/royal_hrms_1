@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
+import 'package:mobile_app/core/network/api_client.dart';
 
 const _kMonths = [
   'January',
@@ -117,8 +118,9 @@ class _TeamCalendarTabState extends ConsumerState<TeamCalendarTab> {
             children: [
               Icon(Icons.error_outline, size: 32, color: AppColors.error),
               const SizedBox(height: 8),
-              Text('Failed to load team calendar.',
-                  style: AppTextStyles.bodySecondary),
+              Text(userFriendlyMessage(err),
+                  style: AppTextStyles.bodySecondary,
+                  textAlign: TextAlign.center),
             ],
           ),
         ),

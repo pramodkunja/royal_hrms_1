@@ -35,6 +35,8 @@ class WfhRequestModel extends WfhRequestEntity {
     super.createdAt,
     super.canApprove,
     super.canCancel,
+    super.isMedical,
+    super.supportingDocumentUrl,
   });
 
   // Backend fields (WorkFromHomeRequestSerializer, apps/hrms/serializers.py):
@@ -42,7 +44,7 @@ class WfhRequestModel extends WfhRequestEntity {
   // status, employee_name, employee_code, employee_dept, employee_branch,
   // l1_approver_name, l1_status, l1_remarks, l1_actioned_at,
   // l2_approver_name, l2_status, l2_remarks, l2_actioned_at, created_at,
-  // can_approve, can_cancel.
+  // can_approve, can_cancel, is_medical, supporting_document_url.
   factory WfhRequestModel.fromJson(Map<String, dynamic> json) {
     return WfhRequestModel(
       id: json['id']?.toString() ?? '',
@@ -68,6 +70,10 @@ class WfhRequestModel extends WfhRequestEntity {
       createdAt: json['created_at'] as String? ?? '',
       canApprove: json['can_approve'] as bool? ?? false,
       canCancel: json['can_cancel'] as bool? ?? false,
+      isMedical: json['is_medical'] == true,
+      supportingDocumentUrl: (json['supporting_document_url'] as String?)?.trim().isEmpty ?? true
+          ? null
+          : json['supporting_document_url'] as String,
     );
   }
 }

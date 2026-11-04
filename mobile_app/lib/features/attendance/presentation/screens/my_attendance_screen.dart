@@ -1,15 +1,13 @@
 import 'dart:async';
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/location/location_service.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/utils/device_identifier.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/stat_card.dart';
 import '../../../dashboard/presentation/widgets/dashboard_section.dart';
 import '../../domain/entities/attendance_entity.dart';
+import '../clock/clock_punch_flow.dart';
+import '../providers/attendance_mode_provider.dart';
 import '../providers/attendance_providers.dart';
 import '../widgets/attendance_ring.dart';
 import '../widgets/hr_correction_card.dart';
@@ -346,10 +344,6 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen>
 
   // ── Calendar ───────────────────────────────────────────────────────────────
 
-  bool get _isCurrentCalendarMonth {
-    final now = DateTime.now();
-    return _calMonth.year == now.year && _calMonth.month == now.month;
-  }
 
   Widget _buildCalendar() {
     final calendarAsync = ref.watch(attendanceCalendarProvider(_calKey));
@@ -430,17 +424,16 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen>
                   ),
                 ),
                 IconButton(
-                  // Matches web: cannot navigate the calendar into future months.
+                  // Matches web (my-attendance AttendanceTab.tsx): forward
+                  // navigation is unbounded, so employees can see upcoming
+                  // holidays. Future days only show what the server returns,
+                  // and Regularize stays behind the server's canRegularize.
                   icon: const Icon(Icons.chevron_right, size: 22),
-                  onPressed: _isCurrentCalendarMonth
-                      ? null
-                      : () => setState(() {
-                            _calMonth = DateTime(
-                                _calMonth.year, _calMonth.month + 1, 1);
-                          }),
-                  color: _isCurrentCalendarMonth
-                      ? AppColors.textHint.withValues(alpha: 0.4)
-                      : AppColors.textSecondary,
+                  tooltip: 'Next month',
+                  onPressed: () => setState(() {
+                    _calMonth = DateTime(_calMonth.year, _calMonth.month + 1, 1);
+                  }),
+                  color: AppColors.textSecondary,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
@@ -670,9 +663,9 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen>
 // rationale.
 // Mirrors the Dashboard's "Today's Attendance" card (AttendanceRingCard) —
 // same SectionCard chrome, segmented ring, punch stat tiles and punch log,
-// built from the shared widgets in attendance_ring.dart — plus the
-// Attendance Mode selector, which is unique to this screen (the Dashboard
-// card always punches as 'office').
+// built from the shared widgets in attendance_ring.dart. Both punch through
+// the same runClockPunch flow (clock/clock_punch_flow.dart); this screen also
+// shows the attendance mode that flow will use, read-only, as web does.
 class _ClockPanel extends ConsumerStatefulWidget {
   const _ClockPanel();
 
@@ -683,7 +676,6 @@ class _ClockPanel extends ConsumerStatefulWidget {
 class _ClockPanelState extends ConsumerState<_ClockPanel>
     with SingleTickerProviderStateMixin {
   bool _punching = false;
-  String _attendanceMode = 'office';
 
   // Seeded from the backend's `totalSeconds` on every fresh fetch, then
   // ticked forward locally once a second while clocked in — avoids re-
@@ -699,24 +691,6 @@ class _ClockPanelState extends ConsumerState<_ClockPanel>
   // easeOutCubic: fast start, gentle settle — reads as the fill gliding to
   // a stop rather than snapping linearly to its target every tick.
   static const _ringCurve = Curves.easeOutCubic;
-
-  // Matches backend AttendancePunch.attendance_mode choices exactly
-  // (apps/attendance/models.py) and web's ClockWidget mode <select>.
-  static const _attendanceModeLabels = {
-    'office': 'Office',
-    'wfh': 'Work from Home',
-    'field': 'Field Work',
-    'client_location': 'Client Location',
-    'remote_office': 'Remote Office',
-  };
-
-  static const _attendanceModeIcons = {
-    'office': Icons.business_outlined,
-    'wfh': Icons.home_outlined,
-    'field': Icons.terrain_outlined,
-    'client_location': Icons.location_on_outlined,
-    'remote_office': Icons.wifi_outlined,
-  };
 
   @override
   void initState() {
@@ -767,38 +741,13 @@ class _ClockPanelState extends ConsumerState<_ClockPanel>
   }
 
   Future<void> _toggleClock(TodayAttendanceEntity today) async {
-    if (_punching) return;
+    // Completed day: nothing to punch — don't even fetch GPS.
+    if (_punching || today.dayCompleted) return;
     setState(() => _punching = true);
 
-    // Location is captured best-effort for every mode, not just 'office' —
-    // only 'office' punches are geofence-checked server-side, but wfh/field/
-    // client_location/remote_office still record GPS for the audit trail
-    // when it's available. getCurrentPosition() never throws and resolves to
-    // null on any permission/timeout/service failure, so this never blocks
-    // the punch.
-    final position =
-        await ref.read(locationServiceProvider).getCurrentPosition();
-
-    if (!mounted) return;
-    final error = await ref.read(todayAttendanceProvider.notifier).punch(
-          isCurrentlyClockedIn: today.isClockedIn,
-          attendanceMode: _attendanceMode,
-          latitude: position?.latitude,
-          longitude: position?.longitude,
-          accuracy: position?.accuracy,
-          // dart:io's Platform throws on web ("Unsupported operation:
-          // _operatingSystem") — must guard with kIsWeb, same convention as
-          // core/network/api_client.dart.
-          deviceName: kIsWeb
-              ? 'Web'
-              : Platform.isAndroid
-                  ? 'Android'
-                  : Platform.isIOS
-                      ? 'iOS'
-                      : null,
-          operatingSystem: kIsWeb ? 'web' : Platform.operatingSystem,
-          deviceId: await ref.read(deviceIdProvider.future),
-        );
+    // Same flow as the dashboard card: GPS → mode from today's approved WFH
+    // request → geofence pre-check → face check when mandatory → punch.
+    final error = await runClockPunch(ref, context, today);
 
     if (!mounted) return;
     setState(() => _punching = false);
@@ -869,93 +818,26 @@ class _ClockPanelState extends ConsumerState<_ClockPanel>
                       ),
                     ),
                     const SizedBox(height: 6),
-                    PopupMenuButton<String>(
-                      enabled: !_punching,
-                      offset: const Offset(0, 44),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      constraints: const BoxConstraints(minWidth: 200),
-                      onSelected: (v) => setState(() => _attendanceMode = v),
-                      itemBuilder: (_) =>
-                          _attendanceModeLabels.entries.map((e) {
-                        final selected = e.key == _attendanceMode;
-                        return PopupMenuItem<String>(
-                          value: e.key,
-                          child: Row(
-                            children: [
-                              Icon(
-                                _attendanceModeIcons[e.key],
-                                size: 18,
-                                color: selected
-                                    ? AppColors.primary
-                                    : AppColors.textSecondary,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  e.value,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: selected
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                    color: selected
-                                        ? AppColors.primary
-                                        : AppColors.textPrimary,
-                                  ),
-                                ),
-                              ),
-                              if (selected)
-                                Icon(Icons.check,
-                                    size: 16, color: AppColors.primary),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: AppColors.backgroundMid,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(_attendanceModeIcons[_attendanceMode],
-                                color: AppColors.textSecondary, size: 16),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _attendanceModeLabels[_attendanceMode] ??
-                                    'Office',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textPrimary,
-                                    fontWeight: FontWeight.w600),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Icon(Icons.expand_more,
-                                color: AppColors.textHint, size: 18),
-                          ],
-                        ),
-                      ),
-                    ),
+                    const _AttendanceModeLabel(),
                     const SizedBox(height: 10),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _punching ? null : () => _toggleClock(today),
+                        // Matches web's ClockWidget: a completed day disables
+                        // the button and shows "Attendance Completed".
+                        onPressed: (_punching || today.dayCompleted)
+                            ? null
+                            : () => _toggleClock(today),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: today.isClockedIn
                               ? AppColors.error
                               : AppColors.success,
                           foregroundColor: Colors.white,
-                          disabledBackgroundColor: (today.isClockedIn
-                                  ? AppColors.error
-                                  : AppColors.success)
+                          disabledBackgroundColor: (today.dayCompleted
+                                  ? AppColors.textHint
+                                  : today.isClockedIn
+                                      ? AppColors.error
+                                      : AppColors.success)
                               .withValues(alpha: 0.6),
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           shape: RoundedRectangleBorder(
@@ -974,16 +856,20 @@ class _ClockPanelState extends ConsumerState<_ClockPanel>
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                      today.isClockedIn
-                                          ? Icons.logout
-                                          : Icons.login,
+                                      today.dayCompleted
+                                          ? Icons.check_circle_outline
+                                          : today.isClockedIn
+                                              ? Icons.logout
+                                              : Icons.login,
                                       size: 16,
                                       color: Colors.white),
                                   const SizedBox(width: 6),
                                   Text(
-                                    today.isClockedIn
-                                        ? 'Clock Out'
-                                        : 'Clock In',
+                                    today.dayCompleted
+                                        ? 'Attendance Completed'
+                                        : today.isClockedIn
+                                            ? 'Clock Out'
+                                            : 'Clock In',
                                     style: const TextStyle(
                                         fontWeight: FontWeight.w700,
                                         color: Colors.white),
@@ -1149,6 +1035,44 @@ void _showMyCorrectionDetail(BuildContext context, MyCorrectionEntity record) {
 // Pending/Approved/Rejected counts, a "Request Attendance Correction" quick
 // action, and the correction-requests list (every field the web table +
 // MyCorrectionDetailModal show, just laid out for a phone).
+
+/// Read-only attendance mode, derived from today's approved WFH request
+/// (todayAttendanceModeProvider) — there is no manual choice, as on web.
+class _AttendanceModeLabel extends ConsumerWidget {
+  const _AttendanceModeLabel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // While the lookup runs, say so instead of flashing "Office" on a WFH day.
+    final mode = ref.watch(todayAttendanceModeProvider).valueOrNull;
+    final isWfh = mode == kAttendanceModeWfh;
+    final label = mode == null ? 'Checking…' : (isWfh ? 'Work from Home: approved' : 'Office');
+    return Container(
+      key: const Key('attendance-mode-label'),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundMid,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(isWfh ? Icons.home_outlined : Icons.business_outlined,
+              color: AppColors.textSecondary, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 12, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _MyCorrectionsSection extends ConsumerWidget {
   const _MyCorrectionsSection();

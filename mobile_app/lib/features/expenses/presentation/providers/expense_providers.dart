@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart' show MultipartFile;
+import 'package:dio/dio.dart' show DioException, MultipartFile;
+import '../../../../core/error/exceptions.dart';
 import '../../../../core/network/api_client.dart';
 import '../../data/datasources/expense_remote_datasource.dart';
 import '../../data/models/expense_model.dart';
@@ -95,6 +96,9 @@ class ExpenseStatsNotifier extends AutoDisposeAsyncNotifier<ExpenseStats> {
 // ── Error helper ──────────────────────────────────────────────────────────────
 
 String _friendly(Object e) {
+  // HTTP failures keep the server's own message (e.g. "<Module> is not
+  // enabled for your company…", or the permission refusal).
+  if (e is DioException || e is AppException) return userFriendlyMessage(e);
   final msg = e.toString();
   if (msg.contains('SocketException') || msg.contains('connection')) {
     return 'Cannot reach server. Check your connection.';

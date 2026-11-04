@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Required for every API call the app makes — without this, Android
          blocks all network access at the OS level regardless of backend. -->
     <uses-permission android:name="android.permission.INTERNET"/>
@@ -7,6 +8,12 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <!-- Required for voice command speech recognition -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Not used by the app. The manifest merger would otherwise add it
+         implicitly because the TensorFlow Lite GPU library (litert-gpu-api,
+         used by on-device face recognition) declares an ancient
+         targetSdkVersion; it would then appear on the Play listing and in
+         the Data safety review. -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" tools:node="remove"/>
     <!-- enableOnBackInvokedCallback explicit false, not just omitted: with
          go_router's ShellRoute (which wraps its own nested Navigator),
          Android's predictive-back callback registration can flap to the OS's

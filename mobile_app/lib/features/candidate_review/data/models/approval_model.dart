@@ -48,6 +48,12 @@ class ApprovalProfile {
   final String? emergencyRelationship;
   final String? emergencyPhone;
 
+  // Statutory IDs (EmployeeProfileSerializer). Sensitive: shown masked,
+  // never logged.
+  final String? uanNumber;
+  final String? panNumber;
+  final String? nameAsPerAadhar;
+
   const ApprovalProfile({
     this.dateOfBirth,
     this.gender,
@@ -71,6 +77,9 @@ class ApprovalProfile {
     this.emergencyName,
     this.emergencyRelationship,
     this.emergencyPhone,
+    this.uanNumber,
+    this.panNumber,
+    this.nameAsPerAadhar,
   });
 
   factory ApprovalProfile.fromJson(Map<String, dynamic> json) =>
@@ -97,6 +106,9 @@ class ApprovalProfile {
         emergencyName:         json['emergency_name'] as String?,
         emergencyRelationship: json['emergency_relationship'] as String?,
         emergencyPhone:        json['emergency_phone'] as String?,
+        uanNumber:             json['uan_number'] as String?,
+        panNumber:             json['pan_number'] as String?,
+        nameAsPerAadhar:       json['name_as_per_aadhar'] as String?,
       );
 }
 

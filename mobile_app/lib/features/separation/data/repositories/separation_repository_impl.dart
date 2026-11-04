@@ -20,6 +20,7 @@ class SeparationRepositoryImpl implements SeparationRepository {
     String? employeeId,
     String? separationType,
     int page = 1,
+    int? pageSize,
   }) =>
       _ds.fetchRequests(
         status: status,
@@ -27,6 +28,7 @@ class SeparationRepositoryImpl implements SeparationRepository {
         employeeId: employeeId,
         separationType: separationType,
         page: page,
+        pageSize: pageSize,
       );
 
   @override

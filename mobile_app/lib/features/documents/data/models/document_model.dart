@@ -16,6 +16,9 @@ class DocumentModel extends DocumentEntity {
     required super.uploadedByName,
     required super.uploadedAt,
     required super.isActive,
+    super.requiresAcknowledgement,
+    super.version,
+    super.myAcknowledgedAt,
   });
 
   factory DocumentModel.fromJson(Map<String, dynamic> json) {
@@ -36,6 +39,9 @@ class DocumentModel extends DocumentEntity {
           ? DateTime.tryParse(json['uploaded_at'] as String) ?? DateTime.now()
           : DateTime.now(),
       isActive: json['is_active'] as bool? ?? true,
+      requiresAcknowledgement: json['requires_acknowledgement'] == true,
+      version: (json['version'] as num?)?.toInt() ?? 1,
+      myAcknowledgedAt: json['my_acknowledged_at']?.toString(),
     );
   }
 }

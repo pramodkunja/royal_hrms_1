@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart' show DioException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/network/api_client.dart';
@@ -178,6 +179,8 @@ String friendlyReferralError(Object e) {
   // discarding the actual, actionable server message. Check the typed
   // statusCode first; only fall back to string-sniffing for non-AppException
   // errors (e.g. a raw parsing exception).
+  if (e is DioException) return friendlyReferralError(parseDioException(e));
+  if (e is ModuleDisabledException) return userFriendlyMessage(e); // keep the server's reason
   if (e is AppException) {
     if (e.statusCode == 401) return 'Session expired. Please log in again.';
     if (e.statusCode == 403) return 'You do not have permission to do this.';

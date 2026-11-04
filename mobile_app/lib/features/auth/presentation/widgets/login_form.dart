@@ -24,6 +24,24 @@ class _LoginFormState extends ConsumerState<LoginForm> {
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   bool _showPassword = false;
+  // Shown once after a forced password change (see loginPrefillProvider).
+  String? _notice;
+
+  @override
+  void initState() {
+    super.initState();
+    final prefill = ref.read(loginPrefillProvider);
+    if (prefill != null) {
+      _companyCodeCtrl.text = prefill.companyCode ?? '';
+      _emailCtrl.text = prefill.email ?? '';
+      _notice = prefill.notice;
+      // One-shot: clear it after this frame (writing a provider while the
+      // widget tree is building is not allowed).
+      Future.microtask(() {
+        if (mounted) ref.read(loginPrefillProvider.notifier).state = null;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -96,6 +114,8 @@ class _LoginFormState extends ConsumerState<LoginForm> {
         children: [
           if (errorMessage != null) _ErrorBanner(message: errorMessage),
           if (errorMessage != null) const SizedBox(height: 16),
+          if (errorMessage == null && _notice != null) _NoticeBanner(message: _notice!),
+          if (errorMessage == null && _notice != null) const SizedBox(height: 16),
           AppTextField(
             label: 'Company Code',
             hint: 'e.g. ROYAL01',
@@ -158,6 +178,41 @@ class _LoginFormState extends ConsumerState<LoginForm> {
             label: 'Sign In',
             onPressed: _submit,
             isLoading: isLoading,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoticeBanner extends StatelessWidget {
+  final String message;
+
+  const _NoticeBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.successContainer,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(Icons.check_circle_outline, color: AppColors.success, size: 14),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.success),
+            ),
           ),
         ],
       ),

@@ -47,8 +47,10 @@ class SeparationRemoteDataSource {
     String? employeeId,
     String? separationType,
     int page = 1,
+    int? pageSize, // server default 20; web's approvals inbox asks for 100
   }) async {
     final params = <String, dynamic>{'page': page};
+    if (pageSize != null) params['page_size'] = pageSize;
     if (status != null) params['status'] = status;
     if (scope != null) params['scope'] = scope;
     if (employeeId != null) params['employee_id'] = employeeId;

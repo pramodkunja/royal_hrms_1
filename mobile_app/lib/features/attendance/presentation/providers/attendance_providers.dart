@@ -22,6 +22,11 @@ String? _fmtDate(DateTime? d) => d == null
 
 // ── My Attendance — Today / Clock In-Out ───────────────────────────────────────
 
+/// The backend's own wording for a punch on a completed day
+/// (services_attendance.py _validate_daily_punch_limit).
+const kDayCompletedMessage = 'You have already completed your attendance for today '
+    '(Clock In and Clock Out). Please try again tomorrow.';
+
 final todayAttendanceProvider = AsyncNotifierProvider.autoDispose<
     TodayAttendanceNotifier, TodayAttendanceEntity>(TodayAttendanceNotifier.new);
 
@@ -81,6 +86,10 @@ class TodayAttendanceNotifier
     double? livenessScore,
     String? captureSessionId,
   }) async {
+    // The last server response already says today's In and Out both exist —
+    // the backend would reject any punch, so don't send one. Only the
+    // server's own day_completed decides this, never local time.
+    if (state.valueOrNull?.dayCompleted ?? false) return kDayCompletedMessage;
     try {
       final updated = await _repo.punch(
         punchType: isCurrentlyClockedIn ? 'OUT' : 'IN',

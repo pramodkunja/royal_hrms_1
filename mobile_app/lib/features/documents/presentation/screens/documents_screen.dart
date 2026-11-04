@@ -9,6 +9,7 @@ import '../widgets/document_filter_bar.dart';
 import '../widgets/document_list_states.dart';
 import '../widgets/document_stats_row.dart';
 import '../widgets/document_upload_dialog.dart';
+import 'package:mobile_app/core/permissions/permission_providers.dart';
 
 class DocumentsScreen extends ConsumerWidget {
   const DocumentsScreen({super.key});
@@ -18,6 +19,8 @@ class DocumentsScreen extends ConsumerWidget {
     final statsAsync = ref.watch(documentStatsProvider);
     final docsAsync = ref.watch(documentListProvider);
     final filtered = ref.watch(filteredDocumentsProvider);
+    // Upload needs documents.create (web documents/page.tsx canUpload).
+    final canUpload = ref.watch(permissionProvider('documents.create'));
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -26,7 +29,7 @@ class DocumentsScreen extends ConsumerWidget {
       // this FAB too just duplicated the same action twice on one screen
       // (the same fix Assessments got for its "Create Assessment" button).
       floatingActionButton: docsAsync.maybeWhen(
-        data: (_) => filtered.isEmpty
+        data: (_) => filtered.isEmpty || !canUpload
             ? null
             : FloatingActionButton.extended(
                 onPressed: () => _openUpload(context),
@@ -83,7 +86,7 @@ class DocumentsScreen extends ConsumerWidget {
                 if (filtered.isEmpty) {
                   return SliverToBoxAdapter(
                     child: DocumentEmptyView(
-                        onUpload: () => _openUpload(context)),
+                        onUpload: canUpload ? () => _openUpload(context) : null),
                   );
                 }
                 return _DocumentGrid(

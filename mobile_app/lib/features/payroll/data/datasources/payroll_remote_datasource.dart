@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../models/payslip_model.dart';
+import '../models/payslip_query_model.dart';
 
 class PayrollRemoteDataSource {
   final Dio _dio;
@@ -35,5 +36,22 @@ class PayrollRemoteDataSource {
   // it otherwise (400). Returns no data payload on success.
   Future<void> acknowledgePayslip(String id) async {
     await _dio.post(ApiConstants.acknowledgePayslip(id));
+  }
+
+  /// The employee's own queries (mine=1 — see payslip_query_model.dart).
+  Future<List<PayslipQueryModel>> fetchMyQueries() async {
+    final res = await _dio.get(ApiConstants.payslipQueries, queryParameters: {'mine': 1});
+    final data = _unwrap(res.data);
+    return (data is List ? data : const [])
+        .whereType<Map<String, dynamic>>()
+        .map(PayslipQueryModel.fromJson)
+        .toList();
+  }
+
+  /// Raises a query on one of the employee's own payslips.
+  Future<PayslipQueryModel> raiseQuery({required String payslipId, required String description}) async {
+    final res = await _dio.post(ApiConstants.payslipQueries,
+        data: {'payslip': payslipId, 'description': description.trim()});
+    return PayslipQueryModel.fromJson((_unwrap(res.data) as Map).cast<String, dynamic>());
   }
 }

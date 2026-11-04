@@ -78,6 +78,8 @@ class SeparationRequestModel extends SeparationRequestEntity {
     super.canDelete,
     super.isOwn,
     required super.createdAt,
+    super.assignedNoticePeriodDays,
+    super.expectedLastWorkingDay,
   });
 
   // Matches SeparationRequestSerializer (apps/hrms/serializers.py) exactly.
@@ -113,6 +115,8 @@ class SeparationRequestModel extends SeparationRequestEntity {
       canDelete: json['can_delete'] as bool? ?? false,
       isOwn: json['is_own'] as bool? ?? false,
       createdAt: json['created_at'] as String? ?? '',
+      assignedNoticePeriodDays: (json['assigned_notice_period_days'] as num?)?.toInt(),
+      expectedLastWorkingDay: _nonBlank(json['expected_last_working_day']),
     );
   }
 }
@@ -257,6 +261,7 @@ class EmployeePickerOptionModel extends EmployeePickerOption {
     required super.name,
     required super.department,
     required super.designation,
+    super.noticePeriodDays,
   });
 
   // Matches _employee_dict (apps/accounts/views.py) — 'id'/'employee_id' are
@@ -268,6 +273,9 @@ class EmployeePickerOptionModel extends EmployeePickerOption {
       name: json['full_name'] as String? ?? '',
       department: json['department'] as String? ?? '',
       designation: json['designation'] as String? ?? '',
+      noticePeriodDays: (json['notice_period_days'] as num?)?.toInt(),
     );
   }
 }
+
+String? _nonBlank(Object? v) => v is String && v.trim().isNotEmpty ? v : null;

@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
+import '../../domain/entities/wfh_medical_proof.dart';
 import '../models/wfh_models.dart';
 
 class WfhRemoteDataSource {
@@ -59,10 +60,12 @@ class WfhRemoteDataSource {
         _unwrap(res.data) as Map<String, dynamic>);
   }
 
-  // POST /wfh/requests/ — plain JSON body (no document upload on this
-  // endpoint). Server always sets employee=self; overlap validation (own
-  // WFH, own leave) happens server-side and surfaces as a plain string
-  // message — do not re-validate client-side.
+  // POST /wfh/requests/ — a JSON body, except a medical request, which is
+  // multipart because it carries its proof (is_medical + supporting_document,
+  // exactly as web's RequestWfhForm sends it). Server always sets
+  // employee=self; overlap validation (own WFH, own leave) happens
+  // server-side and surfaces as a plain string message — do not re-validate
+  // client-side.
   Future<WfhRequestModel> createWfhRequest({
     required String startDate,
     required String endDate,
@@ -70,6 +73,8 @@ class WfhRemoteDataSource {
     String? locationLabel,
     required double latitude,
     required double longitude,
+    bool isMedical = false,
+    WfhMedicalProof? medicalProof,
   }) async {
     final body = <String, dynamic>{
       'start_date': startDate,
@@ -80,7 +85,25 @@ class WfhRemoteDataSource {
       if (locationLabel != null && locationLabel.isNotEmpty)
         'location_label': locationLabel,
     };
-    final res = await _dio.post(ApiConstants.wfhRequests, data: body);
+    final Object data;
+    if (isMedical && medicalProof != null) {
+      // The server checks the file part's content type, so it is set
+      // explicitly from the allowlist rather than left to inference.
+      final mime = wfhProofMimeType(medicalProof.filename);
+      if (mime == null) throw ArgumentError(kWfhProofWrongType);
+      data = FormData.fromMap({
+        ...body.map((k, v) => MapEntry(k, v.toString())),
+        'is_medical': 'true',
+        'supporting_document': await MultipartFile.fromFile(
+          medicalProof.path,
+          filename: medicalProof.filename,
+          contentType: DioMediaType.parse(mime),
+        ),
+      });
+    } else {
+      data = body;
+    }
+    final res = await _dio.post(ApiConstants.wfhRequests, data: data);
     return WfhRequestModel.fromJson(
         _unwrap(res.data) as Map<String, dynamic>);
   }

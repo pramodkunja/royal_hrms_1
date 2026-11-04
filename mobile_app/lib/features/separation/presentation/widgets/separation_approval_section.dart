@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/separation_entity.dart';
 import '../providers/separation_providers.dart';
+import 'separation_decision_dialog.dart';
 import 'separation_status.dart';
 
 /// Multi-stage approval timeline (1 or 2 stages, in `sequence` order —
@@ -12,10 +13,12 @@ import 'separation_status.dart';
 class SeparationApprovalSection extends ConsumerStatefulWidget {
   final String requestId;
   final List<SeparationApprovalStageEntity> stages;
+  final String employeeName;
   const SeparationApprovalSection({
     super.key,
     required this.requestId,
     required this.stages,
+    this.employeeName = '',
   });
 
   @override
@@ -37,80 +40,39 @@ class _SeparationApprovalSectionState
     );
   }
 
-  Future<void> _approve(SeparationApprovalStageEntity stage) async {
-    setState(() => _loading = true);
-    final err = await ref.read(separationActionsProvider).actionStage(
-          requestId: widget.requestId,
-          stageId: stage.id,
-          action: 'approve',
-        );
-    if (!mounted) return;
-    setState(() => _loading = false);
-    if (err != null) _showError(err);
-  }
-
-  Future<void> _reject(SeparationApprovalStageEntity stage) async {
-    final ctrl = TextEditingController();
-    final remarks = await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: AppColors.error.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: Icon(Icons.cancel_outlined, size: 17, color: AppColors.error),
-            ),
-            const SizedBox(width: 10),
-            Text('Reject ${stage.stageDisplay}', style: AppTextStyles.label),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Remarks',
-                style: AppTextStyles.caption.copyWith(
-                    fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
-            const SizedBox(height: 6),
-            TextField(
-              controller: ctrl,
-              maxLines: 3,
-              maxLength: 300,
-              autofocus: true,
-              decoration:
-                  const InputDecoration(hintText: 'Explain the rejection…'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
-            child: const Text('Submit Rejection'),
-          ),
-        ],
-      ),
+  /// Confirms, then sends the decision. One request at a time; the
+  /// server's answer is authoritative — success is reported only once it
+  /// accepted, and a refusal (already actioned, earlier stage pending,
+  /// permission) is shown as it came.
+  Future<void> _decide(SeparationApprovalStageEntity stage, {required bool approve}) async {
+    if (_loading) return;
+    final remarks = await SeparationDecisionDialog.show(
+      context,
+      approve: approve,
+      stageLabel: stage.stageDisplay,
+      employeeName: widget.employeeName,
     );
-    if (remarks == null || !mounted) return;
+    if (remarks == null || !mounted || _loading) return;
     setState(() => _loading = true);
     final err = await ref.read(separationActionsProvider).actionStage(
           requestId: widget.requestId,
           stageId: stage.id,
-          action: 'reject',
+          action: approve ? 'approve' : 'reject',
           remarks: remarks,
         );
     if (!mounted) return;
     setState(() => _loading = false);
-    if (err != null) _showError(err);
+    if (err != null) {
+      _showError(err);
+      // The request may have moved on meanwhile — reload what the server has.
+      ref.read(separationActionsProvider).refreshRequest(widget.requestId);
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(approve ? 'Stage approved.' : 'Stage rejected.'),
+      backgroundColor: AppColors.success,
+      behavior: SnackBarBehavior.floating,
+    ));
   }
 
   @override
@@ -139,8 +101,8 @@ class _SeparationApprovalSectionState
               _StageRow(
                 stage: stages[i],
                 loading: _loading,
-                onApprove: () => _approve(stages[i]),
-                onReject: () => _reject(stages[i]),
+                onApprove: () => _decide(stages[i], approve: true),
+                onReject: () => _decide(stages[i], approve: false),
               ),
             ],
         ],
@@ -237,6 +199,7 @@ class _StageRow extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
+                    key: Key('stage-reject-${stage.id}'),
                     onPressed: loading ? null : onReject,
                     icon: const Icon(Icons.close, size: 14),
                     label: const Text('Reject',
@@ -251,6 +214,7 @@ class _StageRow extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: FilledButton.icon(
+                    key: Key('stage-approve-${stage.id}'),
                     onPressed: loading ? null : onApprove,
                     icon: const Icon(Icons.check, size: 14),
                     label: const Text('Approve',

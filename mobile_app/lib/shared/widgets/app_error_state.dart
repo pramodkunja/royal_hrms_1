@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_app/core/network/api_client.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
 import 'app_button.dart';
@@ -37,6 +38,57 @@ class AppErrorState extends StatelessWidget {
     this.secondaryAction,
     this.padding = const EdgeInsets.all(32),
   });
+
+  /// The error state for a caught [error], keeping the server's own message.
+  /// A module the company has switched off and a missing permission get
+  /// their own title and icon and no Retry (retrying cannot change either);
+  /// connection and server failures keep [onRetry].
+  factory AppErrorState.forError(
+    Object error, {
+    Key? key,
+    String? title,
+    VoidCallback? onRetry,
+    Widget? secondaryAction,
+    EdgeInsetsGeometry padding = const EdgeInsets.all(32),
+  }) {
+    final message = moduleDisabledMessage(error) ?? userFriendlyMessage(error);
+    switch (appErrorKind(error)) {
+      case AppErrorKind.moduleDisabled:
+        return AppErrorState(
+            key: key ?? const Key('module-disabled'),
+            title: 'Not enabled for your company',
+            message: message,
+            icon: Icons.block_outlined,
+            secondaryAction: secondaryAction,
+            padding: padding);
+      case AppErrorKind.forbidden:
+        return AppErrorState(
+            key: key ?? const Key('access-denied'),
+            title: 'Access denied',
+            message: message,
+            icon: Icons.lock_outline,
+            secondaryAction: secondaryAction,
+            padding: padding);
+      case AppErrorKind.network:
+        return AppErrorState(
+            key: key,
+            title: title ?? 'No connection',
+            message: message,
+            icon: Icons.wifi_off_outlined,
+            onRetry: onRetry,
+            secondaryAction: secondaryAction,
+            padding: padding);
+      case AppErrorKind.server:
+      case AppErrorKind.unknown:
+        return AppErrorState(
+            key: key,
+            title: title,
+            message: message,
+            onRetry: onRetry,
+            secondaryAction: secondaryAction,
+            padding: padding);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

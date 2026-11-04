@@ -6,8 +6,8 @@ import 'package:mobile_app/features/facial_recognition/presentation/widgets/face
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/expandable_fab.dart';
-import '../../../auth/presentation/providers/auth_providers.dart';
 import '../controllers/voice_command_controller.dart';
+import '../providers/voice_access_provider.dart';
 import '../state/voice_conversation_state.dart';
 import 'animated_voice_assistant.dart';
 import 'voice_conversation_panel.dart';
@@ -56,12 +56,10 @@ class _VoiceMicOverlayState extends ConsumerState<VoiceMicOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authStateProvider).valueOrNull;
-    final user = authState?.user;
-    final isEligible = (authState?.isAuthenticated ?? false) &&
-        user != null &&
-        !user.needsOnboarding &&
-        !user.awaitingApproval;
+    // Same rule VoiceCommandController enforces on every action — hidden
+    // while signed out, during onboarding, and while a forced password change
+    // is pending (see isVoiceAssistantAllowed).
+    final isEligible = ref.watch(voiceAssistantAllowedProvider);
 
     if (!isEligible) return const SizedBox.shrink();
 

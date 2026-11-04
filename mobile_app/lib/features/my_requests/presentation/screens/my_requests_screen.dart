@@ -417,8 +417,9 @@ class _MyRequestsList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final itemsAsync = ref.watch(filteredMyRequestItemsProvider);
+    final notices = ref.watch(myRequestsModuleNoticesProvider);
 
-    return RefreshIndicator(
+    final list = RefreshIndicator(
       color: AppColors.primary,
       onRefresh: () => ref.read(myRequestsProvider.notifier).refresh(),
       child: itemsAsync.when(
@@ -456,6 +457,31 @@ class _MyRequestsList extends ConsumerWidget {
                 },
               ),
       ),
+    );
+    if (notices.isEmpty) return list;
+    return Column(
+      children: [
+        for (final n in notices)
+          Container(
+            key: const Key('my-requests-module-notice'),
+            width: double.infinity,
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.infoContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.block_outlined, size: 18, color: AppColors.info),
+                const SizedBox(width: 10),
+                Expanded(child: Text(n, style: AppTextStyles.bodySmall.copyWith(color: AppColors.info))),
+              ],
+            ),
+          ),
+        Expanded(child: list),
+      ],
     );
   }
 }

@@ -1,10 +1,13 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/location/location_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/app_button.dart';
+import '../../../documents/presentation/widgets/document_file_picker.dart';
 import '../../domain/entities/wfh_entity.dart';
+import '../../domain/entities/wfh_medical_proof.dart';
 import '../providers/wfh_providers.dart';
 import 'wfh_saved_location_picker.dart';
 
@@ -31,6 +34,16 @@ String _fmtDate(DateTime d) {
   return '${d.day} ${m[d.month]} ${d.year}';
 }
 
+/// Opens the system file chooser for a medical proof (PDF/JPG/PNG). A
+/// provider so tests can supply a file without the platform dialog.
+final wfhProofPickerProvider = Provider<Future<PlatformFile?> Function()>((ref) => () async {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: kWfhProofExtensions,
+      );
+      return (result == null || result.files.isEmpty) ? null : result.files.first;
+    });
+
 class RequestWfhTab extends ConsumerStatefulWidget {
   final VoidCallback? onSubmitted;
   const RequestWfhTab({super.key, this.onSubmitted});
@@ -56,6 +69,26 @@ class _RequestWfhTabState extends ConsumerState<RequestWfhTab> {
   bool _loading = false;
   String? _error;
   bool _submitted = false;
+
+  // WFH for medical reasons — needs a proof (web RequestWfhForm.tsx).
+  bool _isMedical = false;
+  PlatformFile? _proofFile;
+  String? _proofError;
+
+  WfhMedicalProof? get _proof => _proofFile?.path == null
+      ? null
+      : WfhMedicalProof(path: _proofFile!.path!, filename: _proofFile!.name, sizeBytes: _proofFile!.size);
+
+  Future<void> _pickProof() async {
+    final file = await ref.read(wfhProofPickerProvider)();
+    if (!mounted || file == null || file.path == null) return;
+    final candidate = WfhMedicalProof(path: file.path!, filename: file.name, sizeBytes: file.size);
+    final problem = wfhMedicalProofError(isMedical: true, proof: candidate);
+    setState(() {
+      _proofFile = problem == null ? file : null;
+      _proofError = problem;
+    });
+  }
 
   @override
   void dispose() {
@@ -165,6 +198,12 @@ class _RequestWfhTabState extends ConsumerState<RequestWfhTab> {
 
   Future<void> _submit() async {
     if (!_canSubmit) return;
+    // A medical request needs its proof before anything is sent.
+    final proofProblem = wfhMedicalProofError(isMedical: _isMedical, proof: _proof);
+    if (proofProblem != null) {
+      setState(() => _proofError = proofProblem);
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -176,6 +215,8 @@ class _RequestWfhTabState extends ConsumerState<RequestWfhTab> {
           locationLabel: _locationLabelCtrl.text.trim(),
           latitude: _latitude!,
           longitude: _longitude!,
+          isMedical: _isMedical,
+          medicalProof: _isMedical ? _proof : null,
         );
     if (!mounted) return;
     setState(() => _loading = false);
@@ -200,6 +241,9 @@ class _RequestWfhTabState extends ConsumerState<RequestWfhTab> {
       _showSaveLocation = false;
       _error = null;
       _submitted = false;
+      _isMedical = false;
+      _proofFile = null;
+      _proofError = null;
     });
   }
 
@@ -343,6 +387,39 @@ class _RequestWfhTabState extends ConsumerState<RequestWfhTab> {
                     hintText: 'Optional — add context for your approver',
                   ),
                 ),
+                const SizedBox(height: 8),
+                // Own Material so the tile's ink isn't hidden by the card's
+                // decorated background.
+                Material(
+                  type: MaterialType.transparency,
+                  child: CheckboxListTile(
+                    key: const Key('wfh-medical'),
+                    value: _isMedical,
+                    onChanged: _loading
+                        ? null
+                        : (v) => setState(() {
+                              _isMedical = v ?? false;
+                              if (!_isMedical) {
+                                _proofFile = null;
+                                _proofError = null;
+                              }
+                            }),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: Text('WFH for medical reasons', style: AppTextStyles.body),
+                  ),
+                ),
+                if (_isMedical) ...[
+                  const _FieldLabel(text: 'Medical proof (report or prescription)', required: true),
+                  const SizedBox(height: 6),
+                  DocumentFilePicker(
+                    picked: _proofFile,
+                    error: _proofError,
+                    onPick: _loading ? () {} : _pickProof,
+                    hintText: 'PDF, JPG, or PNG — up to 5 MB',
+                  ),
+                ],
                 const SizedBox(height: 14),
                 const _FieldLabel(text: 'Your Location', required: true),
                 const SizedBox(height: 6),

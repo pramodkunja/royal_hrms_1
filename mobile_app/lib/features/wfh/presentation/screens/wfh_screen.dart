@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/blue_hero_banner.dart';
-import '../widgets/request_wfh_tab.dart';
+import '../wfh_report_strings.dart';
 import '../widgets/my_wfh_requests_tab.dart';
+import '../widgets/request_wfh_tab.dart';
+import '../widgets/wfh_daily_reports_tab.dart';
 
-// Matches web's app/dashboard/work-from-home/_client.tsx exactly — just
-// "Request Work From Home" + "My Requests". Approving/rejecting WFH
+// Matches web's app/dashboard/work-from-home/_client.tsx: "Request Work From
+// Home", "My Requests" and "Daily Work Report" (the daily report, including
+// its review, lives in this screen on web too). Approving/rejecting WFH
 // requests is NOT part of this screen on web (it happens in the generic
 // cross-feature Approvals page, alongside leave/expense/attendance
 // correction) — see lib/features/approvals/ for that integration, where
@@ -20,7 +23,7 @@ class WfhScreen extends StatefulWidget {
 
 class _WfhScreenState extends State<WfhScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabController = TabController(length: 2, vsync: this);
+  late final TabController _tabController = TabController(length: 3, vsync: this);
 
   @override
   void dispose() {
@@ -61,6 +64,7 @@ class _WfhScreenState extends State<WfhScreen>
                 tabs: const [
                   Tab(text: 'Request Work From Home'),
                   Tab(text: 'My Requests'),
+                  Tab(text: WfhReportStrings.tabLabel),
                 ],
                 labelColor: AppColors.primary,
                 unselectedLabelColor: AppColors.textSecondary,
@@ -78,6 +82,7 @@ class _WfhScreenState extends State<WfhScreen>
                 children: [
                   RequestWfhTab(onSubmitted: () => _tabController.animateTo(1)),
                   const MyWfhRequestsTab(),
+                  const WfhDailyReportsTab(),
                 ],
               ),
             ),

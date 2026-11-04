@@ -6,6 +6,9 @@ import '../../features/auth/presentation/providers/auth_providers.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/forgot_password_screen.dart';
+import '../../features/auth/presentation/screens/force_change_password_screen.dart';
+import '../../features/auth/presentation/states/auth_state.dart';
+import 'access_control.dart';
 import '../../features/dashboard/presentation/screens/dashboard_shell.dart';
 import '../../features/dashboard/presentation/screens/home_screen.dart';
 import '../../features/dashboard/presentation/screens/placeholder_screen.dart';
@@ -40,6 +43,9 @@ import '../../features/interview_list/presentation/screens/candidate_bulk_import
 import '../../features/interview_list/presentation/screens/interview_list_screen.dart';
 import '../../features/candidate_review/presentation/screens/candidate_review_screen.dart';
 import '../../features/assessments/presentation/screens/assessments_screen.dart';
+import '../../features/assessments/presentation/screens/assessment_gate_screen.dart';
+import '../../features/assessments/presentation/screens/assessment_take_screen.dart';
+import '../../features/assessments/presentation/screens/my_assessments_screen.dart';
 import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../../features/onboarding/presentation/screens/awaiting_approval_screen.dart';
 import '../../features/leave/presentation/screens/leave_screen.dart';
@@ -55,6 +61,7 @@ import '../../features/payroll/presentation/screens/my_payslip_screen.dart';
 import '../../features/referrals/presentation/screens/referrals_screen.dart';
 import '../../features/email_log/presentation/screens/email_log_screen.dart';
 import '../../features/my_requests/presentation/screens/my_requests_screen.dart';
+import '../../features/contacts/presentation/screens/contact_matrix_screen.dart';
 
 // ─── Route path constants ─────────────────────────────────────────────────────
 
@@ -65,6 +72,9 @@ class AppRoutes {
   static const String splash = '/';
   static const String login = '/login';
   static const String forgotPassword = '/forgot-password';
+  // Mandatory password change (login response `must_change_password`) —
+  // the only screen a user with that flag can reach. See resolveAuthRedirect.
+  static const String changePassword = '/change-password';
 
   // Dashboard shell + sub-routes (mirror navConfig.ts paths)
   static const String dashboard = '/dashboard';
@@ -72,6 +82,9 @@ class AppRoutes {
   static const String interviewList = '/dashboard/interview-list';
   static const String candidateReview = '/dashboard/candidate-review';
   static const String assessments = '/dashboard/assessments';
+  // Employee self-service list of their own assignments — open to every
+  // signed-in user (web lists "My Assessments" with permission null).
+  static const String myAssessments = '/dashboard/my-assessments';
   static const String emailLogs = '/dashboard/email-logs';
   static const String employees = '/dashboard/employees';
   static String employeeProfilePath(String employeeId) =>
@@ -94,6 +107,7 @@ class AppRoutes {
   static const String myPayslips = '/dashboard/my-payslip';
   static const String referrals = '/dashboard/referrals';
   static const String myRequests = '/dashboard/my-requests';
+  static const String contacts = '/dashboard/contacts';
   static const String profile = '/dashboard/profile';
   static const String reports = '/dashboard/reports';
   static const String settings = '/dashboard/settings';
@@ -101,6 +115,11 @@ class AppRoutes {
   // Onboarding
   static const String onboarding = '/onboarding';
   static const String onboardingAwaiting = '/onboarding/awaiting-approval';
+  // Onboarding assessment gate (web /onboarding/assessments) and taking one
+  // assessment (outside the dashboard shell, full screen).
+  static const String onboardingAssessments = '/onboarding/assessments';
+  static const String assessmentTake = '/assessments/:assignmentId';
+  static String assessmentTakePath(String assignmentId) => '/assessments/$assignmentId';
 
   // Settings sub-screens — pushed on top of the shell (full-screen with back arrow)
   static const String settingsCompany = '/settings/company';
@@ -208,6 +227,111 @@ final currentVisiblePathProvider = StateProvider<String>(
 /// already invalidates) whenever it changes.
 final dashboardRevisitProvider = StateProvider<int>((ref) => 0);
 
+// ─── Redirect rules ───────────────────────────────────────────────────────────
+
+/// Turns the onboarding assessment gate on. It is enabled only together
+/// with the complete assessment-taking flow (taking, submitting, results,
+/// retake and the server-confirmed release); set to false to disable it in
+/// one place without touching anything else.
+const bool kAssessmentGateEnabled = true;
+
+/// Where GoRouter should send a request for [path], given the current auth
+/// state (null while it is still loading) — or null to let it through.
+/// Pure so the whole guard matrix is unit-testable; [appRouterProvider]'s
+/// `redirect` only delegates here.
+///
+/// Order mirrors web's frontend/proxy.ts:
+///   1. Signed out: protected areas go to login.
+///   2. `must_change_password` (login response, apps/accounts/views.py
+///      LoginView) comes before everything else, onboarding included: every
+///      path except the change-password screen itself (and the splash, which
+///      forwards to the dashboard and lands back here) is redirected to it.
+///      The backend does not enforce this flag on any endpoint, so this
+///      redirect is the enforcement — it also covers deep links and direct
+///      `go()` calls, since GoRouter runs it for every location.
+///   3. Onboarding status, then the onboarding assessment gate
+///      (kAssessmentGateEnabled, UserEntity.needsAssessments).
+///   4. Route permissions (kRoutePermissions in access_control.dart): a path
+///      the user's permissions don't cover redirects to the dashboard.
+String? resolveAuthRedirect({required AuthState? authState, required String path}) {
+  final isAuthenticated = authState?.isAuthenticated ?? false;
+  final user = authState?.user;
+
+  // Not logged in — send to login
+  if (!isAuthenticated) {
+    if (path.startsWith('/dashboard') ||
+        path.startsWith('/settings') ||
+        path.startsWith('/onboarding') ||
+        path.startsWith('/assessments') ||
+        path == AppRoutes.changePassword) {
+      return AppRoutes.login;
+    }
+    return null;
+  }
+
+  if (user != null) {
+    // Forced password change — see the doc comment above.
+    if (user.mustChangePassword) {
+      if (path == AppRoutes.changePassword || path == AppRoutes.splash) return null;
+      return AppRoutes.changePassword;
+    }
+    // Nothing to change — the screen has no purpose (web: proxy.ts sends
+    // /change-password back to /dashboard once the flag is clear).
+    // Land directly where the dashboard itself would send this user
+    // (onboarding, the assessment portal, or the dashboard) — one hop, no
+    // redirect chain.
+    if (path == AppRoutes.changePassword) {
+      return resolveAuthRedirect(authState: authState, path: AppRoutes.dashboard) ?? AppRoutes.dashboard;
+    }
+
+    // Logged in — check onboarding status
+    if (user.needsOnboarding || user.onboardingRejected) {
+      // pending/draft/rejected: must complete (or revise) the onboarding wizard
+      // (The assessment portal only opens once HR approved onboarding —
+      // web proxy.ts blocks /onboarding/assessments while needsOnboarding.)
+      if (!path.startsWith('/onboarding') ||
+          path == AppRoutes.onboardingAwaiting ||
+          path == AppRoutes.onboardingAssessments) {
+        return AppRoutes.onboarding;
+      }
+      return null;
+    }
+    if (user.awaitingApproval) {
+      // submitted: waiting for HR approval
+      if (path != AppRoutes.onboardingAwaiting) {
+        return AppRoutes.onboardingAwaiting;
+      }
+      return null;
+    }
+    // Onboarding approved but an assessment still pending (web proxy.ts
+    // needsAssessments): only the assessment portal and taking an
+    // assessment are open until the server confirms completion — see
+    // syncAssessmentGate. Comes after the forced password change and the
+    // onboarding rules above, as on web.
+    if (kAssessmentGateEnabled && user.needsAssessments) {
+      if (path == AppRoutes.onboardingAssessments ||
+          path.startsWith('/assessments/') ||
+          path == AppRoutes.splash) {
+        return null;
+      }
+      return AppRoutes.onboardingAssessments;
+    }
+    // complete / no onboarding: normal dashboard access
+    // Redirect away from onboarding routes if already done — except the
+    // assessment portal, which stays reachable (web lets a finished
+    // employee see the result there and continue).
+    if (path.startsWith('/onboarding') && path != AppRoutes.onboardingAssessments) {
+      return AppRoutes.dashboard;
+    }
+    // A screen the user's permissions don't allow (deep link, direct go(),
+    // stale link) goes back to the dashboard instead of opening onto a
+    // backend 403 — web's proxy.ts does the same. See kRoutePermissions.
+    if (!canAccessPath(user, path)) return AppRoutes.dashboard;
+  }
+
+  return null;
+}
+
 // ─── Router provider ──────────────────────────────────────────────────────────
 
 // A thin ChangeNotifier that lets GoRouter react to Riverpod auth-state changes.
@@ -226,49 +350,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: AppRoutes.splash,
     refreshListenable: notifier,
-    redirect: (context, state) {
-      final authAsync = ref.read(authStateProvider);
-      final authState = authAsync.valueOrNull;
-      final isAuthenticated = authState?.isAuthenticated ?? false;
-      final user = authState?.user;
-      final path = state.uri.path;
-
-      // Not logged in — send to login
-      if (!isAuthenticated) {
-        if (path.startsWith('/dashboard') ||
-            path.startsWith('/settings') ||
-            path.startsWith('/onboarding')) {
-          return AppRoutes.login;
-        }
-        return null;
-      }
-
-      // Logged in — check onboarding status
-      if (user != null) {
-        if (user.needsOnboarding || user.onboardingRejected) {
-          // pending/draft/rejected: must complete (or revise) the onboarding wizard
-          if (!path.startsWith('/onboarding') ||
-              path == AppRoutes.onboardingAwaiting) {
-            return AppRoutes.onboarding;
-          }
-          return null;
-        }
-        if (user.awaitingApproval) {
-          // submitted: waiting for HR approval
-          if (path != AppRoutes.onboardingAwaiting) {
-            return AppRoutes.onboardingAwaiting;
-          }
-          return null;
-        }
-        // complete / no onboarding: normal dashboard access
-        // Redirect away from onboarding routes if already done
-        if (path.startsWith('/onboarding')) {
-          return AppRoutes.dashboard;
-        }
-      }
-
-      return null;
-    },
+    redirect: (context, state) => resolveAuthRedirect(
+      authState: ref.read(authStateProvider).valueOrNull,
+      path: state.uri.path,
+    ),
     routes: [
       // ── Auth routes ────────────────────────────────────────────────────
       GoRoute(
@@ -280,6 +365,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.login,
         pageBuilder: (_, state) =>
             NoTransitionPage(key: state.pageKey, child: const LoginScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.changePassword,
+        pageBuilder: (_, state) => NoTransitionPage(
+            key: state.pageKey, child: const ForceChangePasswordScreen()),
       ),
       GoRoute(
         path: AppRoutes.forgotPassword,
@@ -298,6 +388,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.onboardingAwaiting,
         pageBuilder: (_, state) => NoTransitionPage(
             key: state.pageKey, child: const AwaitingApprovalScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.onboardingAssessments,
+        pageBuilder: (_, state) => NoTransitionPage(
+            key: state.pageKey, child: const AssessmentGateScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.assessmentTake,
+        builder: (_, state) =>
+            AssessmentTakeScreen(assignmentId: state.pathParameters['assignmentId'] ?? ''),
       ),
 
       // ── Settings sub-screens (outside shell — own AppBar + back button) ──
@@ -408,6 +508,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 key: state.pageKey, child: const AssessmentsScreen()),
           ),
           GoRoute(
+            path: AppRoutes.myAssessments,
+            pageBuilder: (_, state) => NoTransitionPage(
+                key: state.pageKey, child: const MyAssessmentsScreen()),
+          ),
+          GoRoute(
             path: AppRoutes.emailLogs,
             pageBuilder: (_, state) => NoTransitionPage(
                 key: state.pageKey, child: const EmailLogScreen()),
@@ -512,6 +617,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.myRequests,
             pageBuilder: (_, state) => NoTransitionPage(
                 key: state.pageKey, child: const MyRequestsScreen()),
+          ),
+          // Every signed-in user, as on web (the backend scopes the list).
+          GoRoute(
+            path: AppRoutes.contacts,
+            pageBuilder: (_, state) => NoTransitionPage(
+                key: state.pageKey, child: const ContactMatrixScreen()),
           ),
           GoRoute(
             path: AppRoutes.profile,

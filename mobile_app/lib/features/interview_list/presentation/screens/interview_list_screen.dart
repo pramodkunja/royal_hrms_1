@@ -11,6 +11,7 @@ import '../../domain/entities/candidate_entity.dart';
 import '../providers/interview_providers.dart';
 import '../widgets/candidate_card.dart';
 import '../widgets/add_candidate_sheet.dart';
+import 'package:mobile_app/shared/widgets/app_error_state.dart';
 
 part '../widgets/interview_list_widgets.dart';
 
@@ -75,8 +76,8 @@ class _InterviewListScreenState extends ConsumerState<InterviewListScreen> {
                             color: AppColors.primary)),
                   ),
                   error: (e, _) => SliverFillRemaining(
-                    child: _ErrorView(
-                      message: e.toString(),
+                    child: AppErrorState.forError(
+                      e,
                       onRetry: () => ref.invalidate(candidateListProvider),
                     ),
                   ),

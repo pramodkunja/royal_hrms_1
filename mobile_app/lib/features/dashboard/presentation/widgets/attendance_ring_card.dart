@@ -1,22 +1,17 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:mobile_app/core/location/location_service.dart';
+import 'package:mobile_app/core/router/access_control.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
-import 'package:mobile_app/core/utils/device_identifier.dart';
 import 'package:mobile_app/features/attendance/domain/entities/attendance_entity.dart';
+import 'package:mobile_app/features/attendance/presentation/clock/clock_punch_flow.dart';
 import 'package:mobile_app/features/attendance/presentation/providers/attendance_providers.dart';
 import 'package:mobile_app/features/attendance/presentation/widgets/attendance_ring.dart';
-import 'package:mobile_app/features/facial_recognition/domain/entities/face_registration_entity.dart';
-import 'package:mobile_app/features/facial_recognition/presentation/capture/face_capture_state.dart';
-import 'package:mobile_app/features/facial_recognition/presentation/providers/facial_recognition_providers.dart';
-import 'package:mobile_app/features/facial_recognition/presentation/widgets/face_capture_bottom_sheet.dart';
+import 'package:mobile_app/features/auth/presentation/providers/auth_providers.dart';
 import 'dashboard_section.dart';
 
 /// Today's Attendance card — a segmented circular progress ring (left) that
@@ -100,109 +95,15 @@ class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard>
     }
   }
 
-  /// Face ID capture, run before the punch call only when the org-wide
-  /// toggle is mandatory — mirrors web's useClockWidget.ts gate (same logic
-  /// the old ClockInCard used).
-  Future<FaceCaptureUiState?> _runFaceCaptureIfRequired() async {
-    final isMandatory = await ref.read(faceVerificationStatusProvider.future).then((s) => s.isMandatory);
-    if (!isMandatory) return null;
-
-    final registration = await ref.read(myFaceRegistrationProvider.future);
-    if (registration?.status != FaceRegistrationStatus.approved) {
-      throw 'Face ID registration is mandatory and you don\'t have one yet. '
-          'Contact your HR representative or manager to get registered.';
-    }
-
-    if (!mounted) throw 'Face ID check was cancelled.';
-    // No consentNoticeText — clock-in verification never collects new
-    // biometric data, so it never needs fresh consent (only self/HR
-    // registration does).
-    final result = await showFaceCaptureSheet(
-      context,
-      title: 'Face ID Check',
-      subtitle: 'Quick face check before clocking in.',
-    );
-    if (result?.captured.embedding == null) throw 'Face ID check was cancelled.';
-    return result!.captured;
-  }
-
   Future<void> _toggleClock(TodayAttendanceEntity today) async {
-    if (_punching) return;
+    // Completed day: nothing to punch — skip GPS/geofence/face capture too.
+    if (_punching || today.dayCompleted) return;
     setState(() => _punching = true);
 
-    // 1. GPS first — the geofence pre-check below needs it, and so does the
-    //    real punch call later; fetching it once up front means both reuse
-    //    the exact same reading instead of taking two separate fixes a few
-    //    seconds apart.
-    final position = await ref.read(locationServiceProvider).getCurrentPosition();
-    if (!mounted) return;
-
-    // 2. Geofence pre-check — reject an out-of-geofence (or missing-GPS,
-    //    for a branch that requires it) attempt immediately, before ever
-    //    opening face capture or spending a round trip on the real punch
-    //    call that would reject it a moment later anyway. Matches the
-    //    ordering already fixed on web (commit db599c9: geofence before
-    //    face capture) and already enforced by the voice clock-in flow
-    //    (apps.voice_commands.conversation_clock_in_face). Run for every
-    //    attempt, not only when face verification is mandatory — it's a
-    //    cheap read-only check and every clock-in benefits from failing
-    //    fast, not just the ones that would otherwise waste a capture cycle.
-    final geofenceError = await ref.read(todayAttendanceProvider.notifier).checkGeofence(
-          attendanceMode: 'office',
-          latitude: position?.latitude,
-          longitude: position?.longitude,
-          accuracy: position?.accuracy,
-        );
-    if (geofenceError != null) {
-      if (!mounted) return;
-      setState(() => _punching = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(geofenceError), backgroundColor: AppColors.error),
-      );
-      return;
-    }
-    if (!mounted) return;
-
-    // 3. Face capture — only now that location is confirmed valid, and
-    //    only when the org-wide toggle actually requires it (unchanged gate).
-    FaceCaptureUiState? faceCapture;
-    try {
-      faceCapture = await _runFaceCaptureIfRequired();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _punching = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$e'), backgroundColor: AppColors.error),
-      );
-      return;
-    }
-    if (!mounted) return;
-
-    // 4. The real punch — still sends the same location and face data, and
-    //    is still independently, authoritatively re-validated server-side
-    //    (PunchService.record_punch runs the identical GeofencingService.
-    //    validate() again) regardless of step 2 having already passed; this
-    //    pre-check is a UX optimization only, never a substitute for it.
-    final error = await ref.read(todayAttendanceProvider.notifier).punch(
-          isCurrentlyClockedIn: today.isClockedIn,
-          attendanceMode: 'office',
-          latitude: position?.latitude,
-          longitude: position?.longitude,
-          accuracy: position?.accuracy,
-          deviceName: kIsWeb
-              ? 'Web'
-              : Platform.isAndroid
-                  ? 'Android'
-                  : Platform.isIOS
-                      ? 'iOS'
-                      : null,
-          operatingSystem: kIsWeb ? 'web' : Platform.operatingSystem,
-          deviceId: await ref.read(deviceIdProvider.future),
-          faceEmbedding: faceCapture?.embedding,
-          livenessPassed: faceCapture?.livenessPassed,
-          livenessScore: faceCapture?.livenessScore,
-          captureSessionId: faceCapture?.captureSessionId,
-        );
+    // The shared clock flow (also used by My Attendance): GPS → mode from
+    // today's approved WFH request → geofence pre-check → face check when
+    // mandatory → punch. The server re-validates the punch independently.
+    final error = await runClockPunch(ref, context, today);
 
     if (!mounted) return;
     setState(() => _punching = false);
@@ -252,13 +153,22 @@ class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard>
                   Expanded(
                     child: Column(
                       children: [
-                        _ActionButton(
-                          icon: today.isClockedIn ? Icons.logout : Icons.login,
-                          label: today.isClockedIn ? 'Clock Out' : 'Clock In',
-                          color: today.isClockedIn ? AppColors.error : AppColors.success,
-                          loading: _punching,
-                          onTap: () => _toggleClock(today),
-                        ),
+                        // Matches web's ClockInButton: a completed day shows a
+                        // disabled "Attendance Completed" instead of Clock In.
+                        today.dayCompleted
+                            ? _ActionButton(
+                                icon: Icons.check_circle_outline,
+                                label: 'Attendance Completed',
+                                color: AppColors.textHint,
+                                onTap: null,
+                              )
+                            : _ActionButton(
+                                icon: today.isClockedIn ? Icons.logout : Icons.login,
+                                label: today.isClockedIn ? 'Clock Out' : 'Clock In',
+                                color: today.isClockedIn ? AppColors.error : AppColors.success,
+                                loading: _punching,
+                                onTap: () => _toggleClock(today),
+                              ),
                         const SizedBox(height: 8),
                         _ActionButton(
                           icon: Icons.event_note_outlined,
@@ -266,13 +176,17 @@ class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard>
                           color: AppColors.info,
                           onTap: () => goToDashboardSection(context, AppRoutes.myAttendance),
                         ),
-                        const SizedBox(height: 8),
-                        _ActionButton(
-                          icon: Icons.beach_access_outlined,
-                          label: 'Apply Leave',
-                          color: AppColors.secondary,
-                          onTap: () => goToDashboardSection(context, AppRoutes.leave),
-                        ),
+                        // Only for users who may open Leave (leave.view;
+                        // route permissions in access_control.dart).
+                        if (canAccessPath(ref.watch(authStateProvider).valueOrNull?.user, AppRoutes.leave)) ...[
+                          const SizedBox(height: 8),
+                          _ActionButton(
+                            icon: Icons.beach_access_outlined,
+                            label: 'Apply Leave',
+                            color: AppColors.secondary,
+                            onTap: () => goToDashboardSection(context, AppRoutes.leave),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -329,7 +243,7 @@ class _ActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
-  final VoidCallback onTap;
+  final VoidCallback? onTap; // null = disabled
   final bool loading;
 
   const _ActionButton({

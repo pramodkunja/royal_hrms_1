@@ -329,6 +329,7 @@ class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
         UnifiedApprovalKind.expense => Icons.receipt_long_outlined,
         UnifiedApprovalKind.attendanceCorrection => Icons.fact_check_outlined,
         UnifiedApprovalKind.wfh => Icons.home_work_outlined,
+        UnifiedApprovalKind.separation => Icons.logout_outlined,
       };
 
   Widget _sectionLabel(String text) => Text(text,
@@ -343,6 +344,12 @@ class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
 
   List<Widget> _buildRequestDetails(UnifiedApprovalItem item) {
     switch (item.kind) {
+      // Not shown in this sheet — separation opens its own detail screen.
+      case UnifiedApprovalKind.separation:
+        return [
+          _kv('Type', item.primaryLine),
+          _kv('Proposed last day', item.separation?.proposedLastWorkingDay ?? '—'),
+        ];
       case UnifiedApprovalKind.leave:
         final r = item.leave!;
         return [

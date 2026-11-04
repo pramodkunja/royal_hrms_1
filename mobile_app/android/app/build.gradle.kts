@@ -53,15 +53,32 @@ android {
 
     buildTypes {
         release {
-            // Falls back to debug signing when key.properties is absent so
-            // `flutter run --release` still works on machines without the
-            // upload key — such a build can't be uploaded to Play.
-            signingConfig = if (keystorePropertiesFile.exists()) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            // Always the upload key — never a silent debug-signing fallback
+            // (a debug-signed bundle cannot be uploaded to Play). Missing or
+            // incomplete credentials fail the release build below instead.
+            signingConfig = signingConfigs.getByName("release")
         }
+    }
+}
+
+// Fails any release build early, with a clear message, when the upload-key
+// credentials are missing; debug and profile builds are unaffected.
+gradle.taskGraph.whenReady {
+    val buildsRelease = allTasks.any { it.project == project && it.name.contains("Release") }
+    if (!buildsRelease) return@whenReady
+    val required = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+    val missing = if (!keystorePropertiesFile.exists()) required
+        else required.filter { (keystoreProperties[it] as String?).isNullOrBlank() }
+    if (missing.isNotEmpty()) {
+        throw GradleException(
+            "Release signing is not configured: android/key.properties is missing or lacks " +
+                missing.joinToString() + ". Release builds are never signed with the debug key. " +
+                "See https://docs.flutter.dev/deployment/android#configure-signing-in-gradle"
+        )
+    }
+    val store = file(keystoreProperties["storeFile"] as String)
+    if (!store.exists()) {
+        throw GradleException("Release signing keystore not found at the storeFile path in android/key.properties.")
     }
 }
 

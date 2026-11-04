@@ -1,3 +1,4 @@
+import '../../data/models/policy_ack_models.dart';
 import '../entities/document_entity.dart';
 
 abstract class DocumentRepository {
@@ -9,6 +10,13 @@ abstract class DocumentRepository {
     required String title,
     required String description,
     required String category,
+    bool requiresAcknowledgement = false,
   });
   Future<void> deleteDocument(int id);
+
+  Future<List<PendingAcknowledgement>> getPendingAcknowledgements();
+  Future<DocumentEntity> getDocument(int id);
+  Future<String> acknowledge(int id, int version);
+  Future<AckReport> getAcknowledgementReport(int id);
+  Future<DocumentEntity> setRequiresAcknowledgement(int id, bool value);
 }

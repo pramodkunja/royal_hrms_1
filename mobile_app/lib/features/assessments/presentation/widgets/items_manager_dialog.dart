@@ -6,6 +6,7 @@ import '../../data/models/assessment_model.dart';
 import '../providers/assessments_providers.dart';
 import 'item_form.dart';
 import 'item_row.dart';
+import 'package:mobile_app/core/network/api_client.dart';
 
 /// Mirrors the reference web screen's ItemsModal — manage the video/quiz
 /// items that make up one assessment. Items are fetched lazily (only while
@@ -241,7 +242,7 @@ class _ItemsManagerDialogState extends ConsumerState<ItemsManagerDialog> {
                       error: (e, _) => Padding(
                         padding: const EdgeInsets.symmetric(vertical: 24),
                         child: Center(
-                          child: Text('Could not load items.\n${e.toString()}',
+                          child: Text(userFriendlyMessage(e),
                               textAlign: TextAlign.center,
                               style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
                         ),

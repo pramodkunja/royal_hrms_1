@@ -19,6 +19,9 @@ class _AwaitingApprovalScreenState
     extends ConsumerState<AwaitingApprovalScreen> {
   Timer? _timer;
   bool _approved = false;
+  // The server's assessment_status at approval: "pending" hands the employee
+  // over to the onboarding assessments (see resolveAuthRedirect).
+  String? _assessmentStatus;
 
   @override
   void initState() {
@@ -43,7 +46,10 @@ class _AwaitingApprovalScreenState
           : raw as Map<String, dynamic>;
       final status = data['onboarding_status'] as String?;
       if (status == 'complete' && mounted) {
-        setState(() => _approved = true);
+        setState(() {
+          _approved = true;
+          _assessmentStatus = data['assessment_status'] as String?;
+        });
       }
     } catch (_) {
       // Silently ignore poll errors — will retry in 30s.
@@ -58,9 +64,14 @@ class _AwaitingApprovalScreenState
         child: _approved
             ? _ApprovedView(
                 onContinue: () {
-                  ref
-                      .read(authStateProvider.notifier)
-                      .updateOnboardingStatus('complete');
+                  final auth = ref.read(authStateProvider.notifier);
+                  // Assessment status first, so the one redirect that
+                  // follows the onboarding update already knows whether
+                  // assessments are due.
+                  if (_assessmentStatus != null) {
+                    auth.updateAssessmentStatus(_assessmentStatus!);
+                  }
+                  auth.updateOnboardingStatus('complete');
                 },
               )
             : _WaitingView(

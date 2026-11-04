@@ -20,6 +20,12 @@ class PunchEntryEntity {
 
 class TodayAttendanceEntity {
   final bool isClockedIn;
+  /// Server's `day_completed`: today (IST attendance day) already has both a
+  /// Clock In and a Clock Out, so the backend's one-in/one-out rule rejects
+  /// any further punch until tomorrow (services_attendance.py
+  /// get_today_session / _validate_daily_punch_limit). Distinct from
+  /// `!isClockedIn`, which also means "not clocked in yet today".
+  final bool dayCompleted;
   final List<PunchEntryEntity> punches;
   final int totalSeconds;
   final int sessionSeconds;
@@ -27,6 +33,7 @@ class TodayAttendanceEntity {
 
   const TodayAttendanceEntity({
     required this.isClockedIn,
+    this.dayCompleted = false,
     required this.punches,
     required this.totalSeconds,
     required this.sessionSeconds,

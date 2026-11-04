@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile_app/core/network/api_client.dart';
 
 import '../../../attendance/domain/entities/attendance_entity.dart';
 import '../../../attendance/presentation/providers/attendance_providers.dart'
@@ -164,21 +165,42 @@ final myRequestsProvider =
   MyRequestsNotifier.new,
 );
 
+/// Reasons from the backend for request types left out of My Requests
+/// because the company has that module switched off (e.g. "Expenses is not
+/// enabled for your company…"). Shown above the list.
+final myRequestsModuleNoticesProvider = StateProvider.autoDispose<List<String>>((ref) => const []);
+
 class MyRequestsNotifier extends AutoDisposeAsyncNotifier<List<MyRequestItem>> {
   @override
   Future<List<MyRequestItem>> build() async {
-    final results = await Future.wait<dynamic>([
-      ref.watch(leaveRequestsProvider.future),
-      ref.watch(wfhMyRequestsProvider.future),
-      ref.watch(expenseListProvider.future),
-      ref.watch(myCorrectionsProvider.future),
+    // A module the company has switched off leaves its requests out (with
+    // the server's reason) instead of failing the whole list; any other
+    // failure still fails the list as before.
+    final notices = <String>[];
+    Future<List<dynamic>> source(Future<List<dynamic>> f) async {
+      try {
+        return await f;
+      } catch (e) {
+        final disabled = moduleDisabledMessage(e);
+        if (disabled == null) rethrow;
+        notices.add(disabled);
+        return const [];
+      }
+    }
+
+    final results = await Future.wait<List<dynamic>>([
+      source(ref.watch(leaveRequestsProvider.future)),
+      source(ref.watch(wfhMyRequestsProvider.future)),
+      source(ref.watch(expenseListProvider.future)),
+      source(ref.watch(myCorrectionsProvider.future)),
     ]);
+    ref.read(myRequestsModuleNoticesProvider.notifier).state = notices;
 
     final items = <MyRequestItem>[
-      ...(results[0] as List<LeaveRequestEntity>).map(MyRequestItem.fromLeave),
-      ...(results[1] as List<WfhRequestEntity>).map(MyRequestItem.fromWfh),
-      ...(results[2] as List<ExpenseModel>).map(MyRequestItem.fromExpense),
-      ...(results[3] as List<MyCorrectionEntity>).map(MyRequestItem.fromCorrection),
+      ...results[0].cast<LeaveRequestEntity>().map(MyRequestItem.fromLeave),
+      ...results[1].cast<WfhRequestEntity>().map(MyRequestItem.fromWfh),
+      ...results[2].cast<ExpenseModel>().map(MyRequestItem.fromExpense),
+      ...results[3].cast<MyCorrectionEntity>().map(MyRequestItem.fromCorrection),
     ];
     items.sort((a, b) => b.submittedAt.compareTo(a.submittedAt));
     return items;

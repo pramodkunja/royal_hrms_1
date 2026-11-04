@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/candidate_entity.dart';
 import '../providers/interview_providers.dart';
+import 'package:mobile_app/core/network/api_client.dart';
 
 class ActivityLogDialog extends ConsumerWidget {
   final int candidateId;
@@ -56,7 +57,7 @@ class ActivityLogDialog extends ConsumerWidget {
               ),
               error: (e, _) => Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text('Failed to load logs: $e',
+                child: Text(userFriendlyMessage(e),
                     style: AppTextStyles.bodySmall),
               ),
               data: (c) => c.logs.isEmpty

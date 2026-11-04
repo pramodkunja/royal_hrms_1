@@ -133,6 +133,10 @@ class MyProfileModel extends MyProfileEntity {
     required super.assessmentStatus,
     super.photoUrl,
     required super.detail,
+    super.noticePeriodDays,
+    super.reportingManager,
+    super.reportingApprover,
+    super.hr,
   });
 
   factory MyProfileModel.fromJson(Map<String, dynamic> json) {
@@ -154,6 +158,10 @@ class MyProfileModel extends MyProfileEntity {
       assessmentStatus: json['assessment_status'] as String? ?? '',
       photoUrl: json['profile_photo_url'] as String?,
       detail: MyProfileDetailModel.fromJson(profile),
+      noticePeriodDays: (json['notice_period_days'] as num?)?.toInt(),
+      reportingManager: AssignedPersonEntity.fromJson(json['reporting_manager']),
+      reportingApprover: AssignedPersonEntity.fromJson(json['reporting_approver']),
+      hr: AssignedPersonEntity.fromJson(json['hr']),
     );
   }
 
@@ -202,6 +210,10 @@ class MyProfileModel extends MyProfileEntity {
       onboardingStatus: onboardingStatus,
       assessmentStatus: assessmentStatus,
       photoUrl: photoUrl,
+      noticePeriodDays: noticePeriodDays,
+      reportingManager: reportingManager,
+      reportingApprover: reportingApprover,
+      hr: hr,
       detail: detailModel.copyWithEditable(
         currentAddress: data.currentAddress,
         permanentAddress: data.permanentAddress,
@@ -232,6 +244,10 @@ class MyProfileModel extends MyProfileEntity {
       onboardingStatus: onboardingStatus,
       assessmentStatus: assessmentStatus,
       photoUrl: newPhotoUrl,
+      noticePeriodDays: noticePeriodDays,
+      reportingManager: reportingManager,
+      reportingApprover: reportingApprover,
+      hr: hr,
       detail: detail,
     );
   }

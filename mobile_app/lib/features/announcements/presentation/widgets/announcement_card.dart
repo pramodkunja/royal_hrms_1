@@ -114,8 +114,10 @@ class _AnnouncementCardState extends ConsumerState<AnnouncementCard> {
           Divider(height: 1, color: AppColors.border),
           _CardFooter(
             announcement: widget.announcement,
-            onEdit:   widget.announcement.canEdit ? widget.onEdit : null,
-            onDelete: widget.announcement.canDelete ? widget.onDelete : null,
+            // The screen passes only the actions this user may take
+            // (announcement_permissions.dart); null hides the button.
+            onEdit:   widget.onEdit,
+            onDelete: widget.onDelete,
             onReact:  () => ref
                 .read(announcementsProvider.notifier)
                 .toggleReaction(widget.announcement.id),

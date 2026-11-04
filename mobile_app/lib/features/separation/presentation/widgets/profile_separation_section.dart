@@ -8,6 +8,7 @@ import '../../../../shared/widgets/app_button.dart';
 import '../providers/separation_providers.dart';
 import 'separation_form_sheet.dart';
 import 'separation_status.dart';
+import 'package:mobile_app/core/network/api_client.dart';
 
 // Self-service filter — the viewer's own requests, newest first (backend
 // default ordering), matches web's ProfileClient SeparationCard.
@@ -103,7 +104,7 @@ class ProfileSeparationSection extends ConsumerWidget {
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2))),
             ),
-            error: (_, __) => Text('Could not load separation status.',
+            error: (e, __) => Text(userFriendlyMessage(e),
                 style: AppTextStyles.caption.copyWith(color: AppColors.error)),
           ),
         ],

@@ -1,4 +1,5 @@
 import '../entities/wfh_entity.dart';
+import '../entities/wfh_medical_proof.dart';
 
 abstract class WfhRepository {
   Future<List<WfhRequestEntity>> getWfhRequests({String? status});
@@ -20,6 +21,8 @@ abstract class WfhRepository {
     String? locationLabel,
     required double latitude,
     required double longitude,
+    bool isMedical = false,
+    WfhMedicalProof? medicalProof,
   });
 
   Future<void> cancelWfhRequest(String id);

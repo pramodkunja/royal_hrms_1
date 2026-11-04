@@ -5,6 +5,7 @@ import '../../data/models/admin_dashboard_models.dart';
 import '../../data/models/dashboard_common_models.dart';
 import '../../data/models/employee_dashboard_models.dart';
 import '../../data/models/hr_dashboard_models.dart';
+import '../../data/models/manager_dashboard_models.dart';
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
 
@@ -66,6 +67,13 @@ final auditLogsPageProvider = FutureProvider.autoDispose
         offset: params.offset,
         module: params.module,
       ),
+);
+
+// ── Manager ───────────────────────────────────────────────────────────────────
+
+/// GET /dashboard/manager/ — one request for every manager widget.
+final managerDashboardProvider = FutureProvider.autoDispose<ManagerDashboardData>(
+  (ref) => ref.read(dashboardDataSourceProvider).fetchManagerDashboard(),
 );
 
 // ── HR ─────────────────────────────────────────────────────────────────────

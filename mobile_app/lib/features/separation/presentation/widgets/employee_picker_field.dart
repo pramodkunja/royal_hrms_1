@@ -175,21 +175,26 @@ class _EmployeePickerFieldState extends ConsumerState<EmployeePickerField> {
                             Divider(height: 1, color: AppColors.border),
                         itemBuilder: (_, i) {
                           final e = _results[i];
-                          return ListTile(
-                            dense: true,
-                            title: Text(e.name,
-                                style: AppTextStyles.label.copyWith(fontSize: 13)),
-                            subtitle: Text(
-                              [e.code, e.department, e.designation]
-                                  .where((s) => s.isNotEmpty)
-                                  .join(' · '),
-                              style: AppTextStyles.caption.copyWith(fontSize: 11),
+                          // Own Material so the row's ink isn't hidden by
+                          // the dropdown's decorated background.
+                          return Material(
+                            type: MaterialType.transparency,
+                            child: ListTile(
+                              dense: true,
+                              title: Text(e.name,
+                                  style: AppTextStyles.label.copyWith(fontSize: 13)),
+                              subtitle: Text(
+                                [e.code, e.department, e.designation]
+                                    .where((s) => s.isNotEmpty)
+                                    .join(' · '),
+                                style: AppTextStyles.caption.copyWith(fontSize: 11),
+                              ),
+                              onTap: () {
+                                widget.onChanged(e);
+                                setState(() => _open = false);
+                                _controller.clear();
+                              },
                             ),
-                            onTap: () {
-                              widget.onChanged(e);
-                              setState(() => _open = false);
-                              _controller.clear();
-                            },
                           );
                         },
                       ),

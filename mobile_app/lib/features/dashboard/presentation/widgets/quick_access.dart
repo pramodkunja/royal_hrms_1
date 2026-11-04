@@ -1,25 +1,40 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile_app/core/router/access_control.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
+import 'package:mobile_app/features/auth/domain/entities/user_entity.dart';
+import 'package:mobile_app/features/auth/presentation/providers/auth_providers.dart';
 import 'dashboard_section.dart';
 
-/// Role category resolution + the "Quick Access" grid, shared by every
+/// Dashboard category resolution + the "Quick Access" grid, shared by every
 /// per-role dashboard view. Extracted out of `home_screen.dart` so
 /// `EmployeeDashboardView`/`AdminDashboardView`/`HrDashboardView` (separate
-/// files) can all reuse the exact same role-detection logic and tile look.
+/// files) can all reuse the exact same selection logic and tile look.
 ///
-/// Mirrors web's `resolveRole()` in `app/dashboard/page.tsx` exactly — each
-/// of the 4 role categories gets its own distinct Quick Actions set (see
+/// Mirrors web's `resolveDashboard()` in `app/dashboard/page.tsx`: the
+/// choice comes from the login response's flags and permissions, never the
+/// role name (roles are per-company and renameable — `branch_admin` contains
+/// "admin" but is not a system admin). Precedence, first match wins:
+///   1. `is_superuser` → admin. The backend sets it for real superusers and
+///      any role holding `settings.edit` (apps/accounts/views.py LoginView),
+///      the same permission its /dashboard/system-admin/* endpoints require.
+///      `settings.edit` is checked here too so a user cached before the
+///      flag existed still resolves the same way the server decides.
+///   2. `can_manage_team` → manager.
+///   3. `employees.view` → hr (what /dashboard/hr/* requires).
+///   4. otherwise → employee, including no user at all.
+/// Each category gets its own Quick Actions set (see
 /// `EmployeeDashboard.tsx`/`ManagerDashboard.tsx`/`HRDashboard.tsx`/
 /// `AdminDashboard.tsx`'s "Quick actions" arrays).
-String resolveRoleCategory(String rawRole) {
-  final r = rawRole.toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
-  if (r.contains('hradmin') || r == 'hr') return 'hr';
-  if (r.contains('admin')) return 'admin'; // system_admin
-  if (r.contains('manager')) return 'manager';
-  return 'employee'; // default, matches web's fallback
+String resolveDashboardCategory(UserEntity? user) {
+  if (user == null) return 'employee';
+  if (user.isSuperuser || user.hasPermission('settings.edit')) return 'admin';
+  if (user.canManageTeam) return 'manager';
+  if (user.hasPermission('employees.view')) return 'hr';
+  return 'employee';
 }
 
 // Uploaded module icon artwork (assets/images/), keyed by the module's own
@@ -52,7 +67,12 @@ class QuickItem {
   final IconData icon;
   final Color color;
   final String path;
+  // Shown only when the user holds this permission (null = everyone), or —
+  // when anyOfPermissions is set — any one of those. Same rule as the menu
+  // and the router (access_control.dart), so a tile never leads to a screen
+  // the router would refuse.
   final String? permission;
+  final List<String>? anyOfPermissions;
 
   const QuickItem({
     required this.label,
@@ -60,6 +80,7 @@ class QuickItem {
     required this.color,
     required this.path,
     this.permission,
+    this.anyOfPermissions,
   });
 
   /// Uploaded module artwork to show instead of [icon], resolved from
@@ -124,7 +145,9 @@ final kQuickItemsManager = <QuickItem>[
       icon: Icons.checklist_outlined,
       color: AppColors.warning,
       path: '/dashboard/approvals',
-      permission: 'leave.view'),
+      // Same gate as the Approvals menu item / route (leave.view would show
+      // it to people who can't approve anything).
+      anyOfPermissions: ['leave.approve', 'expenses.approve', 'wfh.approve', 'separation.approve']),
   QuickItem(
       label: 'Apply Leave',
       icon: Icons.beach_access_outlined,
@@ -230,20 +253,33 @@ final kQuickItemsByRole = <String, List<QuickItem>>{
   'admin': kQuickItemsAdmin,
 };
 
+/// The tiles of [items] that [user] may use (see QuickItem.permission). No
+/// user (signed out / still loading) → only the tiles open to everyone.
+List<QuickItem> visibleQuickItems(List<QuickItem> items, UserEntity? user) => items
+    .where((item) => item.anyOfPermissions != null
+        ? userHasAnyPermission(user, item.anyOfPermissions!)
+        : (item.permission == null || userHasPermission(user, item.permission!)))
+    .toList();
+
 // Wraps the grid in the same highlighted-header card chrome as the other
 // dashboard sections below it, instead of a plain heading floating above it.
-class QuickAccessCard extends StatelessWidget {
+// Filters [items] by the signed-in user's permissions; hides itself entirely
+// when none remain.
+class QuickAccessCard extends ConsumerWidget {
   final List<QuickItem> items;
 
   const QuickAccessCard({super.key, required this.items});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
+    final visible = visibleQuickItems(items, user);
+    if (visible.isEmpty) return const SizedBox.shrink();
     return SectionCard(
       title: 'Quick Access',
       icon: Icons.apps_rounded,
       accentColor: AppColors.primary,
-      child: QuickAccessGrid(items: items),
+      child: QuickAccessGrid(items: visible),
     );
   }
 }

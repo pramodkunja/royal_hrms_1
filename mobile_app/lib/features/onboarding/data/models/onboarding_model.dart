@@ -158,6 +158,7 @@ class OnboardingProfileModel extends OnboardingProfileEntity {
     required super.bank,
     required super.emergency,
     required super.documents,
+    super.values,
   });
 
   /// Backend `GET /onboarding/` returns the [EmployeeProfileSerializer]
@@ -165,6 +166,20 @@ class OnboardingProfileModel extends OnboardingProfileEntity {
   /// step indices (0-4) whose required fields are already filled — there
   /// is no `status`/`current_step`/nested `personal`/`documents` keys, so
   /// those are derived here or supplied by the caller.
+  /// Scalar profile fields plus custom_field_values, as text (null → absent).
+  static Map<String, String> flatValues(Map<String, dynamic> data) {
+    final out = <String, String>{};
+    void put(String k, Object? v) {
+      if (v == null || v is Map || v is List) return;
+      out[k] = '$v';
+    }
+
+    data.forEach(put);
+    final custom = data['custom_field_values'];
+    if (custom is Map) custom.forEach((k, v) => put('$k', v));
+    return out;
+  }
+
   factory OnboardingProfileModel.fromJson(
     Map<String, dynamic> json, {
     String status = 'pending',
@@ -187,6 +202,7 @@ class OnboardingProfileModel extends OnboardingProfileEntity {
       bank: OnboardingBankModel.fromJson(data),
       emergency: OnboardingEmergencyModel.fromJson(data),
       documents: documents,
+      values: flatValues(data),
     );
   }
 }

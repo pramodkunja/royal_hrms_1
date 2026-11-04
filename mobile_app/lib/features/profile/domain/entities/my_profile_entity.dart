@@ -65,6 +65,26 @@ class MyProfileDetailEntity {
 /// fields are `role_name`/`role_display` here, unlike the admin employee
 /// endpoints which expose a plain `role` field — don't reuse a model that
 /// assumes that shape.
+/// A person HR assigned to this employee (GET /employees/me/
+/// reporting_manager, reporting_approver, hr — each {id: employee code,
+/// name} or null; MyProfileSerializer).
+class AssignedPersonEntity {
+  final String? id;
+  final String? name;
+  const AssignedPersonEntity({this.id, this.name});
+
+  static AssignedPersonEntity? fromJson(Object? json) {
+    if (json is! Map) return null;
+    return AssignedPersonEntity(id: json['id']?.toString(), name: json['name']?.toString());
+  }
+}
+
+/// Web lib/assignedPerson.ts: only the name is shown, or "Not assigned".
+String assignedName(AssignedPersonEntity? person) {
+  final name = person?.name?.trim();
+  return (name == null || name.isEmpty) ? 'Not assigned' : name;
+}
+
 class MyProfileEntity {
   final String id;
   final String fullName;
@@ -82,6 +102,11 @@ class MyProfileEntity {
   final String assessmentStatus;
   final String? photoUrl;
   final MyProfileDetailEntity detail;
+  /// Assigned notice period in days (Settings → Notice Period), or null.
+  final int? noticePeriodDays;
+  final AssignedPersonEntity? reportingManager;
+  final AssignedPersonEntity? reportingApprover;
+  final AssignedPersonEntity? hr;
 
   const MyProfileEntity({
     required this.id,
@@ -100,5 +125,9 @@ class MyProfileEntity {
     required this.assessmentStatus,
     this.photoUrl,
     required this.detail,
+    this.noticePeriodDays,
+    this.reportingManager,
+    this.reportingApprover,
+    this.hr,
   });
 }

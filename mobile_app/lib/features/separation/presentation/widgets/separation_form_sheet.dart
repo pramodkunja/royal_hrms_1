@@ -7,8 +7,11 @@ import '../../../../shared/widgets/app_button.dart';
 import '../../../../shared/widgets/app_text_field.dart';
 import '../../../documents/presentation/widgets/document_file_picker.dart';
 import '../../domain/entities/separation_entity.dart';
+import '../../../profile/presentation/providers/profile_providers.dart';
+import '../notice_period.dart';
 import '../providers/separation_providers.dart';
 import 'employee_picker_field.dart';
+import 'package:mobile_app/core/network/api_client.dart';
 
 // Must match backend SeparationRequestCreateSerializer.validate_document.
 const _kMaxDocBytes = 5 * 1024 * 1024;
@@ -49,7 +52,7 @@ class SeparationFormSheet extends ConsumerStatefulWidget {
 
 class _SeparationFormSheetState extends ConsumerState<SeparationFormSheet> {
   final _formKey = GlobalKey<FormState>();
-  final _noticeCtrl = TextEditingController(text: '30');
+  final _noticeCtrl = TextEditingController(text: '$kDefaultNoticePeriodDays');
   final _commentsCtrl = TextEditingController();
 
   String? _separationType;
@@ -61,8 +64,36 @@ class _SeparationFormSheetState extends ConsumerState<SeparationFormSheet> {
   String? _docError;
   bool _loading = false;
   String? _error;
+  // Once the user picks a last working day it is theirs; until then it
+  // follows request date + notice period (web SeparationFormModal lwdTouched).
+  bool _lwdTouched = false;
 
   bool get _isEdit => widget.existing != null;
+
+  /// Filing for themselves (no other employee picked) — web's `forSelf`.
+  bool get _forSelf => _employee == null;
+
+  /// The assigned notice period of whoever the request is for: the signed-in
+  /// employee's (/employees/me/) or the picked employee's list row.
+  int? get _assignedNotice =>
+      _forSelf ? ref.read(myProfileProvider).valueOrNull?.noticePeriodDays : _employee!.noticePeriodDays;
+
+  /// An employee filing for themselves can't change an assigned notice
+  /// period (the server applies it anyway); HR filing for someone can.
+  bool get _noticeLocked => _forSelf && _assignedNotice != null;
+
+  void _applyAssignedNotice() {
+    final assigned = _assignedNotice;
+    if (assigned == null) return;
+    if (_isEdit && !_noticeLocked) return;
+    if (_noticeCtrl.text != '$assigned') _noticeCtrl.text = '$assigned';
+  }
+
+  void _recalcLastWorkingDay() {
+    if (_lwdTouched) return;
+    final expected = expectedLastWorkingDay(_requestDate, int.tryParse(_noticeCtrl.text.trim()));
+    if (expected != null && expected != _lastWorkingDay) setState(() => _lastWorkingDay = expected);
+  }
 
   @override
   void initState() {
@@ -75,13 +106,27 @@ class _SeparationFormSheetState extends ConsumerState<SeparationFormSheet> {
       _lastWorkingDay = DateTime.tryParse(e.proposedLastWorkingDay);
       _noticeCtrl.text = e.noticePeriodDays.toString();
       _commentsCtrl.text = e.comments;
+      _lwdTouched = true;
     } else {
-      _requestDate = DateTime.now();
+      final now = DateTime.now();
+      _requestDate = DateTime(now.year, now.month, now.day);
+      _lastWorkingDay = expectedLastWorkingDay(_requestDate, kDefaultNoticePeriodDays);
     }
+    _noticeCtrl.addListener(_recalcLastWorkingDay);
+    // Pre-fill the employee's own assigned notice period as soon as their
+    // profile is known (it may already be cached).
+    // (After the frame: this can fire during initState, where the text
+    // change's setState would not be allowed.)
+    ref.listenManual(myProfileProvider, (_, __) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _forSelf) _applyAssignedNotice();
+      });
+    }, fireImmediately: true);
   }
 
   @override
   void dispose() {
+    _noticeCtrl.removeListener(_recalcLastWorkingDay);
     _noticeCtrl.dispose();
     _commentsCtrl.dispose();
     super.dispose();
@@ -104,10 +149,12 @@ class _SeparationFormSheetState extends ConsumerState<SeparationFormSheet> {
     setState(() {
       if (isLastWorkingDay) {
         _lastWorkingDay = picked;
+        _lwdTouched = true;
       } else {
         _requestDate = picked;
       }
     });
+    if (!isLastWorkingDay) _recalcLastWorkingDay();
   }
 
   Future<void> _pickDocument() async {
@@ -196,6 +243,8 @@ class _SeparationFormSheetState extends ConsumerState<SeparationFormSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // Rebuild when the profile (and so the assigned notice period) arrives.
+    ref.watch(myProfileProvider);
     final typesAsync = ref.watch(separationTypesProvider);
     final reasonsAsync = ref.watch(separationReasonsProvider);
 
@@ -276,7 +325,10 @@ class _SeparationFormSheetState extends ConsumerState<SeparationFormSheet> {
                           const SizedBox(height: 6),
                           EmployeePickerField(
                             value: _employee,
-                            onChanged: (e) => setState(() => _employee = e),
+                            onChanged: (e) => setState(() {
+                              _employee = e;
+                              _applyAssignedNotice();
+                            }),
                           ),
                           const SizedBox(height: 14),
                         ],
@@ -298,7 +350,7 @@ class _SeparationFormSheetState extends ConsumerState<SeparationFormSheet> {
                                 hintText: 'Select separation type'),
                           ),
                           loading: () => const LinearProgressIndicator(),
-                          error: (_, __) => Text('Could not load types.',
+                          error: (e, __) => Text(userFriendlyMessage(e),
                               style: AppTextStyles.caption
                                   .copyWith(color: AppColors.error)),
                         ),
@@ -320,7 +372,7 @@ class _SeparationFormSheetState extends ConsumerState<SeparationFormSheet> {
                                 const InputDecoration(hintText: 'Select reason'),
                           ),
                           loading: () => const LinearProgressIndicator(),
-                          error: (_, __) => Text('Could not load reasons.',
+                          error: (e, __) => Text(userFriendlyMessage(e),
                               style: AppTextStyles.caption
                                   .copyWith(color: AppColors.error)),
                         ),
@@ -358,7 +410,19 @@ class _SeparationFormSheetState extends ConsumerState<SeparationFormSheet> {
                           label: 'Notice Period (days) *',
                           controller: _noticeCtrl,
                           keyboardType: TextInputType.number,
+                          enabled: !_noticeLocked && !_loading,
                         ),
+                        if (_assignedNotice != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              _noticeLocked
+                                  ? 'Your assigned notice period (set by HR) — it applies to your request.'
+                                  : 'Assigned notice period: ${formatNoticePeriod(_assignedNotice)}',
+                              key: const Key('separation-notice-hint'),
+                              style: AppTextStyles.caption.copyWith(fontSize: 11),
+                            ),
+                          ),
                         const SizedBox(height: 14),
 
                         AppTextField(

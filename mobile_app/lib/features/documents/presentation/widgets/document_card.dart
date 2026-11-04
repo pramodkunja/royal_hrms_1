@@ -64,6 +64,7 @@ class DocumentCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
+                        Row(children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 1),
@@ -80,6 +81,30 @@ class DocumentCard extends StatelessWidget {
                             ),
                           ),
                         ),
+                        // Web: "Please acknowledge" on documents the
+                        // signed-in user still has to acknowledge.
+                        if (document.requiresAcknowledgement &&
+                            document.myAcknowledgedAt == null) ...[
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Container(
+                              key: Key('doc-ack-pending-${document.id}'),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: AppColors.warning.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'Please acknowledge',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.caption.copyWith(
+                                    fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.warning),
+                              ),
+                            ),
+                          ),
+                        ],
+                        ]),
                       ],
                     ),
                   ),

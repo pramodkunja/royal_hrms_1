@@ -4,30 +4,38 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/blue_hero_banner.dart';
 import '../../../../shared/widgets/stat_card.dart';
+import '../../../assessments/data/models/assessment_model.dart';
+import '../../../assessments/presentation/providers/assessments_providers.dart' show assessmentsDataSourceProvider;
 import '../../data/datasources/approval_datasource.dart';
 import '../../data/models/approval_model.dart';
 import '../providers/approval_providers.dart';
+import '../widgets/approval_identity_fields.dart';
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
-String _statusLabel(String status) => switch (status) {
+// GET /onboarding/approvals/ returns `submitted` and `rejected` (sent back
+// for corrections) applications; web shows `rejected` as "Needs Revision".
+String candidateStatusLabel(String status) => switch (status) {
       'submitted' => 'Submitted',
       'complete' => 'Approved',
-      'pending' => 'Needs Revision',
-      _ => status,
+      'rejected' => 'Needs Revision',
+      '' => 'Unknown',
+      _ => status[0].toUpperCase() + status.substring(1).replaceAll('_', ' '),
     };
+
+String _statusLabel(String status) => candidateStatusLabel(status);
 
 Color _statusColor(String status) => switch (status) {
       'submitted' => const Color(0xFFB45309),
       'complete' => AppColors.success,
-      'pending' => AppColors.error,
+      'rejected' => AppColors.error,
       _ => AppColors.textHint,
     };
 
 Color _statusBg(String status) => switch (status) {
       'submitted' => AppColors.warningContainer,
       'complete' => AppColors.successContainer,
-      'pending' => AppColors.errorContainer,
+      'rejected' => AppColors.errorContainer,
       _ => const Color(0xFFF3F4F6),
     };
 
@@ -115,7 +123,7 @@ class _Body extends ConsumerWidget {
     final total = rows.length;
     final pending = rows.where((r) => r.onboardingStatus == 'submitted').length;
     final approved = rows.where((r) => r.onboardingStatus == 'complete').length;
-    final revision = rows.where((r) => r.onboardingStatus == 'pending').length;
+    final revision = rows.where((r) => r.onboardingStatus == 'rejected').length;
 
     return RefreshIndicator(
       onRefresh: () => ref.read(approvalsProvider.notifier).reload(),
@@ -183,13 +191,21 @@ class _Body extends ConsumerWidget {
       builder: (_) => _ReviewSheet(
         user: user,
         ds: ref.read(approvalDataSourceProvider),
-        onAction: (decision, {remarks, department, designation}) async {
+        // The existing assessments list (GET /assessments/?page_size=100,
+        // as web) — needs assessments.view; a refusal just means "none".
+        loadAssessments: () => ref.read(assessmentsDataSourceProvider).fetchAssessments(),
+        onAction: (decision,
+            {remarks, department, designation, uanNumber, nameAsPerAadhar, panNumber, assessmentId}) async {
           final err = await ref.read(approvalsProvider.notifier).act(
                 user.id,
                 decision: decision,
                 remarks: remarks ?? '',
                 department: department,
                 designation: designation,
+                uanNumber: uanNumber,
+                nameAsPerAadhar: nameAsPerAadhar,
+                panNumber: panNumber,
+                assessmentId: assessmentId,
               );
           return err;
         },
@@ -409,15 +425,20 @@ typedef _ActionCallback = Future<String?> Function(
   String? remarks,
   String? department,
   String? designation,
+  String? uanNumber,
+  String? nameAsPerAadhar,
+  String? panNumber,
+  String? assessmentId,
 });
 
 class _ReviewSheet extends StatefulWidget {
   final ApprovalUser user;
   final ApprovalRemoteDataSource ds;
   final _ActionCallback onAction;
+  final Future<List<AssessmentModel>> Function() loadAssessments;
 
   const _ReviewSheet(
-      {required this.user, required this.ds, required this.onAction});
+      {required this.user, required this.ds, required this.onAction, required this.loadAssessments});
 
   @override
   State<_ReviewSheet> createState() => _ReviewSheetState();
@@ -438,10 +459,42 @@ class _ReviewSheetState extends State<_ReviewSheet> {
   String _selDesig = '';
   bool _loadingDepts = false;
 
+  // Optional approval extras, prefilled from the profile (web drawer).
+  late final _uanCtrl = TextEditingController(text: widget.user.profile?.uanNumber ?? '');
+  late final _aadharNameCtrl = TextEditingController(text: widget.user.profile?.nameAsPerAadhar ?? '');
+  late final _panCtrl = TextEditingController(text: (widget.user.profile?.panNumber ?? '').toUpperCase());
+  String? _uanErr;
+  String? _panErr;
+
+  // Optional assessment (only for applicants with a linked candidate, as web).
+  bool get _offersAssessment => widget.user.candidateId != null;
+  List<AssessmentModel> _assessments = const [];
+  bool _loadingAssessments = false;
+  bool _assessmentsFailed = false;
+  bool _assessmentsRequested = false;
+  String? _selAssessment;
+
   @override
   void dispose() {
     _remarksCtrl.dispose();
+    _uanCtrl.dispose();
+    _aadharNameCtrl.dispose();
+    _panCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadAssessments() async {
+    if (_assessmentsRequested) return; // once per sheet
+    _assessmentsRequested = true;
+    setState(() => _loadingAssessments = true);
+    try {
+      final list = await widget.loadAssessments();
+      if (mounted) setState(() => _assessments = list);
+    } catch (_) {
+      if (mounted) setState(() => _assessmentsFailed = true);
+    } finally {
+      if (mounted) setState(() => _loadingAssessments = false);
+    }
   }
 
   Future<void> _loadDeptsAndDesigs() async {
@@ -478,6 +531,7 @@ class _ReviewSheetState extends State<_ReviewSheet> {
           .toList();
 
   Future<void> _handleReject() async {
+    if (_acting) return; // one request at a time
     setState(() {
       _acting = true;
       _actionErr = null;
@@ -500,25 +554,40 @@ class _ReviewSheetState extends State<_ReviewSheet> {
       _showAssign = true;
       _assignErr = null;
     });
+    if (_offersAssessment) _loadAssessments();
     if (_depts.isEmpty) await _loadDeptsAndDesigs();
   }
 
   Future<void> _handleConfirm() async {
-    if (_selDept.isEmpty || _selDesig.isEmpty) {
-      setState(
-          () => _assignErr = 'Please select both Department and Designation.');
+    if (_acting) return; // one request at a time
+    final uanErr = validateUan(_uanCtrl.text);
+    final panErr = validatePan(_panCtrl.text);
+    final missingRole = _selDept.isEmpty || _selDesig.isEmpty;
+    if (missingRole || uanErr != null || panErr != null) {
+      setState(() {
+        _assignErr = missingRole ? 'Please select both Department and Designation.' : null;
+        _uanErr = uanErr;
+        _panErr = panErr;
+      });
       return;
     }
     setState(() {
       _acting = true;
       _actionErr = null;
       _assignErr = null;
+      _uanErr = null;
+      _panErr = null;
     });
+    // Everything entered stays in the form if the server refuses.
     final err = await widget.onAction(
       'approve',
       remarks: _remarksCtrl.text.trim(),
       department: _selDept,
       designation: _selDesig,
+      uanNumber: _uanCtrl.text.trim(),
+      nameAsPerAadhar: _aadharNameCtrl.text.trim(),
+      panNumber: _panCtrl.text.trim(),
+      assessmentId: _offersAssessment ? _selAssessment : null,
     );
     if (!mounted) return;
     if (err != null) {
@@ -656,6 +725,13 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                           label: 'Account Type',
                           value: widget.user.profile!.accountType),
                     ]),
+                    // Statutory IDs, masked (last 4); the full values are
+                    // only in the editable approval inputs below.
+                    _Section(title: 'Identity', children: [
+                      _Row(label: 'UAN', value: maskIdentifier(widget.user.profile!.uanNumber)),
+                      _Row(label: 'PAN', value: maskIdentifier(widget.user.profile!.panNumber)),
+                      _Row(label: 'Name as per Aadhaar', value: widget.user.profile!.nameAsPerAadhar),
+                    ]),
                     _Section(title: 'Emergency Contact', children: [
                       _Row(
                           label: 'Name',
@@ -730,6 +806,31 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                         _assignErr = null;
                       }),
                     ),
+                    ApprovalIdentityInputs(
+                      uanCtrl: _uanCtrl,
+                      aadharNameCtrl: _aadharNameCtrl,
+                      panCtrl: _panCtrl,
+                      enabled: !_acting,
+                      uanError: _uanErr,
+                      panError: _panErr,
+                      onChanged: () {
+                        if (_uanErr != null || _panErr != null) {
+                          setState(() {
+                            _uanErr = null;
+                            _panErr = null;
+                          });
+                        }
+                      },
+                    ),
+                    if (_offersAssessment)
+                      ApprovalAssessmentPicker(
+                        loading: _loadingAssessments,
+                        failed: _assessmentsFailed,
+                        assessments: _assessments,
+                        selectedId: _selAssessment,
+                        enabled: !_acting,
+                        onChanged: (id) => setState(() => _selAssessment = id),
+                      ),
                   ],
 
                   const SizedBox(height: 24),

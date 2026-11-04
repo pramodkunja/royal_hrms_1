@@ -143,6 +143,9 @@ class AnnouncementStats {
 
 // ── Page (list + stats + pagination) ─────────────────────────────────────────
 
+/// The loaded announcements so far (pages 1..[currentPage]) plus paging
+/// state. GET /announcements/ pages by `page`/`page_size`; [totalPages] is
+/// the server's count for the current category filter.
 @immutable
 class AnnouncementPage {
   final List<AnnouncementModel> announcements;
@@ -150,12 +153,40 @@ class AnnouncementPage {
   final int currentPage;
   final int totalPages;
 
+  /// A further page is being fetched.
+  final bool loadingMore;
+
+  /// Why the last further-page request failed (null when it didn't).
+  final String? loadMoreError;
+
   const AnnouncementPage({
     required this.announcements,
     required this.stats,
     required this.currentPage,
     required this.totalPages,
+    this.loadingMore = false,
+    this.loadMoreError,
   });
+
+  bool get hasMore => currentPage < totalPages;
+
+  AnnouncementPage copyWith({
+    List<AnnouncementModel>? announcements,
+    AnnouncementStats? stats,
+    int? currentPage,
+    int? totalPages,
+    bool? loadingMore,
+    String? loadMoreError,
+    bool clearError = false,
+  }) =>
+      AnnouncementPage(
+        announcements: announcements ?? this.announcements,
+        stats: stats ?? this.stats,
+        currentPage: currentPage ?? this.currentPage,
+        totalPages: totalPages ?? this.totalPages,
+        loadingMore: loadingMore ?? this.loadingMore,
+        loadMoreError: clearError ? null : (loadMoreError ?? this.loadMoreError),
+      );
 }
 
 // ── Form input ─────────────────────────────────────────────────────────────────

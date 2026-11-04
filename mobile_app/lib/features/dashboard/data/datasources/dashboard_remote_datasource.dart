@@ -4,6 +4,7 @@ import '../models/admin_dashboard_models.dart';
 import '../models/dashboard_common_models.dart';
 import '../models/employee_dashboard_models.dart';
 import '../models/hr_dashboard_models.dart';
+import '../models/manager_dashboard_models.dart';
 
 /// All `apps/dashboard` endpoints in one datasource — mirrors how the web
 /// frontend's dashboard widgets are all thin wrappers over the same
@@ -31,6 +32,13 @@ class DashboardRemoteDataSource {
     final data = _unwrap(body);
     final list = data is List<dynamic> ? data : <dynamic>[];
     return list.whereType<Map<String, dynamic>>().map(fromJson).toList();
+  }
+
+  // ── Manager ────────────────────────────────────────────────────────────────
+
+  Future<ManagerDashboardData> fetchManagerDashboard() async {
+    final res = await _dio.get(ApiConstants.dashboardManager);
+    return ManagerDashboardData.fromJson(_asMap(res.data));
   }
 
   // ── System Admin ───────────────────────────────────────────────────────────

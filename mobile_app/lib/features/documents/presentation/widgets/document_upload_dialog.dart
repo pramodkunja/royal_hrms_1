@@ -22,6 +22,9 @@ class _DocumentUploadDialogState
   PlatformFile? _pickedFile;
   String _category = 'policy';
   bool _uploading = false;
+  // Web: "Employees must read and acknowledge this document" — sent as
+  // requires_acknowledgement only when ticked.
+  bool _requiresAck = false;
   String? _titleError;
   String? _fileError;
 
@@ -123,7 +126,21 @@ class _DocumentUploadDialogState
                         if (val != null) setState(() => _category = val);
                       },
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 4),
+                    Material(
+                      type: MaterialType.transparency,
+                      child: CheckboxListTile(
+                        key: const Key('upload-requires-ack'),
+                        value: _requiresAck,
+                        onChanged: _uploading ? null : (v) => setState(() => _requiresAck = v ?? false),
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        dense: true,
+                        title: Text('Employees must read and acknowledge this document',
+                            style: AppTextStyles.bodySmall),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
@@ -212,6 +229,7 @@ class _DocumentUploadDialogState
           title: _titleCtrl.text.trim(),
           description: _descCtrl.text.trim(),
           category: _category,
+          requiresAcknowledgement: _requiresAck,
         );
     if (!mounted) return;
     setState(() => _uploading = false);

@@ -8,6 +8,7 @@ import '../../domain/entities/separation_entity.dart';
 import '../providers/separation_providers.dart';
 import 'employee_picker_field.dart';
 import 'separation_status.dart';
+import 'package:mobile_app/core/network/api_client.dart';
 
 /// KT / Handover checklist. Add-task form is only shown to a manager/HR/
 /// admin acting on SOMEONE ELSE'S separation (canManage && !isOwn) — the
@@ -216,7 +217,7 @@ class _SeparationHandoverSectionState
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2))),
             ),
-            error: (_, __) => Text('Could not load handover tasks.',
+            error: (e, __) => Text(userFriendlyMessage(e),
                 style: AppTextStyles.caption.copyWith(color: AppColors.error)),
           ),
         ],

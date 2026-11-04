@@ -5,7 +5,9 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/document_entity.dart';
 import '../providers/document_providers.dart';
+import 'acknowledgement_panel.dart';
 import 'document_type_helpers.dart';
+import 'package:mobile_app/core/permissions/permission_providers.dart';
 
 class DocumentDetailDialog extends ConsumerStatefulWidget {
   final DocumentEntity document;
@@ -19,10 +21,13 @@ class DocumentDetailDialog extends ConsumerStatefulWidget {
 class _DocumentDetailDialogState
     extends ConsumerState<DocumentDetailDialog> {
   bool _deleting = false;
+  // Updated in place after an acknowledgement, a requirement change, or a
+  // reload of a newer version (409).
+  late DocumentEntity _doc = widget.document;
 
   @override
   Widget build(BuildContext context) {
-    final doc = widget.document;
+    final doc = _doc;
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: Column(
@@ -139,9 +144,20 @@ class _DocumentDetailDialogState
                     ),
                   ),
 
+                  // Company Policy acknowledgement (web AcknowledgementPanel);
+                  // managing it needs documents.edit.
+                  AcknowledgementPanel(
+                    doc: doc,
+                    canManage: ref.watch(permissionProvider('documents.edit')),
+                    onChanged: (d) => setState(() => _doc = d),
+                  ),
+
                   const SizedBox(height: 18),
 
-                  _actionButtons(doc.fileUrl),
+                  // Delete needs documents.delete (backend document delete
+                  // view; web documents/page.tsx canDelete). Preview and
+                  // Download stay for everyone who can see the document.
+                  _actionButtons(doc.fileUrl, canDelete: ref.watch(permissionProvider('documents.delete'))),
                   const SizedBox(height: 4),
                 ],
               ),
@@ -152,14 +168,16 @@ class _DocumentDetailDialogState
     );
   }
 
-  Widget _actionButtons(String fileUrl) {
+  Widget _actionButtons(String fileUrl, {required bool canDelete}) {
     final btnShape = RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10));
     return Row(
       children: [
+        if (canDelete)
         SizedBox(
           height: 42,
           child: FilledButton.icon(
+            key: const Key('document-delete'),
             onPressed: _deleting ? null : _confirmDelete,
             icon: _deleting
                 ? const SizedBox(

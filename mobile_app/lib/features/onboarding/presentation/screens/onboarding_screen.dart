@@ -1,12 +1,12 @@
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../../shared/validators/form_validators.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../facial_recognition/domain/entities/face_registration_entity.dart';
 import '../../../facial_recognition/presentation/controllers/face_registration_controller.dart';
@@ -14,11 +14,16 @@ import '../../../facial_recognition/presentation/providers/facial_recognition_pr
 import '../../../facial_recognition/presentation/state/face_registration_state.dart';
 import '../../../facial_recognition/presentation/widgets/face_capture_bottom_sheet.dart';
 import '../../../facial_recognition/presentation/widgets/face_consent_text.dart';
+import '../../../settings/data/models/onboarding_field_config_model.dart';
+import '../../data/models/onboarding_config_models.dart';
 import '../../domain/entities/onboarding_entity.dart';
 import '../providers/onboarding_providers.dart';
+import '../widgets/onboarding_custom_file_field.dart';
+import '../widgets/onboarding_dynamic_field.dart';
 import '../widgets/step_indicator.dart';
 
 part '../widgets/onboarding_steps.dart';
+part '../widgets/onboarding_configured_step.dart';
 
 class OnboardingScreen extends ConsumerWidget {
   const OnboardingScreen({super.key});
@@ -26,6 +31,9 @@ class OnboardingScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(onboardingProfileProvider);
+    // The admin-configured fields/document types and uploaded custom files.
+    final configAsync = ref.watch(onboardingConfigProvider);
+    final customFilesAsync = ref.watch(onboardingCustomFilesProvider);
     final currentStep = ref.watch(onboardingStepProvider);
     // Defaults to false while the toggle is still loading, same as web's
     // useState(false) before its own fetch resolves — see FACE_STEP in
@@ -60,29 +68,37 @@ class OnboardingScreen extends ConsumerWidget {
                   message: e.toString(),
                   onRetry: () => ref.invalidate(onboardingProfileProvider),
                 ),
-                data: (profile) => _StepContent(
+                data: (profile) => configAsync.hasError || customFilesAsync.hasError
+                    ? _ErrorView(
+                        message: 'Could not load the onboarding form. Please try again.',
+                        onRetry: () {
+                          ref.invalidate(onboardingConfigProvider);
+                          ref.invalidate(onboardingCustomFilesProvider);
+                        },
+                      )
+                    : !configAsync.hasValue || !customFilesAsync.hasValue
+                        ? Center(child: CircularProgressIndicator(color: AppColors.primary))
+                        : _StepContent(
                   profile: profile,
+                  config: configAsync.requireValue,
+                  customFiles: customFilesAsync.requireValue,
+                  onConfiguredSaved: (step) {
+                    if (step < totalSteps - 1) {
+                      ref.read(onboardingStepProvider.notifier).state = step + 1;
+                    }
+                  },
                   currentStep: currentStep,
                   includeFaceStep: includeFaceStep,
                   onPrevious: currentStep > 0 ? goBack : null,
                   onContinueToFaceStep: () =>
                       ref.read(onboardingStepProvider.notifier).state = kTotalSteps,
-                  onStepSaved: (step, data) async {
-                    final err = await ref
-                        .read(onboardingProfileProvider.notifier)
-                        .saveStep(step, data);
-                    if (err == null && context.mounted) {
-                      if (step < totalSteps - 1) {
-                        ref.read(onboardingStepProvider.notifier).state =
-                            step + 1;
-                      }
-                    }
-                    return err;
-                  },
                   onUpload: (docType, file) async {
+                    final mime = onboardingUploadMime(file.name);
                     final multipart = MultipartFile.fromBytes(
                       file.bytes!,
                       filename: file.name,
+                      // The server checks the part's content type.
+                      contentType: mime == null ? null : DioMediaType.parse(mime),
                     );
                     return await ref
                         .read(onboardingProfileProvider.notifier)
@@ -93,12 +109,10 @@ class OnboardingScreen extends ConsumerWidget {
                         .read(onboardingProfileProvider.notifier)
                         .deleteDocument(id);
                   },
-                  onSaveDraft: () async {
-                    // Save draft calls step 4 with empty data (no submit)
-                    await ref
-                        .read(onboardingProfileProvider.notifier)
-                        .saveStep(4, {});
-                  },
+                  onSavePan: (pan) =>
+                      ref.read(onboardingProfileProvider.notifier).savePanNumber(pan),
+                  onSaveDraft: () =>
+                      ref.read(onboardingProfileProvider.notifier).saveDocumentsDraft(),
                   onSubmit: () async {
                     final err = await ref
                         .read(onboardingProfileProvider.notifier)
@@ -220,54 +234,51 @@ class _StepContent extends StatelessWidget {
     required this.includeFaceStep,
     required this.onPrevious,
     required this.onContinueToFaceStep,
-    required this.onStepSaved,
     required this.onUpload,
     required this.onDelete,
     required this.onSaveDraft,
+    required this.onSavePan,
     required this.onSubmit,
+    required this.config,
+    required this.customFiles,
+    required this.onConfiguredSaved,
   });
 
+  final OnboardingConfig config;
+  final List<CustomFileValue> customFiles;
+  final void Function(int step) onConfiguredSaved;
   final OnboardingProfileEntity profile;
   final int currentStep;
   final bool includeFaceStep;
   final VoidCallback? onPrevious;
   final VoidCallback onContinueToFaceStep;
-  final Future<String?> Function(int step, Map<String, dynamic> data)
-      onStepSaved;
   final Future<String?> Function(String docType, PlatformFile file) onUpload;
   final Future<String?> Function(int id) onDelete;
-  final Future<void> Function() onSaveDraft;
+  final Future<({bool ok, String message})> Function() onSaveDraft;
+  final Future<String?> Function(String pan) onSavePan;
   final Future<void> Function() onSubmit;
 
   @override
   Widget build(BuildContext context) {
     switch (currentStep) {
       case 0:
-        return _PersonalStep(
-          initial: profile.personal,
-          onSave: (data) => onStepSaved(0, data),
-          onPrevious: onPrevious,
-        );
       case 1:
-        return _EducationStep(
-          initial: profile.education,
-          onSave: (data) => onStepSaved(1, data),
-          onPrevious: onPrevious,
-        );
       case 2:
-        return _BankStep(
-          initial: profile.bank,
-          onSave: (data) => onStepSaved(2, data),
-          onPrevious: onPrevious,
-        );
       case 3:
-        return _EmergencyStep(
-          initial: profile.emergency,
-          onSave: (data) => onStepSaved(3, data),
+        return _ConfiguredStep(
+          key: ValueKey('configured-step-$currentStep'),
+          step: currentStep,
+          fields: config.fieldsFor(currentStep),
+          values: profile.values,
+          customFiles: customFiles,
+          onSaved: () => onConfiguredSaved(currentStep),
           onPrevious: onPrevious,
         );
       case 4:
         return _DocumentsStep(
+          documentTypes: config.visibleDocumentTypes,
+          panNumber: profile.values['pan_number'] ?? '',
+          onSavePan: onSavePan,
           documents: profile.documents,
           onUpload: onUpload,
           onDelete: onDelete,

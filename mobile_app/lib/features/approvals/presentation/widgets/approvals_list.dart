@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../../core/router/app_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -22,6 +25,19 @@ String _statusLabelFor(String status) => switch (status) {
       'cancelled' => 'Cancelled',
       _ => status,
     };
+
+/// Opens [item]: a separation goes to its own detail screen (where each
+/// stage is decided — web routes it the same way), and the inbox is
+/// reloaded on return so its status reflects what was decided there.
+/// Everything else opens the detail sheet.
+Future<void> openApprovalItem(BuildContext context, WidgetRef ref, UnifiedApprovalItem item) async {
+  if (item.opensDetailScreen) {
+    await context.push(AppRoutes.separationDetailPath(item.sourceId));
+    await ref.read(unifiedTeamApprovalsProvider.notifier).refresh();
+    return;
+  }
+  showApprovalDetailSheet(context, item);
+}
 
 class ApprovalsList extends ConsumerWidget {
   const ApprovalsList({super.key});
@@ -59,7 +75,7 @@ class ApprovalsList extends ConsumerWidget {
                       }
                       ref.read(approvalsSelectedIdsProvider.notifier).state = next;
                     },
-                    onTap: () => showApprovalDetailSheet(context, item),
+                    onTap: () => openApprovalItem(context, ref, item),
                   );
                 },
               ),
@@ -294,7 +310,9 @@ class _ApprovalCardState extends ConsumerState<_ApprovalCard> {
   Widget build(BuildContext context) {
     final item = widget.item;
     final sc = _statusColorFor(item.status);
-    final showActions = item.canAction && item.isPending;
+    final showActions = item.canAction && item.isPending && !item.opensDetailScreen;
+    // Separation: decided stage by stage on its detail screen.
+    final showReview = item.canAction && item.isPending && item.opensDetailScreen;
     final secondary = item.department.isNotEmpty ? item.department : item.secondaryText;
 
     return Container(
@@ -321,7 +339,9 @@ class _ApprovalCardState extends ConsumerState<_ApprovalCard> {
                     children: [
                       Checkbox(
                         value: widget.selected,
-                        onChanged: item.canAction ? (v) => widget.onSelectChanged(v ?? false) : null,
+                        onChanged: item.canAction && !item.opensDetailScreen
+                            ? (v) => widget.onSelectChanged(v ?? false)
+                            : null,
                         visualDensity: VisualDensity.compact,
                       ),
                       Expanded(
@@ -383,6 +403,22 @@ class _ApprovalCardState extends ConsumerState<_ApprovalCard> {
                       ],
                     ),
                   ),
+                  if (showReview) ...[
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 40),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          key: Key('approval-review-${item.sourceId}'),
+                          onPressed: widget.onTap,
+                          icon: const Icon(Icons.rule_outlined, size: 14),
+                          label: const Text('Review & decide',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                    ),
+                  ],
                   if (showActions) ...[
                     const SizedBox(height: 10),
                     Padding(

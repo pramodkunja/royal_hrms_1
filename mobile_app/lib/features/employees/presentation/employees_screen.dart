@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/permissions/permission_providers.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
@@ -86,13 +87,15 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   }
 
   Widget _buildEmployeeCard(BuildContext context, EmployeeModel emp) {
+    // Edit needs employees.edit (web: canEdit; backend EmployeeDetailView).
+    final canEdit = ref.watch(permissionProvider('employees.edit'));
     return EmployeeCard(
       employee: emp,
       onView: () => context.push(
         AppRoutes.employeeProfilePath(emp.employeeId),
         extra: emp,
       ),
-      onEdit: () async {
+      onEdit: !canEdit ? null : () async {
         final updated = await AddEmployeeSheet.show(context, editing: emp);
         if (updated == true) {
           ref.invalidate(employeeListProvider);
@@ -358,10 +361,13 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     // rendering that previous page instead of ever blanking the list —
     // `.when()`'s default loading-branch behavior isn't relied on here.
     final listState = listAsync.valueOrNull;
+    // Add and Bulk Import need employees.create (web employees/page.tsx;
+    // backend EmployeeListCreateView / EmployeeBulkImportView).
+    final canCreate = ref.watch(permissionProvider('employees.create'));
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      floatingActionButton: ExpandableFab(
+      floatingActionButton: !canCreate ? null : ExpandableFab(
         heroTag: 'employees_fab',
         expanded: _fabExpanded,
         onToggle: () => setState(() => _fabExpanded = !_fabExpanded),

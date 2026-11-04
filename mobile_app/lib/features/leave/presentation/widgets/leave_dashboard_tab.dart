@@ -7,6 +7,7 @@ import '../../../../shared/widgets/app_error_state.dart';
 import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
 import 'leave_request_detail_sheet.dart';
+import 'package:mobile_app/core/network/api_client.dart';
 
 // Matches the reference web dashboard's BALANCE_DISPLAY exactly — icon + color
 // per type is deliberately distinct from the LEAVE_TYPE_CONFIG identity colors
@@ -268,11 +269,12 @@ class _LeaveDashboardTabState extends ConsumerState<LeaveDashboardTab> {
                             ),
                           ),
                         ],
-                        error: (_, __) => [
+                        error: (e, __) => [
                           SizedBox(
                             width: 220,
                             child: Center(
-                              child: Text('Could not load balances',
+                              child: Text(userFriendlyMessage(e),
+                                  textAlign: TextAlign.center,
                                   style: AppTextStyles.caption
                                       .copyWith(color: AppColors.error)),
                             ),

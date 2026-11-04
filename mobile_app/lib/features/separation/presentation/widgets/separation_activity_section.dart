@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../providers/separation_providers.dart';
 import 'separation_status.dart';
+import 'package:mobile_app/core/network/api_client.dart';
 
 /// Audit-trail feed — `message` is the fully-formatted sentence the backend
 /// already built (e.g. "Manager Approval approved by Ravi Kumar."), rendered
@@ -80,7 +81,7 @@ class SeparationActivitySection extends ConsumerWidget {
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2))),
             ),
-            error: (_, __) => Text('Could not load activity.',
+            error: (e, __) => Text(userFriendlyMessage(e),
                 style: AppTextStyles.caption.copyWith(color: AppColors.error)),
           ),
         ],

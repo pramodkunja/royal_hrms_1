@@ -8,6 +8,8 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../data/models/my_profile_model.dart';
 import '../providers/profile_providers.dart';
 import 'profile_widgets.dart';
+import '../../domain/entities/my_profile_entity.dart';
+import '../../../separation/presentation/notice_period.dart' show formatNoticePeriod;
 
 // Mirrors backend's User.PROFILE_PHOTO_MIN_SIZE/MAX_SIZE (accounts/models.py)
 // so an out-of-range file is caught here instead of round-tripping to the
@@ -257,6 +259,16 @@ class _ProfilePersonalSectionState extends ConsumerState<ProfilePersonalSection>
           ProfileDisplayFieldRow(
             label1: 'Branch', value1: _s(p.branch),
             label2: 'Date of Joining', value2: _fmtDate(p.dateOfJoining),
+          ),
+          // Web My Profile → Work Information: assigned people (name only,
+          // "Not assigned" when none) and the notice period, read-only.
+          ProfileDisplayFieldRow(
+            label1: 'Reporting Manager', value1: assignedName(p.reportingManager),
+            label2: 'Reporting Approver', value2: assignedName(p.reportingApprover),
+          ),
+          ProfileDisplayFieldRow(
+            label1: 'HR', value1: assignedName(p.hr),
+            label2: 'Notice Period', value2: formatNoticePeriod(p.noticePeriodDays),
           ),
           _StatusBadgeRow(
             label1: 'Onboarding Status', status1: p.onboardingStatus,
