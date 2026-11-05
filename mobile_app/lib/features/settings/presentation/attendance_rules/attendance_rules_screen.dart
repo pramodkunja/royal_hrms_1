@@ -319,31 +319,47 @@ class _LabeledDropdown<T> extends StatelessWidget {
   final List<(T, String)> options;
   final ValueChanged<T?> onChanged;
   final bool enabled;
+  final String? hint;
 
   const _LabeledDropdown({
+    super.key,
     required this.label,
     required this.value,
     required this.options,
     required this.onChanged,
     this.enabled = true,
+    this.hint,
   });
 
   @override
   Widget build(BuildContext context) {
+    // A value the server holds that this list doesn't offer (set on web, or
+    // a newer option) is shown as-is and kept — never blanked or replaced.
+    final known = options.any((o) => o.$1 == value);
+    final items = [
+      ...options,
+      if (!known) (value, '$value (current)'),
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
         const SizedBox(height: 4),
         DropdownButtonFormField<T>(
+          // Rebuild when the option set changes (e.g. late-mark labels follow the rule).
+          key: ValueKey('$label|${items.map((o) => o.$2).join('|')}'),
           initialValue: value,
           isExpanded: true,
           onChanged: enabled ? onChanged : null,
-          items: options
+          items: items
               .map((o) => DropdownMenuItem(value: o.$1, child: Text(o.$2, overflow: TextOverflow.ellipsis)))
               .toList(),
           decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
         ),
+        if (hint != null) ...[
+          const SizedBox(height: 4),
+          Text(hint!, style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+        ],
       ],
     );
   }
@@ -637,7 +653,7 @@ class _PunchRulesCard extends StatelessWidget {
             label: 'Min Hours — Full Day',
             value: section.minHoursFullDay,
             enabled: canEdit,
-            options: const [('8.00', '8 hours'), ('7.00', '7 hours'), ('9.00', '9 hours')],
+            options: const [('8.00', '8 hours'), ('7.50', '7.5 hours'), ('7.00', '7 hours'), ('9.00', '9 hours')],
             onChanged: (v) => v != null ? onChanged(section.copyWith(minHoursFullDay: v)) : null,
           ),
           const SizedBox(height: 12),
@@ -655,6 +671,48 @@ class _PunchRulesCard extends StatelessWidget {
             enabled: canEdit,
             options: const [(30, '30 minutes'), (15, '15 minutes'), (45, '45 minutes')],
             onChanged: (v) => v != null ? onChanged(section.copyWith(earlyExitGraceMinutes: v)) : null,
+          ),
+          // Web Attendance Settings → Punch Rules (production).
+          const SizedBox(height: 12),
+          _LabeledDropdown<String>(
+            key: const Key('punch-missing-clock-out'),
+            label: 'Missing Clock Out',
+            value: section.missingPunchAction ?? PunchRulesSectionModel.defaultMissingPunchAction,
+            enabled: canEdit,
+            options: const [
+              ('require_regularization', 'Incomplete — regularize'),
+              ('mark_half_day', 'Mark as Half Day'),
+              ('mark_absent', 'Mark as Absent'),
+            ],
+            hint: 'Clock In without Clock Out after the shift ends. No punch at all is always Absent.',
+            onChanged: (v) => v != null ? onChanged(section.copyWith(missingPunchAction: v)) : null,
+          ),
+          const SizedBox(height: 12),
+          _LabeledDropdown<int>(
+            key: const Key('punch-early-leaves'),
+            label: 'Permitted Early Leaves / Month',
+            value: section.earlyLeaveAllowancePerMonth ?? PunchRulesSectionModel.defaultEarlyLeaveAllowance,
+            enabled: canEdit,
+            options: const [(0, 'Off'), (1, '1 per month'), (2, '2 per month'), (3, '3 per month')],
+            hint: 'Leaving within the Early Exit Grace still counts as a full day, this many times a month.',
+            onChanged: (v) => v != null ? onChanged(section.copyWith(earlyLeaveAllowancePerMonth: v)) : null,
+          ),
+          const SizedBox(height: 8),
+          Material(
+            type: MaterialType.transparency,
+            child: CheckboxListTile(
+              key: const Key('punch-wfh-report'),
+              value: section.wfhDailyReportRequired ?? PunchRulesSectionModel.defaultWfhDailyReportRequired,
+              onChanged: canEdit ? (v) => onChanged(section.copyWith(wfhDailyReportRequired: v ?? false)) : null,
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: Text('Apply WFH daily report rule to attendance', style: AppTextStyles.bodySmall),
+              subtitle: Text(
+                "Past WFH day without an on-time report = Absent; reviewer's Half Day / Not accepted applies.",
+                style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+              ),
+            ),
           ),
         ],
       ),
@@ -743,6 +801,7 @@ class _LateMarkCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mode = section.lateMarkMode ?? LateMarkRulesSectionModel.defaultLateMarkMode;
     return _SectionCard(
       icon: Icons.warning_amber_outlined,
       title: 'Late Mark & LOP Rule',
@@ -754,14 +813,28 @@ class _LateMarkCard extends StatelessWidget {
       onSave: onSave,
       child: Column(
         children: [
-          _LabeledDropdown<int>(
-            label: 'Late Marks per LOP',
-            value: section.lateMarksPerLop,
+          // Web Attendance Settings → Late Mark & LOP (production): the rule,
+          // then N, whose wording follows the rule.
+          _LabeledDropdown<String>(
+            key: const Key('late-mark-mode'),
+            label: 'Rule',
+            value: mode,
             enabled: canEdit,
             options: const [
-              (3, '3 late marks = 1 LOP'),
-              (2, '2 late marks = 1 LOP'),
-              (4, '4 late marks = 1 LOP'),
+              ('every_n', '1 LOP for every N late marks'),
+              ('after_allowance', 'N late marks allowed, LOP for each after'),
+            ],
+            onChanged: (v) => v != null ? onChanged(section.copyWith(lateMarkMode: v)) : null,
+          ),
+          const SizedBox(height: 12),
+          _LabeledDropdown<int>(
+            key: const Key('late-marks-n'),
+            label: 'Late Marks (N)',
+            value: section.lateMarksPerLop,
+            enabled: canEdit,
+            options: [
+              for (var n = 1; n <= 6; n++)
+                (n, mode == 'after_allowance' ? '$n allowed, then LOP each' : '$n late mark${n > 1 ? 's' : ''} = 1 LOP'),
               (0, 'No LOP (tracking only)'),
             ],
             onChanged: (v) => v != null ? onChanged(section.copyWith(lateMarksPerLop: v)) : null,

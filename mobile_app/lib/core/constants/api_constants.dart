@@ -89,6 +89,8 @@ class ApiConstants {
   static const String employees = '/employees/';
   static const String employeeBulkImport = '/employees/bulk-import/';
   static String employeeDetail(String employeeId) => '/employees/$employeeId/';
+  // HR reset: new temporary password emailed to the employee (employees.edit).
+  static String employeeResetPassword(String employeeId) => '/employees/$employeeId/reset-password/';
 
   // Employees — per-employee Approval Matrix (GET list of workflow rows /
   // PATCH a single row's L1/L2 override). Matches backend
@@ -221,6 +223,7 @@ class ApiConstants {
   // Payslip queries (PayslipQueryListView): GET ?mine=1 = the employee's
   // own queries in every status; POST {payslip, description} raises one.
   static const String payslipQueries = '/payroll/queries/';
+  static String resolvePayslipQuery(String id) => '/payroll/queries/$id/resolve/';
 
   // Holiday Calendar — matches backend /api/leave/holidays/
   static const String holidays = '/leave/holidays/';
@@ -452,6 +455,10 @@ class ApiConstants {
       '/dashboard/employee/attendance-summary/';
   static const String dashboardEmployeeAttendanceStatus =
       '/dashboard/employee/attendance-status/';
+  // The signed-in employee's own notice countdown (null unless their
+  // separation is fully approved) — web EmpNoticePeriodCard.
+  static const String dashboardEmployeeNoticePeriod =
+      '/dashboard/employee/notice-period/';
 
   // Shared announcement (no role gate) — matches web's EmpAnnouncement.
   static const String dashboardAnnouncement = '/dashboard/announcement/';

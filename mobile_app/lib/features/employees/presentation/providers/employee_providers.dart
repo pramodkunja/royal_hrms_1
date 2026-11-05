@@ -2,6 +2,8 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/router/access_control.dart' show userHasPermission;
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../settings/data/models/departments_model.dart';
 import '../../../settings/data/models/roles_model.dart';
 import '../../../settings/presentation/providers/settings_providers.dart';
@@ -498,4 +500,60 @@ String _friendlyError(Object e) {
     return 'Cannot reach server. Check your connection.';
   }
   return msg.replaceAll('Exception:', '').trim();
+}
+
+// ── Reset password (HR) ─────────────────────────────────────────────────────
+//
+// Web employees/[id]/_components/ResetPasswordModal.tsx. Shown and allowed
+// only with employees.edit (web canResetPassword={canEdit}); checked here as
+// well as in the UI, and the server enforces it again. Only the server's
+// confirmation counts as success; nothing secret is returned or kept.
+
+sealed class EmployeePasswordResetOutcome {
+  const EmployeePasswordResetOutcome();
+}
+
+/// The server changed the password. [emailSent] false means the new
+/// credentials could not be emailed (the server's [message] says so).
+class EmployeePasswordResetDone extends EmployeePasswordResetOutcome {
+  final String message;
+  final bool? emailSent;
+  const EmployeePasswordResetDone(this.message, {this.emailSent});
+}
+
+/// Nothing changed; [message] is safe to show.
+class EmployeePasswordResetFailed extends EmployeePasswordResetOutcome {
+  final String message;
+  const EmployeePasswordResetFailed(this.message);
+}
+
+/// Nothing was sent: a reset for this employee is already in progress.
+class EmployeePasswordResetIgnored extends EmployeePasswordResetOutcome {
+  const EmployeePasswordResetIgnored();
+}
+
+const kResetPasswordNotPermitted = 'You do not have permission to perform this action.';
+
+final employeePasswordResetterProvider = Provider<EmployeePasswordResetter>((ref) => EmployeePasswordResetter(ref));
+
+class EmployeePasswordResetter {
+  EmployeePasswordResetter(this._ref);
+  final Ref _ref;
+  final _inFlight = <String>{};
+
+  bool get _permitted => userHasPermission(_ref.read(authStateProvider).valueOrNull?.user, 'employees.edit');
+
+  /// Resets [employeeId]'s password (the employee code, as on web).
+  Future<EmployeePasswordResetOutcome> reset(String employeeId) async {
+    if (!_permitted) return const EmployeePasswordResetFailed(kResetPasswordNotPermitted);
+    if (!_inFlight.add(employeeId)) return const EmployeePasswordResetIgnored();
+    try {
+      final r = await _ref.read(employeesDataSourceProvider).resetPassword(employeeId);
+      return EmployeePasswordResetDone(r.message, emailSent: r.emailSent);
+    } catch (e) {
+      return EmployeePasswordResetFailed(userFriendlyMessage(e));
+    } finally {
+      _inFlight.remove(employeeId);
+    }
+  }
 }

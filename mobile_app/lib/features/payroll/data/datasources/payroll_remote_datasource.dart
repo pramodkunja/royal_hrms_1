@@ -48,6 +48,27 @@ class PayrollRemoteDataSource {
         .toList();
   }
 
+  /// HR queue: the open queries in the caller's scope. Only call this for a
+  /// payroll.view holder — for anyone else the server returns their own
+  /// queries instead (see payslip_query_model.dart).
+  Future<List<PayslipQueryModel>> fetchTeamQueries() async {
+    final res = await _dio.get(ApiConstants.payslipQueries);
+    final data = _unwrap(res.data);
+    return (data is List ? data : const [])
+        .whereType<Map<String, dynamic>>()
+        .map(PayslipQueryModel.fromJson)
+        .toList();
+  }
+
+  /// Resolves an open query with [resolutionNote] (payroll.edit). Returns
+  /// the resolved query as the server sends it.
+  Future<PayslipQueryModel> resolveQuery(String id, {required String resolutionNote}) async {
+    final res = await _dio.post(ApiConstants.resolvePayslipQuery(id),
+        data: {'resolution_note': resolutionNote.trim()});
+    final data = _unwrap(res.data);
+    return PayslipQueryModel.fromJson(data is Map ? data.cast<String, dynamic>() : const <String, dynamic>{});
+  }
+
   /// Raises a query on one of the employee's own payslips.
   Future<PayslipQueryModel> raiseQuery({required String payslipId, required String description}) async {
     final res = await _dio.post(ApiConstants.payslipQueries,

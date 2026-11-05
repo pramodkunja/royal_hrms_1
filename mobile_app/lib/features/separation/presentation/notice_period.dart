@@ -44,3 +44,11 @@ String formatNoticeDate(String? value) {
   if (month < 1 || month > 12) return '—';
   return '${int.parse(m.group(3)!)} ${_months[month - 1]} ${m.group(1)}';
 }
+
+/// "Notice completed" / "1 day remaining" / "N days remaining" / "—"
+/// (web noticeRemainingLabel). The day count is the server's.
+String noticeRemainingLabel(int? daysRemaining, String? status) {
+  if (status == 'completed') return 'Notice completed';
+  if (daysRemaining == null) return '—';
+  return '$daysRemaining ${daysRemaining == 1 ? 'day' : 'days'} remaining';
+}

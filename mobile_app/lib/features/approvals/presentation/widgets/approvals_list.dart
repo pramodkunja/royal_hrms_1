@@ -9,6 +9,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../providers/approvals_providers.dart';
 import 'approval_detail_sheet.dart';
 import 'approve_reject_dialog.dart';
+import 'resolve_payslip_query_dialog.dart';
 
 Color _statusColorFor(String status) => switch (status) {
       'approved' => AppColors.success,
@@ -297,6 +298,16 @@ class _ApprovalCardState extends ConsumerState<_ApprovalCard> {
     _showResult(err, approve: false);
   }
 
+  Future<void> _resolve() async {
+    final resolved = await showResolvePayslipQueryDialog(context, widget.item);
+    if (!resolved || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: const Text('Payslip query resolved.'),
+      backgroundColor: AppColors.success,
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+
   void _showResult(String? err, {required bool approve}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -310,9 +321,11 @@ class _ApprovalCardState extends ConsumerState<_ApprovalCard> {
   Widget build(BuildContext context) {
     final item = widget.item;
     final sc = _statusColorFor(item.status);
-    final showActions = item.canAction && item.isPending && !item.opensDetailScreen;
+    final showActions = item.canAction && item.isPending && item.selectable;
     // Separation: decided stage by stage on its detail screen.
     final showReview = item.canAction && item.isPending && item.opensDetailScreen;
+    // Payslip query: one action — resolve with a note (payroll.edit).
+    final showResolve = item.canAction && item.isPending && item.isPayslipQuery;
     final secondary = item.department.isNotEmpty ? item.department : item.secondaryText;
 
     return Container(
@@ -339,7 +352,7 @@ class _ApprovalCardState extends ConsumerState<_ApprovalCard> {
                     children: [
                       Checkbox(
                         value: widget.selected,
-                        onChanged: item.canAction && !item.opensDetailScreen
+                        onChanged: item.canAction && item.selectable
                             ? (v) => widget.onSelectChanged(v ?? false)
                             : null,
                         visualDensity: VisualDensity.compact,
@@ -415,6 +428,26 @@ class _ApprovalCardState extends ConsumerState<_ApprovalCard> {
                           icon: const Icon(Icons.rule_outlined, size: 14),
                           label: const Text('Review & decide',
                               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (showResolve) ...[
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 40),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          key: Key('approval-resolve-${item.sourceId}'),
+                          onPressed: _resolve,
+                          icon: const Icon(Icons.task_alt, size: 14),
+                          label: const Text('Resolve',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.success,
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
                         ),
                       ),
                     ),

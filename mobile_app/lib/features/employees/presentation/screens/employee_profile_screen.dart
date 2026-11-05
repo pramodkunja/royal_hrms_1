@@ -7,6 +7,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/permissions/permission_providers.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../notifications/presentation/widgets/notification_bell_button.dart';
+import '../../../separation/presentation/notice_period.dart' show formatNoticePeriod;
 import '../../../../shared/widgets/app_button.dart';
 import '../../data/datasources/employees_remote_datasource.dart';
 import '../../data/models/employee_model.dart';
@@ -16,6 +17,7 @@ import '../widgets/approval_override_sheet.dart';
 import '../widgets/employee_attendance_tab.dart';
 import '../widgets/employee_leave_tab.dart';
 import '../widgets/promotion_tab.dart';
+import '../widgets/reset_password_dialog.dart';
 import '../widgets/wishes_tab.dart';
 
 // ignore_for_file: use_build_context_synchronously
@@ -138,6 +140,24 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
     }
   }
 
+  Future<void> _onResetPassword() async {
+    final emp = widget.employee;
+    final done = await showResetPasswordDialog(
+      context,
+      // The employee code, as web's API.employees.resetPassword(id).
+      employeeId: emp.employeeId.isNotEmpty ? emp.employeeId : widget.employeeId,
+      employeeName: emp.fullName,
+    );
+    if (done == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(done.message),
+      // Web: an error-styled toast when the email could not be sent, even
+      // though the password did change.
+      backgroundColor: done.emailSent == false ? AppColors.error : AppColors.success,
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final emp = widget.employee;
@@ -159,9 +179,17 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
         ),
         title: Text('Employee Profile',
             style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
-        actions: const [
-          NotificationBellButton(),
-          SizedBox(width: 4),
+        actions: [
+          // Web ProfileHeader: "Reset Password" for employees.edit holders.
+          if (canEdit)
+            TextButton.icon(
+              key: const Key('employee-reset-password'),
+              onPressed: _onResetPassword,
+              icon: const Icon(Icons.key_outlined, size: 16),
+              label: const Text('Reset Password', style: TextStyle(fontSize: 12.5)),
+            ),
+          const NotificationBellButton(),
+          const SizedBox(width: 4),
         ],
         titleSpacing: 16,
         automaticallyImplyLeading: false,
@@ -797,6 +825,14 @@ class _PersonalContent extends StatelessWidget {
               : emp.hrName!,
           locked2: true,
         ),
+        // Web Personal card: "Notice Period" (read-only; set on Settings →
+        // Notice Period), "Not assigned" / "1 day" / "N days".
+        _DisplayField(
+          key: const Key('employee-notice-period'),
+          label: 'Notice Period',
+          value: formatNoticePeriod(emp.noticePeriodDays),
+          locked: true,
+        ),
         _DisplayField(label: 'Work Email', value: _s(emp.email), locked: true),
         _DisplayField(
           label: 'Current Address',
@@ -1219,6 +1255,7 @@ class _DisplayField extends StatelessWidget {
   final bool locked;
 
   const _DisplayField({
+    super.key,
     required this.label,
     required this.value,
     this.padBottom = true,

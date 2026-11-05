@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../../domain/entities/profile_document_entity.dart';
 
 class ProfileDocumentModel extends ProfileDocumentEntity {
@@ -24,4 +26,22 @@ class ProfileDocumentModel extends ProfileDocumentEntity {
       uploadedAt: json['uploaded_at'] as String? ?? '',
     );
   }
+}
+
+/// A file the employee picked to upload to their own profile.
+class ProfileUploadFile {
+  final String name;
+  final Uint8List bytes;
+
+  const ProfileUploadFile({required this.name, required this.bytes});
+}
+
+/// A document's contents, fetched with the user's login so it can be opened
+/// in the app. Never log [bytes] or [fileName].
+class ProfileDocumentFile {
+  final Uint8List bytes;
+  final String contentType;
+  final String fileName;
+
+  const ProfileDocumentFile({required this.bytes, required this.contentType, required this.fileName});
 }

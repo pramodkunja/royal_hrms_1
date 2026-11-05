@@ -255,8 +255,22 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
       _ds.convertInvalidPunch(id, targetPunchType: targetPunchType, targetTime: targetTime);
 
   @override
-  Future<List<int>> exportCsv({String? date, String? branch, String? department}) =>
-      _ds.exportCsv(date: date, branch: branch, department: department);
+  Future<List<int>> exportCsv({
+    String? date,
+    String? month,
+    String? fromDate,
+    String? toDate,
+    String? branch,
+    String? department,
+  }) =>
+      _ds.exportCsv(
+        date: date,
+        month: month,
+        fromDate: fromDate,
+        toDate: toDate,
+        branch: branch,
+        department: department,
+      );
 
   @override
   Future<ImportResultEntity> importCsv(List<int> bytes, String fileName) =>

@@ -221,6 +221,25 @@ class EmployeesRemoteDataSource {
     return EmployeeModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
+  // ── Reset password (HR) ────────────────────────────────────────────────────
+  //
+  // Production EmployeeResetPasswordView: POST with no body; employees.edit
+  // (403 "You do not have permission to perform this action."), branch scope
+  // (404 "Employee not found."), never one's own account (400 "Use Change
+  // Password from your own account instead."). A new temporary password is
+  // emailed to the employee and never returned. 2xx either way once the
+  // password changed: data.email_sent says whether the email went out, and
+  // the message says so.
+
+  Future<({String message, bool? emailSent})> resetPassword(String employeeId) async {
+    final res = await _dio.post(ApiConstants.employeeResetPassword(employeeId));
+    final body = res.data;
+    final message = body is Map && body['message'] is String ? body['message'] as String : 'Password reset.';
+    final data = _unwrap(body);
+    final sent = data is Map ? data['email_sent'] : null;
+    return (message: message, emailSent: sent is bool ? sent : null);
+  }
+
   // ── Status toggle ──────────────────────────────────────────────────────────
 
   Future<void> patchEmployeeStatus(String employeeId, bool isActive) async {

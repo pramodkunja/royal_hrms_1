@@ -4,6 +4,7 @@ import 'package:mobile_app/core/network/connectivity_provider.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_theme.dart';
 import 'package:mobile_app/core/theme/theme_mode_provider.dart';
+import 'package:mobile_app/features/profile/presentation/providers/profile_document_cleanup.dart';
 import 'package:mobile_app/features/voice_commands/presentation/widgets/voice_mic_overlay.dart';
 import 'package:mobile_app/shared/widgets/no_internet_view.dart';
 
@@ -14,6 +15,8 @@ class RoyalHrmsApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
     final isDark = ref.watch(themeModeProvider);
+    // Clears temporary copies of profile documents at start and sign-out.
+    ref.watch(profileDocumentSessionCleanupProvider);
 
     // Almost every screen reads colors from the static AppColors fields
     // rather than Theme.of(context) (see app_colors.dart), and most

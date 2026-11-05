@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:cookie_jar/cookie_jar.dart';
@@ -326,6 +327,155 @@ void main() {
       expect(server.customFiles.length, 2);
       expect(find.textContaining('one.pdf'), findsOneWidget);
       expect(find.textContaining('two.pdf'), findsOneWidget);
+    });
+  });
+
+  // Phase 11.7: failures never show raw DioException text.
+  group('custom file field failures', () {
+    Finder fileField(String key) => find.byKey(Key('onboarding-file-$key'));
+    Finder inField(String key, Finder f) => find.descendant(of: fileField(key), matching: f);
+    void expectNoRawError() {
+      expect(find.textContaining('DioException'), findsNothing);
+      expect(find.textContaining('SocketException'), findsNothing);
+      expect(find.textContaining('Exception:'), findsNothing);
+    }
+
+    testWidgets('a refused upload shows the server message; nothing is listed; Upload works again', (tester) async {
+      await pumpWizard(tester);
+      for (final (status, message) in [
+        (400, 'Uploaded file is empty.'),
+        (403, '"ID Proof" can no longer be edited here. Contact HR to update it.'),
+      ]) {
+        server.refuseNextCustomFileUpload = (status: status, message: message);
+        picks.add(pdf('passport.pdf'));
+        await tapText(tester, 'Upload');
+        expect(inField('id_proof', find.text(message)), findsOneWidget, reason: '$status');
+        expectNoRawError();
+      }
+      expect(server.customFiles, isEmpty);
+      expect(find.textContaining('passport.pdf'), findsNothing);
+      // The button is usable again, and a later upload clears the error.
+      picks.add(pdf('passport.pdf'));
+      await tapText(tester, 'Upload');
+      expect(find.textContaining('passport.pdf'), findsOneWidget);
+      expect(find.textContaining('can no longer be edited'), findsNothing);
+    });
+
+    testWidgets('a refusal without a server message gets the usual status message, not raw text', (tester) async {
+      await pumpWizard(tester);
+      server.refuseNextCustomFileUpload = (status: 502, message: null);
+      picks.add(pdf('passport.pdf'));
+      await tapText(tester, 'Upload');
+      expect(inField('id_proof', find.text('Something went wrong on the server. Please try again.')), findsOneWidget);
+      expect(find.textContaining('Bad Gateway'), findsNothing);
+      expectNoRawError();
+    });
+
+    testWidgets('upload with no connection: a friendly message, then a retry succeeds', (tester) async {
+      await pumpWizard(tester);
+      server.dropNextCustomFileUpload = true;
+      picks.add(pdf('passport.pdf'));
+      await tapText(tester, 'Upload');
+      expect(inField('id_proof', find.text(kCustomFileUploadConnectionError)), findsOneWidget);
+      expectNoRawError();
+      expect(server.customFiles, isEmpty);
+      expect(find.text('Upload'), findsOneWidget); // not stuck "Uploading…"
+
+      picks.add(pdf('passport.pdf'));
+      await tapText(tester, 'Upload');
+      expect(find.text(kCustomFileUploadConnectionError), findsNothing);
+      expect(find.textContaining('passport.pdf'), findsOneWidget);
+    });
+
+    testWidgets('remove with no connection: a friendly message, the file stays, a retry removes it', (tester) async {
+      await pumpWizard(tester);
+      picks.add(pdf('passport.pdf'));
+      await tapText(tester, 'Upload');
+      server.dropNextCustomFileDelete = true;
+      await tester.tap(find.byTooltip('Remove'));
+      await tester.pumpAndSettle();
+      expect(inField('id_proof', find.text(kCustomFileDeleteConnectionError)), findsOneWidget);
+      expectNoRawError();
+      expect(server.customFiles, hasLength(1));
+      expect(find.textContaining('passport.pdf'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Remove'));
+      await tester.pumpAndSettle();
+      expect(server.customFiles, isEmpty);
+      expect(find.text(kCustomFileDeleteConnectionError), findsNothing);
+    });
+
+    test('the provider maps each failure without exposing raw text', () async {
+      final c = ProviderContainer(overrides: [
+        dioProvider.overrideWithValue(Dio(BaseOptions(baseUrl: 'https://test.invalid/api'))
+          ..httpClientAdapter = FakeOnboardingServer(fields: _fields(), docTypes: _docTypes())),
+      ]);
+      addTearDown(c.dispose);
+      final fake = (c.read(dioProvider).httpClientAdapter as FakeOnboardingServer)
+        ..dropNextCustomFileUpload = true
+        ..dropNextCustomFileDelete = true;
+      c.listen(onboardingProfileProvider, (_, __) {});
+      final n = c.read(onboardingProfileProvider.notifier);
+      expect(await n.uploadCustomFile('id_proof', 'a.pdf', List.filled(10, 1)), kCustomFileUploadConnectionError);
+      expect(await n.deleteCustomFile(5), kCustomFileDeleteConnectionError);
+      fake.refuseNextCustomFileUpload = (status: 400, message: 'Uploaded file is empty.');
+      expect(await n.uploadCustomFile('id_proof', 'a.pdf', List.filled(10, 1)), 'Uploaded file is empty.');
+      // Local validation is unchanged and sends nothing.
+      expect(await n.uploadCustomFile('id_proof', 'a.docx', List.filled(10, 1)),
+          'Only PDF, JPG, and PNG files are allowed.');
+      // A removal the server refuses keeps its message.
+      expect(await n.deleteCustomFile(999), 'File not found.');
+    });
+
+    testWidgets('two file fields on one step work independently', (tester) async {
+      await pumpWizard(tester, fields: [
+        field('id_proof', 'ID Proof', 0, 1, type: 'file', required: true, custom: true),
+        field('certs', 'Certificates', 0, 2, type: 'file', custom: true, multiple: true),
+      ]);
+      expect(fileField('id_proof'), findsOneWidget);
+      expect(fileField('certs'), findsOneWidget);
+      Finder button(String key) => inField(key, find.byType(OutlinedButton));
+      bool enabled(String key) => tester.widget<OutlinedButton>(button(key)).onPressed != null;
+
+      // While ID Proof uploads, only ID Proof is busy.
+      final gate = server.holdNextCustomFileUpload = Completer<void>();
+      picks.add(pdf('passport.pdf'));
+      await tester.tap(inField('id_proof', find.text('Upload')));
+      await tester.pump();
+      expect(inField('id_proof', find.text('Uploading…')), findsOneWidget);
+      expect(enabled('id_proof'), isFalse);
+      expect(inField('certs', find.text('Upload')), findsOneWidget);
+      expect(enabled('certs'), isTrue);
+      gate.complete();
+      await tester.pumpAndSettle();
+
+      // A failure on Certificates stays on Certificates.
+      server.dropNextCustomFileUpload = true;
+      picks.add(pdf('degree.pdf'));
+      await tester.tap(inField('certs', find.text('Upload')));
+      await tester.pumpAndSettle();
+      expect(inField('certs', find.text(kCustomFileUploadConnectionError)), findsOneWidget);
+      expect(inField('id_proof', find.text(kCustomFileUploadConnectionError)), findsNothing);
+      expect(enabled('id_proof'), isTrue);
+
+      // Each file is stored and shown under its own field_key.
+      picks.add(pdf('degree.pdf'));
+      await tester.tap(inField('certs', find.text('Upload')));
+      await tester.pumpAndSettle();
+      expect({for (final f in server.customFiles) f['file_name']: f['field_key']},
+          {'passport.pdf': 'id_proof', 'degree.pdf': 'certs'});
+      expect(inField('id_proof', find.textContaining('passport.pdf')), findsOneWidget);
+      expect(inField('id_proof', find.textContaining('degree.pdf')), findsNothing);
+      expect(inField('certs', find.textContaining('degree.pdf')), findsOneWidget);
+      expect(inField('certs', find.textContaining('passport.pdf')), findsNothing);
+      expect(inField('id_proof', find.text('Replace')), findsOneWidget); // single-file
+      expect(inField('certs', find.text('Add another')), findsOneWidget); // multi-file
+
+      // Removing one leaves the other.
+      await tester.tap(inField('id_proof', find.byTooltip('Remove')));
+      await tester.pumpAndSettle();
+      expect(server.customFiles.map((f) => f['field_key']), ['certs']);
+      expect(inField('certs', find.textContaining('degree.pdf')), findsOneWidget);
     });
   });
 

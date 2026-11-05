@@ -13,6 +13,9 @@ import '../../data/models/employee_dashboard_models.dart';
 import '../providers/dashboard_providers.dart';
 import '../widgets/attendance_ring_card.dart';
 import '../widgets/dashboard_section.dart';
+import '../widgets/emp_notice_period_card.dart';
+import '../widgets/emp_upcoming_holidays_card.dart';
+import '../widgets/leave_monthly_breakdown.dart';
 import '../widgets/quick_access.dart';
 import 'package:mobile_app/features/documents/presentation/providers/document_providers.dart'
     show pendingAcknowledgementsProvider;
@@ -39,8 +42,10 @@ class EmployeeDashboardView extends ConsumerWidget {
 
     Future<void> refreshAll() async {
       ref.invalidate(employeeKpisProvider);
+      ref.invalidate(employeeNoticePeriodProvider);
       ref.invalidate(todayAttendanceProvider);
       ref.invalidate(employeeLeaveBalancesProvider);
+      ref.invalidate(employeeHolidaysProvider);
       ref.invalidate(employeeAttendanceSummaryForProvider);
       ref.invalidate(employeeActionItemsProvider);
       ref.invalidate(employeeRecentRequestsProvider);
@@ -68,6 +73,9 @@ class EmployeeDashboardView extends ConsumerWidget {
           children: [
             const _EmpConsoleCard(),
             const SizedBox(height: 20),
+            // Own notice countdown (web EmpNoticePeriodCard) — nothing unless
+            // the employee's separation is fully approved.
+            const EmpNoticePeriodCard(),
             // Company Policy etc. still to acknowledge — nothing when none.
             const PendingAcknowledgementsBanner(),
             const AttendanceRingCard(),
@@ -75,6 +83,9 @@ class EmployeeDashboardView extends ConsumerWidget {
             QuickAccessCard(items: kQuickItemsEmployee),
             const SizedBox(height: 20),
             const _EmpLeaveBalancesCard(),
+            const SizedBox(height: 20),
+            // Web row 3 pairs Leave Balances with Upcoming Holidays.
+            const EmpUpcomingHolidaysCard(),
             const SizedBox(height: 20),
             const _EmpAttendanceSummaryCard(),
             const SizedBox(height: 20),
@@ -208,6 +219,10 @@ Map<String, Color> get _kLeaveTypeColor => {
   'lwp': const Color(0xFF64748B),
 };
 
+/// Web: leave_type_label || LEAVE_TYPE_LABEL[leave_type] || leave_type —
+/// the server's label covers custom leave types.
+String _leaveTypeLabelFor(EmployeeLeaveBalance b) => b.leaveTypeLabel ?? _kLeaveTypeLabel[b.leaveType] ?? b.leaveType;
+
 const Map<String, String> _kLeaveTypeLabel = {
   'casual': 'Casual Leave',
   'sick': 'Sick Leave',
@@ -274,6 +289,9 @@ class _EmpLeaveBalancesCard extends ConsumerWidget {
                   ],
                 ),
               ],
+              // Month-by-month breakdown (web MonthlyBreakdown) — nothing when
+              // no leave type has monthly data.
+              LeaveMonthlyBreakdownSection(balances: summary.balances, year: year, labelFor: _leaveTypeLabelFor),
             ],
           );
         },
@@ -297,7 +315,7 @@ class _EmpBalanceCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _kLeaveTypeColor[balance.leaveType] ?? AppColors.primary;
-    final label = _kLeaveTypeLabel[balance.leaveType] ?? balance.leaveType;
+    final label = _leaveTypeLabelFor(balance);
     final pct = balance.totalDays > 0
         ? (balance.remaining / balance.totalDays).clamp(0.0, 1.0)
         : 0.0;

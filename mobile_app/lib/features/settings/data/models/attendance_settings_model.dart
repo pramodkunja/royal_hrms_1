@@ -165,11 +165,32 @@ class PunchRulesSectionModel {
   final String minHoursHalfDay;
   final int earlyExitGraceMinutes;
 
+  // Policy rules added in production (AttendancePunchRules). Null = not in
+  // the server's response: then they are never sent, so saving this section
+  // can't overwrite a value this app doesn't know. Any value the server
+  // returns is sent back unchanged unless HR changes it.
+  /// `require_regularization` | `mark_half_day` | `mark_absent`.
+  final String? missingPunchAction;
+
+  /// 0 = off; early departures within the grace that still count as full day.
+  final int? earlyLeaveAllowancePerMonth;
+
+  /// Apply the WFH daily work-report rule to attendance.
+  final bool? wfhDailyReportRequired;
+
   const PunchRulesSectionModel({
     required this.minHoursFullDay,
     required this.minHoursHalfDay,
     required this.earlyExitGraceMinutes,
+    this.missingPunchAction,
+    this.earlyLeaveAllowancePerMonth,
+    this.wfhDailyReportRequired,
   });
+
+  /// Backend defaults (models.AttendancePunchRules), shown when unknown.
+  static const defaultMissingPunchAction = 'require_regularization';
+  static const defaultEarlyLeaveAllowance = 0;
+  static const defaultWfhDailyReportRequired = false;
 
   static const defaults = PunchRulesSectionModel(
     minHoursFullDay: '8.00',
@@ -182,6 +203,9 @@ class PunchRulesSectionModel {
       minHoursFullDay: _toDecimalString(json['min_hours_full_day'], '8.00'),
       minHoursHalfDay: _toDecimalString(json['min_hours_half_day'], '4.00'),
       earlyExitGraceMinutes: (json['early_exit_grace_minutes'] as num? ?? 30).toInt(),
+      missingPunchAction: json['missing_punch_action'] as String?,
+      earlyLeaveAllowancePerMonth: (json['early_leave_allowance_per_month'] as num?)?.toInt(),
+      wfhDailyReportRequired: json['wfh_daily_report_required'] as bool?,
     );
   }
 
@@ -189,17 +213,26 @@ class PunchRulesSectionModel {
         'min_hours_full_day': minHoursFullDay,
         'min_hours_half_day': minHoursHalfDay,
         'early_exit_grace_minutes': earlyExitGraceMinutes,
+        if (missingPunchAction != null) 'missing_punch_action': missingPunchAction,
+        if (earlyLeaveAllowancePerMonth != null) 'early_leave_allowance_per_month': earlyLeaveAllowancePerMonth,
+        if (wfhDailyReportRequired != null) 'wfh_daily_report_required': wfhDailyReportRequired,
       };
 
   PunchRulesSectionModel copyWith({
     String? minHoursFullDay,
     String? minHoursHalfDay,
     int? earlyExitGraceMinutes,
+    String? missingPunchAction,
+    int? earlyLeaveAllowancePerMonth,
+    bool? wfhDailyReportRequired,
   }) =>
       PunchRulesSectionModel(
         minHoursFullDay: minHoursFullDay ?? this.minHoursFullDay,
         minHoursHalfDay: minHoursHalfDay ?? this.minHoursHalfDay,
         earlyExitGraceMinutes: earlyExitGraceMinutes ?? this.earlyExitGraceMinutes,
+        missingPunchAction: missingPunchAction ?? this.missingPunchAction,
+        earlyLeaveAllowancePerMonth: earlyLeaveAllowancePerMonth ?? this.earlyLeaveAllowancePerMonth,
+        wfhDailyReportRequired: wfhDailyReportRequired ?? this.wfhDailyReportRequired,
       );
 }
 
@@ -250,9 +283,17 @@ class LateMarkRulesSectionModel {
   final int lateMarksPerLop;
   final String lopDeductionUnit; // 'full_day' | 'half_day'
 
+  /// `every_n` (one LOP for every N late marks) | `after_allowance` (N
+  /// allowed, LOP for each after). Null = not in the server's response;
+  /// then never sent (see [PunchRulesSectionModel]).
+  final String? lateMarkMode;
+
+  static const defaultLateMarkMode = 'every_n';
+
   const LateMarkRulesSectionModel({
     required this.lateMarksPerLop,
     required this.lopDeductionUnit,
+    this.lateMarkMode,
   });
 
   static const defaults = LateMarkRulesSectionModel(
@@ -264,18 +305,21 @@ class LateMarkRulesSectionModel {
     return LateMarkRulesSectionModel(
       lateMarksPerLop: (json['late_marks_per_lop'] as num? ?? 3).toInt(),
       lopDeductionUnit: json['lop_deduction_unit'] as String? ?? 'full_day',
+      lateMarkMode: json['late_mark_mode'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() => {
         'late_marks_per_lop': lateMarksPerLop,
         'lop_deduction_unit': lopDeductionUnit,
+        if (lateMarkMode != null) 'late_mark_mode': lateMarkMode,
       };
 
-  LateMarkRulesSectionModel copyWith({int? lateMarksPerLop, String? lopDeductionUnit}) =>
+  LateMarkRulesSectionModel copyWith({int? lateMarksPerLop, String? lopDeductionUnit, String? lateMarkMode}) =>
       LateMarkRulesSectionModel(
         lateMarksPerLop: lateMarksPerLop ?? this.lateMarksPerLop,
         lopDeductionUnit: lopDeductionUnit ?? this.lopDeductionUnit,
+        lateMarkMode: lateMarkMode ?? this.lateMarkMode,
       );
 }
 

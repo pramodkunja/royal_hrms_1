@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../domain/entities/attendance_entity.dart';
@@ -375,17 +377,64 @@ class AttendanceRemoteDataSource {
 
   // ── Export / Import ──────────────────────────────────────────────────────────
 
-  Future<List<int>> exportCsv({String? date, String? branch, String? department}) async {
-    final res = await _dio.get(
-      ApiConstants.attendanceExport,
-      queryParameters: {
-        if (date != null) 'date': date,
-        if (branch != null && branch.isNotEmpty) 'branch': branch,
-        if (department != null && department.isNotEmpty) 'department': department,
-      },
-      options: Options(responseType: ResponseType.bytes),
-    );
-    return res.data as List<int>;
+  /// GET /attendance/export/ — exactly one of [date] (one day; omitted means
+  /// the server's today), [month] (`YYYY-MM`, the whole month) or
+  /// [fromDate] + [toDate] (`YYYY-MM-DD`, both inclusive), plus the branch and
+  /// department filters, as web's attendanceExportParams sends them. The CSV
+  /// is built by the server and returned untouched.
+  Future<List<int>> exportCsv({
+    String? date,
+    String? month,
+    String? fromDate,
+    String? toDate,
+    String? branch,
+    String? department,
+  }) async {
+    try {
+      final res = await _dio.get(
+        ApiConstants.attendanceExport,
+        queryParameters: {
+          if (month != null)
+            'month': month
+          else if (fromDate != null || toDate != null) ...{
+            'from_date': fromDate ?? '',
+            'to_date': toDate ?? '',
+          } else if (date != null)
+            'date': date,
+          if (branch != null && branch.isNotEmpty) 'branch': branch,
+          if (department != null && department.isNotEmpty) 'department': department,
+        },
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return res.data as List<int>;
+    } on DioException catch (e) {
+      // A refusal ({status, message}) arrives as bytes here because of the
+      // bytes response type; decode it so the server's message can be shown.
+      final res = e.response;
+      final data = res?.data;
+      if (res != null && data is List<int>) {
+        Object? decoded;
+        try {
+          decoded = jsonDecode(utf8.decode(data, allowMalformed: true));
+        } catch (_) {}
+        if (decoded is Map) {
+          throw DioException(
+            requestOptions: e.requestOptions,
+            response: Response(
+              requestOptions: res.requestOptions,
+              statusCode: res.statusCode,
+              statusMessage: res.statusMessage,
+              headers: res.headers,
+              data: decoded,
+            ),
+            type: e.type,
+            error: e.error,
+            message: e.message,
+          );
+        }
+      }
+      rethrow;
+    }
   }
 
   Future<ImportResultModel> importCsv(List<int> bytes, String fileName) async {

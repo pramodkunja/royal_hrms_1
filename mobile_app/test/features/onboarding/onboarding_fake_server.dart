@@ -99,6 +99,18 @@ class FakeOnboardingServer implements HttpClientAdapter {
 
   bool failConfig = false;
 
+  /// The next custom-file upload / removal fails with no response at all
+  /// (offline), as a real connection failure does.
+  bool dropNextCustomFileUpload = false;
+  bool dropNextCustomFileDelete = false;
+
+  /// The next custom-file upload is refused with this status and message;
+  /// a null message gives a bare non-JSON body (e.g. a proxy's 502 page).
+  ({int status, String? message})? refuseNextCustomFileUpload;
+
+  /// When set, the next custom-file upload waits for it before answering.
+  Completer<void>? holdNextCustomFileUpload;
+
   /// field_key → serializer message returned (422) when that key is saved
   /// with a non-empty value.
   final rejections = <String, String>{};
@@ -156,9 +168,33 @@ class FakeOnboardingServer implements HttpClientAdapter {
       return _ok('Files retrieved.', customFiles);
     }
     if (p == ApiConstants.onboardingCustomFileFields && m == 'POST') {
+      final gate = holdNextCustomFileUpload;
+      if (gate != null) {
+        holdNextCustomFileUpload = null;
+        await gate.future;
+      }
+      if (dropNextCustomFileUpload) {
+        dropNextCustomFileUpload = false;
+        throw DioException(
+            requestOptions: o, type: DioExceptionType.connectionError, message: 'SocketException: Failed host lookup');
+      }
+      final refusal = refuseNextCustomFileUpload;
+      if (refusal != null) {
+        refuseNextCustomFileUpload = null;
+        final message = refusal.message;
+        return message == null
+            ? ResponseBody.fromString('<html><body>502 Bad Gateway</body></html>', refusal.status, headers: {
+                Headers.contentTypeHeader: ['text/html'],
+              })
+            : _fail(refusal.status, message);
+      }
       return _uploadCustomFile(o.data as FormData);
     }
     if (p.startsWith(ApiConstants.onboardingCustomFileFields) && m == 'DELETE') {
+      if (dropNextCustomFileDelete) {
+        dropNextCustomFileDelete = false;
+        throw DioException(requestOptions: o, type: DioExceptionType.connectionTimeout, message: 'Connection timed out');
+      }
       final id = int.parse(p.split('/').where((s) => s.isNotEmpty).last);
       final before = customFiles.length;
       customFiles.removeWhere((f) => f['id'] == id);

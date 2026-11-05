@@ -7,6 +7,7 @@ import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/theme_mode_provider.dart';
 import 'package:mobile_app/features/auth/presentation/providers/auth_providers.dart';
 import '../navigation/nav_config.dart';
+import '../search/global_search_dialog.dart';
 import '../widgets/app_sidebar.dart';
 import '../widgets/app_top_bar.dart';
 
@@ -88,6 +89,7 @@ class _DashboardShellState extends ConsumerState<DashboardShell> {
           onThemeToggleTap: () => ref.read(themeModeProvider.notifier).toggle(),
           isDarkMode: isDarkMode,
           onLogoutTap: _handleLogout,
+          onSearchTap: () => showGlobalSearch(context),
         ),
         body: widget.child,
       ),

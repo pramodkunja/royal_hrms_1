@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/permissions/permission_providers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/app_error_state.dart';
@@ -16,7 +17,10 @@ import '../../../employees/data/models/employee_model.dart';
 import '../../../employees/presentation/providers/employee_providers.dart';
 import '../../../employees/presentation/widgets/employee_attendance_tab.dart';
 import '../../domain/entities/attendance_entity.dart';
+import '../providers/attendance_export.dart' show kAttendanceExportPermission;
 import '../providers/attendance_providers.dart';
+import '../widgets/attendance_export_sheet.dart';
+import '../widgets/punch_location_section.dart';
 import '../widgets/hr_correction_card.dart';
 
 // ─── Colour helpers ───────────────────────────────────────────────────────────
@@ -877,39 +881,24 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
     }
   }
 
+  // Export CSV (web AttendanceTab "Export:" controls): single day (the
+  // table's date), month or custom range, with the table's branch and
+  // department filters — see attendance_export_sheet.dart.
   Future<void> _exportCsv(BuildContext context, WidgetRef ref) async {
-    final branch = ref.read(hrAttendanceBranchFilterProvider);
-    final department = ref.read(hrAttendanceDepartmentFilterProvider);
-    final date = ref.read(hrAttendanceDateFilterProvider);
-    try {
-      final bytes = await ref.read(attendanceRepositoryProvider).exportCsv(
-            date: date == null ? null : _isoDate(date),
-            branch: branch,
-            department: department,
-          );
-      final path = await FilePicker.platform.saveFile(
-        fileName:
-            'attendance_${date == null ? _isoDate(DateTime.now()) : _isoDate(date)}.csv',
-        bytes: Uint8List.fromList(bytes),
-        type: FileType.custom,
-        allowedExtensions: ['csv'],
-      );
-      if (!context.mounted) return;
-      if (path != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: const Text('Attendance exported.'),
-              backgroundColor: AppColors.success),
-        );
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(friendlyAttendanceError(e)),
-            backgroundColor: AppColors.error),
-      );
-    }
+    final saved = await showAttendanceExportSheet(
+      context,
+      tableDate: ref.read(hrAttendanceDateFilterProvider),
+      branch: ref.read(hrAttendanceBranchFilterProvider),
+      department: ref.read(hrAttendanceDepartmentFilterProvider),
+    );
+    if (saved == null || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text(saved.empty
+              ? 'Attendance exported — no records matched the filters.'
+              : 'Attendance exported.'),
+          backgroundColor: AppColors.success),
+    );
   }
 
   @override
@@ -939,6 +928,7 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
     final selectedBranch = ref.watch(hrAttendanceBranchFilterProvider);
     final selectedDept = ref.watch(hrAttendanceDepartmentFilterProvider);
     final selectedDate = ref.watch(hrAttendanceDateFilterProvider);
+    final canExport = ref.watch(permissionProvider(kAttendanceExportPermission));
     final selectedStatus = ref.watch(attendanceRecordsStatusFilterProvider);
     final statusLabel = _kAttendanceStatusFilterOptions
         .firstWhere((e) => e.key == selectedStatus,
@@ -1102,15 +1092,17 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
                           size: 18, color: AppColors.textSecondary),
                     ),
                   const SizedBox(width: 4),
-                  OutlinedButton.icon(
-                    onPressed: () => _exportCsv(context, ref),
-                    icon: const Icon(Icons.download_outlined, size: 15),
-                    label: const Text('Export'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      textStyle: AppTextStyles.labelSmall,
+                  if (canExport)
+                    OutlinedButton.icon(
+                      key: const Key('attendance-export-button'),
+                      onPressed: () => _exportCsv(context, ref),
+                      icon: const Icon(Icons.download_outlined, size: 15),
+                      label: const Text('Export'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        textStyle: AppTextStyles.labelSmall,
+                      ),
                     ),
-                  ),
                   const SizedBox(width: 6),
                   OutlinedButton.icon(
                     onPressed: () => showDialog(
@@ -1533,6 +1525,11 @@ class _AttendanceCard extends ConsumerWidget {
                       _KVRow('Overtime', d.overtime),
                       if (d.note != null && d.note!.isNotEmpty)
                         _KVRow('Note', d.note!),
+                      // Web "Punch History & Location": Clock In / Clock Out
+                      // location + GPS accuracy guidance (display only).
+                      PunchLocationSection(
+                          clockIn: d.clockInLocation,
+                          clockOut: d.clockOutLocation),
                       if (d.punches.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Text('Punches',

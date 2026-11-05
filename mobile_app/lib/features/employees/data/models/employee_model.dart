@@ -25,6 +25,11 @@ class EmployeeModel {
   final String? reportingManagerName;
   final String? hrId;
   final String? hrName;
+
+  /// Notice period in days assigned by HR (Settings → Notice Period);
+  /// null = not assigned. Display only: never sent back on save (web
+  /// employees/[id]/page.tsx).
+  final int? noticePeriodDays;
   final List<EmployeeDocumentEntity> documents;
 
   // Profile: personal
@@ -80,6 +85,7 @@ class EmployeeModel {
     this.reportingManagerName,
     this.hrId,
     this.hrName,
+    this.noticePeriodDays,
     this.documents = const [],
     this.dateOfBirth = '',
     this.gender = '',
@@ -136,6 +142,7 @@ class EmployeeModel {
       reportingManagerName: reportingManager?['name'] as String?,
       hrId:                 hr?['id'] as String?,
       hrName:               hr?['name'] as String?,
+      noticePeriodDays:     _noticeDays(json['notice_period_days']),
       documents: documentsRaw
           .whereType<Map<String, dynamic>>()
           .map(EmployeeDocumentEntity.fromJson)
@@ -175,6 +182,15 @@ class EmployeeModel {
     return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
   }
 
+  /// `notice_period_days` as sent (an integer or null). Anything else — a
+  /// non-number, a fraction or a negative — is treated as not assigned
+  /// rather than shown as a misleading figure.
+  static int? _noticeDays(Object? v) {
+    final n = v is num ? v : (v is String ? num.tryParse(v.trim()) : null);
+    if (n == null || n < 0 || n != n.roundToDouble()) return null;
+    return n.toInt();
+  }
+
   EmployeeModel copyWith({
     bool? isActive,
     String? status,
@@ -191,6 +207,7 @@ class EmployeeModel {
       reportingManagerId: reportingManagerId,
       reportingManagerName: reportingManagerName,
       hrId: hrId, hrName: hrName,
+      noticePeriodDays: noticePeriodDays,
       documents: documents,
       dateOfBirth: dateOfBirth, gender: gender, maritalStatus: maritalStatus,
       fatherName: fatherName, bloodGroup: bloodGroup,

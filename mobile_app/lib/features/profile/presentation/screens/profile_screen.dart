@@ -10,6 +10,7 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../separation/presentation/widgets/profile_separation_section.dart';
 import '../../data/models/my_profile_model.dart';
 import '../providers/profile_providers.dart';
+import '../widgets/profile_documents_section.dart';
 import '../widgets/profile_face_id_section.dart';
 import '../widgets/profile_sections.dart';
 

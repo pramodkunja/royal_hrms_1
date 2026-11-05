@@ -6,6 +6,27 @@ import '../../data/datasources/onboarding_datasource.dart';
 import '../../data/models/onboarding_config_models.dart';
 import '../../domain/entities/onboarding_entity.dart';
 
+const kCustomFileUploadConnectionError =
+    'Unable to upload the document. Please check your internet connection and try again.';
+const kCustomFileDeleteConnectionError =
+    'Unable to remove the document. Please check your internet connection and try again.';
+
+/// The message to show for a failed custom-file upload or removal. The
+/// datasource has already turned a server-provided message into
+/// `Exception(message)`; what reaches here otherwise is the raw
+/// [DioException], which must never be shown as-is:
+///  - no response at all (offline, timeout): [connectionMessage];
+///  - a response without a server message (e.g. a bare 500 or 413): the
+///    app's usual message for that status (`userFriendlyMessage`).
+/// Anything else (the server's message, local validation) is kept.
+String _customFileError(Object e, {required String connectionMessage}) {
+  if (e is DioException) {
+    return e.response == null ? connectionMessage : userFriendlyMessage(e);
+  }
+  final raw = e.toString();
+  return raw.startsWith('Exception: ') ? raw.substring(11) : raw;
+}
+
 final onboardingDatasourceProvider = Provider.autoDispose<OnboardingDatasource>(
   (ref) => OnboardingDatasource(ref.watch(dioProvider)),
 );
@@ -114,8 +135,7 @@ class OnboardingProfileNotifier
       ref.invalidate(onboardingCustomFilesProvider);
       return null;
     } catch (e) {
-      final raw = e.toString();
-      return raw.startsWith('Exception: ') ? raw.substring(11) : raw;
+      return _customFileError(e, connectionMessage: kCustomFileUploadConnectionError);
     }
   }
 
@@ -125,8 +145,7 @@ class OnboardingProfileNotifier
       ref.invalidate(onboardingCustomFilesProvider);
       return null;
     } catch (e) {
-      final raw = e.toString();
-      return raw.startsWith('Exception: ') ? raw.substring(11) : raw;
+      return _customFileError(e, connectionMessage: kCustomFileDeleteConnectionError);
     }
   }
 

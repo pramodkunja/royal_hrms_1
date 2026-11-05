@@ -3,8 +3,10 @@ import '../../../../core/constants/api_constants.dart';
 import '../models/admin_dashboard_models.dart';
 import '../models/dashboard_common_models.dart';
 import '../models/employee_dashboard_models.dart';
+import '../models/employee_notice_period_model.dart';
 import '../models/hr_dashboard_models.dart';
 import '../models/manager_dashboard_models.dart';
+import '../models/upcoming_holidays.dart';
 
 /// All `apps/dashboard` endpoints in one datasource — mirrors how the web
 /// frontend's dashboard widgets are all thin wrappers over the same
@@ -147,6 +149,21 @@ class DashboardRemoteDataSource {
   }
 
   // ── Employee ────────────────────────────────────────────────────────────────
+
+  /// Null when the employee has no fully approved separation.
+  Future<EmployeeNoticePeriod?> fetchEmployeeNoticePeriod() async {
+    final res = await _dio.get(ApiConstants.dashboardEmployeeNoticePeriod);
+    return EmployeeNoticePeriod.fromResponseData(_unwrap(res.data));
+  }
+
+  /// GET /leave/holidays/ with no parameters, as web's EmpUpcomingHolidays:
+  /// the server scopes it to company-wide holidays plus the caller's branch
+  /// (all branches for unrestricted users). Never send `branch` — the server
+  /// would use it instead of the caller's own.
+  Future<List<DashboardHoliday>> fetchHolidays() async {
+    final res = await _dio.get(ApiConstants.holidays);
+    return DashboardHoliday.listFrom(_unwrap(res.data));
+  }
 
   Future<EmployeeKpis> fetchEmployeeKpis() async {
     final res = await _dio.get(ApiConstants.dashboardEmployeeKpis);

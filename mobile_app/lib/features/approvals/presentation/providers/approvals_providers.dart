@@ -10,6 +10,9 @@ import '../../../expenses/data/models/expense_model.dart';
 import '../../../expenses/presentation/providers/expense_providers.dart'
     show expenseDataSourceProvider;
 import '../../../leave/domain/entities/leave_entity.dart';
+import '../../../payroll/data/models/payslip_query_model.dart';
+import '../../../payroll/presentation/providers/payroll_providers.dart'
+    show payrollDataSourceProvider;
 import '../../../separation/domain/entities/separation_entity.dart';
 import '../../../separation/presentation/providers/separation_providers.dart'
     show separationRepositoryProvider;
@@ -30,7 +33,7 @@ import '../../../wfh/presentation/providers/wfh_providers.dart'
 
 // ── Unified item model (presentation-layer glue, not a clean-arch entity) ──────
 
-enum UnifiedApprovalKind { leave, expense, attendanceCorrection, wfh, separation }
+enum UnifiedApprovalKind { leave, expense, attendanceCorrection, wfh, separation, payslip }
 
 class UnifiedApprovalItem {
   final UnifiedApprovalKind kind;
@@ -55,6 +58,7 @@ class UnifiedApprovalItem {
   final HrCorrectionRowEntity? correction;
   final WfhRequestEntity? wfh;
   final SeparationRequestEntity? separation;
+  final PayslipQueryModel? payslipQuery;
 
   const UnifiedApprovalItem({
     required this.kind,
@@ -76,6 +80,7 @@ class UnifiedApprovalItem {
     this.correction,
     this.wfh,
     this.separation,
+    this.payslipQuery,
   });
 
   /// Separation is a multi-stage workflow decided stage by stage on its own
@@ -83,6 +88,42 @@ class UnifiedApprovalItem {
   /// /dashboard/separation/<id> and excludes it from bulk selection) — no
   /// quick approve/reject or bulk action from the inbox.
   bool get opensDetailScreen => kind == UnifiedApprovalKind.separation;
+
+  /// A payslip query has one action — resolve, with a note — not
+  /// approve/reject (web TeamApprovalsSection opens ResolveQueryModal).
+  bool get isPayslipQuery => kind == UnifiedApprovalKind.payslip;
+
+  /// Web UNSELECTABLE_KINDS: separation and payslip queries are never bulk
+  /// actioned.
+  bool get selectable => !opensDetailScreen && !isPayslipQuery;
+
+  /// Web payslipToItem: the HR queue row for a payslip query. [canResolve]
+  /// is the viewer's payroll.edit; the server returns only open queries,
+  /// shown as pending ("resolved" maps to approved, as on web).
+  factory UnifiedApprovalItem.fromPayslipQuery(PayslipQueryModel q, {required bool canResolve}) {
+    final text = q.description.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final preview = text.length > 140 ? '${text.substring(0, 140)}…' : text;
+    final raised = q.createdAt.length >= 10 ? q.createdAt.substring(0, 10) : q.createdAt;
+    return UnifiedApprovalItem(
+      kind: UnifiedApprovalKind.payslip,
+      sourceId: q.id,
+      employeeName: q.raisedByName,
+      employeeCode: q.employeeIdCode ?? '',
+      department: '',
+      secondaryText: '',
+      typeLabel: 'Payslip Request',
+      primaryLine: q.cycleStart == null || q.cycleStart!.isEmpty
+          ? 'Payslip Query'
+          : 'Payslip Query · pay period from ${q.cycleStart}',
+      secondaryLine: preview.isEmpty ? '—' : preview,
+      tertiaryLine: raised.isEmpty ? '' : 'Raised $raised',
+      reason: q.description,
+      status: q.isResolved ? 'approved' : 'pending',
+      submittedAt: _parseDate(q.createdAt),
+      canAction: !q.isResolved && canResolve,
+      payslipQuery: q,
+    );
+  }
 
   /// Web separationToItem: the request's server-computed can_approve (some
   /// stage this user may act on now), with the request's own fields.
@@ -241,6 +282,12 @@ class UnifiedTeamApprovalsNotifier
     // everyone for settings.edit). Without it, scope=team silently returns
     // the caller's OWN requests, so it is not asked for at all.
     final canSeparation = userHasPermission(user, 'separation.approve');
+    // payroll.view — web TeamApprovalsSection fetches the HR payslip-query
+    // queue only for it: without it, GET /payroll/queries/ returns the
+    // caller's OWN queries, which must never appear in a team inbox.
+    // payroll.edit decides whether a query can be resolved.
+    final canPayslipQueries = userHasPermission(user, 'payroll.view');
+    final canResolvePayslip = userHasPermission(user, 'payroll.edit');
 
     final results = await Future.wait<dynamic>([
       canLeave
@@ -279,6 +326,9 @@ class UnifiedTeamApprovalsNotifier
               .getRequests(scope: 'team', pageSize: 100)
               .then((page) => page.results)
           : Future.value(<SeparationRequestEntity>[]),
+      canPayslipQueries
+          ? ref.read(payrollDataSourceProvider).fetchTeamQueries()
+          : Future.value(<PayslipQueryModel>[]),
     ]);
 
     final leaveItems = (results[0] as List<LeaveRequestEntity>)
@@ -293,7 +343,10 @@ class UnifiedTeamApprovalsNotifier
     final separationItems = (results[4] as List<SeparationRequestEntity>)
         .map(UnifiedApprovalItem.fromSeparation);
 
-    return [...leaveItems, ...expenseItems, ...correctionItems, ...wfhItems, ...separationItems];
+    final payslipItems = (results[5] as List<PayslipQueryModel>)
+        .map((q) => UnifiedApprovalItem.fromPayslipQuery(q, canResolve: canResolvePayslip));
+
+    return [...leaveItems, ...expenseItems, ...correctionItems, ...wfhItems, ...separationItems, ...payslipItems];
   }
 
   Future<void> refresh() async {
@@ -327,6 +380,8 @@ class UnifiedTeamApprovalsNotifier
       case UnifiedApprovalKind.separation:
         // Decided per stage on the separation detail screen only.
         throw StateError('Separation requests are approved stage by stage on their detail screen.');
+      case UnifiedApprovalKind.payslip:
+        throw StateError('Payslip queries are resolved with a note, not approved.');
     }
   }
 
@@ -354,6 +409,8 @@ class UnifiedTeamApprovalsNotifier
         break;
       case UnifiedApprovalKind.separation:
         throw StateError('Separation requests are rejected stage by stage on their detail screen.');
+      case UnifiedApprovalKind.payslip:
+        throw StateError('Payslip queries are resolved with a note, not rejected.');
     }
   }
 
@@ -377,6 +434,21 @@ class UnifiedTeamApprovalsNotifier
     } catch (e) {
       return friendlyApprovalsError(e);
     }
+  }
+
+  /// Resolves a payslip query with [note] (web ResolveQueryModal). The
+  /// query is only shown as resolved once the server confirms it and the
+  /// inbox reloads. Returns null on success, or the message to show.
+  Future<String?> resolvePayslipQuery(UnifiedApprovalItem item, String note) async {
+    final text = note.trim();
+    if (text.isEmpty) return kResolutionNoteRequired;
+    try {
+      await ref.read(payrollDataSourceProvider).resolveQuery(item.sourceId, resolutionNote: text);
+    } catch (e) {
+      return friendlyApprovalsError(e);
+    }
+    await refresh();
+    return null;
   }
 
   /// Partial-failure tolerant bulk action — mirrors web's Promise.allSettled
@@ -406,7 +478,7 @@ class UnifiedTeamApprovalsNotifier
 
 // ── Screen-local filter / UI state ──────────────────────────────────────────────
 
-enum ApprovalsTypeTab { all, leave, expense, attendanceCorrection, wfh, separation }
+enum ApprovalsTypeTab { all, leave, expense, attendanceCorrection, wfh, separation, payslip }
 
 UnifiedApprovalKind? _kindForTab(ApprovalsTypeTab tab) => switch (tab) {
       ApprovalsTypeTab.all => null,
@@ -416,6 +488,7 @@ UnifiedApprovalKind? _kindForTab(ApprovalsTypeTab tab) => switch (tab) {
         UnifiedApprovalKind.attendanceCorrection,
       ApprovalsTypeTab.wfh => UnifiedApprovalKind.wfh,
       ApprovalsTypeTab.separation => UnifiedApprovalKind.separation,
+      ApprovalsTypeTab.payslip => UnifiedApprovalKind.payslip,
     };
 
 final approvalsSearchQueryProvider = StateProvider.autoDispose<String>((ref) => '');
@@ -490,6 +563,7 @@ class ApprovalsSummaryCounts {
   final int correctionPending;
   final int wfhPending;
   final int separationPending;
+  final int payslipPending;
   const ApprovalsSummaryCounts({
     required this.pendingTotal,
     required this.leavePending,
@@ -497,6 +571,7 @@ class ApprovalsSummaryCounts {
     required this.correctionPending,
     required this.wfhPending,
     this.separationPending = 0,
+    this.payslipPending = 0,
   });
 }
 
@@ -509,13 +584,15 @@ final approvalsSummaryCountsProvider = Provider.autoDispose<ApprovalsSummaryCoun
   final correction = countFor(UnifiedApprovalKind.attendanceCorrection);
   final wfh = countFor(UnifiedApprovalKind.wfh);
   final separation = countFor(UnifiedApprovalKind.separation);
+  final payslip = countFor(UnifiedApprovalKind.payslip);
   return ApprovalsSummaryCounts(
-    pendingTotal: leave + expense + correction + wfh + separation,
+    pendingTotal: leave + expense + correction + wfh + separation + payslip,
     leavePending: leave,
     expensePending: expense,
     correctionPending: correction,
     wfhPending: wfh,
     separationPending: separation,
+    payslipPending: payslip,
   );
 });
 
@@ -530,8 +607,12 @@ final approvalsTypeTabCountsProvider =
     ApprovalsTypeTab.attendanceCorrection: counts.correctionPending,
     ApprovalsTypeTab.wfh: counts.wfhPending,
     ApprovalsTypeTab.separation: counts.separationPending,
+    ApprovalsTypeTab.payslip: counts.payslipPending,
   };
 });
+
+/// Web ResolveQueryModal's message for an empty note.
+const kResolutionNoteRequired = 'Please enter a resolution note.';
 
 // ── Error helper ──────────────────────────────────────────────────────────────
 

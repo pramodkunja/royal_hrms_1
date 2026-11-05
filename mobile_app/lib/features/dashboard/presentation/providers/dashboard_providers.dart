@@ -4,8 +4,10 @@ import '../../data/datasources/dashboard_remote_datasource.dart';
 import '../../data/models/admin_dashboard_models.dart';
 import '../../data/models/dashboard_common_models.dart';
 import '../../data/models/employee_dashboard_models.dart';
+import '../../data/models/employee_notice_period_model.dart';
 import '../../data/models/hr_dashboard_models.dart';
 import '../../data/models/manager_dashboard_models.dart';
+import '../../data/models/upcoming_holidays.dart';
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
 
@@ -122,6 +124,12 @@ final employeeKpisProvider = FutureProvider.autoDispose<EmployeeKpis>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchEmployeeKpis(),
 );
 
+/// The signed-in employee's own notice period (null when none). Cached while
+/// the Employee dashboard shows it; refreshed with the rest of the dashboard.
+final employeeNoticePeriodProvider = FutureProvider.autoDispose<EmployeeNoticePeriod?>(
+  (ref) => ref.read(dashboardDataSourceProvider).fetchEmployeeNoticePeriod(),
+);
+
 final employeeLeaveBalancesProvider =
     FutureProvider.autoDispose<EmployeeLeaveBalanceSummary>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchEmployeeLeaveBalances(),
@@ -158,6 +166,22 @@ final employeeAttendanceStatusProvider =
     FutureProvider.autoDispose<EmployeeAttendanceStatus>(
   (ref) =>
       ref.read(dashboardDataSourceProvider).fetchEmployeeAttendanceStatus(),
+);
+
+/// Every holiday the employee can see (web EmpUpcomingHolidays' one
+/// request); the card picks the upcoming ones with [upcomingHolidays].
+final employeeHolidaysProvider = FutureProvider.autoDispose<List<DashboardHoliday>>(
+  (ref) => ref.read(dashboardDataSourceProvider).fetchHolidays(),
+);
+
+/// "Today" for the Upcoming Holidays card (overridable in tests).
+final dashboardClockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
+
+/// The UTC and device-local dates the Upcoming Holidays card uses (web
+/// selects by UTC date, badges by local date). Tests override this to fix
+/// both, independent of the machine's time zone.
+final upcomingHolidayDatesProvider = Provider.autoDispose<HolidayDayRefs>(
+  (ref) => HolidayDayRefs.at(ref.watch(dashboardClockProvider)()),
 );
 
 // ── Shared ─────────────────────────────────────────────────────────────────

@@ -73,6 +73,11 @@ dependencies:
   image: ^4.8.0
   uuid: ^4.5.1
 
+  # In-app viewing of the employee's own profile documents (PDF). The file
+  # never leaves the app: no other app is given access. JPG/PNG are shown
+  # with Flutter's own Image widget. Opened with PdfDocument.openFile (not
+  # openData, which leaves an undeleted copy in the cache on Android).
+  pdfx: ^2.11.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

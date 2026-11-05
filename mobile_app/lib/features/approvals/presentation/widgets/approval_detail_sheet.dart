@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../providers/approvals_providers.dart';
 import 'approve_reject_dialog.dart';
+import 'resolve_payslip_query_dialog.dart';
 
 Future<void> showApprovalDetailSheet(BuildContext context, UnifiedApprovalItem item) {
   return showModalBottomSheet<void>(
@@ -118,6 +119,18 @@ class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
     }
   }
 
+  Future<void> _resolve() async {
+    final resolved = await showResolvePayslipQueryDialog(context, widget.item);
+    if (!resolved || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).pop();
+    messenger.showSnackBar(SnackBar(
+      content: const Text('Payslip query resolved.'),
+      backgroundColor: AppColors.success,
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
@@ -156,7 +169,7 @@ class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('${item.typeLabel} Request',
+                          Text(item.isPayslipQuery ? 'Payslip Query' : '${item.typeLabel} Request',
                               style: AppTextStyles.h4.copyWith(fontSize: 15)),
                           Text(item.employeeName,
                               style: AppTextStyles.caption.copyWith(fontSize: 11),
@@ -233,8 +246,8 @@ class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
 
                       _divider(),
 
-                      // Reason
-                      _sectionLabel('REASON'),
+                      // Reason (the employee's query text for a payslip query)
+                      _sectionLabel(item.isPayslipQuery ? 'QUERY' : 'REASON'),
                       const SizedBox(height: 3),
                       Text(item.reason.isNotEmpty ? item.reason : '—',
                           style: AppTextStyles.body.copyWith(fontSize: 13)),
@@ -267,7 +280,32 @@ class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
               ),
 
               // ── Footer actions ───────────────────────────────────────────
-              if (showActions)
+              if (showActions && item.isPayslipQuery)
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    border: Border(top: BorderSide(color: AppColors.border)),
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        key: const Key('detail-resolve'),
+                        onPressed: _resolve,
+                        icon: const Icon(Icons.task_alt, size: 14),
+                        label: const Text('Resolve Query',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.success,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              else if (showActions)
                 Container(
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
                   decoration: BoxDecoration(
@@ -330,6 +368,7 @@ class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
         UnifiedApprovalKind.attendanceCorrection => Icons.fact_check_outlined,
         UnifiedApprovalKind.wfh => Icons.home_work_outlined,
         UnifiedApprovalKind.separation => Icons.logout_outlined,
+        UnifiedApprovalKind.payslip => Icons.chat_bubble_outline,
       };
 
   Widget _sectionLabel(String text) => Text(text,
@@ -349,6 +388,13 @@ class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
         return [
           _kv('Type', item.primaryLine),
           _kv('Proposed last day', item.separation?.proposedLastWorkingDay ?? '—'),
+        ];
+      case UnifiedApprovalKind.payslip:
+        final q = item.payslipQuery!;
+        return [
+          if ((q.cycleStart ?? '').isNotEmpty) _kv('Pay period from', q.cycleStart!),
+          _kv('Raised on', q.createdAt.length >= 10 ? q.createdAt.substring(0, 10) : (q.createdAt.isEmpty ? '—' : q.createdAt)),
+          _kv('Status', q.isResolved ? 'Resolved' : 'Open'),
         ];
       case UnifiedApprovalKind.leave:
         final r = item.leave!;
@@ -474,6 +520,22 @@ class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
       color: AppColors.success,
       detail: item.employeeName,
     );
+
+    if (item.kind == UnifiedApprovalKind.payslip) {
+      final q = item.payslipQuery;
+      final resolved = q?.isResolved ?? false;
+      return [
+        submitted,
+        const SizedBox(height: 8),
+        _TimelineRow(
+          label: 'Resolution',
+          color: resolved ? AppColors.success : AppColors.warning,
+          detail: resolved
+              ? 'Resolved${(q?.resolvedByName ?? '').isNotEmpty ? ' — ${q!.resolvedByName}' : ''}'
+              : 'Open',
+        ),
+      ];
+    }
 
     if (item.kind == UnifiedApprovalKind.expense) {
       return [

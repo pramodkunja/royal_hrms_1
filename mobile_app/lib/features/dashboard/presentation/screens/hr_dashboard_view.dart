@@ -11,6 +11,7 @@ import 'package:mobile_app/features/dashboard/data/models/hr_dashboard_models.da
 import 'package:mobile_app/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:mobile_app/features/dashboard/presentation/widgets/attendance_ring_card.dart';
 import 'package:mobile_app/features/dashboard/presentation/widgets/dashboard_section.dart';
+import 'package:mobile_app/features/dashboard/presentation/widgets/hr_notice_period_row.dart';
 import 'package:mobile_app/features/dashboard/presentation/widgets/quick_access.dart';
 import 'package:mobile_app/features/employees/data/models/employee_model.dart'
     show EmployeeFilters;
@@ -573,7 +574,10 @@ class _LifecycleList extends StatelessWidget {
     if (group.employees.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Center(child: Text('No data', style: AppTextStyles.caption)),
+        // Web: "No employees currently serving notice" on the Notice tab.
+        child: Center(
+            child: Text(tab == 1 ? 'No employees currently serving notice' : 'No data',
+                style: AppTextStyles.caption)),
       );
     }
     return Column(
@@ -597,6 +601,16 @@ class _LifecycleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Notice Period tab: web NoticePeriodRow (approval date, last working
+    // day, server countdown/status). Tapping still opens the employee.
+    if (tab == 1) {
+      return GestureDetector(
+        onTap: employee.employeeId.isEmpty
+            ? null
+            : () => goToDashboardSection(context, '${AppRoutes.employees}/${employee.employeeId}'),
+        child: HrNoticePeriodRow(employee: employee),
+      );
+    }
     final parts = [
       if (employee.department.isNotEmpty) employee.department,
       if ((employee.designation ?? '').isNotEmpty) employee.designation!,

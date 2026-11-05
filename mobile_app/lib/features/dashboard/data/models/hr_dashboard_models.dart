@@ -148,6 +148,18 @@ class HrLifecycleEmployee {
   final int? yearsCompleted;
   final String? anniversaryDate;
 
+  // Notice Period tab only (people.py _notice_period_data): the approved
+  // separation's branch, request id, final approval time (ISO datetime or
+  // null), confirmed last working day (YYYY-MM-DD), the server's
+  // days_remaining (≥ 0) and notice_status ("serving" | "completed").
+  // Shown as sent — never recomputed here.
+  final String? branch;
+  final String? requestId;
+  final String? approvedAt;
+  final String? lastWorkingDay;
+  final int? daysRemaining;
+  final String? noticeStatus;
+
   const HrLifecycleEmployee({
     required this.employeeId,
     required this.fullName,
@@ -156,7 +168,21 @@ class HrLifecycleEmployee {
     required this.dateOfJoining,
     required this.yearsCompleted,
     required this.anniversaryDate,
+    this.branch,
+    this.requestId,
+    this.approvedAt,
+    this.lastWorkingDay,
+    this.daysRemaining,
+    this.noticeStatus,
   });
+
+  static String? _text(Object? v) => v is String && v.trim().isNotEmpty ? v.trim() : null;
+
+  /// A whole, non-negative number of days; anything else is unknown.
+  static int? _days(Object? v) {
+    if (v is! num || !v.isFinite || v < 0 || v != v.roundToDouble()) return null;
+    return v.toInt();
+  }
 
   factory HrLifecycleEmployee.fromJson(Map<String, dynamic> json) {
     return HrLifecycleEmployee(
@@ -167,6 +193,12 @@ class HrLifecycleEmployee {
       dateOfJoining: json['date_of_joining'] as String?,
       yearsCompleted: (json['years_completed'] as num?)?.toInt(),
       anniversaryDate: json['anniversary_date'] as String?,
+      branch: _text(json['branch']),
+      requestId: json['request_id'] == null ? null : '${json['request_id']}',
+      approvedAt: _text(json['approved_at']),
+      lastWorkingDay: _text(json['last_working_day']),
+      daysRemaining: _days(json['days_remaining']),
+      noticeStatus: _text(json['notice_status']),
     );
   }
 }

@@ -127,7 +127,15 @@ abstract class AttendanceRepository {
   });
 
   // Export / Import
-  Future<List<int>> exportCsv({String? date, String? branch, String? department});
+  /// One of [date], [month] (YYYY-MM) or [fromDate] + [toDate] (inclusive).
+  Future<List<int>> exportCsv({
+    String? date,
+    String? month,
+    String? fromDate,
+    String? toDate,
+    String? branch,
+    String? department,
+  });
   Future<ImportResultEntity> importCsv(List<int> bytes, String fileName);
   Future<List<int>> fetchImportSample({String format});
 

@@ -223,6 +223,50 @@ class AttendancePunchDetailEntity {
   });
 }
 
+/// Server GPS accuracy classification (apps/attendance/location_accuracy.py):
+/// ≤ 100 m precise, 100–1,000 m approximate, > 1,000 m very approximate.
+enum GpsAccuracyLevel { precise, approximate, veryApproximate }
+
+/// The actual Clock In or Clock Out punch location on an HR attendance
+/// detail (services_hr.get_attendance_detail, `clock_in_*` / `clock_out_*`).
+/// Every value is the server's; the accuracy text and level are display
+/// guidance only.
+class PunchLocationEntity {
+  final double? latitude;
+  final double? longitude;
+
+  /// Raw reverse-geocoded label (`*_location_label`).
+  final String? label;
+
+  /// Label with the server's approximate-location prefix
+  /// (`*_location_display`), when it has one.
+  final String? display;
+
+  /// "±17 m", "±1.5 km" — null when the accuracy is missing or invalid.
+  final String? accuracyText;
+  final GpsAccuracyLevel? accuracyLevel;
+
+  /// An office punch ("Office – …" label): web shows no accuracy line.
+  final bool isOffice;
+
+  const PunchLocationEntity({
+    this.latitude,
+    this.longitude,
+    this.label,
+    this.display,
+    this.accuracyText,
+    this.accuracyLevel,
+    this.isOffice = false,
+  });
+
+  /// Web shows the place, accuracy and coordinates only when both
+  /// coordinates exist ("—" otherwise).
+  bool get hasCoordinates => latitude != null && longitude != null;
+
+  /// Web: location_display ?? location_label (null → "Location name unavailable").
+  String? get placeName => display ?? label;
+}
+
 class AttendanceDetailEntity {
   final String? recordId;
   final String employeeId;
@@ -241,6 +285,10 @@ class AttendanceDetailEntity {
   final String? note;
   final List<AttendancePunchDetailEntity> punches;
 
+  /// Clock In / Clock Out punch locations (null when the response has none).
+  final PunchLocationEntity? clockInLocation;
+  final PunchLocationEntity? clockOutLocation;
+
   const AttendanceDetailEntity({
     required this.recordId,
     required this.employeeId,
@@ -258,6 +306,8 @@ class AttendanceDetailEntity {
     required this.isEarlyExit,
     this.note,
     required this.punches,
+    this.clockInLocation,
+    this.clockOutLocation,
   });
 }
 

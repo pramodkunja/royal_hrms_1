@@ -1,4 +1,7 @@
 import 'dashboard_common_models.dart';
+import 'employee_leave_breakdown.dart';
+
+export 'employee_leave_breakdown.dart';
 
 /// `GET /dashboard/employee/kpis/` — `EmployeeKPIView`.
 class EmployeeKpis {
@@ -72,22 +75,64 @@ class EmployeeLeaveBalance {
   final double remaining;
   final double carriedForward;
 
+  /// Server label (custom leave types have no fixed name); null when absent.
+  final String? leaveTypeLabel;
+
+  /// "annual" | "monthly" (null on older cached payloads).
+  final String? creditSchedule;
+  final bool? monthlyCarryForward;
+
+  /// Recorded movements by month (see employee_leave_breakdown.dart).
+  final LeaveMonthlyBreakdown? monthly;
+
+  /// Full month-by-month statement — monthly-credited types only.
+  final LeaveStatement? statement;
+
+  /// The balance exactly as the server sent it, so fields this app doesn't
+  /// read yet are not lost.
+  final Map<String, dynamic> raw;
+
   const EmployeeLeaveBalance({
     required this.leaveType,
     required this.totalDays,
     required this.usedDays,
     required this.remaining,
     required this.carriedForward,
+    this.leaveTypeLabel,
+    this.creditSchedule,
+    this.monthlyCarryForward,
+    this.monthly,
+    this.statement,
+    this.raw = const {},
   });
 
   factory EmployeeLeaveBalance.fromJson(Map<String, dynamic> json) {
+    final label = json['leave_type_label'];
     return EmployeeLeaveBalance(
       leaveType: json['leave_type'] as String? ?? '',
       totalDays: (json['total_days'] as num? ?? 0).toDouble(),
       usedDays: (json['used_days'] as num? ?? 0).toDouble(),
       remaining: (json['remaining'] as num? ?? 0).toDouble(),
       carriedForward: (json['carried_forward'] as num? ?? 0).toDouble(),
+      leaveTypeLabel: label is String && label.trim().isNotEmpty ? label : null,
+      creditSchedule: json['credit_schedule'] as String?,
+      monthlyCarryForward: json['monthly_carry_forward'] is bool ? json['monthly_carry_forward'] as bool : null,
+      monthly: LeaveMonthlyBreakdown.fromJson(json['monthly']),
+      statement: LeaveStatement.fromJson(json['statement']),
+      raw: Map<String, dynamic>.unmodifiable(json),
     );
+  }
+
+  /// Web typesWithBreakdown: something to show month by month.
+  bool get hasMonthlyBreakdown =>
+      (statement?.months.isNotEmpty ?? false) || (monthly?.months.isNotEmpty ?? false);
+
+  /// Web scheduleLabel.
+  String get scheduleLabel {
+    if (creditSchedule != 'monthly') return 'Credited annually';
+    return monthlyCarryForward == false
+        ? 'Credited monthly · no carry forward'
+        : 'Credited monthly · carries forward';
   }
 }
 

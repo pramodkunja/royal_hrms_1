@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../data/models/my_profile_model.dart';
@@ -31,13 +30,6 @@ String _fmtDate(String? raw) {
   } catch (_) {
     return raw;
   }
-}
-
-String _fmtFileSize(int bytes) {
-  if (bytes <= 0) return '';
-  if (bytes < 1024) return '$bytes B';
-  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
-  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
 }
 
 // ── Personal information ─────────────────────────────────────────────────────────
@@ -637,62 +629,4 @@ class ProfileChangePasswordSection extends StatelessWidget {
   }
 }
 
-// ── Documents (read-only list) ─────────────────────────────────────────────────
-
-class ProfileDocumentsSection extends ConsumerWidget {
-  const ProfileDocumentsSection({super.key});
-
-  Future<void> _openDocument(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final docsAsync = ref.watch(myDocumentsProvider);
-    return ProfileSectionCard(
-      icon: Icons.folder_outlined,
-      title: 'Documents',
-      child: docsAsync.when(
-        data: (docs) {
-          if (docs.isEmpty) {
-            return Text(
-              'No documents uploaded yet.',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
-            );
-          }
-          return Column(
-            children: [
-              for (var i = 0; i < docs.length; i++) ...[
-                if (i > 0) Divider(height: 1, color: AppColors.border),
-                ProfileDocumentItem(
-                  name: docs[i].documentTypeDisplay.isNotEmpty
-                      ? docs[i].documentTypeDisplay
-                      : docs[i].documentType,
-                  subtitle: [
-                    if (docs[i].uploadedAt.isNotEmpty) _fmtDate(docs[i].uploadedAt),
-                    if (docs[i].fileSize > 0) _fmtFileSize(docs[i].fileSize),
-                  ].join(' · '),
-                  onView: docs[i].fileUrl.isEmpty
-                      ? null
-                      : () => _openDocument(docs[i].fileUrl),
-                ),
-              ],
-            ],
-          );
-        },
-        loading: () => const Padding(
-          padding: EdgeInsets.symmetric(vertical: 8),
-          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-        ),
-        error: (e, _) => Text(
-          friendlyProfileError(e),
-          style: AppTextStyles.bodySmall.copyWith(color: AppColors.error),
-        ),
-      ),
-    );
-  }
-}
+// Documents: see profile_documents_section.dart (ProfileDocumentsSection).

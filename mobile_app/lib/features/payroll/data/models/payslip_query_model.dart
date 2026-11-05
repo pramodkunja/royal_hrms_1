@@ -9,6 +9,14 @@
 //        its query_deadline has not passed; description required, at most
 //        2000 characters. Raising one moves the payslip to "queried", so a
 //        second query on it is refused.
+//   GET  /payroll/queries/ (no mine) → for a payroll.view holder, the OPEN
+//        queries in their branch scope (all branches with settings.edit) —
+//        the HR queue shown in Approvals. Without payroll.view the same call
+//        returns the caller's own queries, so it is only made with it.
+//   POST /payroll/queries/<id>/resolve/ {resolution_note} — payroll.edit
+//        only ("Only HR admin can resolve queries.", 403); the note is
+//        required ("resolution_note is required."); 404 when the query is
+//        not open or not in scope. Returns the resolved query.
 // No categories, attachments, detail endpoint, reply, edit or delete exist;
 // HR resolves a query with a resolution note. Client rules below mirror web
 // (frontend/lib/payslipQuery.ts); the server stays the authority.
@@ -26,6 +34,11 @@ class PayslipQueryModel {
   final String? cycleStart;
   final String createdAt;
 
+  /// HR queue context (PayslipQuerySerializer): who raised it and their
+  /// employee code. Empty / null when the server sends nothing.
+  final String raisedByName;
+  final String? employeeIdCode;
+
   const PayslipQueryModel({
     required this.id,
     required this.payslipId,
@@ -36,6 +49,8 @@ class PayslipQueryModel {
     this.resolvedAt,
     this.cycleStart,
     required this.createdAt,
+    this.raisedByName = '',
+    this.employeeIdCode,
   });
 
   bool get isResolved => status == 'resolved';
@@ -50,6 +65,8 @@ class PayslipQueryModel {
         resolvedAt: json['resolved_at'] as String?,
         cycleStart: json['cycle_start'] as String?,
         createdAt: '${json['created_at'] ?? ''}',
+        raisedByName: '${json['raised_by_name'] ?? ''}',
+        employeeIdCode: json['employee_id_code'] as String?,
       );
 }
 

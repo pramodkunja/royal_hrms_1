@@ -5,6 +5,10 @@ import '../../../../core/network/api_client.dart';
 import '../../data/datasources/profile_remote_datasource.dart';
 import '../../data/models/my_profile_model.dart';
 import '../../data/models/profile_document_model.dart';
+import '../../data/models/profile_document_rows.dart';
+import '../../data/services/profile_document_viewer.dart';
+import 'package:path_provider/path_provider.dart';
+import '../../../settings/data/models/onboarding_field_config_model.dart';
 
 // ── DataSource ─────────────────────────────────────────────────────────────────
 
@@ -97,6 +101,102 @@ final myDocumentsProvider =
     FutureProvider.autoDispose<List<ProfileDocumentModel>>((ref) {
   return ref.read(profileDataSourceProvider).fetchMyDocuments();
 });
+
+// ── Documents (self-service upload / replace) ───────────────────────────────────
+
+/// Every document type the admin configured (visible or not).
+final myDocumentTypesProvider = FutureProvider.autoDispose<List<DocumentTypeConfigModel>>((ref) {
+  return ref.read(profileDataSourceProvider).fetchDocumentTypes();
+});
+
+/// The Documents rows: configured types merged with the employee's uploads.
+/// The uploads must load (their failure is the section's error); a failed
+/// type configuration falls back to web's built-in list, as web does.
+final profileDocumentListingProvider = FutureProvider.autoDispose<ProfileDocumentListing>((ref) async {
+  final docsFuture = ref.watch(myDocumentsProvider.future);
+  final typesFuture = ref.watch(myDocumentTypesProvider.future);
+  List<DocumentTypeConfigModel> types;
+  try {
+    types = await typesFuture;
+  } catch (_) {
+    types = const [];
+  }
+  return buildProfileDocumentListing(types, await docsFuture);
+});
+
+/// The app-private folders holding temporary profile document copies.
+final profileDocumentTempStoreProvider = Provider<ProfileDocumentTempStore>((ref) {
+  return ProfileDocumentTempStore(tempRoot: getTemporaryDirectory, documentsRoot: getApplicationDocumentsDirectory);
+});
+
+/// Prepares the employee's own documents for the in-app viewer: downloaded
+/// with their login and checked (see ProfileDocumentViewer).
+final profileDocumentViewerProvider = Provider.autoDispose<ProfileDocumentViewer>((ref) {
+  return ProfileDocumentViewer(
+    download: ref.watch(profileDataSourceProvider).downloadMyDocument,
+    store: ref.watch(profileDocumentTempStoreProvider),
+  );
+});
+
+sealed class DocumentUploadOutcome {
+  const DocumentUploadOutcome();
+}
+
+/// Saved by the server (2xx with the new document); the list is reloaded.
+class DocumentUploadSucceeded extends DocumentUploadOutcome {
+  final ProfileDocumentModel document;
+  const DocumentUploadSucceeded(this.document);
+}
+
+/// Not saved. [message] is the server's (or the pre-upload check's) text.
+class DocumentUploadFailed extends DocumentUploadOutcome {
+  final String message;
+  const DocumentUploadFailed(this.message);
+}
+
+/// Nothing was sent: an upload for this type is already in progress.
+class DocumentUploadIgnored extends DocumentUploadOutcome {
+  const DocumentUploadIgnored();
+}
+
+/// The document types with an upload in flight. One upload per type at a
+/// time (web disables that row while it uploads); other rows stay usable.
+final profileDocumentUploadProvider =
+    NotifierProvider.autoDispose<ProfileDocumentUploadNotifier, Set<String>>(ProfileDocumentUploadNotifier.new);
+
+class ProfileDocumentUploadNotifier extends AutoDisposeNotifier<Set<String>> {
+  bool _disposed = false;
+
+  @override
+  Set<String> build() {
+    ref.onDispose(() => _disposed = true);
+    return const {};
+  }
+
+  /// Uploads [file] for [row] to the signed-in employee's own profile. The
+  /// target is always the employee code from their own `/employees/me/`
+  /// profile — never another employee. A replace confirmation, when
+  /// [ProfileDocumentRow.replaceNeedsConfirmation], is the caller's job.
+  Future<DocumentUploadOutcome> upload(ProfileDocumentRow row, ProfileUploadFile file) async {
+    final type = row.documentType;
+    if (state.contains(type)) return const DocumentUploadIgnored();
+    if (!row.canUpload) return const DocumentUploadFailed('This document type can no longer be uploaded.');
+    final employeeId = ref.read(myProfileProvider).valueOrNull?.employeeId.trim() ?? '';
+    if (employeeId.isEmpty) {
+      return const DocumentUploadFailed('Your profile is still loading. Please try again.');
+    }
+    state = {...state, type};
+    try {
+      final doc = await ref.read(profileDataSourceProvider).uploadMyDocument(employeeId, type, file);
+      if (!_disposed) ref.invalidate(myDocumentsProvider);
+      return DocumentUploadSucceeded(doc);
+    } catch (e) {
+      return DocumentUploadFailed(userFriendlyMessage(e));
+    } finally {
+      if (!_disposed) state = {...state}..remove(type);
+    }
+  }
+}
 
 // ── Change password ─────────────────────────────────────────────────────────────
 //

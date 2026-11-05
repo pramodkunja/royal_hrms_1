@@ -325,6 +325,8 @@ class AttendanceDetailModel extends AttendanceDetailEntity {
     required super.isEarlyExit,
     super.note,
     required super.punches,
+    super.clockInLocation,
+    super.clockOutLocation,
   });
 
   factory AttendanceDetailModel.fromJson(Map<String, dynamic> json) {
@@ -349,8 +351,38 @@ class AttendanceDetailModel extends AttendanceDetailEntity {
           .whereType<Map<String, dynamic>>()
           .map(AttendancePunchDetailModel.fromJson)
           .toList(),
+      clockInLocation: punchLocationFromJson(json, 'clock_in'),
+      clockOutLocation: punchLocationFromJson(json, 'clock_out'),
     );
   }
+}
+
+/// `<prefix>_latitude`, `_longitude`, `_location_label`, `_location_display`,
+/// `_accuracy_text`, `_accuracy_level`, `_location_is_office` from the HR
+/// attendance detail (prefix `clock_in` / `clock_out`). Wrong-typed or
+/// non-finite values read as missing; an unknown level reads as none.
+PunchLocationEntity punchLocationFromJson(Map<String, dynamic> json, String prefix) {
+  double? coord(Object? v) {
+    final d = v is num ? v.toDouble() : (v is String ? double.tryParse(v.trim()) : null);
+    return d != null && d.isFinite ? d : null;
+  }
+
+  String? text(Object? v) => v is String && v.trim().isNotEmpty ? v : null;
+
+  return PunchLocationEntity(
+    latitude: coord(json['${prefix}_latitude']),
+    longitude: coord(json['${prefix}_longitude']),
+    label: text(json['${prefix}_location_label']),
+    display: text(json['${prefix}_location_display']),
+    accuracyText: text(json['${prefix}_accuracy_text']),
+    accuracyLevel: switch (json['${prefix}_accuracy_level']) {
+      'precise' => GpsAccuracyLevel.precise,
+      'approximate' => GpsAccuracyLevel.approximate,
+      'very_approximate' => GpsAccuracyLevel.veryApproximate,
+      _ => null,
+    },
+    isOffice: json['${prefix}_location_is_office'] == true,
+  );
 }
 
 class OvertimeRowModel extends OvertimeRowEntity {

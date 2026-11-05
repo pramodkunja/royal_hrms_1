@@ -17,6 +17,8 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   // Every route gets the blue theme except the Dashboard home screen, which
   // keeps the original plain white bar — set by DashboardShell per-route.
   final bool isBlueTheme;
+  // Global Search (web DashboardShell's "Search anything…"); hidden when null.
+  final VoidCallback? onSearchTap;
 
   const AppTopBar({
     super.key,
@@ -26,6 +28,7 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onThemeToggleTap,
     required this.isDarkMode,
     required this.isBlueTheme,
+    this.onSearchTap,
   });
 
   @override
@@ -90,6 +93,16 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+
+                // Global Search — web's header search box, opened full screen.
+                if (onSearchTap != null)
+                  IconButton(
+                    key: const Key('global-search-button'),
+                    icon: const Icon(Icons.search_rounded),
+                    color: iconColor,
+                    onPressed: onSearchTap,
+                    tooltip: 'Search',
+                  ),
 
                 // Dark mode toggle — moon/sun swap, matches web's DashboardShell.
                 IconButton(
