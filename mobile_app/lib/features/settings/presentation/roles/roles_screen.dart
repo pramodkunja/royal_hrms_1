@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/permissions/permission_providers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/app_loading_widget.dart';
@@ -31,11 +32,14 @@ class RolesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final rolesAsync = ref.watch(rolesProvider);
     final permsAsync = ref.watch(allPermissionsProvider);
+    // Web: Add / Edit / activate only with settings.edit; others see "View only".
+    final canEdit = ref.watch(permissionProvider('settings.edit'));
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: const SettingsAppBar(title: 'Roles & Permissions'),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: !canEdit ? null : FloatingActionButton.extended(
+        key: const Key('role-add'),
         onPressed: () => _openForm(context, ref, null),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
@@ -47,7 +51,7 @@ class RolesScreen extends ConsumerWidget {
       body: rolesAsync.when(
         loading: () => const AppLoadingWidget(),
         error: (e, _) => _ErrorView(message: e.toString()),
-        data: (roles) => _buildBody(context, ref, roles, permsAsync),
+        data: (roles) => _buildBody(context, ref, roles, permsAsync, canEdit),
       ),
     );
   }
@@ -57,8 +61,9 @@ class RolesScreen extends ConsumerWidget {
     WidgetRef ref,
     List<RoleModel> roles,
     AsyncValue<List<PermissionModel>> permsAsync,
+    bool canEdit,
   ) {
-    if (roles.isEmpty) return _EmptyView(onAdd: () => _openForm(context, ref, null));
+    if (roles.isEmpty) return _EmptyView(onAdd: canEdit ? () => _openForm(context, ref, null) : null);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
@@ -70,6 +75,7 @@ class RolesScreen extends ConsumerWidget {
         const SizedBox(height: 14),
         // ── All Roles group card ──────────────────────────────────────
         _RolesGroupCard(
+          canEdit: canEdit,
           roles: roles,
           onEdit:   (role) => _openForm(context, ref, role),
           onToggle: (role, v) => _toggle(context, ref, role, v),
@@ -117,11 +123,13 @@ class RolesScreen extends ConsumerWidget {
 // ── All-Roles group card ──────────────────────────────────────────────────────
 
 class _RolesGroupCard extends StatelessWidget {
+  final bool canEdit;
   final List<RoleModel> roles;
   final void Function(RoleModel) onEdit;
   final void Function(RoleModel, bool) onToggle;
 
   const _RolesGroupCard({
+    required this.canEdit,
     required this.roles,
     required this.onEdit,
     required this.onToggle,
@@ -171,6 +179,7 @@ class _RolesGroupCard extends StatelessWidget {
             children: [
               Divider(height: 1, color: AppColors.border),
               _RoleRow(
+                canEdit: canEdit,
                 role: roles[i],
                 onEdit:   () => onEdit(roles[i]),
                 onToggle: (v) => onToggle(roles[i], v),
@@ -184,11 +193,12 @@ class _RolesGroupCard extends StatelessWidget {
 }
 
 class _RoleRow extends StatelessWidget {
+  final bool canEdit;
   final RoleModel role;
   final VoidCallback onEdit;
   final ValueChanged<bool> onToggle;
 
-  const _RoleRow({required this.role, required this.onEdit, required this.onToggle});
+  const _RoleRow({required this.canEdit, required this.role, required this.onEdit, required this.onToggle});
 
   @override
   Widget build(BuildContext context) {
@@ -279,7 +289,11 @@ class _RoleRow extends StatelessWidget {
                 color: AppColors.success,
               ),
               const Spacer(),
-              if (!isSystem) ...[
+              if (!canEdit)
+                Text('View only',
+                    key: Key('role-view-only-${role.idStr}'),
+                    style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+              if (canEdit && !isSystem) ...[
                 _ActionBtn(
                   icon: Icons.edit_outlined,
                   tooltip: 'Edit',
@@ -289,6 +303,7 @@ class _RoleRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 6),
               ],
+              if (canEdit)
               Transform.scale(
                 scale: 0.8,
                 alignment: Alignment.centerRight,
@@ -634,8 +649,9 @@ class _ActionBtn extends StatelessWidget {
 // ── Empty / Error ─────────────────────────────────────────────────────────────
 
 class _EmptyView extends StatelessWidget {
-  final VoidCallback onAdd;
-  const _EmptyView({required this.onAdd});
+  /// Null without settings.edit (no Add button).
+  final VoidCallback? onAdd;
+  const _EmptyView({this.onAdd});
 
   @override
   Widget build(BuildContext context) {
@@ -661,7 +677,8 @@ class _EmptyView extends StatelessWidget {
               style: AppTextStyles.bodySecondary,
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
+            if (onAdd != null) const SizedBox(height: 24),
+            if (onAdd != null)
             FilledButton.icon(
               onPressed: onAdd,
               icon: const Icon(Icons.add, size: 18),

@@ -102,8 +102,9 @@ class _PunchLocationBlock extends StatelessWidget {
 }
 
 /// Web GpsAccuracyLine: "GPS accuracy: <text | unknown>", with " — location
-/// approximate" (amber) or " — location very approximate" (red) and a warning
-/// icon for those two levels.
+/// approximate" (amber) or " — location very approximate" (red). The warning
+/// icon shows for any level other than none or precise — an unrecognised
+/// level gets it too, in the neutral colour and with no suffix, as on web.
 class GpsAccuracyLine extends StatelessWidget {
   const GpsAccuracyLine({super.key, required this.text, required this.level});
 

@@ -360,7 +360,9 @@ class AttendanceDetailModel extends AttendanceDetailEntity {
 /// `<prefix>_latitude`, `_longitude`, `_location_label`, `_location_display`,
 /// `_accuracy_text`, `_accuracy_level`, `_location_is_office` from the HR
 /// attendance detail (prefix `clock_in` / `clock_out`). Wrong-typed or
-/// non-finite values read as missing; an unknown level reads as none.
+/// non-finite values read as missing. The level follows web's truthiness:
+/// null, false, 0 or "" is no level; any other unknown value is
+/// [GpsAccuracyLevel.unrecognised].
 PunchLocationEntity punchLocationFromJson(Map<String, dynamic> json, String prefix) {
   double? coord(Object? v) {
     final d = v is num ? v.toDouble() : (v is String ? double.tryParse(v.trim()) : null);
@@ -379,7 +381,8 @@ PunchLocationEntity punchLocationFromJson(Map<String, dynamic> json, String pref
       'precise' => GpsAccuracyLevel.precise,
       'approximate' => GpsAccuracyLevel.approximate,
       'very_approximate' => GpsAccuracyLevel.veryApproximate,
-      _ => null,
+      null || false || 0 || '' => null,
+      _ => GpsAccuracyLevel.unrecognised,
     },
     isOffice: json['${prefix}_location_is_office'] == true,
   );
@@ -521,20 +524,34 @@ class ImportResultModel extends ImportResultEntity {
     required super.failed,
     required super.status,
     required super.errors,
+    super.message,
+    super.skipped,
   });
 
+  /// Production HRAttendanceImportView / services_hr_ops._run_import_bulk:
+  /// `total_records`, `successful`, `failed`, `skipped`, `message` and
+  /// errors as `{row, employee_id, employee_name, attendance_date, reason,
+  /// resolution}`. The older `total_rows` / `success` / `errors[].errors`
+  /// keys are still read when present.
   factory ImportResultModel.fromJson(Map<String, dynamic> json) {
     final rawErrors = json['errors'] as List<dynamic>? ?? [];
     return ImportResultModel(
       importId: json['import_id']?.toString() ?? '',
-      totalRows: _toInt(json['total_rows']),
-      success: _toInt(json['success']),
+      totalRows: _toInt(json['total_records'] ?? json['total_rows']),
+      success: _toInt(json['successful'] ?? json['success']),
       failed: _toInt(json['failed']),
+      skipped: _toInt(json['skipped']),
+      message: json['message']?.toString() ?? '',
       status: json['status'] as String? ?? '',
       errors: rawErrors.whereType<Map<String, dynamic>>().map((e) {
+        final reason = e['reason'];
+        final name = e['employee_name']?.toString() ?? '';
         return ImportRowErrorEntity(
           row: _toInt(e['row']),
-          message: _flattenRowError(e['errors']),
+          message: reason is String && reason.isNotEmpty ? reason : _flattenRowError(e['errors']),
+          employee: name.isNotEmpty ? name : (e['employee_id']?.toString() ?? ''),
+          date: e['attendance_date']?.toString() ?? '',
+          resolution: e['resolution']?.toString() ?? '',
         );
       }).toList(),
     );
@@ -547,6 +564,7 @@ class ImportResultModel extends ImportResultEntity {
   // readable text. Flatten it the same way the web app does
   // ("field: msg1 msg2 · field2: msg3").
   static String _flattenRowError(dynamic errors) {
+    if (errors == null) return '';
     if (errors is String) return errors;
     if (errors is Map) {
       final parts = <String>[];

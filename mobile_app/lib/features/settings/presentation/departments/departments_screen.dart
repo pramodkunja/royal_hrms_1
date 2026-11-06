@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/permissions/permission_providers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/stat_card.dart';
@@ -32,11 +33,14 @@ class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen> {
   @override
   Widget build(BuildContext context) {
     final deptsAsync = ref.watch(departmentsProvider);
+    // Web: add/edit/delete only with settings.edit; others browse read-only.
+    final canEdit = ref.watch(permissionProvider('settings.edit'));
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: const SettingsAppBar(title: 'Depts & Designations'),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: !canEdit ? null : FloatingActionButton.extended(
+        key: const Key('dept-add'),
         onPressed: () => _openDeptEdit(null),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
@@ -49,6 +53,7 @@ class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => _ErrorView(message: e.toString()),
         data: (depts) => _Body(
+          canEdit: canEdit,
           depts: depts,
           query: _query,
           searchCtrl: _searchCtrl,
@@ -120,6 +125,7 @@ class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen> {
 // ── Body ──────────────────────────────────────────────────────────────────────
 
 class _Body extends ConsumerWidget {
+  final bool canEdit;
   final List<DepartmentModel> depts;
   final String query;
   final TextEditingController searchCtrl;
@@ -133,6 +139,7 @@ class _Body extends ConsumerWidget {
   final ValueChanged<DesignationModel> onDeleteDesig;
 
   const _Body({
+    required this.canEdit,
     required this.depts,
     required this.query,
     required this.searchCtrl,
@@ -174,7 +181,7 @@ class _Body extends ConsumerWidget {
         ),
         Expanded(
           child: filtered.isEmpty
-              ? _EmptyView(onAdd: () => onEditDept(null))
+              ? _EmptyView(onAdd: canEdit ? () => onEditDept(null) : null)
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 6, 16, 88),
                   itemCount: filtered.length,
@@ -186,6 +193,7 @@ class _Body extends ConsumerWidget {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: DeptListItem(
+                        canEdit: canEdit,
                         dept: dept,
                         isExpanded: selectedDeptId == dept.id,
                         designations: deptDesigs,
@@ -291,8 +299,9 @@ class _SearchBar extends StatelessWidget {
 // ── Empty / Error ─────────────────────────────────────────────────────────────
 
 class _EmptyView extends StatelessWidget {
-  final VoidCallback onAdd;
-  const _EmptyView({required this.onAdd});
+  /// Null without settings.edit (no Add button).
+  final VoidCallback? onAdd;
+  const _EmptyView({this.onAdd});
 
   @override
   Widget build(BuildContext context) {
@@ -320,6 +329,7 @@ class _EmptyView extends StatelessWidget {
               style: AppTextStyles.bodySecondary,
               textAlign: TextAlign.center,
             ),
+            if (onAdd != null) ...[
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: onAdd,
@@ -333,6 +343,7 @@ class _EmptyView extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12)),
               ),
             ),
+            ],
           ],
         ),
       ),

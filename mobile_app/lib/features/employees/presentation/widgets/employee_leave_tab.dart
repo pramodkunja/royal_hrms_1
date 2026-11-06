@@ -6,6 +6,7 @@ import '../../../leave/domain/entities/leave_entity.dart';
 import '../../../leave/presentation/providers/leave_providers.dart';
 import '../../../leave/presentation/widgets/leave_request_detail_sheet.dart';
 import '../../data/models/employee_model.dart';
+import 'leave_credits_section.dart';
 
 // Mirrors leave_dashboard_tab.dart's _kBalanceDisplay convention exactly —
 // same icon/color per leave type, so the "3 balance cards" visual identity
@@ -143,6 +144,10 @@ class _EmployeeLeaveTabState extends ConsumerState<EmployeeLeaveTab> {
             ),
           ),
         ),
+        const SizedBox(height: 18),
+        // Web LeaveTab mounts this in its Annual view (schedule="annual");
+        // it renders nothing for users who may not manage these credits.
+        LeaveCreditsSection(employeeId: empId),
         const SizedBox(height: 18),
         Row(
           children: [

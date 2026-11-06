@@ -151,6 +151,12 @@ class DashboardRemoteDataSource {
   // ── Employee ────────────────────────────────────────────────────────────────
 
   /// Null when the employee has no fully approved separation.
+  /// GET /dashboard/employee/birthdays/today/ (web useBirthdaysToday).
+  Future<List<EmployeeBirthdayToday>> fetchEmployeeBirthdaysToday() async {
+    final res = await _dio.get(ApiConstants.dashboardEmployeeBirthdaysToday);
+    return EmployeeBirthdayToday.listFrom(_unwrap(res.data));
+  }
+
   Future<EmployeeNoticePeriod?> fetchEmployeeNoticePeriod() async {
     final res = await _dio.get(ApiConstants.dashboardEmployeeNoticePeriod);
     return EmployeeNoticePeriod.fromResponseData(_unwrap(res.data));

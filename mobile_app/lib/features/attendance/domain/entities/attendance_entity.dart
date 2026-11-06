@@ -225,7 +225,9 @@ class AttendancePunchDetailEntity {
 
 /// Server GPS accuracy classification (apps/attendance/location_accuracy.py):
 /// ≤ 100 m precise, 100–1,000 m approximate, > 1,000 m very approximate.
-enum GpsAccuracyLevel { precise, approximate, veryApproximate }
+/// [unrecognised] is any other value the server sends: web still shows its
+/// warning icon for it (in the neutral colour, with no suffix).
+enum GpsAccuracyLevel { precise, approximate, veryApproximate, unrecognised }
 
 /// The actual Clock In or Clock Out punch location on an HR attendance
 /// detail (services_hr.get_attendance_detail, `clock_in_*` / `clock_out_*`).
@@ -527,7 +529,19 @@ class AttendanceAuditEntryEntity {
 class ImportRowErrorEntity {
   final int row;
   final String message;
-  const ImportRowErrorEntity({required this.row, required this.message});
+
+  /// Production rows also carry who / which day and how to fix it
+  /// (services_hr_ops._make_error_entry).
+  final String employee;
+  final String date;
+  final String resolution;
+  const ImportRowErrorEntity({
+    required this.row,
+    required this.message,
+    this.employee = '',
+    this.date = '',
+    this.resolution = '',
+  });
 }
 
 class ImportResultEntity {
@@ -538,6 +552,10 @@ class ImportResultEntity {
   final String status;
   final List<ImportRowErrorEntity> errors;
 
+  /// The server's summary sentence, and rows skipped (e.g. on approved leave).
+  final String message;
+  final int skipped;
+
   const ImportResultEntity({
     required this.importId,
     required this.totalRows,
@@ -545,7 +563,12 @@ class ImportResultEntity {
     required this.failed,
     required this.status,
     required this.errors,
+    this.message = '',
+    this.skipped = 0,
   });
+
+  /// Large files are processed in the background (HTTP 202).
+  bool get isQueued => status == 'queued';
 }
 
 /// Generic page envelope matching the backend's `{count, page, page_size,

@@ -136,7 +136,8 @@ abstract class AttendanceRepository {
     String? branch,
     String? department,
   });
-  Future<ImportResultEntity> importCsv(List<int> bytes, String fileName);
+  Future<ImportResultEntity> importCsv(List<int> bytes, String fileName,
+      {String? employeeId, String? dateFrom, String? dateTo});
   Future<List<int>> fetchImportSample({String format});
 
   // Audit history

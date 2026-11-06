@@ -2,12 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../../core/router/access_control.dart' show userHasPermission;
+import '../../../../auth/domain/entities/user_entity.dart';
 import '../../../../auth/presentation/providers/auth_providers.dart';
 import '../../../data/datasources/settings_remote_datasource.dart';
 import '../../../data/models/leave_policy_model.dart';
 import '../../providers/settings_providers.dart';
 
-const kCarryForwardRoles = ['system_admin', 'hr_admin', 'hr'];
+/// Who sees the Carry Forward tab and the "Import Opening Balances" action:
+/// web leave-policy page shows both with usePermission("leave.edit") — a
+/// permission, never a role name (a Branch Admin holding it sees them too).
+/// The server is authoritative: the carry-forward and opening-balance
+/// endpoints require leave.approve and their refusal is shown as sent.
+bool canManageCarryForward(UserEntity? user) => userHasPermission(user, 'leave.edit');
 
 /// The "Carry Forward" tab — mirrors web's `CarryForwardTab.tsx` exactly:
 /// pick a from/to year range, Preview what would happen, then Run it.
@@ -142,8 +149,8 @@ class _LeaveCarryForwardTabState extends ConsumerState<LeaveCarryForwardTab> {
 
   @override
   Widget build(BuildContext context) {
-    final role = ref.watch(authStateProvider).valueOrNull?.user?.role;
-    if (role != null && !kCarryForwardRoles.contains(role)) {
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
+    if (user != null && !canManageCarryForward(user)) {
       return const _LockedView();
     }
 

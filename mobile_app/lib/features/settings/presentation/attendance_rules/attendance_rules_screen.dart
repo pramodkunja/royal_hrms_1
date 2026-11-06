@@ -8,6 +8,7 @@ import '../../data/models/attendance_settings_model.dart';
 import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
 import '../widgets/settings_page_header.dart';
+import '../../../attendance/presentation/widgets/weekly_off_patterns_card.dart';
 
 class AttendanceRulesScreen extends ConsumerStatefulWidget {
   const AttendanceRulesScreen({super.key});
@@ -36,8 +37,6 @@ class _AttendanceRulesScreenState extends ConsumerState<AttendanceRulesScreen> {
     switch (key) {
       case 'working_hours':
         return local.copyWith(workingHours: server.workingHours);
-      case 'weekly_off':
-        return local.copyWith(weeklyOff: server.weeklyOff);
       case 'punch_rules':
         return local.copyWith(punchRules: server.punchRules);
       case 'overtime_rules':
@@ -68,10 +67,6 @@ class _AttendanceRulesScreenState extends ConsumerState<AttendanceRulesScreen> {
   }
 
   Future<void> _saveAll(AttendanceSettingsModel current) async {
-    if (!current.weeklyOff.hasAtLeastOneWorkingDay) {
-      _toast('At least one day must remain a working day.', false);
-      return;
-    }
     setState(() => _savingAll = true);
     final error = await ref.read(attendanceSettingsProvider.notifier).saveAll(current);
     if (!mounted) return;
@@ -122,14 +117,14 @@ class _AttendanceRulesScreenState extends ConsumerState<AttendanceRulesScreen> {
                         onSave: () => _saveSection(current, 'working_hours', current.workingHours.toJson()),
                       ),
                       const SizedBox(height: 12),
-                      _WeeklyOffCard(
-                        section: current.weeklyOff,
-                        canEdit: canEdit,
-                        saving: _savingSection == 'weekly_off',
-                        busy: busy,
-                        onChanged: (s) => setState(() => _edited = current.copyWith(weeklyOff: s)),
-                        onSave: () => _saveSection(current, 'weekly_off', current.weeklyOff.toJson()),
-                      ),
+                      // Web: Weekly Off Patterns card right after Working Hours.
+                      // It replaces the old flat "Weekly Off Days" grid, as on
+                      // web (AttendanceSettings.tsx). That setting
+                      // (AttendanceSettings.weekly_off) still exists on the
+                      // server as the last fallback when no pattern is marked
+                      // Default (WeeklyOffCacheService); Save All sends it back
+                      // unchanged, so removing the grid changes no data.
+                      const WeeklyOffPatternsCard(),
                       const SizedBox(height: 12),
                       _PunchRulesCard(
                         section: current.punchRules,
@@ -518,82 +513,6 @@ class _TimeField extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-// ── Weekly Off Days ───────────────────────────────────────────────────────────
-
-class _WeeklyOffCard extends StatelessWidget {
-  final WeeklyOffSectionModel section;
-  final bool canEdit;
-  final bool saving;
-  final bool busy;
-  final ValueChanged<WeeklyOffSectionModel> onChanged;
-  final VoidCallback onSave;
-
-  const _WeeklyOffCard({
-    required this.section,
-    required this.canEdit,
-    required this.saving,
-    required this.busy,
-    required this.onChanged,
-    required this.onSave,
-  });
-
-  static const _days = [
-    ('monday', 'Mon'), ('tuesday', 'Tue'), ('wednesday', 'Wed'), ('thursday', 'Thu'),
-    ('friday', 'Fri'), ('saturday', 'Sat'), ('sunday', 'Sun'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return _SectionCard(
-      icon: Icons.calendar_view_week_outlined,
-      title: 'Weekly Off Days',
-      accentColor: const Color(0xFF6B3FA0),
-      headerTrailing: const _CriticalBadge(),
-      canEdit: canEdit,
-      saving: saving,
-      busy: busy,
-      onSave: onSave,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Select off days — excluded from attendance calculations',
-            style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _days.map((d) {
-              final isOff = section.valueFor(d.$1);
-              return GestureDetector(
-                onTap: canEdit ? () => onChanged(section.toggled(d.$1)) : null,
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: isOff ? AppColors.primary : AppColors.backgroundLow,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: isOff ? AppColors.primary : AppColors.border),
-                  ),
-                  child: Text(
-                    d.$2,
-                    style: AppTextStyles.caption.copyWith(
-                      color: isOff ? Colors.white : AppColors.textSecondary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
     );
   }
 }

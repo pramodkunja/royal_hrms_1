@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../../core/permissions/permission_providers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../data/models/company_model.dart';
@@ -26,6 +27,9 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(companyProvider);
+    // Web: logo Upload/Remove and Save Changes only with settings.edit; others
+    // see the company details read-only.
+    final canEdit = ref.watch(permissionProvider('settings.edit'));
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -41,9 +45,10 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
             company: _draft!,
             logoFile: _logoFile,
             isSaving: _saving,
+            canEdit: canEdit,
             onChanged: (updated) => setState(() => _draft = updated),
-            onLogoTap: _pickLogo,
-            onRemoveLogo: hasLogo ? _removeLogo : null,
+            onLogoTap: canEdit ? _pickLogo : null,
+            onRemoveLogo: canEdit && hasLogo ? _removeLogo : null,
             onSave: _submit,
           );
         },
@@ -89,8 +94,9 @@ class _Body extends StatelessWidget {
   final CompanyModel company;
   final File? logoFile;
   final bool isSaving;
+  final bool canEdit;
   final ValueChanged<CompanyModel> onChanged;
-  final VoidCallback onLogoTap;
+  final VoidCallback? onLogoTap;
   final VoidCallback? onRemoveLogo;
   final VoidCallback onSave;
 
@@ -99,8 +105,9 @@ class _Body extends StatelessWidget {
     required this.company,
     required this.logoFile,
     required this.isSaving,
+    required this.canEdit,
     required this.onChanged,
-    required this.onLogoTap,
+    this.onLogoTap,
     this.onRemoveLogo,
     required this.onSave,
   });
@@ -124,9 +131,14 @@ class _Body extends StatelessWidget {
             const SizedBox(height: 16),
             const FinancialYearSection(),
             const SizedBox(height: 24),
-            CompanyFormFields(company: company, onChanged: onChanged),
+            // Read-only without settings.edit (nothing can be saved anyway).
+            IgnorePointer(
+              key: const Key('company-fields'),
+              ignoring: !canEdit,
+              child: CompanyFormFields(company: company, onChanged: onChanged),
+            ),
             const SizedBox(height: 28),
-            _SaveButton(isSaving: isSaving, onSave: onSave),
+            if (canEdit) _SaveButton(isSaving: isSaving, onSave: onSave),
             const SizedBox(height: 8),
           ],
         ),
@@ -187,14 +199,15 @@ class _LogoSection extends StatelessWidget {
   final String? currentUrl;
   final File? logoFile;
   final String companyName;
-  final VoidCallback onTap;
+  /// Null when the logo can't be changed (no settings.edit).
+  final VoidCallback? onTap;
   final VoidCallback? onRemove;
 
   const _LogoSection({
     this.currentUrl,
     this.logoFile,
     required this.companyName,
-    required this.onTap,
+    this.onTap,
     this.onRemove,
   });
 
@@ -254,20 +267,22 @@ class _LogoSection extends StatelessWidget {
                                 : _logoPlaceholder(),
                       ),
                     ),
-                    Positioned(
-                      bottom: -5,
-                      right: -5,
-                      child: Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: AppColors.secondary,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
+                    if (onTap != null)
+                      Positioned(
+                        key: const Key('company-logo-change'),
+                        bottom: -5,
+                        right: -5,
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: AppColors.secondary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: const Icon(Icons.camera_alt, size: 14, color: Colors.white),
                         ),
-                        child: const Icon(Icons.camera_alt, size: 14, color: Colors.white),
                       ),
-                    ),
                     if (onRemove != null)
                       Positioned(
                         top: -5,

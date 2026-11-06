@@ -21,6 +21,8 @@ Color _deptColor(String name) =>
 // ── Accordion card ────────────────────────────────────────────────────────────
 
 class DeptListItem extends StatelessWidget {
+  /// Edit/delete/add actions only with settings.edit (web canEdit).
+  final bool canEdit;
   final DepartmentModel dept;
   final bool isExpanded;
   final List<DesignationModel> designations;
@@ -33,6 +35,7 @@ class DeptListItem extends StatelessWidget {
 
   const DeptListItem({
     super.key,
+    this.canEdit = true,
     required this.dept,
     required this.isExpanded,
     required this.designations,
@@ -73,6 +76,7 @@ class DeptListItem extends StatelessWidget {
             dept: dept,
             accentColor: accentColor,
             isExpanded: isExpanded,
+            canEdit: canEdit,
             onTap: onTap,
             onEdit: onEdit,
             onDelete: onDelete,
@@ -81,6 +85,7 @@ class DeptListItem extends StatelessWidget {
             Divider(height: 1, color: AppColors.border),
             if (dept.roles.isNotEmpty) _RolesPanel(roles: dept.roles),
             _DesignationPanel(
+              canEdit: canEdit,
               designations: designations,
               onAdd: onAddDesig,
               onEdit: onEditDesig,
@@ -99,6 +104,7 @@ class _DeptHeader extends StatelessWidget {
   final DepartmentModel dept;
   final Color accentColor;
   final bool isExpanded;
+  final bool canEdit;
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -107,6 +113,7 @@ class _DeptHeader extends StatelessWidget {
     required this.dept,
     required this.accentColor,
     required this.isExpanded,
+    required this.canEdit,
     required this.onTap,
     required this.onEdit,
     required this.onDelete,
@@ -216,7 +223,9 @@ class _DeptHeader extends StatelessWidget {
               ),
             ),
             // Action buttons stacked
+            if (canEdit)
             Column(
+              key: Key('dept-actions-${dept.id}'),
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
@@ -299,12 +308,14 @@ class _RolesPanel extends StatelessWidget {
 // ── Designation expansion panel ───────────────────────────────────────────────
 
 class _DesignationPanel extends StatelessWidget {
+  final bool canEdit;
   final List<DesignationModel> designations;
   final VoidCallback onAdd;
   final ValueChanged<DesignationModel> onEdit;
   final ValueChanged<DesignationModel> onDelete;
 
   const _DesignationPanel({
+    required this.canEdit,
     required this.designations,
     required this.onAdd,
     required this.onEdit,
@@ -356,7 +367,9 @@ class _DesignationPanel extends StatelessWidget {
                 ),
               ),
               const Spacer(),
+              if (canEdit)
               GestureDetector(
+                key: const Key('desig-add'),
                 onTap: onAdd,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -394,7 +407,7 @@ class _DesignationPanel extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   child: Center(
                     child: Text(
-                      'No designations yet — tap Add to create one.',
+                      canEdit ? 'No designations yet — tap Add to create one.' : 'No designations yet.',
                       style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
                       textAlign: TextAlign.center,
                     ),
@@ -405,6 +418,7 @@ class _DesignationPanel extends StatelessWidget {
                       .map((d) => Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: _DesigCard(
+                              canEdit: canEdit,
                               desig: d,
                               onEdit: () => onEdit(d),
                               onDelete: () => onDelete(d),
@@ -421,11 +435,13 @@ class _DesignationPanel extends StatelessWidget {
 // ── Designation card ──────────────────────────────────────────────────────────
 
 class _DesigCard extends StatelessWidget {
+  final bool canEdit;
   final DesignationModel desig;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _DesigCard({
+    required this.canEdit,
     required this.desig,
     required this.onEdit,
     required this.onDelete,
@@ -531,7 +547,9 @@ class _DesigCard extends StatelessWidget {
                 ],
               ),
             ),
+            if (canEdit) ...[
             IconButton(
+              key: Key('desig-edit-${desig.id}'),
               icon: const Icon(Icons.edit_outlined, size: 15),
               color: AppColors.textSecondary,
               visualDensity: VisualDensity.compact,
@@ -545,6 +563,7 @@ class _DesigCard extends StatelessWidget {
               onPressed: onDelete,
               tooltip: 'Delete',
             ),
+            ],
           ],
         ),
       ),

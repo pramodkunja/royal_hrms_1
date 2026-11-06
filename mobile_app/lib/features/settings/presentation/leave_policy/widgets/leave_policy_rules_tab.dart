@@ -3,11 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../auth/presentation/providers/auth_providers.dart';
 import '../../../../branches/presentation/providers/branch_providers.dart';
 import '../../../../leave/domain/entities/leave_entity.dart';
 import '../../../../leave/presentation/widgets/leave_type_icons.dart';
 import '../../../data/models/leave_policy_model.dart';
 import '../../providers/settings_providers.dart';
+import 'monthly_credit_settings_section.dart';
 
 // Matches web's EligibilitySection.tsx: "No employment-type concept exists
 // anywhere in this system yet (checked accounts.models — no field, no
@@ -51,6 +53,8 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
   late final TextEditingController _maxDurationCtrl;
   late final TextEditingController _maxConsecutiveCtrl;
   late final TextEditingController _minNoticeCtrl;
+  late final TextEditingController _longLeaveMinCtrl;
+  late final TextEditingController _longLeaveNoticeCtrl;
   late bool _allowHalfDay;
   late bool _allowBackdatedLeave;
   late final TextEditingController _maxBackdatedCtrl;
@@ -87,6 +91,10 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
   late bool _allowLeaveExtension;
   late bool _allowLeaveCombination;
 
+  // Monthly Credit Settings (web MonthlyCreditSettingsSection).
+  String _creditSchedule = 'annual';
+  bool _monthlyCarryForward = true;
+
   bool _saving = false;
   bool _initialized = false;
   String? _carryFwdLimitError;
@@ -102,6 +110,8 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
     _maxDurationCtrl = TextEditingController(text: '0');
     _maxConsecutiveCtrl = TextEditingController(text: '0');
     _minNoticeCtrl = TextEditingController(text: '0');
+    _longLeaveMinCtrl = TextEditingController(text: '0');
+    _longLeaveNoticeCtrl = TextEditingController(text: '0');
     _maxBackdatedCtrl = TextEditingController(text: '0');
     _maxFutureCtrl = TextEditingController(text: '0');
     _minServicePeriodCtrl = TextEditingController(text: '0');
@@ -137,6 +147,8 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
     _maxDurationCtrl.dispose();
     _maxConsecutiveCtrl.dispose();
     _minNoticeCtrl.dispose();
+    _longLeaveMinCtrl.dispose();
+    _longLeaveNoticeCtrl.dispose();
     _maxBackdatedCtrl.dispose();
     _maxFutureCtrl.dispose();
     _minServicePeriodCtrl.dispose();
@@ -157,6 +169,8 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
     _maxDurationCtrl.text = '${form.maximumLeaveDuration}';
     _maxConsecutiveCtrl.text = '${form.maximumConsecutiveDays}';
     _minNoticeCtrl.text = '${form.minimumNoticePeriod}';
+    _longLeaveMinCtrl.text = '${form.longLeaveMinDays ?? 0}';
+    _longLeaveNoticeCtrl.text = '${form.longLeaveNoticeDays ?? 0}';
     _allowHalfDay = form.allowHalfDay;
     _allowBackdatedLeave = form.allowBackdatedLeave;
     _maxBackdatedCtrl.text = '${form.maximumBackdatedDays}';
@@ -182,6 +196,8 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
     _allowNoticePeriodLeave = form.allowNoticePeriodLeave;
     _allowLeaveExtension = form.allowLeaveExtension;
     _allowLeaveCombination = form.allowLeaveCombination;
+    _creditSchedule = p.creditSchedule;
+    _monthlyCarryForward = p.monthlyCarryForward;
     _carryFwdLimitError = null;
     _maxDurationError = null;
     _certAfterDaysError = null;
@@ -205,6 +221,8 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
   }
 
   Future<void> _save(LeavePolicyModel current) async {
+    if (_saving) return; // one save at a time
+    if (!canEditLeavePolicies(ref.read(authStateProvider).valueOrNull?.user)) return;
     final base = LeavePolicyFormData.fromModel(current);
     base.canCarryForward = _canCarryForward;
     base.maxCarryForwardDays = int.tryParse(_carryFwdLimitCtrl.text) ?? 0;
@@ -212,6 +230,9 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
     base.maximumLeaveDuration = int.tryParse(_maxDurationCtrl.text) ?? 0;
     base.maximumConsecutiveDays = int.tryParse(_maxConsecutiveCtrl.text) ?? 0;
     base.minimumNoticePeriod = int.tryParse(_minNoticeCtrl.text) ?? 0;
+    // Only when the server sent them (otherwise left out, never overwritten).
+    if (current.longLeaveMinDays != null) base.longLeaveMinDays = int.tryParse(_longLeaveMinCtrl.text) ?? 0;
+    if (current.longLeaveNoticeDays != null) base.longLeaveNoticeDays = int.tryParse(_longLeaveNoticeCtrl.text) ?? 0;
     base.allowHalfDay = _allowHalfDay;
     base.allowBackdatedLeave = _allowBackdatedLeave;
     base.maximumBackdatedDays = int.tryParse(_maxBackdatedCtrl.text) ?? 0;
@@ -238,6 +259,8 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
     base.allowNoticePeriodLeave = _allowNoticePeriodLeave;
     base.allowLeaveExtension = _allowLeaveExtension;
     base.allowLeaveCombination = _allowLeaveCombination;
+    base.creditSchedule = _creditSchedule;
+    base.monthlyCarryForward = _monthlyCarryForward;
 
     final errors = base.validate();
     if (errors.isNotEmpty) {
@@ -271,6 +294,7 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
   @override
   Widget build(BuildContext context) {
     final policiesAsync = ref.watch(leavePoliciesProvider);
+    final canEdit = canEditLeavePolicies(ref.watch(authStateProvider).valueOrNull?.user);
     return policiesAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(
@@ -465,6 +489,28 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
                   const SizedBox(height: 14),
                 ],
 
+                // Saving needs settings.edit or leave.approve (LeavePolicyView.put);
+                // others can read every rule but change nothing.
+                if (!canEdit) ...[
+                  Container(
+                    key: const Key('leave-rules-view-only'),
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.info.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.info.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(
+                        'You can view these rules. Changing them needs permission to edit settings or approve leave.',
+                        style: AppTextStyles.body.copyWith(color: AppColors.info, fontSize: 12)),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                _RulesLock(
+                  key: const Key('leave-rules-fields'),
+                  locked: !canEdit,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 _RuleSection(
                   icon: Icons.event_available_outlined,
                   title: 'Leave Application Rules',
@@ -502,6 +548,23 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
                       controller: _minNoticeCtrl,
                       label: 'Minimum Notice Period (days)',
                     ),
+                    // Web "Long Leave — From / Notice" (LeavePoliciesTab.tsx).
+                    if (current.longLeaveMinDays != null) ...[
+                      const SizedBox(height: 12),
+                      _numField(
+                        key: const Key('long-leave-min-days'),
+                        controller: _longLeaveMinCtrl,
+                        label: 'Long Leave — From (days or more, 0 = off)',
+                      ),
+                    ],
+                    if (current.longLeaveNoticeDays != null) ...[
+                      const SizedBox(height: 12),
+                      _numField(
+                        key: const Key('long-leave-notice-days'),
+                        controller: _longLeaveNoticeCtrl,
+                        label: 'Long Leave — Notice (days in advance)',
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     _switchTile('Allow Half Day', null, _allowHalfDay,
                         (v) => setState(() => _allowHalfDay = v)),
@@ -769,13 +832,35 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
                     ],
                   ],
                 ),
+
+                // Web MonthlyCreditSettingsSection — saved with the policy.
+                _RuleSection(
+                  icon: Icons.event_repeat_outlined,
+                  title: 'Monthly Credit Settings',
+                  color: typeColor,
+                  children: [
+                    MonthlyCreditSettingsSection(
+                      creditSchedule: _creditSchedule,
+                      monthlyCarryForward: _monthlyCarryForward,
+                      rulesFrom: current.monthlyRulesFrom,
+                      enabled: !_saving,
+                      onScheduleChanged: (v) =>
+                          setState(() => _creditSchedule = v),
+                      onCarryForwardChanged: (v) =>
+                          setState(() => _monthlyCarryForward = v),
+                    ),
+                  ],
+                ),
+                  ]),
+                ),
               ],
             )),
-            _PolicyFooter(
-              saving: _saving,
-              onDiscard: () => _discard(policies),
-              onSave: () => _save(current),
-            ),
+            if (canEdit)
+              _PolicyFooter(
+                saving: _saving,
+                onDiscard: () => _discard(policies),
+                onSave: () => _save(current),
+              ),
           ],
         );
       },
@@ -800,6 +885,7 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
       );
 
   Widget _numField({
+    Key? key,
     required TextEditingController controller,
     required String label,
     bool decimal = false,
@@ -807,6 +893,7 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
     VoidCallback? onChanged,
   }) {
     return TextFormField(
+      key: key,
       controller: controller,
       style: AppTextStyles.body,
       keyboardType: TextInputType.numberWithOptions(decimal: decimal),
@@ -959,7 +1046,11 @@ class _RuleSection extends StatelessWidget {
         ],
       ),
       clipBehavior: Clip.antiAlias,
-      child: Theme(
+      // Own Material so the tiles' ink (ExpansionTile, switches) paints above
+      // the card colour instead of being hidden behind it.
+      child: Material(
+        type: MaterialType.transparency,
+        child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           tilePadding: const EdgeInsets.symmetric(horizontal: 12),
@@ -977,11 +1068,16 @@ class _RuleSection extends StatelessWidget {
               style: AppTextStyles.label
                   .copyWith(fontWeight: FontWeight.w700, fontSize: 13)),
           children: [
-            Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: children),
+            // Read-only users can still expand and read each section.
+            IgnorePointer(
+              ignoring: _RulesLock.of(context),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: children),
+            ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -1090,4 +1186,17 @@ class _ChipsError extends StatelessWidget {
                   .copyWith(color: AppColors.error, fontSize: 11)),
         ],
       );
+}
+
+/// Tells every rule section whether its contents are locked (no permission
+/// to save leave policies). Section headers stay tappable.
+class _RulesLock extends InheritedWidget {
+  const _RulesLock({super.key, required this.locked, required super.child});
+  final bool locked;
+
+  static bool of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_RulesLock>()?.locked ?? false;
+
+  @override
+  bool updateShouldNotify(_RulesLock old) => old.locked != locked;
 }

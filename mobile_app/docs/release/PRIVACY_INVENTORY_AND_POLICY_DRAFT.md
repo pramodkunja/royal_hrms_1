@@ -2,7 +2,7 @@
 
 **For:** the company's privacy owner and the Play Console owner.
 **Status:** DRAFT. **Not published, and no public URL exists yet.** Google Play requires a public HTTPS privacy-policy URL before the update can be submitted. A privacy or legal professional must review the text before it goes live.
-**Evidence base:** the mobile code in `mobile_app/lib` and the production backend (`web_frontend_backend`, `origin/production` 95fc10a), read-only. Written 2026-11-04; re-checked against the current mobile code (through Phase 11.8) on 2026-11-05.
+**Evidence base:** the mobile code in `mobile_app/lib` and the production backend (`web_frontend_backend`, `origin/production` 95fc10a), read-only. Written 2026-11-04; re-checked against the current mobile code (through Phase 11.8) on 2026-11-05; HR import/export flows and new role-scoped screens added 2026-11-06 (A11, A12, Q16). No new Android permission or SDK was added on 2026-11-06.
 
 **How to read this document**
 1. **Part A — verified from application code.** Each row names its evidence. Nothing in Part A depends on a company or vendor statement.
@@ -112,6 +112,24 @@ These screens show data about colleagues or applicants, limited by the server to
 | Candidate Review (onboarding approval): applicant profile and documents; HR may enter the applicant's UAN, name as per Aadhaar and PAN. Identifiers are shown **masked** (last 4 characters) in the read-only view | HR with the onboarding-approval permission | `candidate_review_screen.dart`, `approval_identity_fields.dart` → `POST /onboarding/approvals/<id>/` |
 | Policy acknowledgement report: who has acknowledged which document | HR (`documents.edit`) | `acknowledgement_panel.dart` → `/documents/<id>/acknowledgements/` |
 | Employee's own notice period (approval date, last working day, days remaining) | That employee only (the server scopes it to the signed-in user) | `emp_notice_period_card.dart` → `/dashboard/employee/notice-period/` |
+| Today's birthdays: colleagues' names, designation and department | Every onboarded employee (Employee dashboard). The server's response also contains each person's email and date of birth; **the app does not read or display them**, but they are sent to the device | `employee_dashboard_view.dart` → `/dashboard/employee/birthdays/today/` |
+| Employees' attendance records with clock-in/out location and GPS accuracy | HR with `attendance.view`, scoped by the server | `punch_location_section.dart`, `attendance_screen.dart` |
+| Employee directory search (name, ID, department) | Users with `employees.view` | `global_search_controller.dart` → `/employees/?search=` |
+| Employees' notice periods (Settings → Notice Period) | Settings users; the list comes from `/employees/` (`employees.view`, branch/team scope); changing needs `employees.edit` | `notice_period_screen.dart` |
+| An employee's leave-credit statement, adjustment history (amount, reason, who made it) and monthly view | HR with `leave.approve`, only for employees the server lets them manage | `leave_credits_section.dart` → `/leave/credits/<code>/` |
+| Shift and weekly-off assignments, monthly leave credits | HR with the matching attendance / leave permissions | `shift_assignment_tab.dart`, `weekly_off_assignment_tab.dart`, `monthly_leave_tab.dart` |
+
+### A12. HR file imports and exports (added 2026-11-06)
+These flows are started by HR users; they move employee data in files between the device and the server.
+
+| Flow | Handling | Evidence |
+|---|---|---|
+| **Attendance import (CSV)** — bulk, or for one selected employee with an optional date range | HR picks a CSV with the system file picker; the app reads it into memory and uploads it (`file`, plus `employee_id`, `date_from`, `date_to` in single-employee mode). The server records an import log with the file name, row counts and up to 100 row errors (employee ID and name, date, reason); for files over 500 rows the contents are handed to a background job. How long the log and any file contents are kept: **Requires confirmation (Q16)** | `attendance_screen.dart` (import dialog); `POST /attendance/import/`; backend `services_hr_ops.import_attendance_csv`, `AttendanceImportLog` |
+| **Notice-period import (CSV/XLSX)** | HR picks a file; it is uploaded for a preview (`dry_run=true`, nothing saved) and again on confirmation. The server re-reads it and records each change in the audit log (old and new value). No storage of the file itself was found in the view. Retention: **Requires confirmation (Q3, Q16)** | `notice_import_dialog.dart`; `POST /employees/notice-period/import/`; backend `views_notice_period_import.py` |
+| **Monthly leave-credit import (CSV/XLSX)** | Same pattern (preview, then confirm); credits are recorded in the leave-credit history. Retention: **Requires confirmation (Q3, Q16)** | `monthly_import_section.dart`; `POST /leave/monthly-credits/import/` |
+| **Attendance export (CSV)** | HR exports attendance for a day, a month or a date range; the file contains colleagues' attendance data. The app saves it through the **system save dialog** to a location the user chooses, i.e. outside the app's private storage, where the user and other apps with access to that location can open it. **The app does not delete exported files.** | `attendance_export.dart` (`FilePicker.platform.saveFile`); `/attendance/export/` |
+| **Sample templates** (attendance, notice period, monthly leave, leave balances) | Downloaded and saved through the system save dialog; they contain only example rows | sample endpoints; `saveFile` |
+| Leave-credit adjustments and reversals | Amount, reason, the HR user who made it and the time, kept as an append-only history on the server (part of A8 work records) | `/leave/credits/<code>/adjust/`, `.../reverse/` |
 
 ---
 
@@ -132,6 +150,7 @@ These screens show data about colleagues or applicants, limited by the server to
 13. **[Business/legal] Screenshots of documents:** identity documents (PAN, Aadhaar, bank proof) are now viewed inside the app only, and temporary copies are deleted on close and at sign-out. Should screenshots of the document viewer also be blocked? (Mobile change in a later phase.)
 14. **[Third party] Google Fonts and Android speech recognition:** the app fetches its font from Google at run time, and voice commands use the device's speech-recognition service (on most Android phones a Google service, which may process audio off the device). Confirm how these are to be described in the policy and the Data Safety form, or ask for the font to be bundled in a later phase.
 15. **[Business/legal] Hosting and other recipients:** the backend (`royalhrms.com`) hosting provider and any other party that receives employee data (backups, support, monitoring) are not visible in the code. Confirm the full list.
+16. **[Business/legal] HR imports and exports (A12):** how long attendance import logs (including row errors with employee names), background-job file contents and import audit entries are kept; whether the policy should tell HR users that exported attendance files saved on their phone are their responsibility to protect and delete; and whether the birthday response should stop sending colleagues' email and date of birth (a backend change, outside the mobile app).
 
 ---
 
@@ -158,6 +177,7 @@ These screens show data about colleagues or applicants, limited by the server to
 >
 > **3. Sharing**
 > - With your employer's authorised staff (e.g. HR, your manager), according to their role.
+> - **HR files:** authorised HR staff may import attendance, notice-period or leave-credit data from spreadsheet files, and may export attendance reports to their device. **[How long import records are kept and how exported files must be handled — Question 16.]**
 > - With service providers who process data for us: Cloudinary (file storage), Sarvam AI (voice features), **[email provider]** (notification emails) and Google (on-device face detection, device speech recognition, fonts).
 > - When required by law.
 > - **Viewing your documents:** when you open one of your documents, it is shown inside the App and is not given to any other app. Any temporary copy is deleted when you close it or sign out.

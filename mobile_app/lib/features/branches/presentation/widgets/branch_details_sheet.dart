@@ -3,6 +3,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/branch_entity.dart';
 import '../utils/branch_formatters.dart';
+import 'branch_admin_reassign.dart';
 import 'branch_dlg_header.dart';
 
 /// Full field dump for a branch — the safe place to expose everything the
@@ -46,10 +47,12 @@ Future<void> showBranchDetailsSheet(BuildContext context, BranchEntity b) {
                       _row('State', b.stateName),
                       _row('Address', b.address.isEmpty ? 'Not available' : b.address),
                     ]),
-                    _Section(title: 'Workforce & HR', rows: [
+                    _Section(title: 'Workforce', rows: [
                       _row('Employees', b.employeesLabel),
-                      _row('HR Manager', b.hasHr ? b.hrName! : 'Not Assigned'),
                     ]),
+                    // Web View modal "Branch Admin" (hr_name / hr_email) with
+                    // Change / Assign Branch Admin for permitted users.
+                    BranchAdminSection(branch: b),
                     _Section(title: 'Geolocation & Attendance', rows: [
                       _row('Geofencing', b.geofencingEnabled ? 'Enabled' : 'Disabled'),
                       _row('Allowed Radius', '${b.allowedRadiusMeters} m'),

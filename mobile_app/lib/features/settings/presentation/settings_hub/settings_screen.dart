@@ -130,6 +130,16 @@ const _kTiles = <_Tile>[
     desc: 'Manage the rules and bonus details shown on the Referral page',
     route: AppRoutes.settingsReferralRules,
   ),
+  // Web settings/page.tsx "notice-period" (Modules, after Referral Rules).
+  _Tile(
+    cat: _Tab.modules,
+    icon: Icons.hourglass_empty_rounded,
+    iconColor: Color(0xFFB45309),
+    iconBg: Color(0xFFFEF3C7),
+    label: 'Notice Period',
+    desc: "Assign each employee's notice period for resignations",
+    route: AppRoutes.settingsNoticePeriod,
+  ),
   _Tile(
     cat: _Tab.modules,
     icon: Icons.fact_check_outlined,

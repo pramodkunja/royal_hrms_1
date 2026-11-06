@@ -19,6 +19,7 @@ import 'package:mobile_app/features/dashboard/presentation/screens/employee_dash
 import 'package:mobile_app/features/dashboard/presentation/screens/home_screen.dart';
 import 'package:mobile_app/features/dashboard/presentation/screens/hr_dashboard_view.dart';
 import 'package:mobile_app/features/dashboard/presentation/widgets/hr_notice_period_row.dart';
+import 'package:mobile_app/features/separation/presentation/notice_period.dart' show debugNoticeDateOffset;
 
 // Task 7: HR dashboard "Employee Lifecycle" → Notice Period tab — web
 // components/dashboard/hr/HrEmployeeLifecycleTabs.tsx + NoticePeriodRow.tsx
@@ -164,6 +165,10 @@ String rowText(WidgetTester tester, String key) => tester.widget<Text>(find.byKe
 
 void main() {
   setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
+  // Timestamps are shown on the viewer's calendar day; fix the viewer in
+  // India (+05:30) so results don't depend on the machine's time zone.
+  setUp(() => debugNoticeDateOffset = (_) => const Duration(hours: 5, minutes: 30));
+  tearDown(() => debugNoticeDateOffset = null);
 
   group('parsing (people.py _notice_period_data)', () {
     test('12. all notice fields kept as the server sent them', () {

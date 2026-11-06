@@ -34,8 +34,7 @@ String _initials(String name) {
 class HrCorrectionCard extends StatefulWidget {
   final HrCorrectionRowEntity record;
   final Future<String?> Function(bool approve) onReview;
-  const HrCorrectionCard(
-      {super.key, required this.record, required this.onReview});
+  const HrCorrectionCard({super.key, required this.record, required this.onReview});
 
   @override
   State<HrCorrectionCard> createState() => _HrCorrectionCardState();
@@ -51,8 +50,7 @@ class _HrCorrectionCardState extends State<HrCorrectionCard> {
     setState(() => _reviewing = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-            error ?? (approve ? 'Correction approved.' : 'Correction rejected.')),
+        content: Text(error ?? (approve ? 'Correction approved.' : 'Correction rejected.')),
         backgroundColor: error != null ? AppColors.error : AppColors.success,
       ),
     );
@@ -61,8 +59,7 @@ class _HrCorrectionCardState extends State<HrCorrectionCard> {
   @override
   Widget build(BuildContext context) {
     final record = widget.record;
-    final showAwaiting = !record.canAction &&
-        (record.status == 'pending' || record.status == 'l2_pending');
+    final showAwaiting = !record.canAction && (record.status == 'pending' || record.status == 'l2_pending');
     final showFlow = record.l1Status != null || record.l2Status != null;
 
     return Container(
@@ -89,35 +86,28 @@ class _HrCorrectionCardState extends State<HrCorrectionCard> {
                   ),
                   alignment: Alignment.center,
                   child: Text(_initials(record.name),
-                      style: AppTextStyles.label.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w700)),
+                      style: AppTextStyles.label.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(record.name,
-                          style: AppTextStyles.label
-                              .copyWith(fontWeight: FontWeight.w600)),
+                      Text(record.name, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
                       Text('${record.employeeId} · ${record.department}',
-                          style: AppTextStyles.labelSmall
-                              .copyWith(color: AppColors.textSecondary)),
+                          style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
                     ],
                   ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: _statusColor(record.status).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(_statusLabel(record.status),
-                      style: AppTextStyles.labelSmall.copyWith(
-                          color: _statusColor(record.status),
-                          fontWeight: FontWeight.w600)),
+                      style: AppTextStyles.labelSmall
+                          .copyWith(color: _statusColor(record.status), fontWeight: FontWeight.w600)),
                 ),
               ],
             ),
@@ -128,16 +118,11 @@ class _HrCorrectionCardState extends State<HrCorrectionCard> {
             ]),
             const SizedBox(height: 8),
             Row(children: [
-              Expanded(
-                  child: _KV(
-                      k: 'Requested In', v: record.requestedInTime ?? '—')),
-              Expanded(
-                  child: _KV(
-                      k: 'Requested Out', v: record.requestedOutTime ?? '—')),
+              Expanded(child: _KV(k: 'Requested In', v: record.requestedInTime ?? '—')),
+              Expanded(child: _KV(k: 'Requested Out', v: record.requestedOutTime ?? '—')),
             ]),
             const SizedBox(height: 8),
             _KV(k: 'Reason', v: record.reason),
-
             if (showAwaiting) ...[
               const SizedBox(height: 8),
               Text(
@@ -148,11 +133,9 @@ class _HrCorrectionCardState extends State<HrCorrectionCard> {
                     : ((record.l2ApproverName?.isNotEmpty ?? false)
                         ? 'Awaiting ${record.l2ApproverName}'
                         : 'Awaiting HR'),
-                style: AppTextStyles.caption
-                    .copyWith(color: AppColors.textHint, fontSize: 11),
+                style: AppTextStyles.caption.copyWith(color: AppColors.textHint, fontSize: 11),
               ),
             ],
-
             if (showFlow) ...[
               const SizedBox(height: 10),
               Divider(height: 1, color: AppColors.border),
@@ -174,17 +157,13 @@ class _HrCorrectionCardState extends State<HrCorrectionCard> {
                 ),
               ],
             ],
-
             if (record.canAction) ...[
               const SizedBox(height: 10),
               if (_reviewing)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 6),
                   child: Center(
-                    child: SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2)),
+                    child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
                   ),
                 )
               else
@@ -196,11 +175,9 @@ class _HrCorrectionCardState extends State<HrCorrectionCard> {
                       label: const Text('Reject'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.error,
-                        side: BorderSide(
-                            color: AppColors.error.withValues(alpha: 0.4)),
+                        side: BorderSide(color: AppColors.error.withValues(alpha: 0.4)),
                         padding: const EdgeInsets.symmetric(vertical: 8),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
                   ),
@@ -214,8 +191,7 @@ class _HrCorrectionCardState extends State<HrCorrectionCard> {
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 8),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         elevation: 0,
                       ),
                     ),
@@ -238,13 +214,10 @@ class _KV extends StatelessWidget {
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(k,
-              style: AppTextStyles.labelSmall
-                  .copyWith(color: AppColors.textHint, fontSize: 10)),
+          Text(k, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textHint, fontSize: 10)),
           const SizedBox(height: 2),
           Text(v,
-              style: AppTextStyles.label
-                  .copyWith(fontWeight: FontWeight.w500, fontSize: 12),
+              style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w500, fontSize: 12),
               maxLines: 1,
               overflow: TextOverflow.ellipsis),
         ],
@@ -293,8 +266,7 @@ class StageLine extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
                   child: Text('"$remarks"',
-                      style: AppTextStyles.caption.copyWith(
-                          fontSize: 10, color: AppColors.textSecondary)),
+                      style: AppTextStyles.caption.copyWith(fontSize: 10, color: AppColors.textSecondary)),
                 ),
             ],
           ),

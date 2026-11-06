@@ -408,7 +408,8 @@ void main() {
     testWidgets('14. the Export button is only there with attendance.export', (tester) async {
       await pumpScreen(tester, as: hrViewer);
       expect(find.byKey(const Key('attendance-export-button')), findsNothing);
-      expect(find.text('Import'), findsOneWidget); // the rest of the toolbar is unchanged
+      // Import needs attendance.create (Task 17), which this viewer lacks.
+      expect(find.text('Import'), findsNothing);
     });
 
     testWidgets('1. single day (default): table date, filters, file name and the old success message', (tester) async {

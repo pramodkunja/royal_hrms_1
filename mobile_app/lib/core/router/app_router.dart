@@ -26,6 +26,7 @@ import '../../features/settings/presentation/attendance_rules/attendance_rules_s
 import '../../features/settings/presentation/approval_rules/approval_rules_screen.dart';
 import '../../features/settings/presentation/leave_policy/leave_balance_import_screen.dart';
 import '../../features/settings/presentation/referral_rules/referral_rules_settings_screen.dart';
+import '../../features/settings/presentation/notice_period/notice_period_screen.dart';
 import '../../features/settings/presentation/assessment_config/assessment_config_screen.dart';
 import '../../features/settings/presentation/notification_settings/notification_settings_screen.dart';
 import '../../features/settings/presentation/onboarding_fields/onboarding_fields_screen.dart';
@@ -133,6 +134,7 @@ class AppRoutes {
   static const String settingsHolidayCalendar = '/settings/holiday-calendar';
   static const String settingsAttendanceRules = '/settings/attendance-rules';
   static const String settingsReferralRules = '/settings/referral-rules';
+  static const String settingsNoticePeriod = '/settings/notice-period';
   static const String settingsAssessmentConfig = '/settings/assessment-config';
   static const String settingsApprovalRules = '/settings/approval-rules';
   static const String settingsNotifications = '/settings/notifications';
@@ -444,6 +446,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.settingsReferralRules,
         builder: (_, __) => const ReferralRulesSettingsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.settingsNoticePeriod,
+        builder: (_, __) => const NoticePeriodScreen(),
       ),
       GoRoute(
         path: AppRoutes.settingsNotifications,

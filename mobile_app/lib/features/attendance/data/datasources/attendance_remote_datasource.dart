@@ -437,16 +437,39 @@ class AttendanceRemoteDataSource {
     }
   }
 
-  Future<ImportResultModel> importCsv(List<int> bytes, String fileName) async {
+  /// POST /attendance/import/ (multipart). Bulk mode sends only `file`;
+  /// single-employee mode (web ImportModal) adds `employee_id` and the
+  /// optional `date_from` / `date_to` (YYYY-MM-DD). A file whose every row
+  /// failed comes back as HTTP 400 *with* the import result (production
+  /// HRAttendanceImportView), which is returned as a result, not an error.
+  Future<ImportResultModel> importCsv(
+    List<int> bytes,
+    String fileName, {
+    String? employeeId,
+    String? dateFrom,
+    String? dateTo,
+  }) async {
     final formData = FormData.fromMap({
       'file': MultipartFile.fromBytes(bytes, filename: fileName),
+      if (employeeId != null) 'employee_id': employeeId,
+      if (dateFrom != null) 'date_from': dateFrom,
+      if (dateTo != null) 'date_to': dateTo,
     });
-    final res = await _dio.post(
-      ApiConstants.attendanceImport,
-      data: formData,
-      options: Options(contentType: 'multipart/form-data'),
-    );
-    return ImportResultModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+    try {
+      final res = await _dio.post(
+        ApiConstants.attendanceImport,
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return ImportResultModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+    } on DioException catch (e) {
+      final body = e.response?.data;
+      final data = body is Map ? body['data'] : null;
+      if (e.response?.statusCode == 400 && data is Map && data.containsKey('total_records')) {
+        return ImportResultModel.fromJson(Map<String, dynamic>.from(data));
+      }
+      rethrow;
+    }
   }
 
   Future<List<int>> fetchImportSample({String format = 'csv'}) async {

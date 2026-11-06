@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
-import '../../../../auth/presentation/providers/auth_providers.dart';
+import '../../../../../core/permissions/permission_providers.dart';
 import '../../../data/models/company_model.dart';
 import '../../providers/settings_providers.dart';
 
@@ -25,10 +25,10 @@ class _FinancialYearSectionState extends ConsumerState<FinancialYearSection> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(financialYearProvider);
-    // The API enforces this server-side too (403 on PUT for anyone else) —
-    // this only controls whether the edit control renders at all.
-    final role = ref.watch(authStateProvider).valueOrNull?.user?.role ?? '';
-    final isSystemAdmin = role == 'system_admin';
+    // The server's PUT requires settings.edit (CompanyFinancialYearView); it
+    // decides, never the role name. This only controls whether the edit
+    // control renders at all.
+    final isSystemAdmin = ref.watch(permissionProvider('settings.edit'));
 
     return _Card(
       child: async.when(

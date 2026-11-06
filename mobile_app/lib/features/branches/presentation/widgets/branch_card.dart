@@ -6,14 +6,16 @@ import 'branch_details_sheet.dart';
 
 class BranchCard extends StatefulWidget {
   final BranchEntity branch;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+
+  /// Null hides the action (web: Edit / Delete only with settings.edit).
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   const BranchCard({
     super.key,
     required this.branch,
-    required this.onEdit,
-    required this.onDelete,
+    this.onEdit,
+    this.onDelete,
   });
 
   @override
@@ -399,12 +401,12 @@ class _MiniStat extends StatelessWidget {
 
 class _Actions extends StatelessWidget {
   final VoidCallback onViewDetails;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
   const _Actions({
     required this.onViewDetails,
-    required this.onEdit,
-    required this.onDelete,
+    this.onEdit,
+    this.onDelete,
   });
 
   @override
@@ -422,13 +424,15 @@ class _Actions extends StatelessWidget {
             style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 10)),
           ),
         ),
-        VerticalDivider(width: 1, color: AppColors.border),
+        if (onEdit != null || onDelete != null) VerticalDivider(width: 1, color: AppColors.border),
+        if (onEdit != null)
         IconButton(
           tooltip: 'Edit branch',
           onPressed: onEdit,
           icon: Icon(Icons.edit_outlined, size: 18, color: AppColors.textSecondary),
           visualDensity: VisualDensity.compact,
         ),
+        if (onDelete != null)
         IconButton(
           tooltip: 'Delete branch',
           onPressed: onDelete,

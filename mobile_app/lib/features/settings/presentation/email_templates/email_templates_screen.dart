@@ -6,6 +6,7 @@ import '../../../../shared/widgets/stat_card.dart';
 import '../../data/models/email_template_model.dart';
 import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
+import 'widgets/birthday_settings_card.dart';
 import 'widgets/email_branding_card.dart';
 import 'widgets/template_card.dart';
 import 'widgets/template_editor_sheet.dart';
@@ -81,6 +82,8 @@ class _EmailTemplatesScreenState extends ConsumerState<EmailTemplatesScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const EmailBrandingCard(),
+          // Web: the Birthday Wishes card sits right after Email Branding.
+          const BirthdaySettingsCard(),
           Expanded(child: _EmptyView(onAdd: () => _openEditor(context, null))),
         ],
       );
@@ -111,6 +114,7 @@ class _EmailTemplatesScreenState extends ConsumerState<EmailTemplatesScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const EmailBrandingCard(),
+        const BirthdaySettingsCard(),
         _SubHeader(),
         _StatsRow(templates: templates),
         _SearchBar(

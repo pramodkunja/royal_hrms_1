@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/permissions/permission_providers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/branch_entity.dart';
@@ -79,6 +80,9 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
   @override
   Widget build(BuildContext context) {
     final branchesAsync = ref.watch(branchListProvider);
+    // Web BranchManagement: Add / Edit / Delete only with settings.edit; the
+    // list and View Details stay available with branches.view.
+    final canEdit = ref.watch(permissionProvider('settings.edit'));
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isWide = screenWidth >= 700;
 
@@ -91,7 +95,7 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
       // shown when filters/search reduce the list to zero *matches*, since
       // then this FAB remains the only way to add a branch.
       floatingActionButton: branchesAsync.maybeWhen(
-        data: (branches) => branches.isEmpty
+        data: (branches) => branches.isEmpty || !canEdit
             ? null
             : screenWidth < 360
                 ? FloatingActionButton(
@@ -166,7 +170,7 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
                 if (branches.isEmpty) {
                   return SliverToBoxAdapter(
                     child: BranchEmptyView(
-                        onAdd: () => _openForm(context, null)),
+                        onAdd: canEdit ? () => _openForm(context, null) : null),
                   );
                 }
                 final filtered = _applyFilters(branches);
@@ -186,8 +190,8 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
                 return _BranchGrid(
                   branches: filtered,
                   twoColumns: isWide,
-                  onEdit: (b) => _openForm(context, b),
-                  onDelete: (b) => _confirmDelete(context, ref, b),
+                  onEdit: canEdit ? (b) => _openForm(context, b) : null,
+                  onDelete: canEdit ? (b) => _confirmDelete(context, ref, b) : null,
                 );
               },
             ),
@@ -323,15 +327,18 @@ class _NoMatchesView extends StatelessWidget {
 class _BranchGrid extends StatelessWidget {
   final List<BranchEntity> branches;
   final bool twoColumns;
-  final void Function(BranchEntity) onEdit;
-  final void Function(BranchEntity) onDelete;
+  final void Function(BranchEntity)? onEdit;
+  final void Function(BranchEntity)? onDelete;
 
   const _BranchGrid({
     required this.branches,
     required this.twoColumns,
-    required this.onEdit,
-    required this.onDelete,
+    this.onEdit,
+    this.onDelete,
   });
+
+  VoidCallback? _edit(BranchEntity b) => onEdit == null ? null : () => onEdit!(b);
+  VoidCallback? _delete(BranchEntity b) => onDelete == null ? null : () => onDelete!(b);
 
   @override
   Widget build(BuildContext context) {
@@ -344,8 +351,8 @@ class _BranchGrid extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 12),
               child: BranchCard(
                 branch: branches[index],
-                onEdit: () => onEdit(branches[index]),
-                onDelete: () => onDelete(branches[index]),
+                onEdit: _edit(branches[index]),
+                onDelete: _delete(branches[index]),
               ),
             ),
             childCount: branches.length,
@@ -370,8 +377,8 @@ class _BranchGrid extends StatelessWidget {
                   Expanded(
                     child: BranchCard(
                       branch: branches[firstIndex],
-                      onEdit: () => onEdit(branches[firstIndex]),
-                      onDelete: () => onDelete(branches[firstIndex]),
+                      onEdit: _edit(branches[firstIndex]),
+                      onDelete: _delete(branches[firstIndex]),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -379,8 +386,8 @@ class _BranchGrid extends StatelessWidget {
                     child: secondIndex < branches.length
                         ? BranchCard(
                             branch: branches[secondIndex],
-                            onEdit: () => onEdit(branches[secondIndex]),
-                            onDelete: () => onDelete(branches[secondIndex]),
+                            onEdit: _edit(branches[secondIndex]),
+                            onDelete: _delete(branches[secondIndex]),
                           )
                         : const SizedBox.shrink(),
                   ),

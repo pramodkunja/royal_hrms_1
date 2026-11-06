@@ -273,8 +273,9 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
       );
 
   @override
-  Future<ImportResultEntity> importCsv(List<int> bytes, String fileName) =>
-      _ds.importCsv(bytes, fileName);
+  Future<ImportResultEntity> importCsv(List<int> bytes, String fileName,
+          {String? employeeId, String? dateFrom, String? dateTo}) =>
+      _ds.importCsv(bytes, fileName, employeeId: employeeId, dateFrom: dateFrom, dateTo: dateTo);
 
   @override
   Future<List<int>> fetchImportSample({String format = 'csv'}) =>

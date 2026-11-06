@@ -17,10 +17,14 @@ import '../../../employees/data/models/employee_model.dart';
 import '../../../employees/presentation/providers/employee_providers.dart';
 import '../../../employees/presentation/widgets/employee_attendance_tab.dart';
 import '../../domain/entities/attendance_entity.dart';
+import '../../../separation/domain/entities/separation_entity.dart' as sep show EmployeePickerOption;
+import '../../../separation/presentation/widgets/employee_picker_field.dart';
 import '../providers/attendance_export.dart' show kAttendanceExportPermission;
 import '../providers/attendance_providers.dart';
 import '../widgets/attendance_export_sheet.dart';
 import '../widgets/punch_location_section.dart';
+import '../widgets/shift_assignment_tab.dart';
+import '../widgets/weekly_off_assignment_tab.dart';
 import '../widgets/hr_correction_card.dart';
 
 // ─── Colour helpers ───────────────────────────────────────────────────────────
@@ -149,7 +153,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 4, vsync: this);
+    _tab = TabController(length: 6, vsync: this);
   }
 
   @override
@@ -187,6 +191,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
                 const Tab(text: 'OT Entry'),
                 _BadgeTab(label: 'Invalid Punches', count: invalidCount),
                 _BadgeTab(label: 'Un-punches', count: unpunchCount),
+                const Tab(text: 'Weekly Off Assignment'),
+                const Tab(text: 'Shift Assignment'),
               ],
             ),
           ),
@@ -199,6 +205,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
           _OtEntryTab(),
           _InvalidPunchesTab(),
           _UnpunchesTab(),
+          WeeklyOffAssignmentTab(),
+          ShiftAssignmentTab(),
         ],
       ),
     );
@@ -929,6 +937,7 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
     final selectedDept = ref.watch(hrAttendanceDepartmentFilterProvider);
     final selectedDate = ref.watch(hrAttendanceDateFilterProvider);
     final canExport = ref.watch(permissionProvider(kAttendanceExportPermission));
+    final canImport = ref.watch(permissionProvider(kAttendanceImportPermission));
     final selectedStatus = ref.watch(attendanceRecordsStatusFilterProvider);
     final statusLabel = _kAttendanceStatusFilterOptions
         .firstWhere((e) => e.key == selectedStatus,
@@ -1104,7 +1113,9 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
                       ),
                     ),
                   const SizedBox(width: 6),
+                  if (canImport)
                   OutlinedButton.icon(
+                    key: const Key('attendance-import-button'),
                     onPressed: () => showDialog(
                       context: context,
                       builder: (_) => const _ImportAttendanceDialog(),
@@ -1266,6 +1277,31 @@ class _PaginationBar extends StatelessWidget {
       );
 }
 
+/// Picks the attendance CSV (tests override it).
+final attendanceImportFilePickerProvider = Provider<Future<PlatformFile?> Function()>((ref) => () async {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return null;
+      return result.files.single;
+    });
+
+/// Picks a From / To date for single-employee import (tests override it).
+final attendanceImportDatePickerProvider =
+    Provider<Future<DateTime?> Function(BuildContext context, DateTime? initial)>((ref) => (context, initial) {
+          final now = DateTime.now();
+          return showDatePicker(
+            context: context,
+            initialDate: initial ?? now,
+            firstDate: DateTime(now.year - 10),
+            lastDate: DateTime(now.year + 1, 12, 31),
+          );
+        });
+
+enum _ImportMode { bulk, single }
+
 class _ImportAttendanceDialog extends ConsumerStatefulWidget {
   const _ImportAttendanceDialog();
 
@@ -1281,6 +1317,11 @@ class _ImportAttendanceDialogState
   String? _error;
   ImportResultEntity? _result;
   bool _downloadingSample = false;
+  // Web ImportModal's "Import for One Employee" / "Import for All Employees".
+  _ImportMode _mode = _ImportMode.bulk;
+  sep.EmployeePickerOption? _employee;
+  DateTime? _dateFrom;
+  DateTime? _dateTo;
 
   Future<void> _downloadSample(String format) async {
     setState(() => _downloadingSample = true);
@@ -1315,23 +1356,56 @@ class _ImportAttendanceDialogState
   }
 
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['csv'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
+    final file = await ref.read(attendanceImportFilePickerProvider)();
+    if (file == null || !mounted) return;
     setState(() {
-      _file = result.files.single;
+      _file = file;
+      _error = null;
+    });
+  }
+
+  /// Switching mode drops the single-employee choices, so a bulk upload can
+  /// never carry a stale employee or date range.
+  void _setMode(_ImportMode mode) {
+    if (_uploading || mode == _mode) return;
+    setState(() {
+      _mode = mode;
+      _employee = null;
+      _dateFrom = null;
+      _dateTo = null;
+      _error = null;
+    });
+  }
+
+  Future<void> _pickDate(bool from) async {
+    final picked = await ref.read(attendanceImportDatePickerProvider)(context, from ? _dateFrom : _dateTo);
+    if (picked == null || !mounted) return;
+    setState(() {
+      if (from) {
+        _dateFrom = picked;
+      } else {
+        _dateTo = picked;
+      }
       _error = null;
     });
   }
 
   Future<void> _upload() async {
+    if (_uploading) return;
     final file = _file;
     if (file == null || file.bytes == null) {
       setState(() => _error = 'Please choose a CSV file.');
       return;
+    }
+    final single = _mode == _ImportMode.single
+        ? AttendanceSingleImport(employeeId: _employee?.code ?? '', dateFrom: _dateFrom, dateTo: _dateTo)
+        : null;
+    if (single != null) {
+      final problem = attendanceSingleImportError(single);
+      if (problem != null) {
+        setState(() => _error = problem);
+        return;
+      }
     }
     setState(() {
       _uploading = true;
@@ -1340,7 +1414,7 @@ class _ImportAttendanceDialogState
     try {
       final result = await ref
           .read(attendanceImportActionProvider)
-          .upload(file.bytes!, file.name);
+          .upload(file.bytes!, file.name, single: single);
       if (!mounted) return;
       setState(() {
         _result = result;
@@ -1362,11 +1436,14 @@ class _ImportAttendanceDialogState
       title: const Text('Import Attendance'),
       content: SizedBox(
         width: 340,
-        child: result != null ? _buildResult(result) : _buildPicker(),
+        child: SingleChildScrollView(
+          child: result != null ? _buildResult(result) : _buildPicker(),
+        ),
       ),
       actions: result != null
           ? [
               TextButton(
+                  key: const Key('attendance-import-done'),
                   onPressed: () => Navigator.pop(context),
                   child: const Text('Done'))
             ]
@@ -1376,6 +1453,7 @@ class _ImportAttendanceDialogState
                 child: const Text('Cancel'),
               ),
               ElevatedButton(
+                key: const Key('attendance-import-upload'),
                 onPressed: _uploading ? null : _upload,
                 style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
@@ -1392,104 +1470,257 @@ class _ImportAttendanceDialogState
     );
   }
 
-  Widget _buildPicker() => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _InfoBanner(
-            icon: Icons.info_outline,
-            color: AppColors.info,
-            bg: AppColors.infoContainer,
-            border: AppColors.info.withValues(alpha: 0.3),
-            message:
-                'Required columns: employee_id, date, punch_in, punch_out — CSV only, max 5 MB.',
+  Widget _modeOption(_ImportMode mode, IconData icon, String title, String sub) {
+    final active = _mode == mode;
+    return Expanded(
+      child: InkWell(
+        key: Key('attendance-import-mode-${mode.name}'),
+        borderRadius: BorderRadius.circular(8),
+        onTap: _uploading ? null : () => _setMode(mode),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: active ? AppColors.primary.withValues(alpha: 0.05) : null,
+            border: Border.all(
+                color: active ? AppColors.primary : AppColors.border,
+                width: active ? 1.5 : 1),
           ),
-          const SizedBox(height: 6),
-          Text('Example: EMP001,2026-07-02,09:05,18:15',
-              style:
-                  AppTextStyles.labelSmall.copyWith(color: AppColors.textHint)),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisSize: MainAxisSize.min,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Download sample:',
-                  style: AppTextStyles.labelSmall
-                      .copyWith(color: AppColors.textSecondary)),
-              const SizedBox(width: 4),
-              TextButton(
-                onPressed:
-                    _downloadingSample ? null : () => _downloadSample('csv'),
-                style: TextButton.styleFrom(
-                    padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
-                child: Text('CSV', style: AppTextStyles.bodySmall),
-              ),
-              Text('·', style: AppTextStyles.caption),
-              TextButton(
-                onPressed:
-                    _downloadingSample ? null : () => _downloadSample('xlsx'),
-                style: TextButton.styleFrom(
-                    padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
-                child: Text('XLSX', style: AppTextStyles.bodySmall),
-              ),
-              if (_downloadingSample) ...[
-                const SizedBox(width: 6),
-                const SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: CircularProgressIndicator(strokeWidth: 2)),
-              ],
+              Row(children: [
+                Icon(icon, size: 14, color: active ? AppColors.primary : AppColors.textSecondary),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(title,
+                      style: AppTextStyles.label.copyWith(
+                          fontSize: 12,
+                          color: active ? AppColors.primary : AppColors.textPrimary)),
+                ),
+              ]),
+              const SizedBox(height: 2),
+              Text(sub, style: AppTextStyles.caption.copyWith(fontSize: 10)),
             ],
           ),
-          const SizedBox(height: 8),
-          GestureDetector(
-            onTap: _pickFile,
-            child: _FakeInput(
-                value: _file?.name ?? 'Choose CSV file',
-                icon: Icons.attach_file),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 6),
-            Text(_error!,
-                style:
-                    AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
-          ],
-        ],
-      );
+        ),
+      ),
+    );
+  }
 
-  Widget _buildResult(ImportResultEntity r) => Column(
-        mainAxisSize: MainAxisSize.min,
+  String _fmtDate(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Widget _dateField(bool from) {
+    final value = from ? _dateFrom : _dateTo;
+    final label = from ? 'From date (optional)' : 'To date (optional)';
+    return Expanded(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(label, style: AppTextStyles.caption.copyWith(fontSize: 11)),
+          const SizedBox(height: 4),
           Row(children: [
-            Expanded(child: _KV(k: 'Total Rows', v: '${r.totalRows}')),
             Expanded(
-                child: _KV(
-                    k: 'Success',
-                    v: '${r.success}',
-                    vColor: AppColors.success)),
-            Expanded(
-                child: _KV(
-                    k: 'Failed',
-                    v: '${r.failed}',
-                    vColor: r.failed > 0 ? AppColors.error : null)),
+              child: GestureDetector(
+                key: Key('attendance-import-date-${from ? 'from' : 'to'}'),
+                onTap: _uploading ? null : () => _pickDate(from),
+                child: _FakeInput(
+                    value: value == null ? 'Any' : _fmtDate(value),
+                    icon: Icons.calendar_today_outlined),
+              ),
+            ),
+            if (value != null)
+              IconButton(
+                key: Key('attendance-import-date-${from ? 'from' : 'to'}-clear'),
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.close, size: 16),
+                onPressed: _uploading
+                    ? null
+                    : () => setState(() {
+                          if (from) {
+                            _dateFrom = null;
+                          } else {
+                            _dateTo = null;
+                          }
+                        }),
+              ),
           ]),
-          if (r.errors.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            const Divider(height: 1),
-            const SizedBox(height: 8),
-            Text('First errors',
-                style: AppTextStyles.label
-                    .copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
-            const SizedBox(height: 4),
-            ...r.errors.take(5).map((e) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text('Row ${e.row}: ${e.message}',
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPicker() {
+    final single = _mode == _ImportMode.single;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          _modeOption(_ImportMode.bulk, Icons.groups_outlined, 'Import for All Employees',
+              'One file with rows for many employees.'),
+          const SizedBox(width: 8),
+          _modeOption(_ImportMode.single, Icons.person_outline, 'Import for One Employee',
+              'Upload attendance for a single selected employee.'),
+        ]),
+        const SizedBox(height: 10),
+        if (single) ...[
+          Text('Employee *', style: AppTextStyles.caption.copyWith(fontSize: 11)),
+          const SizedBox(height: 4),
+          EmployeePickerField(
+            key: const Key('attendance-import-employee'),
+            value: _employee,
+            enabled: !_uploading,
+            hintText: 'Search by employee name or ID…',
+            onChanged: (e) => setState(() {
+              _employee = e;
+              _error = null;
+            }),
+          ),
+          const SizedBox(height: 8),
+          Row(children: [
+            _dateField(true),
+            const SizedBox(width: 8),
+            _dateField(false),
+          ]),
+          const SizedBox(height: 10),
+        ],
+        _InfoBanner(
+          icon: Icons.info_outline,
+          color: AppColors.info,
+          bg: AppColors.infoContainer,
+          border: AppColors.info.withValues(alpha: 0.3),
+          message: single
+              ? 'Required columns: employee_id, date, punch_in, punch_out — CSV only, max 5 MB. '
+                  'Every row must belong to the selected employee; employee_id may be left blank.'
+              : 'Required columns: employee_id, date, punch_in, punch_out — CSV only, max 5 MB.',
+        ),
+        const SizedBox(height: 6),
+        Text('Example: EMP001,2026-07-02,09:05,18:15',
+            style: AppTextStyles.labelSmall.copyWith(color: AppColors.textHint)),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Download sample:',
+                style: AppTextStyles.labelSmall
+                    .copyWith(color: AppColors.textSecondary)),
+            const SizedBox(width: 4),
+            TextButton(
+              onPressed:
+                  _downloadingSample ? null : () => _downloadSample('csv'),
+              style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
+              child: Text('CSV', style: AppTextStyles.bodySmall),
+            ),
+            Text('·', style: AppTextStyles.caption),
+            TextButton(
+              onPressed:
+                  _downloadingSample ? null : () => _downloadSample('xlsx'),
+              style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
+              child: Text('XLSX', style: AppTextStyles.bodySmall),
+            ),
+            if (_downloadingSample) ...[
+              const SizedBox(width: 6),
+              const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 2)),
+            ],
+          ],
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          key: const Key('attendance-import-file'),
+          onTap: _uploading ? null : _pickFile,
+          child: _FakeInput(
+              value: _file?.name ?? 'Choose CSV file',
+              icon: Icons.attach_file),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 6),
+          Text(_error!,
+              key: const Key('attendance-import-error'),
+              style:
+                  AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildResult(ImportResultEntity r) {
+    if (r.isQueued) {
+      // Web: the message up to " Poll ", then a note to check back.
+      final text = r.message.split(' Poll ').first;
+      return Text(
+        '$text You can close this window; refresh the attendance list in a few minutes.',
+        key: const Key('attendance-import-queued'),
+        style: AppTextStyles.bodySmall,
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (r.message.isNotEmpty) ...[
+          Text(r.message,
+              key: const Key('attendance-import-message'),
+              style: AppTextStyles.bodySmall.copyWith(
+                  color: r.failed > 0
+                      ? (r.success > 0 ? AppColors.warning : AppColors.error)
+                      : AppColors.success)),
+          const SizedBox(height: 10),
+        ],
+        Row(children: [
+          Expanded(child: _KV(k: 'Total Rows', v: '${r.totalRows}')),
+          Expanded(
+              child: _KV(
+                  k: 'Success',
+                  v: '${r.success}',
+                  vColor: AppColors.success)),
+          Expanded(
+              child: _KV(
+                  k: 'Failed',
+                  v: '${r.failed}',
+                  vColor: r.failed > 0 ? AppColors.error : null)),
+          Expanded(
+              child: _KV(
+                  k: 'Skipped',
+                  v: '${r.skipped}',
+                  vColor: r.skipped > 0 ? AppColors.warning : null)),
+        ]),
+        if (r.errors.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          const Divider(height: 1),
+          const SizedBox(height: 8),
+          Text('First errors',
+              style: AppTextStyles.label
+                  .copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
+          const SizedBox(height: 4),
+          ...r.errors.take(5).map((e) {
+            final where = [e.employee, e.date].where((s) => s.isNotEmpty).join(' · ');
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Row ${e.row}${where.isEmpty ? '' : ' ($where)'}: ${e.message}',
                       style: AppTextStyles.labelSmall
                           .copyWith(color: AppColors.error)),
-                )),
-          ],
+                  if (e.resolution.isNotEmpty)
+                    Text(e.resolution,
+                        style: AppTextStyles.labelSmall
+                            .copyWith(color: AppColors.textSecondary)),
+                ],
+              ),
+            );
+          }),
         ],
-      );
+      ],
+    );
+  }
 }
 
 class _AttendanceCard extends ConsumerWidget {

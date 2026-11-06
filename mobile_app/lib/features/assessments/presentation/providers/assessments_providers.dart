@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../auth/domain/entities/user_entity.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/datasources/assessments_remote_datasource.dart';
 import '../../data/models/assessment_model.dart';
 
@@ -94,7 +96,10 @@ class AssessmentItemsNotifier
   List<AssessmentItemModel> _sorted(List<AssessmentItemModel> items) =>
       [...items]..sort((a, b) => a.order.compareTo(b.order));
 
+  bool get _canEdit => canEditAssessments(ref.read(authStateProvider).valueOrNull?.user);
+
   Future<String?> createItem(AssessmentItemFormData form) async {
+    if (!_canEdit) return kAssessmentEditDenied;
     try {
       final created = await _ds.createItem(arg, form);
       state = AsyncData(_sorted([...state.valueOrNull ?? [], created]));
@@ -105,6 +110,7 @@ class AssessmentItemsNotifier
   }
 
   Future<String?> editItem(String itemId, AssessmentItemFormData form) async {
+    if (!_canEdit) return kAssessmentEditDenied;
     try {
       final updated = await _ds.updateItem(itemId, form);
       state = AsyncData(
@@ -117,6 +123,7 @@ class AssessmentItemsNotifier
   }
 
   Future<String?> removeItem(String itemId) async {
+    if (!_canEdit) return kAssessmentEditDenied;
     try {
       await _ds.deleteItem(itemId);
       state = AsyncData(
@@ -127,6 +134,61 @@ class AssessmentItemsNotifier
       return _friendly(e);
     }
   }
+}
+
+// ── Assessment sections (web ItemsModal; fetched while the dialog is open) ────
+
+/// Production assessments views: item and section writes need
+/// `has_perm(user, 'assessments.edit')` (superuser or the role's codename);
+/// reading needs `assessments.view`.
+bool canEditAssessments(UserEntity? user) =>
+    user != null && (user.isSuperuser || user.permissions.contains('assessments.edit'));
+
+const kAssessmentEditDenied = 'Permission denied.';
+
+final assessmentSectionsProvider = AsyncNotifierProvider.autoDispose
+    .family<AssessmentSectionsNotifier, List<AssessmentSectionModel>, String>(
+  AssessmentSectionsNotifier.new,
+);
+
+/// Sections in `order` (web sorts them the same way). Writes are refused
+/// before any request without assessments.edit, and run one at a time.
+class AssessmentSectionsNotifier
+    extends AutoDisposeFamilyAsyncNotifier<List<AssessmentSectionModel>, String> {
+  AssessmentsRemoteDataSource get _ds => ref.read(assessmentsDataSourceProvider);
+  bool _busy = false;
+
+  @override
+  Future<List<AssessmentSectionModel>> build(String assessmentId) async {
+    final sections = await _ds.fetchSections(assessmentId);
+    return [...sections]..sort((a, b) => a.order.compareTo(b.order));
+  }
+
+  Future<String?> _write(Future<void> Function() run, {bool reloadItems = false}) async {
+    if (!canEditAssessments(ref.read(authStateProvider).valueOrNull?.user)) return kAssessmentEditDenied;
+    if (_busy) return 'Please wait — a change is already being saved.';
+    _busy = true;
+    try {
+      await run();
+      // Web: refetchSections(); after a delete also refetchItems().
+      ref.invalidateSelf();
+      if (reloadItems) ref.invalidate(assessmentItemsProvider(arg));
+      return null;
+    } catch (e) {
+      return _friendly(e);
+    } finally {
+      _busy = false;
+    }
+  }
+
+  Future<String?> createSection(AssessmentSectionFormData form) => _write(() => _ds.createSection(arg, form));
+
+  Future<String?> editSection(String sectionId, AssessmentSectionFormData form) =>
+      _write(() => _ds.updateSection(arg, sectionId, form));
+
+  /// The server moves the section's items to unsectioned.
+  Future<String?> removeSection(String sectionId) =>
+      _write(() => _ds.deleteSection(arg, sectionId), reloadItems: true);
 }
 
 // ── Employees + email templates for the Assign dialog ─────────────────────────

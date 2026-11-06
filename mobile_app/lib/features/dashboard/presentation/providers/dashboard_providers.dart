@@ -126,6 +126,11 @@ final employeeKpisProvider = FutureProvider.autoDispose<EmployeeKpis>(
 
 /// The signed-in employee's own notice period (null when none). Cached while
 /// the Employee dashboard shows it; refreshed with the rest of the dashboard.
+/// Today's birthdays for the Employee dashboard (web EmpBirthdayAnnouncement).
+final employeeBirthdaysTodayProvider = FutureProvider.autoDispose<List<EmployeeBirthdayToday>>(
+  (ref) => ref.read(dashboardDataSourceProvider).fetchEmployeeBirthdaysToday(),
+);
+
 final employeeNoticePeriodProvider = FutureProvider.autoDispose<EmployeeNoticePeriod?>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchEmployeeNoticePeriod(),
 );

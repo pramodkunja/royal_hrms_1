@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/router/access_control.dart' show userHasPermission;
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/datasources/attendance_remote_datasource.dart';
 import '../../data/repositories/attendance_repository_impl.dart';
 import '../../domain/entities/attendance_entity.dart';
@@ -640,23 +642,74 @@ final attendanceRecordCorrectionsProvider = FutureProvider.autoDispose
 
 // ── HR Attendance — CSV Import (Export is a direct one-shot call, see below) ───
 
-final attendanceImportActionProvider =
-    Provider.autoDispose<AttendanceImportAction>((ref) => AttendanceImportAction(ref));
+/// Web shows "Import Attendance" with attendance.create; the server's import
+/// endpoints require it too.
+const kAttendanceImportPermission = 'attendance.create';
+const kAttendanceImportDenied = 'You do not have permission to import attendance.';
+
+/// Single-employee import (web ImportModal "Import for One Employee"): only
+/// rows for [employeeId] are imported, and rows outside the optional
+/// [dateFrom]–[dateTo] range are rejected by the server.
+class AttendanceSingleImport {
+  const AttendanceSingleImport({required this.employeeId, this.dateFrom, this.dateTo});
+  final String employeeId;
+  final DateTime? dateFrom;
+  final DateTime? dateTo;
+}
+
+String _isoDate(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+/// Web ImportModal buildForm's checks for single mode (no file is checked by the dialog).
+String? attendanceSingleImportError(AttendanceSingleImport single) {
+  if (single.employeeId.trim().isEmpty) return 'Please select an employee.';
+  final from = single.dateFrom, to = single.dateTo;
+  if (from != null && to != null && _isoDate(from).compareTo(_isoDate(to)) > 0) {
+    return 'The From date must be on or before the To date.';
+  }
+  return null;
+}
+
+/// Not autoDispose, so the one-upload-at-a-time guard holds across reads.
+final attendanceImportActionProvider = Provider<AttendanceImportAction>((ref) => AttendanceImportAction(ref));
+
+/// Refused before any request: an upload is already running.
+const kAttendanceImportBusy = 'An import is already running.';
 
 class AttendanceImportAction {
   final Ref _ref;
   AttendanceImportAction(this._ref);
+  bool _busy = false;
 
   /// Returns the import result (which itself may report partial row failures),
-  /// or throws a friendly error message string on hard failure.
-  Future<ImportResultEntity> upload(List<int> bytes, String fileName) async {
+  /// or throws a friendly error message string on hard failure. Bulk mode
+  /// ([single] null) sends exactly the original payload: only `file`.
+  Future<ImportResultEntity> upload(List<int> bytes, String fileName, {AttendanceSingleImport? single}) async {
+    // Refused before any request without attendance.create.
+    if (!userHasPermission(_ref.read(authStateProvider).valueOrNull?.user, kAttendanceImportPermission)) {
+      throw kAttendanceImportDenied;
+    }
+    if (single != null) {
+      final problem = attendanceSingleImportError(single);
+      if (problem != null) throw problem;
+    }
+    if (_busy) throw kAttendanceImportBusy;
+    _busy = true;
     try {
-      final result = await _ref.read(attendanceRepositoryProvider).importCsv(bytes, fileName);
+      final result = await _ref.read(attendanceRepositoryProvider).importCsv(
+            bytes,
+            fileName,
+            employeeId: single?.employeeId.trim(),
+            dateFrom: single?.dateFrom == null ? null : _isoDate(single!.dateFrom!),
+            dateTo: single?.dateTo == null ? null : _isoDate(single!.dateTo!),
+          );
       await _ref.read(attendanceRecordsProvider.notifier).refresh();
       _ref.invalidate(attendanceDashboardProvider);
       return result;
     } catch (e) {
       throw friendlyAttendanceError(e);
+    } finally {
+      _busy = false;
     }
   }
 }

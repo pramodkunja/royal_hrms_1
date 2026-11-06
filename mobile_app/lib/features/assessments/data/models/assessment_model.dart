@@ -196,6 +196,13 @@ class AssessmentItemModel {
   final int passScore;
   final DateTime? createdAt;
 
+  /// The section this item belongs to (`section_id`; null = unsectioned).
+  final String? sectionId;
+
+  /// Whether the server reported the section at all — only then is it sent
+  /// back on edit, so an unknown section is never cleared.
+  final bool sectionKnown;
+
   const AssessmentItemModel({
     required this.id,
     required this.itemType,
@@ -211,10 +218,16 @@ class AssessmentItemModel {
     required this.correctOption,
     required this.passScore,
     this.createdAt,
+    this.sectionId,
+    this.sectionKnown = false,
   });
 
   factory AssessmentItemModel.fromJson(Map<String, dynamic> json) {
+    // Web: `item.section_id ?? item.section`.
+    final rawSection = json['section_id'] ?? json['section'];
     return AssessmentItemModel(
+      sectionId: rawSection == null || rawSection.toString().isEmpty ? null : rawSection.toString(),
+      sectionKnown: json.containsKey('section_id') || json.containsKey('section'),
       id: json['id']?.toString() ?? '',
       itemType: json['item_type'] as String? ?? AssessmentItemType.video,
       title: json['title'] as String? ?? '',
@@ -359,6 +372,13 @@ class AssessmentItemFormData {
   String correctOption;
   int passScore;
 
+  /// Web sends `section` with every item save: the section the item is
+  /// added under (null = unsectioned) or, on edit, the item's own section.
+  /// [sendSection] is false only when editing an item whose section the
+  /// server never reported, so it is left untouched.
+  String? sectionId;
+  bool sendSection;
+
   AssessmentItemFormData({
     this.itemType = AssessmentItemType.video,
     this.order = 1,
@@ -372,6 +392,8 @@ class AssessmentItemFormData {
     this.optionD = '',
     this.correctOption = 'a',
     this.passScore = 0,
+    this.sectionId,
+    this.sendSection = false,
   });
 
   factory AssessmentItemFormData.fromModel(AssessmentItemModel model) => AssessmentItemFormData(
@@ -386,6 +408,8 @@ class AssessmentItemFormData {
     optionC: model.optionC,
     optionD: model.optionD,
     correctOption: model.correctOption,
+    sectionId: model.sectionId,
+    sendSection: model.sectionKnown,
     passScore: model.passScore,
   );
 
@@ -393,6 +417,7 @@ class AssessmentItemFormData {
 
   Map<String, dynamic> toJson() {
     return {
+      if (sendSection) 'section': sectionId,
       'item_type': itemType,
       'title': title.trim(),
       'order': order < 1 ? 1 : order,
@@ -435,4 +460,65 @@ class AssessmentItemFormData {
     }
     return null;
   }
+}
+
+/// One assessment section (GET /assessments/<id>/sections/ →
+/// AssessmentSectionSerializer). `score` = marks allocated to the section;
+/// its quiz items share it equally.
+@immutable
+class AssessmentSectionModel {
+  final String id;
+  final String title;
+  final int order;
+  final int score;
+  final int? itemCount;
+
+  const AssessmentSectionModel({
+    required this.id,
+    required this.title,
+    required this.order,
+    required this.score,
+    this.itemCount,
+  });
+
+  factory AssessmentSectionModel.fromJson(Map<String, dynamic> json) {
+    int n(Object? v, int f) => v is num ? v.toInt() : int.tryParse('${v ?? ''}') ?? f;
+    return AssessmentSectionModel(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      order: n(json['order'], 0),
+      score: n(json['score'], 0),
+      itemCount: json['item_count'] == null ? null : n(json['item_count'], 0),
+    );
+  }
+}
+
+/// Web ItemsModal SectionForm. Text fields, as typed; [toJson] converts them
+/// exactly as web does: `Number(order) || 1`, `Number(score) || 0`.
+class AssessmentSectionFormData {
+  String title;
+  String order;
+  String score;
+
+  AssessmentSectionFormData({this.title = '', this.order = '1', this.score = '0'});
+
+  /// Web: EMPTY_SECTION with order = number of sections + 1.
+  factory AssessmentSectionFormData.add(int sectionCount) => AssessmentSectionFormData(order: '${sectionCount + 1}');
+
+  factory AssessmentSectionFormData.fromModel(AssessmentSectionModel s) =>
+      AssessmentSectionFormData(title: s.title, order: '${s.order}', score: '${s.score}');
+
+  static int _num(String v, int fallback) {
+    final n = num.tryParse(v.trim());
+    if (n == null || n == 0 || n.isNaN) return fallback;
+    return n.toInt();
+  }
+
+  String? validate() => title.trim().isEmpty ? 'Title is required.' : null;
+
+  Map<String, dynamic> toJson() => {
+        'title': title.trim(),
+        'order': _num(order, 1),
+        'score': _num(score, 0),
+      };
 }

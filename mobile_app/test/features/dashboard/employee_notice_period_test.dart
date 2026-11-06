@@ -162,6 +162,10 @@ Finder inCard(Finder f) => find.descendant(of: card, matching: f);
 
 void main() {
   setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
+  // Timestamps are shown on the viewer's calendar day; fix the viewer in
+  // India (+05:30) so results don't depend on the machine's time zone.
+  setUp(() => debugNoticeDateOffset = (_) => const Duration(hours: 5, minutes: 30));
+  tearDown(() => debugNoticeDateOffset = null);
 
   group('response parsing', () {
     test('a served notice period is read field by field', () {
@@ -210,7 +214,7 @@ void main() {
       expect(noticeRemainingLabel(null, null), '—');
     });
 
-    test('dates as "D Mon YYYY", from the server value without shifting', () {
+    test('dates as "D Mon YYYY"; timestamps on the (India) viewer\'s day', () {
       expect(formatNoticeDate('2026-11-17'), '17 Nov 2026');
       expect(formatNoticeDate('2026-10-30T11:36:02.123456+05:30'), '30 Oct 2026');
       expect(formatNoticeDate('2026-01-01T00:30:00+05:30'), '1 Jan 2026');

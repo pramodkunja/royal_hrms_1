@@ -45,6 +45,7 @@ class BranchModel extends BranchEntity {
     required super.cityId,
     required super.cityName,
     super.hrName,
+    super.hrEmail,
     required super.employeesCount,
     required super.status,
     required super.isHeadquarter,
@@ -67,6 +68,7 @@ class BranchModel extends BranchEntity {
         cityId: json['city'] as int? ?? 0,
         cityName: json['city_name'] as String? ?? '',
         hrName: json['hr_name'] as String?,
+        hrEmail: json['hr_email'] as String?,
         employeesCount: json['employees_count'] as int? ?? 0,
         status: json['status'] as String? ?? 'active',
         isHeadquarter: json['is_headquarter'] as bool? ?? false,
@@ -125,4 +127,50 @@ class BranchStatsModel extends BranchStatsEntity {
         totalCities: json['total_cities'] as int? ?? 0,
         totalEmployees: json['total_employees'] as int? ?? 0,
       );
+}
+
+/// An employee offered in "Change Branch Admin" (web ApiEmployeeOption from
+/// GET /employees/: `id` is the employee **code**, which is what
+/// reassign-admin expects as `employee_id`).
+class BranchAdminCandidate {
+  const BranchAdminCandidate({
+    required this.code,
+    required this.fullName,
+    required this.email,
+    required this.employeeId,
+    required this.branch,
+    required this.role,
+  });
+
+  final String code;
+  final String fullName;
+  final String email;
+  final String employeeId;
+  final String branch;
+  final String role;
+
+  factory BranchAdminCandidate.fromJson(Map<String, dynamic> j) {
+    String s(String k) => j[k]?.toString() ?? '';
+    final employeeId = s('employee_id');
+    return BranchAdminCandidate(
+      code: s('id').isNotEmpty ? s('id') : employeeId,
+      fullName: s('full_name'),
+      email: s('email'),
+      employeeId: employeeId,
+      branch: s('branch'),
+      role: s('role'),
+    );
+  }
+
+  /// Web: "<name> (<employee ID>) — <branch or 'no branch'>".
+  String get label => '$fullName ($employeeId) — ${branch.isEmpty ? 'no branch' : branch}';
+
+  /// Web search: name, email or employee ID, case-insensitive.
+  bool matches(String query) {
+    final q = query.trim().toLowerCase();
+    return q.isEmpty ||
+        fullName.toLowerCase().contains(q) ||
+        email.toLowerCase().contains(q) ||
+        employeeId.toLowerCase().contains(q);
+  }
 }

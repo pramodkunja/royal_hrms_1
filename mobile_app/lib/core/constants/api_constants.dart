@@ -89,6 +89,9 @@ class ApiConstants {
   static const String employees = '/employees/';
   static const String employeeBulkImport = '/employees/bulk-import/';
   static String employeeDetail(String employeeId) => '/employees/$employeeId/';
+  // Settings → Notice Period → Import (web API.employees.noticePeriodImport*).
+  static const String employeeNoticePeriodImport = '/employees/notice-period/import/';
+  static const String employeeNoticePeriodImportSample = '/employees/notice-period/import/sample/';
   // HR reset: new temporary password emailed to the employee (employees.edit).
   static String employeeResetPassword(String employeeId) => '/employees/$employeeId/reset-password/';
 
@@ -171,6 +174,11 @@ class ApiConstants {
   static String assessmentDetail(String id) => '/assessments/$id/';
   static String assessmentItems(String assessmentId) =>
       '/assessments/$assessmentId/items/';
+  // Web API.assessments.sections / sectionDetail (AssessmentSection*View):
+  // GET assessments.view; POST / PUT / DELETE assessments.edit.
+  static String assessmentSections(String assessmentId) => '/assessments/$assessmentId/sections/';
+  static String assessmentSectionDetail(String assessmentId, String sectionId) =>
+      '/assessments/$assessmentId/sections/$sectionId/';
   static String assessmentItemDetail(String itemId) =>
       '/assessments/items/$itemId/';
   static const String assessmentAssign = '/assessments/assign/';
@@ -241,6 +249,8 @@ class ApiConstants {
   static const String companyContacts = '/company-contacts/';
   static String companyContactDetail(int id) => '/company-contacts/$id/';
   static String branchDetail(int id) => '/branch/branches/$id/';
+  // Web API.branches.reassignAdmin (BranchReassignAdminView, branches.edit).
+  static String branchReassignAdmin(int id) => '/branch/branches/$id/reassign-admin/';
 
   // Employee Onboarding
   static const String onboardingProfile = '/onboarding/';
@@ -265,6 +275,11 @@ class ApiConstants {
   static String leavePolicyDetail(String leaveType) =>
       '/leave/policy/$leaveType/';
   static const String leaveBalanceCredit = '/leave/balance/credit/';
+  // Employee Profile → Leave → Manage Leave Credits (web API.leave.credits*).
+  static String leaveCreditsOverview(String employeeCode) => '/leave/credits/$employeeCode/';
+  static String leaveCreditsAdjust(String employeeCode) => '/leave/credits/$employeeCode/adjust/';
+  static String leaveCreditsReverse(String employeeCode, String txnId) =>
+      '/leave/credits/$employeeCode/transactions/$txnId/reverse/';
 
   // Separation & Exit — matches backend /api/separation/... (apps/hrms/urls.py).
   // The mobile/web user-facing name is "Separation & Exit"; the backend model
@@ -312,6 +327,13 @@ class ApiConstants {
   static const String leaveBalanceImportValidate = '/leave/balance/import/validate/';
   static const String leaveBalanceImportSample = '/leave/balance/import/sample/';
 
+  // Settings → Leave Policy → Monthly Leave Management (leave.approve).
+  static const String leaveMonthlyCredits = '/leave/monthly-credits/';
+  static const String leaveMonthlyCreditsImport = '/leave/monthly-credits/import/';
+  static const String leaveMonthlyCreditsSample = '/leave/monthly-credits/import/sample/';
+  static const String leaveMonthlyAssignments = '/leave/monthly-credits/assignments/';
+  static const String leaveMonthlyCreditsBulk = '/leave/monthly-credits/bulk/';
+
   // Carry Forward execution (year-range batch job) — matches web's
   // API.leave.carryForward.*. NOTE: as of this writing these routes do not
   // exist in the backend (apps/hrms/urls.py has no carry-forward paths at
@@ -354,6 +376,9 @@ class ApiConstants {
   // HRMS — Birthdays widget (hrms app is mounted at the API root, not
   // under a '/hrms/' prefix — see config/urls.py: path('api/', include('apps.hrms.urls')))
   static const String hrmsBirthdays = '/birthdays/';
+  // Settings → Email Templates → Automatic Birthday Wishes (web API.hrms.birthdaySettings):
+  // GET needs employees.view, PATCH needs settings.edit (BirthdaySettingsView).
+  static const String hrmsBirthdaySettings = '/birthdays/settings/';
 
   // Attendance — HR admin management
   static const String attendanceDashboard = '/attendance/dashboard/';
@@ -383,6 +408,18 @@ class ApiConstants {
 
   // Attendance — Export / Import
   static const String attendanceExport = '/attendance/export/';
+
+  // HR Attendance → Shift Assignment (web ShiftAssignmentTab.tsx).
+  static const String attendanceWorkingHoursPolicies = '/attendance/working-hours/';
+  static String attendanceWorkingHoursPolicy(String id) => '/attendance/working-hours/$id/';
+  static const String attendanceShiftAssignments = '/attendance/shift-assignments/';
+  static const String attendanceShiftAssignmentsBulk = '/attendance/shift-assignments/bulk/';
+
+  // HR Attendance → Weekly Off Assignment (web WeeklyOffAssignmentTab.tsx).
+  static const String attendanceWeeklyDayPolicies = '/attendance/weekly-days/';
+  static String attendanceWeeklyDayPolicy(String id) => '/attendance/weekly-days/$id/';
+  static const String attendanceWeeklyOffAssignments = '/attendance/weekly-off-assignments/';
+  static const String attendanceWeeklyOffAssignmentsBulk = '/attendance/weekly-off-assignments/bulk/';
   static const String attendanceImport = '/attendance/import/';
   static const String attendanceImportSample = '/attendance/import/sample/';
 
@@ -459,6 +496,10 @@ class ApiConstants {
   // separation is fully approved) — web EmpNoticePeriodCard.
   static const String dashboardEmployeeNoticePeriod =
       '/dashboard/employee/notice-period/';
+  // Web EmpBirthdayAnnouncement (API.employeeDashboard.birthdaysToday): open to
+  // any onboarded employee (EmployeeBirthdayTodayView, HasCompletedOnboarding),
+  // unlike /birthdays/ and the HR/admin birthday endpoints (employees.view).
+  static const String dashboardEmployeeBirthdaysToday = '/dashboard/employee/birthdays/today/';
 
   // Shared announcement (no role gate) — matches web's EmpAnnouncement.
   static const String dashboardAnnouncement = '/dashboard/announcement/';

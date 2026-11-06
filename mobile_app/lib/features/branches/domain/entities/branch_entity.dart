@@ -39,6 +39,8 @@ class BranchEntity {
   final int cityId;
   final String cityName;
   final String? hrName;
+  /// The Branch Admin's email (`hr_email`), shown with the name as on web.
+  final String? hrEmail;
   final int employeesCount;
   final String status; // 'active' | 'inactive'
   final bool isHeadquarter;
@@ -60,6 +62,7 @@ class BranchEntity {
     required this.cityId,
     required this.cityName,
     this.hrName,
+    this.hrEmail,
     required this.employeesCount,
     required this.status,
     required this.isHeadquarter,

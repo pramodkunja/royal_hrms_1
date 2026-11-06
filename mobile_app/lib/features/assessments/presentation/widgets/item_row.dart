@@ -15,14 +15,15 @@ String _fmtDate(DateTime? d) {
 class ItemRow extends StatelessWidget {
   final AssessmentItemModel item;
   final bool deleting;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  // Null hides the action (no assessments.edit).
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
   const ItemRow({
     super.key,
     required this.item,
     required this.deleting,
-    required this.onEdit,
-    required this.onDelete,
+    this.onEdit,
+    this.onDelete,
   });
 
   @override
@@ -81,13 +82,17 @@ class ItemRow extends StatelessWidget {
               child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
             )
           else ...[
+            if (onEdit != null)
             IconButton(
+              key: Key('item-edit-${item.id}'),
               icon: const Icon(Icons.edit_outlined, size: 16),
               color: AppColors.textSecondary,
               visualDensity: VisualDensity.compact,
               onPressed: onEdit,
             ),
+            if (onDelete != null)
             IconButton(
+              key: Key('item-delete-${item.id}'),
               icon: const Icon(Icons.delete_outline, size: 16),
               color: AppColors.error,
               visualDensity: VisualDensity.compact,

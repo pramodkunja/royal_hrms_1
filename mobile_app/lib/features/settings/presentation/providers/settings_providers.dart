@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/router/access_control.dart' show userHasPermission;
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/datasources/settings_remote_datasource.dart';
 import '../../data/models/assessment_config_model.dart';
 import '../../data/models/attendance_settings_model.dart';
@@ -25,6 +27,20 @@ final settingsDataSourceProvider = Provider<SettingsRemoteDataSource>((ref) {
 // ── Company ───────────────────────────────────────────────────────────────────
 // autoDispose: disposed when company screen unmounts → fresh fetch on next visit
 
+// ── settings.edit guard ──────────────────────────────────────────────────────
+// Web gates Company, Departments & Designations and Roles editing on
+// usePermission("settings.edit"); the backend refuses those writes without it.
+// Every write below checks it first and sends nothing when it's missing.
+
+const kSettingsEditDenied = 'You do not have permission to perform this action.';
+
+const kLeavePolicyEditDenied = 'Permission denied.';
+
+/// Whether the signed-in user may edit Company, Departments/Designations and
+/// Roles (settings.edit; superusers pass, as everywhere in the app).
+bool canEditSettings(Ref ref) =>
+    userHasPermission(ref.read(authStateProvider).valueOrNull?.user, 'settings.edit');
+
 final companyProvider =
     AsyncNotifierProvider.autoDispose<CompanyNotifier, CompanyModel>(
   CompanyNotifier.new,
@@ -37,6 +53,7 @@ class CompanyNotifier extends AutoDisposeAsyncNotifier<CompanyModel> {
   Future<CompanyModel> build() => _ds.fetchCompany();
 
   Future<String?> save(CompanyModel model, {dynamic logoFile}) async {
+    if (!canEditSettings(ref)) return kSettingsEditDenied;
     state = const AsyncLoading();
     try {
       final updated = await _ds.saveCompany(model, logoFile: logoFile);
@@ -66,6 +83,7 @@ class FinancialYearNotifier
   Future<CompanyFinancialYearModel> build() => _ds.fetchFinancialYear();
 
   Future<String?> save(String startMonth) async {
+    if (!canEditSettings(ref)) return kSettingsEditDenied;
     try {
       final updated = await _ds.updateFinancialYear(startMonth);
       state = AsyncData(updated);
@@ -307,6 +325,7 @@ class DepartmentsNotifier extends AutoDisposeAsyncNotifier<List<DepartmentModel>
   Future<List<DepartmentModel>> build() => _ds.fetchDepartments();
 
   Future<String?> createDept(DeptFormData form) async {
+    if (!canEditSettings(ref)) return kSettingsEditDenied;
     try {
       final created = await _ds.createDepartment(form);
       state = AsyncData([...state.valueOrNull ?? [], created]);
@@ -317,6 +336,7 @@ class DepartmentsNotifier extends AutoDisposeAsyncNotifier<List<DepartmentModel>
   }
 
   Future<String?> editDept(int id, DeptFormData form) async {
+    if (!canEditSettings(ref)) return kSettingsEditDenied;
     try {
       final updated = await _ds.updateDepartment(id, form);
       state = AsyncData(
@@ -329,6 +349,7 @@ class DepartmentsNotifier extends AutoDisposeAsyncNotifier<List<DepartmentModel>
   }
 
   Future<String?> removeDept(int id) async {
+    if (!canEditSettings(ref)) return kSettingsEditDenied;
     try {
       await _ds.deleteDepartment(id);
       state = AsyncData(
@@ -354,6 +375,7 @@ class DesignationsNotifier
   Future<List<DesignationModel>> build() => _ds.fetchDesignations();
 
   Future<String?> createDesig(DesignationFormData form) async {
+    if (!canEditSettings(ref)) return kSettingsEditDenied;
     try {
       final created = await _ds.createDesignation(form);
       state = AsyncData([...state.valueOrNull ?? [], created]);
@@ -364,6 +386,7 @@ class DesignationsNotifier
   }
 
   Future<String?> editDesig(int id, DesignationFormData form) async {
+    if (!canEditSettings(ref)) return kSettingsEditDenied;
     try {
       final updated = await _ds.updateDesignation(id, form);
       state = AsyncData(
@@ -376,6 +399,7 @@ class DesignationsNotifier
   }
 
   Future<String?> removeDesig(int id) async {
+    if (!canEditSettings(ref)) return kSettingsEditDenied;
     try {
       await _ds.deleteDesignation(id);
       state = AsyncData(
@@ -613,6 +637,9 @@ class LeavePoliciesNotifier extends AutoDisposeAsyncNotifier<List<LeavePolicyMod
   Future<List<LeavePolicyModel>> build() => _ds.fetchLeavePolicies();
 
   Future<String?> updatePolicy(String leaveType, LeavePolicyFormData form) async {
+    // Refused before any request without settings.edit or leave.approve
+    // (production LeavePolicyView.put answers 403 "Permission denied.").
+    if (!canEditLeavePolicies(ref.read(authStateProvider).valueOrNull?.user)) return kLeavePolicyEditDenied;
     try {
       final updated = await _ds.updateLeavePolicy(leaveType, form);
       state = AsyncData(
@@ -709,6 +736,7 @@ class RolesNotifier extends AutoDisposeAsyncNotifier<List<RoleModel>> {
   }
 
   Future<String?> create(RoleFormData form) async {
+    if (!canEditSettings(ref)) return kSettingsEditDenied;
     try {
       final created = await _ds.createRole(form);
       state = AsyncData([...state.valueOrNull ?? [], created]);
@@ -719,6 +747,7 @@ class RolesNotifier extends AutoDisposeAsyncNotifier<List<RoleModel>> {
   }
 
   Future<String?> edit(dynamic id, RoleFormData form) async {
+    if (!canEditSettings(ref)) return kSettingsEditDenied;
     try {
       final updated = await _ds.updateRole(id, form);
       state = AsyncData(
@@ -733,6 +762,7 @@ class RolesNotifier extends AutoDisposeAsyncNotifier<List<RoleModel>> {
   }
 
   Future<String?> toggleActive(dynamic id, bool isActive) async {
+    if (!canEditSettings(ref)) return kSettingsEditDenied;
     try {
       await _ds.toggleRole(id, isActive);
       state = AsyncData(

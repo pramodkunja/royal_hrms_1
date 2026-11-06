@@ -228,13 +228,14 @@ void main() {
           [13.0, 'Location approximate (±390 m): Test Exit', '±390 m', GpsAccuracyLevel.approximate]);
     });
 
-    test('9/11. missing, wrong-typed and unknown values read as missing; older responses still parse', () {
+    test('9/11. missing or wrong-typed values read as missing; an unknown level is kept as unrecognised', () {
       final d = parse(detail(
         loc('clock_in', lat: 'not a number', lng: double.nan, label: '  ', level: 'super_precise', accText: null),
         {'clock_out_latitude': '13.5', 'clock_out_longitude': 77, 'clock_out_location_is_office': 'yes'},
       ));
       final i = d.clockInLocation!, o = d.clockOutLocation!;
-      expect([i.latitude, i.longitude, i.placeName, i.accuracyText, i.accuracyLevel], [null, null, null, null, null]);
+      expect([i.latitude, i.longitude, i.placeName, i.accuracyText, i.accuracyLevel],
+          [null, null, null, null, GpsAccuracyLevel.unrecognised]);
       expect([o.latitude, o.longitude, o.isOffice, o.accuracyLevel], [13.5, 77.0, false, null]);
       final old = parse({'record_id': recordId, 'punches': []});
       expect(old.clockInLocation!.hasCoordinates, isFalse);
@@ -323,16 +324,53 @@ void main() {
       expect(find.byKey(const Key('punch-location-section')), findsNothing);
     });
 
-    testWidgets('9. missing or invalid accuracy: "GPS accuracy: unknown", neutral, no warning', (tester) async {
+    testWidgets('9. missing accuracy and level: "GPS accuracy: unknown", neutral, no warning', (tester) async {
+      await pumpSection(
+          tester, parse(detail(loc('clock_in', accText: null, level: null, accM: null), none('clock_out'))));
+      expect(accuracyLine(tester, inBlock), 'GPS accuracy: unknown');
+      expect(accuracyColor(tester, inBlock), AppColors.textSecondary);
+      expect(find.byKey(const Key('gps-accuracy-warning')), findsNothing);
+    });
+
+    testWidgets('9. unrecognised level (web: truthy, not "precise"): warning icon, neutral colour, no suffix',
+        (tester) async {
       await pumpSection(
           tester,
           parse(detail(
-            loc('clock_in', accText: null, level: null, accM: null),
+            loc('clock_in', accText: '±250 m', level: 'roughly'),
             loc('clock_out', accText: null, level: 'not_a_level', accM: -5),
           )));
-      expect(accuracyLine(tester, inBlock), 'GPS accuracy: unknown');
+      expect(accuracyLine(tester, inBlock), 'GPS accuracy: ±250 m'); // server text kept, no suffix
       expect(accuracyLine(tester, outBlock), 'GPS accuracy: unknown');
-      expect(accuracyColor(tester, inBlock), AppColors.textSecondary);
+      for (final block in [inBlock, outBlock]) {
+        expect(accuracyColor(tester, block), AppColors.textSecondary);
+        final icon = tester.widget<Icon>(within(block, find.byKey(const Key('gps-accuracy-warning'))));
+        expect(icon.color, AppColors.textSecondary);
+      }
+    });
+
+    test('9. level truthiness as web: null, false, 0 and "" are no level; other values unrecognised', () {
+      GpsAccuracyLevel? level(Object? v) =>
+          parse(detail({...loc('clock_in'), 'clock_in_accuracy_level': v}, none('clock_out')))
+              .clockInLocation!
+              .accuracyLevel;
+      for (final v in [null, false, 0, '']) {
+        expect(level(v), isNull, reason: '$v');
+      }
+      for (final v in ['PRECISE', 'very approximate', 'unknown', true, 1]) {
+        expect(level(v), GpsAccuracyLevel.unrecognised, reason: '$v');
+      }
+      expect(level('precise'), GpsAccuracyLevel.precise);
+      expect(level('approximate'), GpsAccuracyLevel.approximate);
+      expect(level('very_approximate'), GpsAccuracyLevel.veryApproximate);
+    });
+
+    testWidgets('10. office punch with an unrecognised level still hides the accuracy line', (tester) async {
+      await pumpSection(tester,
+          parse(detail(loc('clock_in', label: 'Office – Test HQ', level: 'roughly', office: true), none('clock_out'))));
+      expect(within(inBlock, find.text('Office – Test HQ')), findsOneWidget);
+      expect(within(inBlock, find.text('Latitude: 12.97159871')), findsOneWidget);
+      expect(find.byKey(const Key('gps-accuracy-line')), findsNothing);
       expect(find.byKey(const Key('gps-accuracy-warning')), findsNothing);
     });
 

@@ -7,8 +7,6 @@ import 'package:mobile_app/core/theme/app_text_styles.dart';
 import 'package:mobile_app/features/attendance/presentation/providers/attendance_providers.dart'
     hide employeeAttendanceSummaryProvider;
 import 'package:mobile_app/features/auth/presentation/providers/auth_providers.dart';
-import 'package:mobile_app/features/hrms/domain/entities/birthday_entity.dart';
-import 'package:mobile_app/features/hrms/presentation/providers/hrms_providers.dart';
 import '../../data/models/employee_dashboard_models.dart';
 import '../providers/dashboard_providers.dart';
 import '../widgets/attendance_ring_card.dart';
@@ -36,10 +34,6 @@ class EmployeeDashboardView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(authStateProvider).valueOrNull?.user;
-    final permissions = user?.permissions ?? const [];
-    final canViewBirthdays = permissions.contains('employees.view');
-
     Future<void> refreshAll() async {
       ref.invalidate(employeeKpisProvider);
       ref.invalidate(employeeNoticePeriodProvider);
@@ -51,7 +45,7 @@ class EmployeeDashboardView extends ConsumerWidget {
       ref.invalidate(employeeRecentRequestsProvider);
       ref.invalidate(sharedAnnouncementProvider);
       ref.invalidate(pendingAcknowledgementsProvider);
-      if (canViewBirthdays) ref.invalidate(birthdaysProvider);
+      ref.invalidate(employeeBirthdaysTodayProvider);
     }
 
     // This view is reached via context.go() but every sub-section under it
@@ -94,12 +88,10 @@ class EmployeeDashboardView extends ConsumerWidget {
             const _EmpRecentRequestsCard(),
             const SizedBox(height: 20),
             const _EmpAnnouncementBanner(),
-            if (canViewBirthdays) ...[
-              const SizedBox(height: 20),
-              const _TodaysBirthdaysCard(),
-              const SizedBox(height: 20),
-              const _UpcomingBirthdaysCard(),
-            ],
+            // Today's birthdays for everyone, as web EmpBirthdayAnnouncement
+            // (/dashboard/employee/birthdays/today/ needs no employees.view;
+            // /birthdays/ does, so the old gated cards could never show here).
+            const _EmpBirthdaysTodayCard(),
             const SizedBox(height: 20),
             const _QuickLinksCard(),
           ],
@@ -1175,104 +1167,54 @@ class _EmpAnnouncementBannerState extends ConsumerState<_EmpAnnouncementBanner> 
   }
 }
 
-// ── Birthdays (unchanged from the previous generic dashboard) ───────────────
+// ── Today's birthdays (web EmpBirthdayAnnouncement) ─────────────────────────
+// Renders nothing while loading, when nobody has a birthday today, or when
+// the request fails (e.g. 403 for an account still onboarding) — as web,
+// which shows the announcement only once it has birthdays to show. Shows
+// what web shows: name, designation · department and, for a single
+// birthday, the company's banner message. No age or date of birth.
 
-class _TodaysBirthdaysCard extends ConsumerWidget {
-  const _TodaysBirthdaysCard();
+class _EmpBirthdaysTodayCard extends ConsumerWidget {
+  const _EmpBirthdaysTodayCard();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final birthdaysAsync = ref.watch(birthdaysProvider);
-
-    return SectionCard(
-      title: "Today's Birthdays",
-      iconWidget: const SectionIconAsset('assets/images/Birthday.png'),
-      accentColor: AppColors.primary,
-      child: birthdaysAsync.when(
-        data: (result) {
-          if (result.today.isEmpty) {
-            return const SectionMessage(
-              iconWidget: SectionIconAsset('assets/images/Birthday.png', size: 28),
-              label: 'No birthdays today',
-            );
-          }
-          return Column(
-            children: [
-              for (var i = 0; i < result.today.length; i++) ...[
-                if (i > 0) const SizedBox(height: 10),
-                _BirthdayRow(entry: result.today[i], showAge: true),
-              ],
+    final birthdays = ref.watch(employeeBirthdaysTodayProvider).valueOrNull ?? const <EmployeeBirthdayToday>[];
+    if (birthdays.isEmpty) return const SizedBox.shrink();
+    final single = birthdays.length == 1;
+    return Padding(
+      key: const Key('emp-birthdays-today'),
+      padding: const EdgeInsets.only(top: 20),
+      child: SectionCard(
+        title: single ? 'Happy Birthday, ${birthdays.first.fullName}!' : "Today's Birthdays",
+        iconWidget: const SectionIconAsset('assets/images/Birthday.png'),
+        accentColor: AppColors.primary,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (single && birthdays.first.message.isNotEmpty) ...[
+              Text(birthdays.first.message, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+              const SizedBox(height: 10),
             ],
-          );
-        },
-        loading: () => const SectionMessage(
-          iconWidget: SectionIconAsset('assets/images/Birthday.png', size: 28),
-          label: 'Loading…',
-        ),
-        error: (e, _) => SectionError(
-          message: friendlyHrmsError(e),
-          onRetry: () => ref.invalidate(birthdaysProvider),
+            for (var i = 0; i < birthdays.length; i++) ...[
+              if (i > 0) const SizedBox(height: 10),
+              _EmpBirthdayRow(entry: birthdays[i]),
+            ],
+          ],
         ),
       ),
     );
   }
 }
 
-class _UpcomingBirthdaysCard extends ConsumerWidget {
-  const _UpcomingBirthdaysCard();
+class _EmpBirthdayRow extends StatelessWidget {
+  final EmployeeBirthdayToday entry;
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final birthdaysAsync = ref.watch(birthdaysProvider);
-
-    return SectionCard(
-      title: 'Upcoming Birthdays',
-      iconWidget: const SectionIconAsset('assets/images/Birthday.png'),
-      accentColor: AppColors.primary,
-      child: birthdaysAsync.when(
-        data: (result) {
-          if (result.upcoming.isEmpty) {
-            return const SectionMessage(
-              iconWidget: SectionIconAsset('assets/images/Birthday.png', size: 28),
-              label: 'No upcoming birthdays in the next 30 days',
-            );
-          }
-          return Column(
-            children: [
-              for (var i = 0; i < result.upcoming.length; i++) ...[
-                if (i > 0) const SizedBox(height: 10),
-                _BirthdayRow(entry: result.upcoming[i], showAge: false),
-              ],
-            ],
-          );
-        },
-        loading: () => const SectionMessage(
-          iconWidget: SectionIconAsset('assets/images/Birthday.png', size: 28),
-          label: 'Loading…',
-        ),
-        error: (e, _) => SectionError(
-          message: friendlyHrmsError(e),
-          onRetry: () => ref.invalidate(birthdaysProvider),
-        ),
-      ),
-    );
-  }
-}
-
-class _BirthdayRow extends StatelessWidget {
-  final BirthdayEntity entry;
-  final bool showAge;
-
-  const _BirthdayRow({required this.entry, required this.showAge});
+  const _EmpBirthdayRow({required this.entry});
 
   @override
   Widget build(BuildContext context) {
-    final age = entry.age;
-    final sub = [
-      entry.designation,
-      entry.department,
-    ].where((s) => s.isNotEmpty).join(' · ');
-
+    final sub = [entry.designation, entry.department].where((s) => s.isNotEmpty).join(' · ');
     return Row(
       children: [
         const Text('🎂', style: TextStyle(fontSize: 20)),
@@ -1282,28 +1224,21 @@ class _BirthdayRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                entry.name,
+                entry.fullName,
                 style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
               ),
               if (sub.isNotEmpty)
                 Text(
-                  showAge && age != null ? '$sub · Turning $age' : sub,
-                  style: AppTextStyles.caption
-                      .copyWith(color: AppColors.textSecondary),
+                  sub,
+                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                 ),
             ],
           ),
         ),
-        if (!showAge)
-          Text(
-            'In ${entry.daysUntil} day${entry.daysUntil == 1 ? '' : 's'}',
-            style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-            overflow: TextOverflow.ellipsis,
-          ),
       ],
     );
   }

@@ -99,6 +99,33 @@ class BranchRemoteDataSource {
     await _dio.delete(ApiConstants.branchDetail(id));
   }
 
+  // ── Branch Admin reassignment (web BranchManagement openReassign / doReassign) ─
+
+  /// GET /employees/?page_size=50&status=active — web's candidate list, minus
+  /// system admins and the current admin (matched by email, as web does).
+  Future<List<BranchAdminCandidate>> fetchAdminCandidates({String? excludeEmail}) async {
+    final res = await _dio.get(ApiConstants.employees, queryParameters: {'page_size': 50, 'status': 'active'});
+    final data = _unwrap(res.data);
+    final list = data is Map ? (data['results'] is List ? data['results'] as List : const []) : _toList(data);
+    return list
+        .whereType<Map>()
+        .map((e) => BranchAdminCandidate.fromJson(Map<String, dynamic>.from(e)))
+        .where((c) => c.role != 'system_admin' && c.email != (excludeEmail ?? ''))
+        .toList();
+  }
+
+  /// POST /branch/branches/<id>/reassign-admin/ with `{employee_id: <code>}`.
+  /// Returns the server's message and the updated branch.
+  Future<({String message, BranchModel? branch})> reassignAdmin(int branchId, String employeeCode) async {
+    final res = await _dio.post(ApiConstants.branchReassignAdmin(branchId), data: {'employee_id': employeeCode});
+    final body = res.data;
+    final data = body is Map ? body['data'] : null;
+    return (
+      message: body is Map && body['message'] is String ? body['message'] as String : '',
+      branch: data is Map ? BranchModel.fromJson(Map<String, dynamic>.from(data)) : null,
+    );
+  }
+
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
   dynamic _unwrap(dynamic body) {

@@ -1,5 +1,25 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../auth/domain/entities/user_entity.dart';
+
+/// Who may save leave policies: production LeavePolicyView.put/patch allow
+/// `has_perm(user, 'settings.edit')` **or** `has_perm(user, 'leave.approve')`
+/// (superuser passes both). Anyone else gets 403 "Permission denied.".
+bool canEditLeavePolicies(UserEntity? user) =>
+    user != null &&
+    (user.isSuperuser || user.permissions.contains('settings.edit') || user.permissions.contains('leave.approve'));
+
+/// Web LeavePoliciesTab `Number(p.long_leave_min_days ?? 0)` — but absent
+/// stays null here, so a server that does not send the field is never sent
+/// one back (unknown values are preserved).
+int? _optInt(Map<String, dynamic> json, String key) {
+  if (!json.containsKey(key)) return null;
+  final v = json[key];
+  if (v is num) return v.toInt();
+  if (v is String) return int.tryParse(v.trim()) ?? 0;
+  return 0;
+}
+
 // annual_days is a Django DecimalField, serialized by DRF as a string
 // (e.g. "12.0"), not a JSON number.
 double _toDouble(dynamic value) {
@@ -38,6 +58,12 @@ class LeavePolicyModel {
   final int maximumLeaveDuration; // maximum_leave_duration, 0 = unlimited
   final int maximumConsecutiveDays; // maximum_consecutive_days, 0 = unlimited
   final int minimumNoticePeriod; // minimum_notice_period (days)
+  // Long leave (company policy section 9): a request of [longLeaveMinDays]
+  // or more days needs [longLeaveNoticeDays] days' advance notice; the rule
+  // applies only when both are > 0 (leave.py _validate_leave_policy).
+  // Null = the server did not send the field.
+  final int? longLeaveMinDays; // long_leave_min_days, 0 = off
+  final int? longLeaveNoticeDays; // long_leave_notice_days
   final bool allowHalfDay; // allow_half_day
   final bool allowBackdatedLeave; // allow_backdated_leave
   final int maximumBackdatedDays; // maximum_backdated_days, 0 = unlimited
@@ -74,6 +100,14 @@ class LeavePolicyModel {
   final bool allowLeaveExtension; // allow_leave_extension
   final bool allowLeaveCombination; // allow_leave_combination
 
+  // ── Monthly Credit Settings (web MonthlyCreditSettingsSection) ──
+  /// 'annual' | 'monthly' — anything else reads as 'annual' (web extractMonthly).
+  final String creditSchedule; // credit_schedule
+  /// Unused monthly credit rolls into the next month (default true).
+  final bool monthlyCarryForward; // monthly_carry_forward
+  /// YYYY-MM-DD the current monthly rules apply from (server-set), or null.
+  final String? monthlyRulesFrom; // monthly_rules_from
+
   const LeavePolicyModel({
     required this.id,
     required this.leaveType,
@@ -89,6 +123,8 @@ class LeavePolicyModel {
     this.maximumLeaveDuration = 0,
     this.maximumConsecutiveDays = 0,
     this.minimumNoticePeriod = 0,
+    this.longLeaveMinDays,
+    this.longLeaveNoticeDays,
     this.allowHalfDay = true,
     this.allowBackdatedLeave = false,
     this.maximumBackdatedDays = 0,
@@ -114,6 +150,9 @@ class LeavePolicyModel {
     this.allowNoticePeriodLeave = false,
     this.allowLeaveExtension = false,
     this.allowLeaveCombination = false,
+    this.creditSchedule = 'annual',
+    this.monthlyCarryForward = true,
+    this.monthlyRulesFrom,
   });
 
   // Matches backend's LeavePolicySerializer exactly — see
@@ -141,6 +180,8 @@ class LeavePolicyModel {
       maximumLeaveDuration: (json['maximum_leave_duration'] as num? ?? 0).toInt(),
       maximumConsecutiveDays: (json['maximum_consecutive_days'] as num? ?? 0).toInt(),
       minimumNoticePeriod: (json['minimum_notice_period'] as num? ?? 0).toInt(),
+      longLeaveMinDays: _optInt(json, 'long_leave_min_days'),
+      longLeaveNoticeDays: _optInt(json, 'long_leave_notice_days'),
       allowHalfDay: json['allow_half_day'] as bool? ?? true,
       allowBackdatedLeave: json['allow_backdated_leave'] as bool? ?? false,
       maximumBackdatedDays: (json['maximum_backdated_days'] as num? ?? 0).toInt(),
@@ -166,6 +207,11 @@ class LeavePolicyModel {
       allowNoticePeriodLeave: json['allow_notice_period_leave'] as bool? ?? false,
       allowLeaveExtension: json['allow_leave_extension'] as bool? ?? false,
       allowLeaveCombination: json['allow_leave_combination'] as bool? ?? false,
+      creditSchedule: json['credit_schedule'] == 'monthly' ? 'monthly' : 'annual',
+      monthlyCarryForward: json['monthly_carry_forward'] is bool ? json['monthly_carry_forward'] as bool : true,
+      monthlyRulesFrom: json['monthly_rules_from'] is String && (json['monthly_rules_from'] as String).isNotEmpty
+          ? json['monthly_rules_from'] as String
+          : null,
     );
   }
 }
@@ -186,6 +232,8 @@ class LeavePolicyFormData {
   int maximumLeaveDuration;
   int maximumConsecutiveDays;
   int minimumNoticePeriod;
+  int? longLeaveMinDays; // sent only when not null
+  int? longLeaveNoticeDays; // sent only when not null
   bool allowHalfDay;
   bool allowBackdatedLeave;
   int maximumBackdatedDays;
@@ -222,6 +270,11 @@ class LeavePolicyFormData {
   bool allowLeaveExtension;
   bool allowLeaveCombination;
 
+  // ── Monthly Credit Settings ── null = not sent (only the Leave Policy
+  // rules tab sets them, as web's LeavePoliciesTab does).
+  String? creditSchedule;
+  bool? monthlyCarryForward;
+
   LeavePolicyFormData({
     this.annualDays = 0,
     this.canCarryForward = false,
@@ -232,6 +285,8 @@ class LeavePolicyFormData {
     this.maximumLeaveDuration = 0,
     this.maximumConsecutiveDays = 0,
     this.minimumNoticePeriod = 0,
+    this.longLeaveMinDays,
+    this.longLeaveNoticeDays,
     this.allowHalfDay = true,
     this.allowBackdatedLeave = false,
     this.maximumBackdatedDays = 0,
@@ -273,6 +328,8 @@ class LeavePolicyFormData {
         maximumLeaveDuration: model.maximumLeaveDuration,
         maximumConsecutiveDays: model.maximumConsecutiveDays,
         minimumNoticePeriod: model.minimumNoticePeriod,
+        longLeaveMinDays: model.longLeaveMinDays,
+        longLeaveNoticeDays: model.longLeaveNoticeDays,
         allowHalfDay: model.allowHalfDay,
         allowBackdatedLeave: model.allowBackdatedLeave,
         maximumBackdatedDays: model.maximumBackdatedDays,
@@ -310,6 +367,8 @@ class LeavePolicyFormData {
         'maximum_leave_duration': maximumLeaveDuration,
         'maximum_consecutive_days': maximumConsecutiveDays,
         'minimum_notice_period': minimumNoticePeriod,
+        if (longLeaveMinDays != null) 'long_leave_min_days': longLeaveMinDays,
+        if (longLeaveNoticeDays != null) 'long_leave_notice_days': longLeaveNoticeDays,
         'allow_half_day': allowHalfDay,
         'allow_backdated_leave': allowBackdatedLeave,
         'maximum_backdated_days': maximumBackdatedDays,
@@ -335,6 +394,8 @@ class LeavePolicyFormData {
         'allow_notice_period_leave': allowNoticePeriodLeave,
         'allow_leave_extension': allowLeaveExtension,
         'allow_leave_combination': allowLeaveCombination,
+        if (creditSchedule != null) 'credit_schedule': creditSchedule,
+        if (monthlyCarryForward != null) 'monthly_carry_forward': monthlyCarryForward,
       };
 
   // Matches LeavePolicyUpdateSerializer.validate_annual_days /

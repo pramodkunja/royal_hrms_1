@@ -316,3 +316,39 @@ class RecentRequestsResponse {
     );
   }
 }
+
+/// One person on web's Employee-dashboard birthday announcement
+/// (GET /dashboard/employee/birthdays/today/ → `data.birthdays[]`). Only the
+/// fields web shows are kept — name, designation, department and the
+/// company's banner message; the response's email and date of birth are
+/// deliberately not read.
+class EmployeeBirthdayToday {
+  final String employeeId;
+  final String fullName;
+  final String designation;
+  final String department;
+  final String message;
+
+  const EmployeeBirthdayToday({
+    required this.employeeId,
+    required this.fullName,
+    required this.designation,
+    required this.department,
+    required this.message,
+  });
+
+  factory EmployeeBirthdayToday.fromJson(Map<String, dynamic> json) => EmployeeBirthdayToday(
+        employeeId: json['employee_id']?.toString() ?? '',
+        fullName: json['full_name']?.toString() ?? '',
+        designation: json['designation']?.toString() ?? '',
+        department: json['department']?.toString() ?? '',
+        message: json['message']?.toString() ?? '',
+      );
+
+  /// `data.birthdays`; anything else is no birthdays.
+  static List<EmployeeBirthdayToday> listFrom(Object? data) {
+    final list = data is Map ? data['birthdays'] : null;
+    if (list is! List) return const [];
+    return list.whereType<Map>().map((m) => EmployeeBirthdayToday.fromJson(Map<String, dynamic>.from(m))).toList();
+  }
+}

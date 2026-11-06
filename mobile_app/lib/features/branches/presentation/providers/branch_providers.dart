@@ -1,5 +1,10 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/router/access_control.dart' show userHasPermission;
+import '../../../auth/domain/entities/user_entity.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../data/models/branch_model.dart' show BranchAdminCandidate;
 import '../../data/datasources/branch_remote_datasource.dart';
 import '../../data/repositories/branch_repository_impl.dart';
 import '../../domain/entities/branch_entity.dart';
@@ -57,6 +62,31 @@ class BranchDistributionNotifier
 
 // ── Branch list ───────────────────────────────────────────────────────────────
 
+/// Web BranchManagement shows Add / Edit / Delete only with settings.edit
+/// (the server separately checks branches.create / .edit / .delete). Writes
+/// are refused here without it, before any request.
+const kBranchEditDenied = 'You do not have permission to perform this action.';
+
+bool canManageBranches(Ref ref) =>
+    userHasPermission(ref.read(authStateProvider).valueOrNull?.user, 'settings.edit');
+
+/// Change / Assign Branch Admin. Web shows it to settings.edit holders (the
+/// same gate as every branch action, [canManageBranches]); production
+/// BranchReassignAdminView additionally requires `has_perm(user,
+/// 'branches.edit')` (superuser or the role's codename). Both must hold, so
+/// the action is never offered to someone the server would refuse.
+bool canReassignBranchAdmin(UserEntity? user) =>
+    userHasPermission(user, 'settings.edit') &&
+    user != null &&
+    (user.isSuperuser || user.permissions.contains('branches.edit'));
+
+/// Web openReassign's list (active employees, 50, without system admins and
+/// the current admin by email). Keyed by the current admin's email.
+final branchAdminCandidatesProvider =
+    FutureProvider.autoDispose.family<List<BranchAdminCandidate>, String?>(
+  (ref, excludeEmail) => ref.read(branchDataSourceProvider).fetchAdminCandidates(excludeEmail: excludeEmail),
+);
+
 final branchListProvider = AsyncNotifierProvider.autoDispose<
     BranchListNotifier, List<BranchEntity>>(BranchListNotifier.new);
 
@@ -67,6 +97,31 @@ class BranchListNotifier
   @override
   Future<List<BranchEntity>> build() => _repo.getBranches();
 
+  bool _reassigning = false;
+
+  /// POST reassign-admin with the chosen employee's code. Refused before any
+  /// request without the permission, or while one is running. On success the
+  /// list, stats and distribution reload (web fetchData). Returns null on
+  /// success, else the message to show.
+  Future<String?> reassignAdmin(int branchId, String employeeCode) async {
+    if (!canReassignBranchAdmin(ref.read(authStateProvider).valueOrNull?.user)) return kBranchEditDenied;
+    if (employeeCode.trim().isEmpty) return 'employee_id is required.';
+    if (_reassigning) return 'A reassignment is already in progress.';
+    _reassigning = true;
+    try {
+      await ref.read(branchDataSourceProvider).reassignAdmin(branchId, employeeCode);
+      ref
+        ..invalidateSelf()
+        ..invalidate(branchStatsProvider)
+        ..invalidate(branchDistributionProvider);
+      return null;
+    } catch (e) {
+      return reassignAdminError(e);
+    } finally {
+      _reassigning = false;
+    }
+  }
+
   Future<String?> create({
     required int cityId,
     required int stateId,
@@ -75,6 +130,7 @@ class BranchListNotifier
     required String status,
     required bool isHeadquarter,
   }) async {
+    if (!canManageBranches(ref)) return kBranchEditDenied;
     try {
       final created = await _repo.createBranch(
         cityId: cityId,
@@ -100,6 +156,7 @@ class BranchListNotifier
     required String status,
     required bool isHeadquarter,
   }) async {
+    if (!canManageBranches(ref)) return kBranchEditDenied;
     try {
       final updated = await _repo.updateBranch(
         id: id,
@@ -122,6 +179,7 @@ class BranchListNotifier
   }
 
   Future<String?> remove(int id) async {
+    if (!canManageBranches(ref)) return kBranchEditDenied;
     try {
       await _repo.deleteBranch(id);
       state = AsyncData(
@@ -176,4 +234,20 @@ String friendlyBranchError(Object e) {
   if (msg.contains('404')) return 'Resource not found.';
   if (msg.contains('500')) return 'Server error. Please try again later.';
   return msg.replaceAll('Exception:', '').trim();
+}
+
+/// The server's own message for a refused reassignment (inactive, onboarding
+/// not complete, Company Admin, already the admin here or elsewhere, scope),
+/// else web's "Failed to reassign Branch Admin.".
+String reassignAdminError(Object e) {
+  if (e is DioException) {
+    final body = e.response?.data;
+    if (body is Map && body['message'] is String && (body['message'] as String).isNotEmpty) {
+      return body['message'] as String;
+    }
+    if (e.type == DioExceptionType.connectionError || e.type == DioExceptionType.connectionTimeout) {
+      return 'Cannot reach server. Check your connection.';
+    }
+  }
+  return 'Failed to reassign Branch Admin.';
 }

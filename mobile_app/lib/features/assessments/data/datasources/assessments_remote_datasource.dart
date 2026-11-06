@@ -98,6 +98,28 @@ class AssessmentsRemoteDataSource {
     await _dio.delete(ApiConstants.assessmentItemDetail(itemId));
   }
 
+  // ── Assessment sections (web ItemsModal) ──────────────────────────────────
+
+  Future<List<AssessmentSectionModel>> fetchSections(String assessmentId) async {
+    final res = await _dio.get(ApiConstants.assessmentSections(assessmentId));
+    return _toList(_unwrap(res.data))
+        .whereType<Map>()
+        .map((e) => AssessmentSectionModel.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
+  Future<void> createSection(String assessmentId, AssessmentSectionFormData form) async {
+    await _dio.post(ApiConstants.assessmentSections(assessmentId), data: form.toJson());
+  }
+
+  Future<void> updateSection(String assessmentId, String sectionId, AssessmentSectionFormData form) async {
+    await _dio.put(ApiConstants.assessmentSectionDetail(assessmentId, sectionId), data: form.toJson());
+  }
+
+  Future<void> deleteSection(String assessmentId, String sectionId) async {
+    await _dio.delete(ApiConstants.assessmentSectionDetail(assessmentId, sectionId));
+  }
+
   // ── Assign ─────────────────────────────────────────────────────────────────
 
   Future<void> assignAssessment({

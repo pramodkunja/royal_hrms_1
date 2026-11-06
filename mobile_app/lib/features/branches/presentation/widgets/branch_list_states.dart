@@ -3,8 +3,9 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 
 class BranchEmptyView extends StatelessWidget {
-  final VoidCallback onAdd;
-  const BranchEmptyView({super.key, required this.onAdd});
+  /// Null without settings.edit (no Add button).
+  final VoidCallback? onAdd;
+  const BranchEmptyView({super.key, this.onAdd});
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +33,8 @@ class BranchEmptyView extends StatelessWidget {
               style: AppTextStyles.bodySecondary,
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
+            if (onAdd != null) const SizedBox(height: 24),
+            if (onAdd != null)
             FilledButton.icon(
               onPressed: onAdd,
               icon: const Icon(Icons.add, size: 18),

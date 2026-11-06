@@ -1,8 +1,8 @@
 # Google Play Data Safety Worksheet — Royal HRMS Android update (1.0.0)
 
 **For:** the Play Console owner who fills in Policy → App content → Data safety, and the company's privacy owner.
-**Updated:** 2026-11-05 (mobile code through Phase 11.8).
-**Basis:** the code inventory in `PRIVACY_INVENTORY_AND_POLICY_DRAFT.md`, Part A. Question numbers (Q1–Q15) refer to Part B of that document.
+**Updated:** 2026-11-06 (mobile code through the 2026-11-06 work; no new permission or SDK since 2026-11-05).
+**Basis:** the code inventory in `PRIVACY_INVENTORY_AND_POLICY_DRAFT.md`, Part A. Question numbers (Q1–Q16) refer to Part B of that document.
 **Status:** worksheet only. **The Data Safety form in Play Console has not been filled in or submitted.** Do not submit any answer marked **Requires confirmation** until the company has confirmed it, and make sure the answers match the published privacy policy.
 
 ## How to use this worksheet
@@ -37,7 +37,7 @@
 | **Photos and videos → Photos** (uploaded document images, profile photo, receipts) | Yes | Stored with Cloudinary | Cloudinary | **Requires confirmation** (Q7) | App functionality | HTTPS; documents downloaded only with the user's sign-in; viewed inside the app | **Requires confirmation** | — |
 | Photos → **face photo** | **Not collected** (processed on the device only; the photo is not uploaded) | Temporary file on the device; the app does not delete it (Q5) | Google ML Kit **on device** | — | Liveness and face template | On-device only | Stays in the app cache until the system clears it | Disclose in the policy; Q5 |
 | **Audio → Voice or sound recordings** (voice commands; Hindi fallback clip) | Yes (optional feature) | Clip uploaded to the backend and sent to Sarvam AI; whether it is kept is not visible in code | Sarvam AI (backend); device speech-recognition service (Q14) | **Requires confirmation** (Q6, Q14) | App functionality (voice commands) | HTTPS to the backend | **Requires confirmation** (Q3, Q6) | Sarvam retention and terms; device speech service |
-| **Files and docs** (onboarding documents and custom file fields, profile documents, WFH proof, separation documents, receipts, Document Center) | Yes | Stored with Cloudinary. On the device, a viewed PDF is a temporary private copy deleted on close, at start and at sign-out; images are never written | Cloudinary | **Requires confirmation** (Q7) | App functionality | HTTPS; sign-in required to download; viewed only inside the app (no other app receives the file) | **Requires confirmation** (Q3) | Cloudinary region, retention, terms |
+| **Files and docs** (onboarding documents and custom file fields, profile documents, WFH proof, separation documents, receipts, Document Center; **HR import files**: attendance CSV, notice-period and monthly leave-credit CSV/XLSX — see privacy inventory A12) | Yes | Stored with Cloudinary. On the device, a viewed PDF is a temporary private copy deleted on close, at start and at sign-out; images are never written. HR import files are uploaded for processing; the server keeps import logs/audit entries derived from them (how long, and whether file contents are kept: Q16) | Cloudinary (stored documents); none found in code for import files | **Requires confirmation** (Q7, Q16) | App functionality | HTTPS; sign-in required to download; viewed only inside the app (no other app receives the file) | **Requires confirmation** (Q3, Q16) | Cloudinary region, retention, terms; import-file retention (Q16) |
 | **App activity → Other user-generated content** (leave/WFH reasons, WFH daily reports, comments, remarks, payslip queries, voice transcripts) | Yes | Stored; transcripts may go to Sarvam AI for classification | Sarvam AI (transcripts only) | **Requires confirmation** (Q6) | App functionality | HTTPS | **Requires confirmation** | — |
 | App activity → App interactions (policy acknowledgements, announcement views and reactions, audit events) | Yes | Stored | None found in code | **Requires confirmation** | App functionality; security / fraud prevention | HTTPS | **Requires confirmation** | — |
 | **App info and performance → Crash logs / diagnostics** | **No** (no crash-reporting or analytics SDK) | — | — | — | — | — | — | — |
@@ -51,7 +51,8 @@
 ## Other items to decide before submitting
 
 - **Google Fonts** (IP address and user agent sent to Google when the font downloads) and the **device speech-recognition service**: confirm how to treat them (Q14).
-- **Colleague and applicant data shown by role** (privacy inventory A11) is the same data already listed above; no extra Data Safety type is expected, but confirm with the privacy owner.
+- **Colleague and applicant data shown by role** (privacy inventory A11) is the same data already listed above; no extra Data Safety type is expected, but confirm with the privacy owner. A11 now also covers today's birthdays shown to all employees (the server response additionally carries colleagues' email and date of birth, which the app does not display — Q16), HR views of punch location, leave credits, notice periods and assignments.
+- **HR exports saved on the device** (attendance CSV, sample templates — privacy inventory A12): the file is created by a user action and saved through the system save dialog to a location the user chooses; it is not sent to any third party by the app. Confirm with the privacy owner whether this needs any Data Safety disclosure beyond the policy text (Q16). **Requires confirmation.**
 
 ## Before submitting
 

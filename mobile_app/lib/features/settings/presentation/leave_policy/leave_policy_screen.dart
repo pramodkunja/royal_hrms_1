@@ -14,6 +14,8 @@ import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
 import 'widgets/add_leave_type_dialog.dart';
 import 'widgets/leave_carry_forward_tab.dart';
+import 'monthly_leave/monthly_leave_tab.dart';
+import '../../data/models/monthly_leave_models.dart' show canManageMonthlyCredits;
 import 'widgets/leave_policy_form_sheet.dart';
 import 'widgets/leave_policy_rules_tab.dart';
 
@@ -61,16 +63,19 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   late final bool _showCarryForward;
+  // Web: "Monthly Leave Management" tab only with leave.approve.
+  late final bool _showMonthly;
   final _creditRulesKey = GlobalKey<CreditRulesTabState>();
   final _policyKey = GlobalKey<_PolicyTabState>();
 
   @override
   void initState() {
     super.initState();
-    final role = ref.read(authStateProvider).valueOrNull?.user?.role;
-    _showCarryForward = role != null && kCarryForwardRoles.contains(role);
+    // Web: Carry Forward tab and Import Opening Balances need leave.edit.
+    _showCarryForward = canManageCarryForward(ref.read(authStateProvider).valueOrNull?.user);
+    _showMonthly = canManageMonthlyCredits(ref.read(authStateProvider).valueOrNull?.user);
     _tabController =
-        TabController(length: _showCarryForward ? 4 : 3, vsync: this)
+        TabController(length: 3 + (_showCarryForward ? 1 : 0) + (_showMonthly ? 1 : 0), vsync: this)
           ..addListener(() => setState(() {}));
   }
 
@@ -107,6 +112,8 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
             _iconTab(Icons.paid_outlined, 'Credit Rules'),
             if (_showCarryForward)
               _iconTab(Icons.repeat_rounded, 'Carry Forward'),
+            if (_showMonthly)
+              _iconTab(Icons.calendar_month_outlined, 'Monthly Leave Management'),
           ],
           labelColor: AppColors.primary,
           unselectedLabelColor: AppColors.textSecondary,
@@ -152,6 +159,7 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
           const LeavePolicyRulesTab(),
           CreditRulesTab(key: _creditRulesKey),
           if (_showCarryForward) const LeaveCarryForwardTab(),
+          if (_showMonthly) const MonthlyLeaveTab(),
         ],
       ),
     );
