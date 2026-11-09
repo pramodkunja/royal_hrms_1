@@ -1,9 +1,11 @@
-import 'package:dio/dio.dart' show DioException;
+import 'package:dio/dio.dart' show DioException, DioExceptionType;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/router/access_control.dart' show userHasPermission;
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../settings/data/models/departments_model.dart';
-import '../../../settings/presentation/providers/settings_providers.dart';
+import '../announcement_permissions.dart';
 import '../../data/datasources/announcements_remote_datasource.dart';
 import '../../data/models/announcement_model.dart';
 
@@ -91,7 +93,24 @@ class AnnouncementsNotifier extends AutoDisposeAsyncNotifier<AnnouncementPage> {
     }
   }
 
+  /// Permission and branch-scope check before any request (the backend does
+  /// not enforce the branch scope — see announcement_permissions.dart).
+  Future<String?> _guard(AnnouncementFormData form, {required String permission, required String denied}) async {
+    final user = ref.read(authStateProvider).valueOrNull?.user;
+    if (!userHasPermission(user, permission)) return denied;
+    if (isOrgWideAnnouncer(user) || form.visibility == 'department') return null;
+    List<BranchSimple> branches;
+    try {
+      branches = await ref.read(announcementBranchesProvider.future);
+    } catch (_) {
+      branches = const [];
+    }
+    return announcementScopeError(form, user, ownBranchId: announcementOwnBranchId(user, branches));
+  }
+
   Future<String?> create(AnnouncementFormData form) async {
+    final refused = await _guard(form, permission: 'announcements.create', denied: kAnnouncementCreateDenied);
+    if (refused != null) return refused;
     try {
       final created = await _ds.createAnnouncement(form);
       final current = state.valueOrNull;
@@ -113,11 +132,25 @@ class AnnouncementsNotifier extends AutoDisposeAsyncNotifier<AnnouncementPage> {
       }
       return null;
     } catch (e) {
-      return _friendly(e);
+      return _saveError(e);
     }
   }
 
+  /// A save that was sent but got no reply in time may still have been
+  /// applied on the server (web: "may still have been saved"). A connection
+  /// that never opened did not reach the server, so it keeps the ordinary
+  /// message.
+  String _saveError(Object e) {
+    if (e is DioException &&
+        (e.type == DioExceptionType.sendTimeout || e.type == DioExceptionType.receiveTimeout)) {
+      return kAnnouncementSaveTimedOut;
+    }
+    return _friendly(e);
+  }
+
   Future<String?> edit(String id, AnnouncementFormData form) async {
+    final refused = await _guard(form, permission: 'announcements.edit', denied: kAnnouncementEditDenied);
+    if (refused != null) return refused;
     try {
       final updated = await _ds.updateAnnouncement(id, form);
       final current = state.valueOrNull;
@@ -135,7 +168,7 @@ class AnnouncementsNotifier extends AutoDisposeAsyncNotifier<AnnouncementPage> {
       }
       return null;
     } catch (e) {
-      return _friendly(e);
+      return _saveError(e);
     }
   }
 
@@ -198,9 +231,11 @@ class AnnouncementsNotifier extends AutoDisposeAsyncNotifier<AnnouncementPage> {
 
 // ── Departments (re-export from settings for form dropdowns) ──────────────────
 
+/// Keyed by the branch-name filter: null (org-wide, all departments) or the
+/// poster's own branch (web `?branch=`).
 final announcementDepartmentsProvider =
-    Provider.autoDispose<AsyncValue<List<DepartmentModel>>>((ref) {
-  return ref.watch(departmentsProvider);
+    FutureProvider.autoDispose.family<List<DepartmentModel>, String?>((ref, branch) {
+  return ref.watch(announcementsDataSourceProvider).fetchDepartments(branch: branch);
 });
 
 // ── Branches (for form dropdown) ──────────────────────────────────────────────

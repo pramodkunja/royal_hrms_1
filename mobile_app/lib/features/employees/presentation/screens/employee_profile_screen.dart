@@ -14,6 +14,7 @@ import '../../data/models/employee_model.dart';
 import '../providers/employee_providers.dart';
 import '../widgets/add_employee_sheet.dart';
 import '../widgets/approval_override_sheet.dart';
+import '../widgets/custom_fields_block.dart';
 import '../widgets/employee_attendance_tab.dart';
 import '../widgets/employee_leave_tab.dart';
 import '../widgets/promotion_tab.dart';
@@ -165,6 +166,17 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
     // Editing and activating/deactivating need employees.edit (web
     // employees/[id]/page.tsx canEdit); without it the profile is read-only.
     final canEdit = ref.watch(permissionProvider('employees.edit'));
+    // Web employees/[id]/page.tsx: while onboarding is pending/draft the
+    // header (with Reset Password) stays, but the tabs and the edit form —
+    // which carries is_active — are replaced by "Onboarding form not
+    // submitted". The backend itself doesn't lock edits; this is web's UI.
+    final pendingOnboarding = emp.isPendingOnboarding;
+    final profileCard = _ProfileCard(
+      employee: emp,
+      isActive: _isActive,
+      isToggling: _toggling,
+      onToggle: canEdit && !pendingOnboarding ? _onToggle : null,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -195,23 +207,28 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
         automaticallyImplyLeading: false,
         leadingWidth: 44,
       ),
-      bottomNavigationBar: isProfileTab && canEdit
+      bottomNavigationBar: isProfileTab && canEdit && !pendingOnboarding
           ? _BottomBar(
               onCancel: () => Navigator.of(context).pop(),
               onSave: _onSave,
             )
           : null,
-      body: NestedScrollView(
+      body: pendingOnboarding
+          ? ListView(
+              key: const Key('employee-pending-onboarding'),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+              children: [
+                profileCard,
+                const SizedBox(height: 12),
+                _PendingOnboardingCard(status: emp.onboardingStatus),
+              ],
+            )
+          : NestedScrollView(
         headerSliverBuilder: (_, __) => [
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-              child: _ProfileCard(
-                employee: emp,
-                isActive: _isActive,
-                isToggling: _toggling,
-                onToggle: canEdit ? _onToggle : null,
-              ),
+              child: profileCard,
             ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 10)),
@@ -260,6 +277,72 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
             WishesTab(employee: emp),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Pending onboarding ────────────────────────────────────────────────────────
+
+/// Web employees/[id]/page.tsx, shown instead of the tabs while the employee
+/// hasn't submitted the onboarding form (onboarding_status pending / draft).
+class _PendingOnboardingCard extends StatelessWidget {
+  const _PendingOnboardingCard({required this.status});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final badge = status == 'draft' ? 'Form saved as draft' : 'Awaiting employee submission';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(Icons.assignment_outlined, size: 26, color: AppColors.primary),
+          ),
+          const SizedBox(height: 16),
+          Text('Onboarding form not submitted',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.body.copyWith(fontSize: 16, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          Text(
+            'This employee has not yet submitted their onboarding form for approval. '
+            'Profile details will appear here once they submit and HR approves their application.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.caption.copyWith(fontSize: 13),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            key: const Key('employee-onboarding-badge'),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.warning.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.schedule_outlined, size: 14, color: AppColors.warning),
+                const SizedBox(width: 4),
+                Text(badge,
+                    style: AppTextStyles.caption
+                        .copyWith(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.warning)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -766,10 +849,10 @@ class _ProfileTabState extends State<_ProfileTab> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
                   child: [
-                    _PersonalContent(emp: emp),
-                    _EducationContent(emp: emp),
-                    _BankContent(emp: emp),
-                    _EmergencyContent(emp: emp),
+                    _PersonalContent(emp: emp, canEdit: widget.onEdit != null),
+                    _EducationContent(emp: emp, canEdit: widget.onEdit != null),
+                    _BankContent(emp: emp, canEdit: widget.onEdit != null),
+                    _EmergencyContent(emp: emp, canEdit: widget.onEdit != null),
                     _DocumentsContent(emp: emp),
                   ][_sub],
                 ),
@@ -782,11 +865,40 @@ class _ProfileTabState extends State<_ProfileTab> {
   }
 }
 
+// ── Custom fields (Settings → Onboarding Fields), per section ──────────────────
+// Web employees/[id]/page.tsx: each section shows its visible custom fields;
+// employees.edit holders edit them (PUT custom_field_values for every
+// configured text-type key, merged server-side) and manage file fields.
+
+class _EmployeeCustomFields extends ConsumerWidget {
+  final EmployeeModel emp;
+  final int step;
+  final bool canEdit;
+  const _EmployeeCustomFields({required this.emp, required this.step, required this.canEdit});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return CustomFieldsBlock(
+      step: step,
+      values: emp.customFieldValues,
+      files: emp.customFileFields,
+      onSaveText: canEdit
+          ? (config, edits) => saveEmployeeCustomFields(
+              ref, emp.employeeId, employeeCustomFieldsPayload(config, emp.customFieldValues, edits))
+          : null,
+      canEditFiles: canEdit,
+      onUpload: (key, name, bytes) => uploadEmployeeCustomFile(ref, emp.employeeId, key, name, bytes),
+      onDelete: (id) => deleteEmployeeCustomFile(ref, emp.employeeId, id),
+    );
+  }
+}
+
 // ── Personal section ──────────────────────────────────────────────────────────
 
 class _PersonalContent extends StatelessWidget {
   final EmployeeModel emp;
-  const _PersonalContent({required this.emp});
+  final bool canEdit;
+  const _PersonalContent({required this.emp, this.canEdit = false});
 
   @override
   Widget build(BuildContext context) {
@@ -845,6 +957,7 @@ class _PersonalContent extends StatelessWidget {
           maxLines: 3,
           padBottom: false,
         ),
+        _EmployeeCustomFields(emp: emp, step: 0, canEdit: canEdit),
       ],
     );
   }
@@ -856,7 +969,8 @@ class _PersonalContent extends StatelessWidget {
 
 class _EducationContent extends StatelessWidget {
   final EmployeeModel emp;
-  const _EducationContent({required this.emp});
+  final bool canEdit;
+  const _EducationContent({required this.emp, this.canEdit = false});
 
   @override
   Widget build(BuildContext context) {
@@ -885,6 +999,7 @@ class _EducationContent extends StatelessWidget {
           maxLines: 3,
           padBottom: false,
         ),
+        _EmployeeCustomFields(emp: emp, step: 1, canEdit: canEdit),
       ],
     );
   }
@@ -896,7 +1011,8 @@ class _EducationContent extends StatelessWidget {
 
 class _BankContent extends StatelessWidget {
   final EmployeeModel emp;
-  const _BankContent({required this.emp});
+  final bool canEdit;
+  const _BankContent({required this.emp, this.canEdit = false});
 
   @override
   Widget build(BuildContext context) {
@@ -915,6 +1031,7 @@ class _BankContent extends StatelessWidget {
           label1: 'Bank Name',   value1: _s(emp.bankName),
           label2: 'Bank Branch', value2: _s(emp.bankBranch),
         ),
+        _EmployeeCustomFields(emp: emp, step: 2, canEdit: canEdit),
       ],
     );
   }
@@ -926,7 +1043,8 @@ class _BankContent extends StatelessWidget {
 
 class _EmergencyContent extends StatelessWidget {
   final EmployeeModel emp;
-  const _EmergencyContent({required this.emp});
+  final bool canEdit;
+  const _EmergencyContent({required this.emp, this.canEdit = false});
 
   @override
   Widget build(BuildContext context) {
@@ -942,6 +1060,7 @@ class _EmergencyContent extends StatelessWidget {
           label2: 'Email',        value2: _s(emp.emergencyEmail),
           padBottom: false,
         ),
+        _EmployeeCustomFields(emp: emp, step: 3, canEdit: canEdit),
       ],
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../shared/validators/form_validators.dart';
+import '../../../onboarding/data/models/onboarding_config_models.dart' show CustomFileValue;
 
 // ── Employee ──────────────────────────────────────────────────────────────────
 
@@ -20,6 +21,10 @@ class EmployeeModel {
   final String roleDisplay;
   final bool isActive;
   final String status;
+
+  /// User.onboarding_status — pending | draft | submitted | complete |
+  /// rejected ('' when not sent). See [isPendingOnboarding].
+  final String onboardingStatus;
   final String dateOfJoining;
   final String? reportingManagerId;
   final String? reportingManagerName;
@@ -65,6 +70,13 @@ class EmployeeModel {
   final String emergencyPhone;
   final String emergencyEmail;
 
+  // HR-created custom fields (Settings → Onboarding Fields): text-type values
+  // by field_key from profile.custom_field_values — every saved key is kept,
+  // including ones whose field is hidden or no longer configured — and the
+  // file-type values from custom_file_fields.
+  final Map<String, String> customFieldValues;
+  final List<CustomFileValue> customFileFields;
+
   const EmployeeModel({
     required this.id,
     required this.employeeId,
@@ -80,6 +92,7 @@ class EmployeeModel {
     required this.isActive,
     required this.status,
     required this.dateOfJoining,
+    this.onboardingStatus = '',
     this.role = '',
     this.reportingManagerId,
     this.reportingManagerName,
@@ -112,6 +125,8 @@ class EmployeeModel {
     this.emergencyRelationship = '',
     this.emergencyPhone = '',
     this.emergencyEmail = '',
+    this.customFieldValues = const {},
+    this.customFileFields = const [],
   });
 
   factory EmployeeModel.fromJson(Map<String, dynamic> json) {
@@ -137,6 +152,7 @@ class EmployeeModel {
       roleDisplay:   json['role_display'] as String? ?? '',
       isActive:      json['is_active'] as bool? ?? false,
       status:        json['status'] as String? ?? 'inactive',
+      onboardingStatus: json['onboarding_status'] is String ? (json['onboarding_status'] as String).trim() : '',
       dateOfJoining: json['date_of_joining'] as String? ?? '',
       reportingManagerId:   reportingManager?['id'] as String?,
       reportingManagerName: reportingManager?['name'] as String?,
@@ -172,8 +188,21 @@ class EmployeeModel {
       emergencyRelationship: profile['emergency_relationship'] as String? ?? '',
       emergencyPhone:        profile['emergency_phone'] as String? ?? '',
       emergencyEmail:        profile['emergency_email'] as String? ?? '',
+      customFieldValues:     _customValues(profile['custom_field_values']),
+      customFileFields: [
+        for (final f in (json['custom_file_fields'] as List<dynamic>? ?? const []))
+          if (f is Map<String, dynamic>)
+            // This payload names the file URL `file` (web maps file_url: f.file).
+            CustomFileValue.fromJson({...f, 'file_url': f['file_url'] ?? f['file']}),
+      ],
     );
   }
+
+  /// custom_field_values as strings (the backend stores what clients send —
+  /// strings; anything else is kept as its text form, never dropped).
+  static Map<String, String> _customValues(Object? raw) => raw is Map
+      ? {for (final e in raw.entries) '${e.key}': e.value == null ? '' : '${e.value}'}
+      : const {};
 
   String get initials {
     final parts = fullName.trim().split(RegExp(r'\s+'));
@@ -191,6 +220,11 @@ class EmployeeModel {
     return n.toInt();
   }
 
+  /// Web employees/[id]/page.tsx isPendingOnboarding: the employee hasn't
+  /// submitted the onboarding form yet (never opened it, or saved a draft).
+  /// Submitted, rejected (sent back) and complete profiles show normally.
+  bool get isPendingOnboarding => onboardingStatus == 'pending' || onboardingStatus == 'draft';
+
   EmployeeModel copyWith({
     bool? isActive,
     String? status,
@@ -203,6 +237,7 @@ class EmployeeModel {
       role: role, roleDisplay: roleDisplay,
       isActive: isActive ?? this.isActive,
       status: status ?? this.status,
+      onboardingStatus: onboardingStatus,
       dateOfJoining: dateOfJoining,
       reportingManagerId: reportingManagerId,
       reportingManagerName: reportingManagerName,
@@ -221,6 +256,7 @@ class EmployeeModel {
       bankName: bankName, bankBranch: bankBranch,
       emergencyName: emergencyName, emergencyRelationship: emergencyRelationship,
       emergencyPhone: emergencyPhone, emergencyEmail: emergencyEmail,
+      customFieldValues: customFieldValues, customFileFields: customFileFields,
     );
   }
 

@@ -18,6 +18,16 @@ class FormValidators {
     return null;
   }
 
+  /// Sign-in only: the password must just be present. The length rule above
+  /// applies when a password is created/changed, not when an existing one is
+  /// entered — the backend LoginSerializer accepts min_length=1, and web
+  /// login has no length check, so enforcing 8 here locked out accounts with
+  /// shorter (e.g. HR-set or legacy) passwords.
+  static String? loginPassword(String? value) {
+    if (value == null || value.isEmpty) return 'Password is required.';
+    return null;
+  }
+
   static String? confirmPassword(String? value, String original) {
     if (value == null || value.isEmpty) return 'Please confirm your password.';
     if (value != original) return 'Passwords do not match.';

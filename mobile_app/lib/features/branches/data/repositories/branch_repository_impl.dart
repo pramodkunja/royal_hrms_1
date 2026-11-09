@@ -1,3 +1,4 @@
+import '../../domain/branch_geofence.dart';
 import '../../domain/entities/branch_entity.dart';
 import '../../domain/repositories/branch_repository.dart';
 import '../datasources/branch_remote_datasource.dart';
@@ -39,6 +40,7 @@ class BranchRepositoryImpl implements BranchRepository {
     required String address,
     required String status,
     required bool isHeadquarter,
+    BranchGeofence? geofence,
   }) =>
       _dataSource.createBranch({
         'city': cityId,
@@ -47,6 +49,7 @@ class BranchRepositoryImpl implements BranchRepository {
         'address': address,
         'status': status,
         'is_headquarter': isHeadquarter,
+        ...?geofence?.toPayload(),
       });
 
   @override
@@ -58,6 +61,7 @@ class BranchRepositoryImpl implements BranchRepository {
     required String address,
     required String status,
     required bool isHeadquarter,
+    BranchGeofence? geofence,
   }) =>
       _dataSource.updateBranch(id, {
         'city': cityId,
@@ -66,6 +70,7 @@ class BranchRepositoryImpl implements BranchRepository {
         'address': address,
         'status': status,
         'is_headquarter': isHeadquarter,
+        ...?geofence?.toPayload(),
       });
 
   @override

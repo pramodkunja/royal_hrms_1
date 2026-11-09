@@ -5,14 +5,18 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../settings/presentation/providers/settings_providers.dart';
 import '../../domain/entities/candidate_entity.dart';
 import '../providers/interview_providers.dart';
-import 'interview_status_badge.dart';
+
+/// Text the backend puts in the status response message when the status
+/// changed but its selected/rejected email could not be sent.
+const kCandidateStatusEmailFailed = 'Email could not be sent';
 
 /// Confirmation sheet shown before moving a candidate to Selected/Rejected —
 /// mirrors web's `MarkCandidateModal.tsx`. The email template is fixed by the
-/// target status (never manually chosen), and confirming both updates the
-/// status (carrying the interviewer's remarks into the audit log) and sends
-/// the matching notification email, same as web's setStatus-then-sendEmail
-/// sequence.
+/// target status (never manually chosen). Confirming sends ONE request: the
+/// status PATCH (with the interviewer's remarks for the audit log). The
+/// backend sends the candidate_selected / candidate_rejected email itself as
+/// part of that PATCH, so no separate /send-email/ call is made (that used to
+/// email the candidate twice).
 class MarkCandidateSheet extends ConsumerStatefulWidget {
   final CandidateEntity candidate;
   final String targetStatus; // 'selected' | 'rejected'
@@ -60,69 +64,35 @@ class _MarkCandidateSheetState extends ConsumerState<MarkCandidateSheet> {
     super.dispose();
   }
 
-  Map<String, String> _candidateVars(String companyName) {
-    final c = widget.candidate;
-    final parts = c.name.trim().split(RegExp(r'\s+'));
-    final firstName = parts.isNotEmpty && parts.first.isNotEmpty ? parts.first : c.name;
-    final lastName = parts.length > 1 ? parts.last : '';
-    final modeLabel = interviewModeLabel(c.interviewMode);
-    return {
-      'candidate_name': c.name,
-      'full_name': c.name,
-      'first_name': firstName,
-      'last_name': lastName,
-      'email': c.email,
-      'position_applied': c.positionApplied,
-      'position': c.positionApplied,
-      'branch': c.branchName,
-      'branch_name': c.branchName,
-      'interview_date': c.interviewDate,
-      'interview_mode': c.interviewMode,
-      'interview_mode_display': modeLabel,
-      'company_name': companyName,
-      'FULL_NAME': c.name,
-      'FNAME': firstName,
-      'LNAME': lastName,
-      'EMAIL': c.email,
-      'POSITION': c.positionApplied,
-      'COMPANY': companyName,
-    };
-  }
-
-  Future<void> _confirm(String companyName) async {
+  Future<void> _confirm() async {
+    if (_saving) return;
     setState(() {
       _saving = true;
       _error = null;
     });
-    final notifier = ref.read(candidateListProvider.notifier);
-    final statusErr = await notifier.updateStatus(
-      widget.candidate.id,
-      widget.targetStatus,
-      remarks: _remarksCtrl.text.trim(),
-    );
+    var serverMessage = '';
+    final statusErr = await ref.read(candidateListProvider.notifier).updateStatus(
+          widget.candidate.id,
+          widget.targetStatus,
+          remarks: _remarksCtrl.text.trim(),
+          onServerMessage: (m) => serverMessage = m,
+        );
+    if (!mounted) return;
     if (statusErr != null) {
-      if (!mounted) return;
       setState(() {
         _saving = false;
         _error = statusErr;
       });
       return;
     }
-    final emailErr = await notifier.sendStatusEmail(
-      widget.candidate.id,
-      templateName: _templateSlug,
-      extraContext: _candidateVars(companyName),
-    );
-    if (!mounted) return;
     setState(() => _saving = false);
-    if (emailErr == null) {
-      Navigator.pop(context, true);
-    } else {
-      // The status change already succeeded — only the email failed. Close
-      // as successful but let the caller know the email didn't go out.
-      Navigator.pop(context, true);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Status updated, but the email failed to send: $emailErr'),
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.pop(context, true);
+    // The status change succeeded; the backend's email may not have. It only
+    // says so in the response message — surface that as a warning.
+    if (serverMessage.contains(kCandidateStatusEmailFailed)) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(serverMessage),
         backgroundColor: AppColors.warning,
       ));
     }
@@ -131,7 +101,6 @@ class _MarkCandidateSheetState extends ConsumerState<MarkCandidateSheet> {
   @override
   Widget build(BuildContext context) {
     final templatesAsync = ref.watch(emailTemplatesProvider);
-    final companyAsync = ref.watch(companyProvider);
 
     final loadingTemplates = templatesAsync.isLoading && !templatesAsync.hasValue;
     final activeTemplates =
@@ -139,10 +108,6 @@ class _MarkCandidateSheetState extends ConsumerState<MarkCandidateSheet> {
     final matching =
         activeTemplates.where((t) => t.name == _templateSlug).toList();
     final template = matching.isEmpty ? null : matching.first;
-
-    final company = companyAsync.valueOrNull;
-    final companyName =
-        (company?.companyName.isNotEmpty ?? false) ? company!.companyName : '[Company]';
 
     final actionColor = _isSelect ? AppColors.success : AppColors.error;
 
@@ -326,7 +291,7 @@ class _MarkCandidateSheetState extends ConsumerState<MarkCandidateSheet> {
                       child: FilledButton.icon(
                         onPressed: (_saving || loadingTemplates || template == null)
                             ? null
-                            : () => _confirm(companyName),
+                            : _confirm,
                         style: FilledButton.styleFrom(
                           backgroundColor: actionColor,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

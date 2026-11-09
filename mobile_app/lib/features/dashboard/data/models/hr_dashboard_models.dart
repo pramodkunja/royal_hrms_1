@@ -73,7 +73,9 @@ class HrAttendanceSummary {
 }
 
 /// `GET /dashboard/hr/action-queue/` — `HRActionQueueView`.
-/// `separationRequests` is always 0 (model not implemented).
+/// `separationRequests` is a server-side hard-coded 0 (not in total_pending)
+/// and is not shown — the card uses [hrSeparationQueueCountProvider], the
+/// separation API's team-scope count, as web HrActionQueue does.
 class HrActionQueue {
   final int totalPending;
   final int candidateReviews;

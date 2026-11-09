@@ -331,14 +331,19 @@ class AttendanceRemoteDataSource {
     return _unwrapList(res.data).map(MyCorrectionModel.fromJson).toList();
   }
 
-  Future<void> reviewCorrection(String id, {required bool approve, String? remarks}) async {
-    await _dio.patch(
+  /// PATCH /attendance/corrections/<id>/review/ {action, remarks}. Returns the
+  /// server's message, which says whether an approval was final ("…Attendance
+  /// record updated.") or moved to the HR stage ("…Awaiting HR review.").
+  Future<String> reviewCorrection(String id, {required bool approve, String? remarks}) async {
+    final res = await _dio.patch(
       ApiConstants.attendanceHrCorrectionReview(id),
       data: {
         'action': approve ? 'approve' : 'reject',
         'remarks': remarks ?? '',
       },
     );
+    final body = res.data;
+    return body is Map && body['message'] is String ? body['message'] as String : '';
   }
 
   // ── Invalid Punch actions ────────────────────────────────────────────────────
@@ -449,12 +454,7 @@ class AttendanceRemoteDataSource {
     String? dateFrom,
     String? dateTo,
   }) async {
-    final formData = FormData.fromMap({
-      'file': MultipartFile.fromBytes(bytes, filename: fileName),
-      if (employeeId != null) 'employee_id': employeeId,
-      if (dateFrom != null) 'date_from': dateFrom,
-      if (dateTo != null) 'date_to': dateTo,
-    });
+    final formData = _importForm(bytes, fileName, employeeId: employeeId, dateFrom: dateFrom, dateTo: dateTo);
     try {
       final res = await _dio.post(
         ApiConstants.attendanceImport,
@@ -470,6 +470,38 @@ class AttendanceRemoteDataSource {
       }
       rethrow;
     }
+  }
+
+  /// The import form web builds (ImportModal buildForm): `file`, then in
+  /// single-employee mode `employee_id` / `date_from` / `date_to`, and
+  /// `dry_run=true` for the preview only. A fresh FormData each time (one
+  /// can't be sent twice).
+  FormData _importForm(List<int> bytes, String fileName,
+          {String? employeeId, String? dateFrom, String? dateTo, bool dryRun = false}) =>
+      FormData.fromMap({
+        'file': MultipartFile.fromBytes(bytes, filename: fileName),
+        if (employeeId != null) 'employee_id': employeeId,
+        if (dateFrom != null) 'date_from': dateFrom,
+        if (dateTo != null) 'date_to': dateTo,
+        if (dryRun) 'dry_run': 'true',
+      });
+
+  /// POST /attendance/import/ with `dry_run=true`: validates and plans the
+  /// file — nothing is saved (always answered synchronously).
+  Future<ImportPreviewEntity> previewImportCsv(
+    List<int> bytes,
+    String fileName, {
+    String? employeeId,
+    String? dateFrom,
+    String? dateTo,
+  }) async {
+    final res = await _dio.post(
+      ApiConstants.attendanceImport,
+      data: _importForm(bytes, fileName, employeeId: employeeId, dateFrom: dateFrom, dateTo: dateTo, dryRun: true),
+      options: Options(contentType: 'multipart/form-data'),
+    );
+    final data = _unwrap(res.data);
+    return parseImportPreview(data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{});
   }
 
   Future<List<int>> fetchImportSample({String format = 'csv'}) async {

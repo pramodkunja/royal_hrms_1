@@ -2,7 +2,9 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../shared/models/bulk_import_result.dart';
+import '../../../onboarding/data/models/onboarding_config_models.dart' show CustomFileValue, onboardingUploadMime;
 import '../models/employee_model.dart';
+import '../models/promotion_record_model.dart';
 
 // ── Approval matrix row (per-employee) ────────────────────────────────────
 // Matches backend `_build_matrix_row` (EmployeeApprovalMatrixView). Lives
@@ -349,6 +351,67 @@ class EmployeesRemoteDataSource {
   // directly via "Add Employee" have no Candidate record and this 404s with
   // "Candidate not found." — that error is left to propagate to the caller
   // verbatim (via parseDioException), not swallowed here.
+  // ── Promotion history (web PromotionTab) ──────────────────────────────────
+
+  /// GET /employees/<id>/promotions/ — a plain list, newest first.
+  Future<List<PromotionRecordModel>> fetchPromotions(String employeeId) async {
+    final res = await _dio.get(ApiConstants.employeePromotions(employeeId));
+    final body = res.data;
+    final data = body is Map && body.containsKey('data') ? body['data'] : body;
+    return [
+      for (final r in (data is List ? data : const []))
+        if (r is Map<String, dynamic>) PromotionRecordModel.fromJson(r),
+    ];
+  }
+
+  /// Promote: PUT /employees/<id>/ with only designation and role (web
+  /// PromotionTab), plus effective_date / remarks — optional fields the
+  /// backend stores on the PromotionRecord it creates (web collects them but
+  /// does not send them).
+  Future<void> promoteEmployee(
+    String employeeId, {
+    required String designation,
+    required String role,
+    required String effectiveDate,
+    String remarks = '',
+  }) async {
+    await _dio.put(ApiConstants.employeeDetail(employeeId), data: {
+      'designation': designation,
+      'role': role,
+      'effective_date': effectiveDate,
+      if (remarks.trim().isNotEmpty) 'remarks': remarks.trim(),
+    });
+  }
+
+  // ── HR-created custom fields (web employees/[id]/page.tsx) ───────────────
+  // Text-type values: PUT /employees/<id>/ {custom_field_values}. The backend
+  // (EmployeeDetailView.put) applies only the keys sent and MERGES this dict
+  // into the stored one, so keys not sent are kept.
+  Future<void> updateCustomFieldValues(String employeeId, Map<String, String> values) async {
+    await _dio.put(ApiConstants.employeeDetail(employeeId), data: {'custom_field_values': values});
+  }
+
+  /// POST multipart {field_key, file} → the stored value (a single-file
+  /// field's previous file is replaced server-side).
+  Future<CustomFileValue> uploadCustomFile(String employeeId, String fieldKey, String fileName, List<int> bytes) async {
+    final mime = onboardingUploadMime(fileName);
+    if (mime == null) throw Exception('Only PDF, JPG, and PNG files are allowed.');
+    final res = await _dio.post(
+      ApiConstants.employeeCustomFileFields(employeeId),
+      data: FormData.fromMap({
+        'field_key': fieldKey,
+        'file': MultipartFile.fromBytes(bytes, filename: fileName, contentType: DioMediaType.parse(mime)),
+      }),
+    );
+    final body = res.data;
+    final data = body is Map && body.containsKey('data') ? body['data'] : body;
+    return CustomFileValue.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  Future<void> deleteCustomFile(int valueId) async {
+    await _dio.delete(ApiConstants.onboardingCustomFileFieldDetail(valueId));
+  }
+
   Future<void> sendCandidateEmail(
     String employeeId, {
     required String templateName,

@@ -89,6 +89,8 @@ class ApiConstants {
   static const String employees = '/employees/';
   static const String employeeBulkImport = '/employees/bulk-import/';
   static String employeeDetail(String employeeId) => '/employees/$employeeId/';
+  static String employeeCustomFileFields(String employeeId) => '/employees/$employeeId/custom-file-fields/';
+  static String employeePromotions(String employeeId) => '/employees/$employeeId/promotions/';
   // Settings → Notice Period → Import (web API.employees.noticePeriodImport*).
   static const String employeeNoticePeriodImport = '/employees/notice-period/import/';
   static const String employeeNoticePeriodImportSample = '/employees/notice-period/import/sample/';
@@ -500,6 +502,10 @@ class ApiConstants {
   // any onboarded employee (EmployeeBirthdayTodayView, HasCompletedOnboarding),
   // unlike /birthdays/ and the HR/admin birthday endpoints (employees.view).
   static const String dashboardEmployeeBirthdaysToday = '/dashboard/employee/birthdays/today/';
+  // Web useMyBirthdayWidgets (TeamBirthdayCard / ManagerBirthdayCard):
+  // MyBirthdayWidgetsView — IsAuthenticated + HasCompletedOnboarding, scoped
+  // to the caller's own team (same reporting manager) and manager.
+  static const String dashboardMyBirthdayWidgets = '/dashboard/birthdays/mine/';
 
   // Shared announcement (no role gate) — matches web's EmpAnnouncement.
   static const String dashboardAnnouncement = '/dashboard/announcement/';

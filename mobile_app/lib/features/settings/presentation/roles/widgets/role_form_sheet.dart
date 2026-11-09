@@ -53,6 +53,9 @@ class _RoleFormSheetState extends State<RoleFormSheet> {
   late final TextEditingController _nameCtrl;
   final Map<String, String?> _errors = {};
   bool _saving = false;
+  // Server error from the last save, shown inside the form (web modal
+  // alert); the form keeps everything the user entered.
+  String? _submitError;
 
   bool get _isAdd => widget.role == null;
 
@@ -138,9 +141,27 @@ class _RoleFormSheetState extends State<RoleFormSheet> {
                 shrinkWrap: true,
                 padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.viewInsetsOf(context).bottom + 24),
                 children: [
+                  if (_submitError != null) _buildSubmitError(),
                   _buildNameField(),
                   _buildSlugField(),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
+                  _buildCapability(
+                    key: const Key('role-can-manage-team'),
+                    title: 'Can manage team',
+                    subtitle:
+                        'Users with this role appear in manager dropdowns, can access the team dashboard, and bypass the employee onboarding gate.',
+                    value: _form.canManageTeam,
+                    onChanged: (v) => setState(() => _form.canManageTeam = v),
+                  ),
+                  _buildCapability(
+                    key: const Key('role-can-manage-branch'),
+                    title: 'Can manage branch',
+                    subtitle:
+                        'Users with this role have unconditional access to every employee, request, and record within their own branch — not limited to employees specifically assigned to them (unlike HR) or their direct reports (unlike a manager).',
+                    value: _form.canManageBranch,
+                    onChanged: (v) => setState(() => _form.canManageBranch = v),
+                  ),
+                  const SizedBox(height: 12),
                   permsAsync.when(
                     loading: () => const Padding(
                       padding: EdgeInsets.symmetric(vertical: 24),
@@ -197,6 +218,41 @@ class _RoleFormSheetState extends State<RoleFormSheet> {
       ],
     ),
   );
+
+  Widget _buildSubmitError() => Container(
+    key: const Key('role-form-error'),
+    margin: const EdgeInsets.only(bottom: 12),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: AppColors.error.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+    ),
+    child: Text(_submitError!, style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+  );
+
+  // Web RoleFormFields checkbox + label + description.
+  Widget _buildCapability({
+    required Key key,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) =>
+      Material(
+        type: MaterialType.transparency,
+        child: CheckboxListTile(
+          key: key,
+          value: value,
+          onChanged: _saving ? null : (v) => onChanged(v ?? false),
+          controlAffinity: ListTileControlAffinity.leading,
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          activeColor: AppColors.primary,
+          title: Text(title, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
+          subtitle: Text(subtitle, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+        ),
+      );
 
   Widget _buildPermissionsSection(List<PermissionModel> all) {
     final selectedCount = _form.permissions.length;
@@ -301,7 +357,11 @@ class _RoleFormSheetState extends State<RoleFormSheet> {
       setState(() => _errors.addAll(errors));
       return;
     }
-    setState(() => _saving = true);
+    if (_saving) return;
+    setState(() {
+      _saving = true;
+      _submitError = null;
+    });
     final notifier = widget.ref.read(rolesProvider.notifier);
     final result = _isAdd
         ? await notifier.create(_form)
@@ -310,14 +370,32 @@ class _RoleFormSheetState extends State<RoleFormSheet> {
     setState(() => _saving = false);
     if (result == null) {
       Navigator.pop(context);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ));
+      return;
     }
+    // Edit conflict (409): the roles were reloaded with a newer version of
+    // this role — the form is stale, so close it and report on the screen
+    // (web closes the modal and shows a page banner).
+    if (!_isAdd) {
+      final reloaded = (widget.ref.read(rolesProvider).valueOrNull ?? [])
+          .where((r) => r.idStr == widget.role!.idStr)
+          .firstOrNull;
+      if (reloaded != null &&
+          reloaded.updatedAt != null &&
+          reloaded.updatedAt != _form.expectedUpdatedAt) {
+        final messenger = ScaffoldMessenger.of(context);
+        Navigator.pop(context);
+        messenger.showSnackBar(SnackBar(
+          content: Text(result),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+        return;
+      }
+    }
+    // Any other failure (validation, permission, network): stay open with
+    // every field as entered, and show the server message in the form.
+    setState(() => _submitError = result);
   }
 }
 

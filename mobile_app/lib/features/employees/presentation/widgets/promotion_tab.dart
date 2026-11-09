@@ -4,47 +4,18 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/app_button.dart';
 import '../../../../shared/widgets/app_text_field.dart';
+import '../../../../core/router/access_control.dart' show userHasPermission;
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../settings/data/models/roles_model.dart';
 import '../../data/models/employee_model.dart';
+import '../../data/models/promotion_record_model.dart';
 import '../providers/employee_providers.dart';
 
-const List<String> _kMonthNames = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
-
-String _displayDate(String iso) {
-  if (iso.isEmpty) return '—';
-  final dt = DateTime.tryParse(iso);
-  if (dt == null) return iso;
-  return '${dt.day} ${_kMonthNames[dt.month - 1]} ${dt.year}';
-}
-
-class _PromotionHistoryEntry {
-  final String fromDesignation;
-  final String toDesignation;
-  final bool roleChanged;
-  final String effectiveDate; // ISO yyyy-MM-dd
-  final String updatedBy;
-
-  const _PromotionHistoryEntry({
-    required this.fromDesignation,
-    required this.toDesignation,
-    required this.roleChanged,
-    required this.effectiveDate,
-    required this.updatedBy,
-  });
-}
-
-/// Employee Profile "Promotion" tab — ports web's `PromotionTab.tsx`
-/// (`app/dashboard/employees/[id]/_components/PromotionTab.tsx`) exactly,
-/// including its real limitations rather than inventing missing backend
-/// support: there is no Promotion model, endpoint, or persisted history
-/// anywhere in the Django backend. Submitting a promotion just PUTs the
-/// employee's `designation`/`role` through the same endpoint the Edit
-/// Employee sheet already uses (`updateEmployeeAction` /
-/// `PUT /employees/{id}/`), and "Promotion History" below is session-only
-/// local state — never fetched from an API, same as web.
+/// Employee Profile "Promotion" tab — web `PromotionTab.tsx`. History is
+/// the persisted record list from GET /employees/<id>/promotions/ (newest
+/// first, as the server orders it); records are read-only and are created by
+/// the backend whenever a promotion (PUT /employees/<id>/) changes the
+/// designation or role. Viewing needs employees.view, promoting employees.edit.
 class PromotionTab extends ConsumerStatefulWidget {
   final EmployeeModel employee;
   const PromotionTab({super.key, required this.employee});
@@ -54,20 +25,24 @@ class PromotionTab extends ConsumerStatefulWidget {
 }
 
 class _PromotionTabState extends ConsumerState<PromotionTab> {
-  final List<_PromotionHistoryEntry> _history = [];
-
   Future<void> _openPromoteSheet() async {
-    final entry = await _PromoteEmployeeSheet.show(context, employee: widget.employee);
-    if (entry != null && mounted) {
-      setState(() => _history.insert(0, entry));
+    final message = await _PromoteEmployeeSheet.show(context, employee: widget.employee);
+    if (message != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.success,
+      ));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final employee = widget.employee;
-    final canEdit =
-        ref.watch(authStateProvider).valueOrNull?.user?.hasPermission('employees.edit') ?? false;
+    final canEdit = userHasPermission(ref.watch(authStateProvider).valueOrNull?.user, 'employees.edit');
+    final historyAsync = ref.watch(employeePromotionsProvider(employee.employeeId));
+    final roleLabels = {
+      for (final r in ref.watch(employeeFormRolesProvider).valueOrNull ?? const <RoleModel>[]) r.name: r.displayName,
+    };
 
     return ListView(
       primary: false,
@@ -126,32 +101,80 @@ class _PromotionTabState extends ConsumerState<PromotionTab> {
         const SizedBox(height: 18),
         Text('Promotion History', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
-        if (_history.isEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
+        ...historyAsync.when(
+          loading: () => [
+            const _HistoryMessage(key: Key('promotion-history-loading'), title: 'Loading history…'),
+          ],
+          error: (e, _) => [
+            _HistoryMessage(
+              key: const Key('promotion-history-error'),
+              title: 'Could not load promotion history.',
+              action: TextButton(
+                key: const Key('promotion-history-retry'),
+                onPressed: () => ref.invalidate(employeePromotionsProvider(employee.employeeId)),
+                child: const Text('Retry'),
+              ),
             ),
-            child: Text('No promotions recorded yet.', style: AppTextStyles.bodySecondary),
-          )
-        else
-          ..._history.map((e) => _PromotionHistoryCard(entry: e)),
+          ],
+          data: (records) => records.isEmpty
+              ? [
+                  const _HistoryMessage(
+                    key: Key('promotion-history-empty'),
+                    title: 'No promotions yet',
+                    subtitle: 'Designation and role changes for this employee will be listed here.',
+                  ),
+                ]
+              : [for (final r in records) _PromotionHistoryCard(record: r, roleLabels: roleLabels)],
+        ),
       ],
     );
   }
 }
 
-class _PromotionHistoryCard extends StatelessWidget {
-  final _PromotionHistoryEntry entry;
-  const _PromotionHistoryCard({required this.entry});
+class _HistoryMessage extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final Widget? action;
+  const _HistoryMessage({super.key, required this.title, this.subtitle, this.action});
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(children: [
+        Text(title, style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600)),
+        if (subtitle != null) ...[
+          const SizedBox(height: 4),
+          Text(subtitle!, textAlign: TextAlign.center, style: AppTextStyles.bodySecondary),
+        ],
+        if (action != null) action!,
+      ]),
+    );
+  }
+}
+
+/// One record — web history row: designation change (+ "Promotion"),
+/// role change (+ "Role change"), effective date, updated by, "Applied".
+class _PromotionHistoryCard extends StatelessWidget {
+  final PromotionRecordModel record;
+  final Map<String, String> roleLabels;
+  const _PromotionHistoryCard({required this.record, required this.roleLabels});
+
+  String _role(String slug) => slug.isEmpty ? '—' : (roleLabels[slug] ?? slug);
+  String _or(String v) => v.isEmpty ? '—' : v;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = record;
+    return Container(
+      key: Key('promotion-${r.id}'),
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -166,32 +189,42 @@ class _PromotionHistoryCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(
-                  '${entry.fromDesignation} → ${entry.toDesignation}',
-                  style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w700),
-                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  if (r.designationChanged)
+                    _ChangeLine(
+                      key: Key('promotion-${r.id}-designation'),
+                      text: '${_or(r.previousDesignation)} → ${_or(r.newDesignation)}',
+                      badge: 'Promotion',
+                      color: AppColors.info,
+                    ),
+                  if (r.roleChanged)
+                    _ChangeLine(
+                      key: Key('promotion-${r.id}-role'),
+                      text: '${_role(r.previousRole)} → ${_role(r.newRole)}',
+                      badge: 'Role change',
+                      color: AppColors.warning,
+                    ),
+                ]),
               ),
               const SizedBox(width: 8),
               _StatusPill(label: 'Applied', color: AppColors.success),
             ],
           ),
-          if (entry.roleChanged) ...[
-            const SizedBox(height: 6),
-            _StatusPill(label: 'Role change', color: AppColors.warning),
-          ],
           const SizedBox(height: 10),
           Row(
             children: [
               Icon(Icons.event_outlined, size: 13, color: AppColors.textHint),
               const SizedBox(width: 4),
-              Text(_displayDate(entry.effectiveDate),
+              Text(formatPromotionDate(r.effectiveDate),
+                  key: Key('promotion-${r.id}-date'),
                   style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
               const SizedBox(width: 14),
               Icon(Icons.person_outline, size: 13, color: AppColors.textHint),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
-                  entry.updatedBy.isNotEmpty ? entry.updatedBy : '—',
+                  _or(r.promotedBy),
+                  key: Key('promotion-${r.id}-by'),
                   style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -200,6 +233,24 @@ class _PromotionHistoryCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ChangeLine extends StatelessWidget {
+  final String text;
+  final String badge;
+  final Color color;
+  const _ChangeLine({super.key, required this.text, required this.badge, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        Text(text, style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w700)),
+        _StatusPill(label: badge, color: color),
+      ]),
     );
   }
 }
@@ -231,11 +282,12 @@ class _PromoteEmployeeSheet extends ConsumerStatefulWidget {
   final EmployeeModel employee;
   const _PromoteEmployeeSheet({required this.employee});
 
-  static Future<_PromotionHistoryEntry?> show(
+  /// Returns the success message once the promotion is saved, else null.
+  static Future<String?> show(
     BuildContext context, {
     required EmployeeModel employee,
   }) {
-    return showModalBottomSheet<_PromotionHistoryEntry>(
+    return showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -293,6 +345,7 @@ class _PromoteEmployeeSheetState extends ConsumerState<_PromoteEmployeeSheet> {
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
     if (_designation.isEmpty) {
       setState(() => _error = 'Select a new designation.');
       return;
@@ -301,10 +354,19 @@ class _PromoteEmployeeSheetState extends ConsumerState<_PromoteEmployeeSheet> {
       setState(() => _error = 'Select a system role.');
       return;
     }
+    // Web PromotionTab: nothing to submit without a change.
+    if (_designation == widget.employee.designation && _roleSlug == widget.employee.role) {
+      setState(() => _error = kPromotionNoChange);
+      return;
+    }
     // Matches web's exact copy/gate: PromotionTab.tsx blocks submit with
     // this same message until the elevation checkbox is ticked.
     if (_isElevated && !_confirmed) {
       setState(() => _error = 'Confirm the role change before submitting.');
+      return;
+    }
+    if (_effectiveDate.isEmpty) {
+      setState(() => _error = 'Effective date is required.');
       return;
     }
 
@@ -312,29 +374,27 @@ class _PromoteEmployeeSheetState extends ConsumerState<_PromoteEmployeeSheet> {
       _submitting = true;
       _error = null;
     });
-
-    final fromDesignation = widget.employee.designation;
-    final form = EmployeeUpdateFormData.fromModel(widget.employee)
-      ..designation = _designation
-      ..role = _roleSlug;
-
-    final err = await updateEmployeeAction(ref, widget.employee.id, form);
+    final err = await promoteEmployeeAction(
+      ref,
+      widget.employee.employeeId,
+      fromDesignation: widget.employee.designation,
+      fromRole: widget.employee.role,
+      designation: _designation,
+      role: _roleSlug,
+      effectiveDate: _effectiveDate,
+      remarks: _remarksCtrl.text,
+    );
     if (!mounted) return;
-    setState(() => _submitting = false);
-
     if (err != null) {
-      setState(() => _error = err);
+      setState(() {
+        _submitting = false;
+        _error = err;
+      });
       return;
     }
-
-    final updatedBy = ref.read(authStateProvider).valueOrNull?.user?.fullName ?? '';
-    Navigator.of(context).pop(_PromotionHistoryEntry(
-      fromDesignation: fromDesignation,
-      toDesignation: _designation,
-      roleChanged: _isElevated,
-      effectiveDate: _effectiveDate,
-      updatedBy: updatedBy,
-    ));
+    Navigator.of(context).pop(_isElevated
+        ? "Designation and role updated. New access applies at the employee's next login."
+        : 'Designation updated successfully.');
   }
 
   @override
@@ -410,7 +470,7 @@ class _PromoteEmployeeSheetState extends ConsumerState<_PromoteEmployeeSheet> {
                             suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                           ),
-                          child: Text(_displayDate(_effectiveDate), style: AppTextStyles.body),
+                          child: Text(formatPromotionDate(_effectiveDate), style: AppTextStyles.body),
                         ),
                       ),
                       const SizedBox(height: 14),

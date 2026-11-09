@@ -64,10 +64,16 @@ class PendingApprovals {
   }
 }
 
-/// One row of `SystemAdminEmployeeLifecycleView`'s `new_joiners` /
-/// `work_anniversaries` groups. `years` is only present for anniversaries.
-/// `noticePeriod` is always `{count: 0, employees: []}` — not implemented
-/// server-side yet; don't expect real data there.
+/// One row of `SystemAdminEmployeeLifecycleView`'s groups. `years` is only
+/// present for anniversaries.
+///
+/// The `notice_period` group is real data (people.py `_notice_period_data`,
+/// company-wide for the admin dashboard): approved separations whose last
+/// working day is today or later, active employees only, ordered by last
+/// working day then name. Those rows add the separation's request id, the
+/// final approval time (ISO datetime or null), the confirmed last working day
+/// (YYYY-MM-DD), the server's `days_remaining` (≥ 0) and `notice_status`
+/// ("serving" | "completed"). Shown as sent — never recomputed here.
 class AdminLifecycleEmployee {
   final String employeeId;
   final String fullName;
@@ -76,6 +82,13 @@ class AdminLifecycleEmployee {
   final String? dateOfJoining;
   final int? years;
 
+  // Notice Period tab only.
+  final String? requestId;
+  final String? approvedAt;
+  final String? lastWorkingDay;
+  final int? daysRemaining;
+  final String? noticeStatus;
+
   const AdminLifecycleEmployee({
     required this.employeeId,
     required this.fullName,
@@ -83,7 +96,20 @@ class AdminLifecycleEmployee {
     required this.branch,
     required this.dateOfJoining,
     required this.years,
+    this.requestId,
+    this.approvedAt,
+    this.lastWorkingDay,
+    this.daysRemaining,
+    this.noticeStatus,
   });
+
+  static String? _text(Object? v) => v is String && v.trim().isNotEmpty ? v.trim() : null;
+
+  /// A whole, non-negative number of days; anything else is unknown.
+  static int? _days(Object? v) {
+    if (v is! num || !v.isFinite || v < 0 || v != v.roundToDouble()) return null;
+    return v.toInt();
+  }
 
   factory AdminLifecycleEmployee.fromJson(Map<String, dynamic> json) {
     return AdminLifecycleEmployee(
@@ -93,6 +119,11 @@ class AdminLifecycleEmployee {
       branch: json['branch'] as String? ?? '',
       dateOfJoining: json['date_of_joining'] as String?,
       years: (json['years'] as num?)?.toInt(),
+      requestId: json['request_id'] == null ? null : '${json['request_id']}',
+      approvedAt: _text(json['approved_at']),
+      lastWorkingDay: _text(json['last_working_day']),
+      daysRemaining: _days(json['days_remaining']),
+      noticeStatus: _text(json['notice_status']),
     );
   }
 }

@@ -7,9 +7,10 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../shared/validators/form_validators.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../separation/domain/entities/separation_entity.dart' show EmployeePickerOption;
+import '../../../separation/presentation/widgets/employee_picker_field.dart';
 import '../../domain/entities/candidate_entity.dart';
 import '../providers/interview_providers.dart';
-import 'interview_status_badge.dart';
 
 part 'add_candidate_form.dart';
 
@@ -33,6 +34,7 @@ class _AddCandidateDialogState
   final _posCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
+  final _meetingLinkCtrl = TextEditingController();
 
   final _scrollCtrl = ScrollController();
 
@@ -40,6 +42,10 @@ class _AddCandidateDialogState
   String _mode = 'in_person';
   DateTime? _interviewDate;
   DateTime? _originalInterviewDate;
+  // Web Interview Time ("HH:MM"), Meeting Link (Video Call only) and
+  // Interviewer (an employee; sent as the User uuid).
+  TimeOfDay? _interviewTime;
+  EmployeePickerOption? _interviewer;
   bool _loading = false;
   List<Map<String, dynamic>> _branches = [];
   bool _branchLocked = false;
@@ -60,6 +66,18 @@ class _AddCandidateDialogState
       _mode = existing.interviewMode.isEmpty ? 'in_person' : existing.interviewMode;
       _interviewDate = DateTime.tryParse(existing.interviewDate);
       _originalInterviewDate = _interviewDate;
+      _interviewTime = parseInterviewTime(existing.interviewTime);
+      _meetingLinkCtrl.text = existing.meetingLink;
+      final interviewerId = existing.interviewer;
+      if (interviewerId != null && interviewerId.isNotEmpty) {
+        _interviewer = EmployeePickerOption(
+          code: '',
+          uuid: interviewerId,
+          name: existing.interviewerName.isNotEmpty ? existing.interviewerName : 'Assigned interviewer',
+          department: '',
+          designation: '',
+        );
+      }
     }
     _loadBranches();
   }
@@ -86,7 +104,9 @@ class _AddCandidateDialogState
       // server-side, so the client is the only guard).
       final user = ref.read(authStateProvider).valueOrNull?.user;
       final locked = user != null && user.role != 'system_admin';
-      if (locked && !_isEdit) {
+      // Web EditCandidateModal does the same for a candidate with no branch
+      // yet (e.g. a referral): fill in the user's own branch.
+      if (locked && (!_isEdit || _selectedBranch == null)) {
         final own = branches.firstWhere(
           (b) => (b['name'] as String).toLowerCase() ==
               (user.branch ?? '').toLowerCase(),
@@ -110,6 +130,7 @@ class _AddCandidateDialogState
       _posCtrl,
       _phoneCtrl,
       _notesCtrl,
+      _meetingLinkCtrl,
     ]) {
       c.dispose();
     }
@@ -118,6 +139,7 @@ class _AddCandidateDialogState
   }
 
   Future<void> _submit() async {
+    if (_loading) return;
     if (!_formKey.currentState!.validate()) return;
     if (_selectedBranch == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -136,6 +158,9 @@ class _AddCandidateDialogState
       return;
     }
     setState(() => _loading = true);
+    final time = _interviewTime == null ? null : formatInterviewTime(_interviewTime!);
+    // Web: the link only applies to a Video Call; otherwise it is cleared.
+    final link = _mode == 'video_call' ? _meetingLinkCtrl.text.trim() : '';
     final data = {
       'name': _nameCtrl.text.trim(),
       if (!_isEdit) 'email': _emailCtrl.text.trim(),
@@ -143,30 +168,45 @@ class _AddCandidateDialogState
       'phone': _phoneCtrl.text.trim(),
       'branch': _selectedBranch,
       'interview_mode': _mode,
-      if (_interviewDate != null)
-        'interview_date':
-            _interviewDate!.toIso8601String().split('T').first,
+      // As web EditCandidateModal: an edit always sends the date, null when
+      // cleared (the backend then sends no invitation); Add omits it.
+      if (_isEdit || _interviewDate != null)
+        'interview_date': _interviewDate?.toIso8601String().split('T').first,
+      // As web: Edit sends null to clear an empty time/interviewer; Add
+      // simply leaves an unset time out.
+      if (_isEdit || time != null) 'interview_time': time,
+      'meeting_link': link,
+      'interviewer': _interviewer?.uuid,
       if (_notesCtrl.text.trim().isNotEmpty)
         'notes': _notesCtrl.text.trim(),
     };
-    final isFirstSchedule =
-        _isEdit && _interviewDate != null && _originalInterviewDate == null;
+    // The backend emails the interview details itself (queued) when a save
+    // leaves a date set and the date, time or link changed — mirror that
+    // rule only to word the confirmation; nothing else is requested.
+    final willEmail = _interviewDate != null &&
+        (!_isEdit ||
+            !_sameDay(_interviewDate!, _originalInterviewDate) ||
+            time != _originalTime ||
+            link != widget.existing!.meetingLink);
     final err = _isEdit ? await _updateCandidate(data) : await _addCandidate(data);
     if (!mounted) return;
     setState(() => _loading = false);
     if (err == null) {
-      if (isFirstSchedule) {
-        await _sendScheduleEmail();
-      }
-      if (!mounted) return;
+      // No separate /send-email/ call: the backend sends the interview
+      // invitation itself whenever a save sets or changes the interview
+      // date/time/link (recruitment views `_fire_interview_date_emails_if_needed`).
+      // Calling it here too emailed the candidate twice.
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.pop(context);
-      if (isFirstSchedule && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('Interview details saved. Invitation email sent to candidate.'),
+      if (willEmail) {
+        messenger.showSnackBar(SnackBar(
+          content: const Text(
+              'Interview details saved. An interview invitation email will be sent to the candidate.'),
           backgroundColor: AppColors.success,
         ));
       }
     } else {
+      // The dialog stays open with every value as entered, for a retry.
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(err), backgroundColor: AppColors.error),
@@ -174,37 +214,13 @@ class _AddCandidateDialogState
     }
   }
 
-  // Mirrors web's EditCandidateModal — the very first time an interview_date
-  // is set on a candidate, an "interview_scheduled_candidate" email fires
-  // automatically. Uses the ORIGINAL branch name (not any newly-picked one in
-  // this same save) to match web's candidate.branch_name reference exactly.
-  Future<void> _sendScheduleEmail() async {
-    final existing = widget.existing!;
-    final parts = _nameCtrl.text.trim().split(RegExp(r'\s+'));
-    final firstName = parts.isNotEmpty && parts.first.isNotEmpty
-        ? parts.first
-        : _nameCtrl.text.trim();
-    final lastName = parts.length > 1 ? parts.last : '';
-    final modeLabel = interviewModeLabel(_mode);
-    final vars = <String, String>{
-      'candidate_name': _nameCtrl.text.trim(),
-      'full_name': _nameCtrl.text.trim(),
-      'first_name': firstName,
-      'last_name': lastName,
-      'email': existing.email,
-      'position_applied': _posCtrl.text.trim(),
-      'position': _posCtrl.text.trim(),
-      'branch_name': existing.branchName,
-      'interview_date': _interviewDate!.toIso8601String().split('T').first,
-      'interview_mode': _mode,
-      'interview_mode_display': modeLabel,
-    };
-    await ref.read(candidateListProvider.notifier).sendStatusEmail(
-          existing.id,
-          templateName: 'interview_scheduled_candidate',
-          extraContext: vars,
-        );
+  String? get _originalTime {
+    final t = parseInterviewTime(widget.existing?.interviewTime ?? '');
+    return t == null ? null : formatInterviewTime(t);
   }
+
+  static bool _sameDay(DateTime a, DateTime? b) =>
+      b != null && a.year == b.year && a.month == b.month && a.day == b.day;
 
   Future<String?> _addCandidate(Map<String, dynamic> data) async {
     try {
@@ -288,6 +304,11 @@ class _AddCandidateDialogState
                     setState(() => _mode = v ?? 'in_person'),
                 onDateChanged: (v) =>
                     setState(() => _interviewDate = v),
+                interviewTime: _interviewTime,
+                onTimeChanged: (v) => setState(() => _interviewTime = v),
+                meetingLinkCtrl: _meetingLinkCtrl,
+                interviewer: _interviewer,
+                onInterviewerChanged: (v) => setState(() => _interviewer = v),
                 scrollCtrl: _scrollCtrl,
               ),
             ),
@@ -297,3 +318,16 @@ class _AddCandidateDialogState
     );
   }
 }
+
+/// "HH:MM" or "HH:MM:SS" (backend TimeField) → TimeOfDay; null if empty/bad.
+TimeOfDay? parseInterviewTime(String raw) {
+  final m = RegExp(r'^(\d{1,2}):(\d{2})').firstMatch(raw.trim());
+  if (m == null) return null;
+  final h = int.parse(m.group(1)!), min = int.parse(m.group(2)!);
+  if (h > 23 || min > 59) return null;
+  return TimeOfDay(hour: h, minute: min);
+}
+
+/// TimeOfDay → "HH:MM", the value web's time input sends.
+String formatInterviewTime(TimeOfDay t) =>
+    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';

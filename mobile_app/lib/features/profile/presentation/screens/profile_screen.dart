@@ -12,6 +12,7 @@ import '../../data/models/my_profile_model.dart';
 import '../providers/profile_providers.dart';
 import '../widgets/profile_documents_section.dart';
 import '../widgets/profile_face_id_section.dart';
+import '../widgets/profile_custom_fields.dart';
 import '../widgets/profile_sections.dart';
 
 // ignore_for_file: use_build_context_synchronously
@@ -212,6 +213,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             profile: profile,
                             phoneCtrl: _phoneCtrl,
                           ),
+                          ProfileCustomFields(step: 0, values: profile.detail.customFieldValues),
                           const SizedBox(height: 16),
                           const ProfileSeparationSection(),
                           const SizedBox(height: 16),
@@ -221,8 +223,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                           const SizedBox(height: 16),
                           ProfileEducationSection(profile: profile),
+                          ProfileCustomFields(step: 1, values: profile.detail.customFieldValues),
                           const SizedBox(height: 16),
                           ProfileBankSection(profile: profile),
+                          ProfileCustomFields(step: 2, values: profile.detail.customFieldValues),
                           const SizedBox(height: 16),
                           ProfileEmergencySection(
                             nameCtrl: _emergencyNameCtrl,
@@ -230,6 +234,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             phoneCtrl: _emergencyPhoneCtrl,
                             emailCtrl: _emergencyEmailCtrl,
                           ),
+                          ProfileCustomFields(step: 3, values: profile.detail.customFieldValues),
                           const SizedBox(height: 16),
                           ProfileChangePasswordSection(
                             currentCtrl: _curPassCtrl,

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/router/access_control.dart' show userHasPermission;
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../auth/domain/entities/user_entity.dart';
 import '../../data/datasources/attendance_remote_datasource.dart';
 import '../../data/repositories/attendance_repository_impl.dart';
 import '../../domain/entities/attendance_entity.dart';
@@ -640,6 +641,67 @@ final attendanceRecordCorrectionsProvider = FutureProvider.autoDispose
   return all.where((c) => c.employeeId == key.employeeId && c.date == key.date).toList();
 });
 
+// ── HR Attendance — Review a correction from the record detail ─────────────────
+// Web AttendanceDetailDrawer: Approve / Reject on a `pending` correction for
+// users with attendance.create → PATCH /attendance/corrections/<id>/review/
+// {action}. No remarks and no confirmation step on web. The server further
+// enforces that only the designated approver for the current stage may act
+// (403 with its own message otherwise).
+
+const kCorrectionReviewPermission = 'attendance.create';
+const kCorrectionReviewDenied = 'You do not have permission to review attendance corrections.';
+const kCorrectionReviewBusy = 'This correction is already being reviewed.';
+
+/// Web shows the actions only on `pending` rows, and only to attendance.create.
+bool canReviewRecordCorrection(UserEntity? user, HrCorrectionRowEntity c) =>
+    c.status == 'pending' && userHasPermission(user, kCorrectionReviewPermission);
+
+final attendanceCorrectionReviewProvider =
+    Provider<AttendanceCorrectionReview>((ref) => AttendanceCorrectionReview(ref));
+
+class AttendanceCorrectionReview {
+  AttendanceCorrectionReview(this._ref);
+  final Ref _ref;
+  final _inFlight = <String>{};
+
+  bool isReviewing(String correctionId) => _inFlight.contains(correctionId);
+
+  /// Approves or rejects [correctionId] and returns the server's message.
+  /// Throws a user-facing message on refusal or failure — in which case
+  /// nothing is refreshed, so the row keeps its original state. On success
+  /// the record's corrections, detail, audit trail, the team list, the HR
+  /// corrections inbox and the dashboard are reloaded (an approval re-runs
+  /// the attendance record server-side).
+  Future<String> review(
+    String correctionId, {
+    required bool approve,
+    required EmployeeDateKey correctionsKey,
+    RecordDetailKey? detailKey,
+    String? recordId,
+  }) async {
+    if (!userHasPermission(_ref.read(authStateProvider).valueOrNull?.user, kCorrectionReviewPermission)) {
+      throw kCorrectionReviewDenied;
+    }
+    if (!_inFlight.add(correctionId)) throw kCorrectionReviewBusy;
+    try {
+      final message =
+          await _ref.read(attendanceRepositoryProvider).reviewCorrection(correctionId, approve: approve);
+      _ref.invalidate(attendanceRecordCorrectionsProvider(correctionsKey));
+      if (detailKey != null) _ref.invalidate(attendanceRecordDetailProvider(detailKey));
+      if (recordId != null) _ref.invalidate(attendanceRecordAuditProvider(recordId));
+      _ref.invalidate(attendanceRecordsProvider);
+      _ref.invalidate(hrCorrectionsProvider);
+      _ref.invalidate(attendanceDashboardProvider);
+      if (message.isNotEmpty) return message;
+      return approve ? 'Correction approved. Attendance record updated.' : 'Correction rejected.';
+    } catch (e) {
+      throw friendlyAttendanceError(e);
+    } finally {
+      _inFlight.remove(correctionId);
+    }
+  }
+}
+
 // ── HR Attendance — CSV Import (Export is a direct one-shot call, see below) ───
 
 /// Web shows "Import Attendance" with attendance.create; the server's import
@@ -680,6 +742,34 @@ class AttendanceImportAction {
   final Ref _ref;
   AttendanceImportAction(this._ref);
   bool _busy = false;
+
+  /// The dry run (web Preview): the same request with `dry_run=true`, refused
+  /// on the same grounds as [upload]. Nothing is saved and nothing reloads —
+  /// a successful preview is never a completed import.
+  Future<ImportPreviewEntity> preview(List<int> bytes, String fileName, {AttendanceSingleImport? single}) async {
+    if (!userHasPermission(_ref.read(authStateProvider).valueOrNull?.user, kAttendanceImportPermission)) {
+      throw kAttendanceImportDenied;
+    }
+    if (single != null) {
+      final problem = attendanceSingleImportError(single);
+      if (problem != null) throw problem;
+    }
+    if (_busy) throw kAttendanceImportBusy;
+    _busy = true;
+    try {
+      return await _ref.read(attendanceRepositoryProvider).previewImportCsv(
+            bytes,
+            fileName,
+            employeeId: single?.employeeId.trim(),
+            dateFrom: single?.dateFrom == null ? null : _isoDate(single!.dateFrom!),
+            dateTo: single?.dateTo == null ? null : _isoDate(single!.dateTo!),
+          );
+    } catch (e) {
+      throw friendlyAttendanceError(e);
+    } finally {
+      _busy = false;
+    }
+  }
 
   /// Returns the import result (which itself may report partial row failures),
   /// or throws a friendly error message string on hard failure. Bulk mode

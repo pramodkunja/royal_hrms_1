@@ -7,6 +7,49 @@ import 'package:flutter/foundation.dart';
 
 double _money(dynamic value) => double.tryParse(value?.toString() ?? '') ?? 0.0;
 
+/// Web `INR` (components/payroll/PayslipDocument.tsx):
+/// `"₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 })` —
+/// whole rupees (half away from zero, as Intl rounds), Indian digit grouping
+/// (₹1,23,45,678), and a negative sign after the ₹ as web prints it.
+String formatPayslipInr(dynamic value) {
+  final rounded = _money(value).round();
+  final negative = rounded < 0;
+  final digits = rounded.abs().toString();
+  String grouped;
+  if (digits.length <= 3) {
+    grouped = digits;
+  } else {
+    final head = digits.substring(0, digits.length - 3);
+    final tail = digits.substring(digits.length - 3);
+    final buf = StringBuffer();
+    for (var i = 0; i < head.length; i++) {
+      if (i > 0 && (head.length - i) % 2 == 0) buf.write(',');
+      buf.write(head[i]);
+    }
+    grouped = '$buf,$tail';
+  }
+  return '₹${negative ? '-' : ''}$grouped';
+}
+
+/// Web `fmtDate` (`toLocaleDateString("en-IN", {day: "2-digit", month: "short",
+/// year: "numeric"})`): "09 Nov 2026", with en-IN's "Sept". Date-only values
+/// are read as calendar dates (no time-zone shift); unparseable → as given.
+String formatPayslipDate(String iso) {
+  final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(iso);
+  if (m == null) return iso.isEmpty ? '—' : iso;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
+  final month = int.parse(m.group(2)!);
+  if (month < 1 || month > 12) return iso;
+  return '${m.group(3)} ${months[month - 1]} ${m.group(1)}';
+}
+
+/// Web masks the account number as "••••" + its last 4 characters; "—" when none.
+String maskPayslipAccount(String account) =>
+    account.isEmpty ? '—' : '••••${account.length <= 4 ? account : account.substring(account.length - 4)}';
+
+/// A number as JS prints it: 21 not 21.0, 0.5 stays 0.5.
+String payslipNumber(num n) => n == n.roundToDouble() ? n.toInt().toString() : n.toString();
+
 /// Formats a raw decimal-as-string/num value as "₹12,345.00".
 String formatPayslipCurrency(dynamic value) {
   final parsed = _money(value);
@@ -59,6 +102,10 @@ class PayslipModel {
   final double hra;
   final double specialAllowance;
   final Map<String, dynamic> otherEarnings;
+
+  /// Named extra deductions (`other_deductions`, a JSON object), shown by web
+  /// between Labour Welfare Fund and Loss of Pay.
+  final Map<String, dynamic> otherDeductions;
   final double reimbursements;
   final double bonus;
   final double grossEarnings;
@@ -95,6 +142,7 @@ class PayslipModel {
     required this.hra,
     required this.specialAllowance,
     required this.otherEarnings,
+    this.otherDeductions = const {},
     required this.reimbursements,
     required this.bonus,
     required this.grossEarnings,
@@ -114,6 +162,7 @@ class PayslipModel {
 
   factory PayslipModel.fromJson(Map<String, dynamic> json) {
     final otherEarningsRaw = json['other_earnings'];
+    final otherDeductionsRaw = json['other_deductions'];
     return PayslipModel(
       id: json['id']?.toString() ?? '',
       cycleStart: json['cycle_start'] as String? ?? '',
@@ -128,6 +177,7 @@ class PayslipModel {
       otherEarnings: otherEarningsRaw is Map
           ? Map<String, dynamic>.from(otherEarningsRaw)
           : const {},
+      otherDeductions: otherDeductionsRaw is Map ? Map<String, dynamic>.from(otherDeductionsRaw) : const {},
       reimbursements: _money(json['reimbursements']),
       bonus: _money(json['bonus']),
       grossEarnings: _money(json['gross_earnings']),
@@ -160,6 +210,7 @@ class PayslipModel {
     hra: hra,
     specialAllowance: specialAllowance,
     otherEarnings: otherEarnings,
+    otherDeductions: otherDeductions,
     reimbursements: reimbursements,
     bonus: bonus,
     grossEarnings: grossEarnings,

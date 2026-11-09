@@ -1,3 +1,4 @@
+import '../branch_geofence.dart';
 import '../entities/branch_entity.dart';
 
 abstract class BranchRepository {
@@ -20,6 +21,7 @@ abstract class BranchRepository {
     required String address,
     required String status,
     required bool isHeadquarter,
+    BranchGeofence? geofence,
   });
 
   Future<BranchEntity> updateBranch({
@@ -30,6 +32,7 @@ abstract class BranchRepository {
     required String address,
     required String status,
     required bool isHeadquarter,
+    BranchGeofence? geofence,
   });
 
   Future<void> deleteBranch(int id);

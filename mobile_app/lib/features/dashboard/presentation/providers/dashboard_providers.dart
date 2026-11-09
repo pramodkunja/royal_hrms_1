@@ -1,5 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/router/access_control.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../separation/presentation/providers/separation_providers.dart';
 import '../../data/datasources/dashboard_remote_datasource.dart';
 import '../../data/models/admin_dashboard_models.dart';
 import '../../data/models/dashboard_common_models.dart';
@@ -93,6 +96,20 @@ final hrActionQueueProvider = FutureProvider.autoDispose<HrActionQueue>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchHrActionQueue(),
 );
 
+/// The action queue's "Separation Requests" count. HRActionQueueView hard-codes
+/// `separation_requests: 0` (and leaves it out of total_pending), so — as web
+/// HrActionQueue does — it is read from the separation API's team scope
+/// instead. Web asks only when the viewer holds separation.approve or
+/// settings.edit (the backend's has_perm counts settings.edit / superuser as
+/// holding everything, as [userHasPermission] does); anyone else gets 0
+/// without a request, as on web. A failed or malformed answer is an error,
+/// never a 0 — the card shows it as unknown.
+final hrSeparationQueueCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  final user = ref.watch(authStateProvider.select((s) => s.valueOrNull?.user));
+  if (!userHasPermission(user, 'separation.approve')) return 0;
+  return ref.read(separationDataSourceProvider).fetchTeamRequestCount();
+});
+
 final hrRecruitmentFunnelProvider =
     FutureProvider.autoDispose<HrRecruitmentFunnel>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchHrRecruitmentFunnel(),
@@ -126,6 +143,16 @@ final employeeKpisProvider = FutureProvider.autoDispose<EmployeeKpis>(
 
 /// The signed-in employee's own notice period (null when none). Cached while
 /// the Employee dashboard shows it; refreshed with the rest of the dashboard.
+/// Team / manager birthdays today (web TeamBirthdayCard / ManagerBirthdayCard).
+final myBirthdayWidgetsProvider = FutureProvider.autoDispose<MyBirthdayWidgets>(
+  (ref) => ref.read(dashboardDataSourceProvider).fetchMyBirthdayWidgets(),
+);
+
+/// The unread promotion celebration, or null (web EmpPromotionCelebration).
+final promotionCelebrationProvider = FutureProvider.autoDispose<PromotionCelebration?>(
+  (ref) => ref.read(dashboardDataSourceProvider).fetchUnreadPromotion(),
+);
+
 /// Today's birthdays for the Employee dashboard (web EmpBirthdayAnnouncement).
 final employeeBirthdaysTodayProvider = FutureProvider.autoDispose<List<EmployeeBirthdayToday>>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchEmployeeBirthdaysToday(),

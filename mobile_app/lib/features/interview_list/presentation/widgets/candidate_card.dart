@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/permissions/permission_providers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/candidate_entity.dart';
@@ -192,13 +193,20 @@ class _LogsButton extends StatelessWidget {
 
 // ── Edit button ──────────────────────────────────────────────────────────────
 
-class _EditButton extends StatelessWidget {
+/// Web interview-list page: "Edit" (update interview details) only with
+/// recruitment.edit and never for a converted candidate — the backend refuses
+/// both (403 / "Cannot edit a candidate who has already been converted").
+class _EditButton extends ConsumerWidget {
   final CandidateEntity candidate;
   const _EditButton({required this.candidate});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(permissionProvider('recruitment.edit')) || candidate.isConverted) {
+      return const SizedBox.shrink();
+    }
     return IconButton(
+      key: Key('candidate-edit-${candidate.id}'),
       onPressed: () => showDialog(
         context: context,
         builder: (_) => AddCandidateDialog(existing: candidate),

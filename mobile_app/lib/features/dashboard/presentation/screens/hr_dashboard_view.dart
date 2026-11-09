@@ -32,6 +32,7 @@ class HrDashboardView extends ConsumerWidget {
       ref.invalidate(sharedAnnouncementProvider);
       ref.invalidate(hrAttendanceSummaryProvider);
       ref.invalidate(hrActionQueueProvider);
+      ref.invalidate(hrSeparationQueueCountProvider);
       ref.invalidate(hrRecruitmentFunnelProvider);
       ref.invalidate(hrEmployeeLifecycleProvider);
       ref.invalidate(hrBirthdaysTodayProvider);
@@ -339,6 +340,11 @@ class _ActionQueueCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final queueAsync = ref.watch(hrActionQueueProvider);
     final user = ref.watch(authStateProvider).valueOrNull?.user;
+    // Web HrActionQueue: the separation figure comes from the separation API
+    // (team scope count) and is added to the pending total; the dashboard
+    // endpoint's own separation_requests is a hard-coded 0 and is ignored.
+    final separationAsync = ref.watch(hrSeparationQueueCountProvider);
+    final separationCount = separationAsync.valueOrNull;
 
     return SectionCard(
       title: 'Action Queue',
@@ -394,11 +400,19 @@ class _ActionQueueCard extends ConsumerWidget {
                 goToDashboardSection(context, AppRoutes.employees);
               },
             )),
-            (path: AppRoutes.separation, counted: false, row: ActionRow(
+            (path: AppRoutes.separation, counted: true, row: ActionRow(
+              key: const Key('hr-queue-separation'),
               icon: Icons.logout_outlined,
               iconColor: AppColors.secondary,
               title: 'Separation Requests',
-              count: queue.separationRequests,
+              // Unknown (loading / failed) counts as nothing in the total —
+              // web does the same — but the row says so instead of "0".
+              count: separationCount ?? 0,
+              countText: separationCount != null
+                  ? null
+                  : separationAsync.hasError
+                      ? '—'
+                      : '…',
               onTap: () => goToDashboardSection(context, AppRoutes.separation),
             )),
           ].where((r) => canAccessPath(user, r.path)).toList();

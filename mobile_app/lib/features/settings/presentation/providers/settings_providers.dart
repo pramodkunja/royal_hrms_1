@@ -52,15 +52,22 @@ class CompanyNotifier extends AutoDisposeAsyncNotifier<CompanyModel> {
   @override
   Future<CompanyModel> build() => _ds.fetchCompany();
 
-  Future<String?> save(CompanyModel model, {dynamic logoFile}) async {
+  /// [logoFile] uploads a new logo; otherwise [removeLogo] sends
+  /// `remove_logo=true` (web's Remove → Save). The provider changes only when
+  /// the server confirms the save.
+  Future<String?> save(CompanyModel model, {dynamic logoFile, bool removeLogo = false}) async {
     if (!canEditSettings(ref)) return kSettingsEditDenied;
-    state = const AsyncLoading();
+    final previous = state;
+    // Keep showing the loaded company while saving (a refresh, not a blank
+    // reload), and restore it if the save fails — a failed save must not
+    // replace the form or drop the current logo.
+    state = const AsyncLoading<CompanyModel>().copyWithPrevious(previous);
     try {
-      final updated = await _ds.saveCompany(model, logoFile: logoFile);
+      final updated = await _ds.saveCompany(model, logoFile: logoFile, removeLogo: removeLogo);
       state = AsyncData(updated);
       return null;
     } catch (e) {
-      state = AsyncError(e, StackTrace.current);
+      state = previous;
       return _friendly(e);
     }
   }
@@ -757,6 +764,14 @@ class RolesNotifier extends AutoDisposeAsyncNotifier<List<RoleModel>> {
       );
       return null;
     } catch (e) {
+      // 409: the role changed since the form was opened (web reloads the
+      // roles so a retry starts from current data). Reload here too; the
+      // form sees the newer updated_at and closes, as web does.
+      if (e is DioException && e.response?.statusCode == 409) {
+        try {
+          state = AsyncData((await _ds.fetchRoles()).roles);
+        } catch (_) {}
+      }
       return _friendly(e);
     }
   }
@@ -782,18 +797,137 @@ class RolesNotifier extends AutoDisposeAsyncNotifier<List<RoleModel>> {
 final auditFiltersProvider =
     StateProvider.autoDispose<AuditLogFilters>((ref) => const AuditLogFilters());
 
+/// Audit Log modules the backend actually writes (`AuditLog.module`, matched
+/// exactly by GET /settings/audit/?module=). Web's select offers a subset
+/// (accounts, settings, company, branch, announcements, birthday).
+const kAuditLogModules = <({String value, String label})>[
+  (value: 'accounts', label: 'Accounts'),
+  (value: 'announcements', label: 'Announcements'),
+  (value: 'assets', label: 'Assets'),
+  (value: 'birthday', label: 'Birthday'),
+  (value: 'branch', label: 'Branch'),
+  (value: 'company', label: 'Company'),
+  (value: 'company_financial_year', label: 'Financial Year'),
+  (value: 'documents', label: 'Documents'),
+  (value: 'employees', label: 'Employees'),
+  (value: 'leave', label: 'Leave'),
+  (value: 'payroll', label: 'Payroll'),
+  (value: 'recruitment', label: 'Recruitment'),
+  (value: 'settings', label: 'Settings'),
+  (value: 'voice_commands', label: 'Voice Commands'),
+  (value: 'wfh', label: 'Work From Home'),
+];
+
+/// The loaded audit entries for the current filters: pages 1..[page]
+/// appended in order, de-duplicated by id.
+class AuditLogState {
+  const AuditLogState({
+    required this.filters,
+    required this.entries,
+    required this.total,
+    required this.page,
+    required this.totalPages,
+    this.loadingMore = false,
+    this.loadMoreError,
+  });
+
+  final AuditLogFilters filters;
+  final List<AuditLogEntry> entries;
+  final int total;
+  final int page;
+  final int totalPages;
+  final bool loadingMore;
+  final String? loadMoreError;
+
+  bool get hasMore => page < totalPages;
+
+  AuditLogState copyWith({
+    List<AuditLogEntry>? entries,
+    int? total,
+    int? page,
+    int? totalPages,
+    bool? loadingMore,
+    String? loadMoreError,
+    bool clearLoadMoreError = false,
+  }) =>
+      AuditLogState(
+        filters: filters,
+        entries: entries ?? this.entries,
+        total: total ?? this.total,
+        page: page ?? this.page,
+        totalPages: totalPages ?? this.totalPages,
+        loadingMore: loadingMore ?? this.loadingMore,
+        loadMoreError: clearLoadMoreError ? null : (loadMoreError ?? this.loadMoreError),
+      );
+}
+
 final auditLogProvider =
-    AsyncNotifierProvider.autoDispose<AuditLogNotifier, AuditLogPage>(
+    AsyncNotifierProvider.autoDispose<AuditLogNotifier, AuditLogState>(
   AuditLogNotifier.new,
 );
 
-class AuditLogNotifier extends AutoDisposeAsyncNotifier<AuditLogPage> {
+/// GET /settings/audit/?module&search&date_from&date_to&page — newest first.
+/// Changing any filter (auditFiltersProvider) rebuilds from page 1; a
+/// first-page response for superseded filters is discarded by Riverpod.
+/// [loadMore] appends the next page; a response that arrives after the
+/// filters changed is dropped (generation check), and ids already shown are
+/// skipped (new events shift pages; Django also clamps a page past the end
+/// to the last page).
+class AuditLogNotifier extends AutoDisposeAsyncNotifier<AuditLogState> {
   SettingsRemoteDataSource get _ds => ref.read(settingsDataSourceProvider);
 
+  int _generation = 0;
+  bool _loadingMore = false;
+
   @override
-  Future<AuditLogPage> build() {
-    final filters = ref.watch(auditFiltersProvider);
-    return _ds.fetchAuditLog(filters);
+  Future<AuditLogState> build() async {
+    final filters = ref.watch(auditFiltersProvider).copyWith(page: 1);
+    _generation++;
+    _loadingMore = false;
+    final first = await _ds.fetchAuditLog(filters);
+    return AuditLogState(
+      filters: filters,
+      entries: _dedupe(const [], first.entries),
+      total: first.total,
+      page: 1,
+      totalPages: first.totalPages,
+    );
+  }
+
+  Future<void> loadMore() async {
+    final current = state.valueOrNull;
+    if (current == null || _loadingMore || !current.hasMore) return;
+    final generation = _generation;
+    final nextPage = current.page + 1;
+    _loadingMore = true;
+    state = AsyncData(current.copyWith(loadingMore: true, clearLoadMoreError: true));
+    try {
+      final next = await _ds.fetchAuditLog(current.filters.copyWith(page: nextPage));
+      if (generation != _generation) return; // filters changed meanwhile
+      final base = state.valueOrNull ?? current;
+      state = AsyncData(base.copyWith(
+        entries: _dedupe(base.entries, next.entries),
+        total: next.total,
+        page: nextPage,
+        totalPages: next.totalPages,
+        loadingMore: false,
+      ));
+    } catch (e) {
+      if (generation != _generation) return;
+      final base = state.valueOrNull ?? current;
+      state = AsyncData(base.copyWith(loadingMore: false, loadMoreError: _friendly(e)));
+    } finally {
+      if (generation == _generation) _loadingMore = false;
+    }
+  }
+
+  static List<AuditLogEntry> _dedupe(List<AuditLogEntry> existing, List<AuditLogEntry> incoming) {
+    final seen = existing.map((e) => e.id).toSet();
+    return [
+      ...existing,
+      for (final e in incoming)
+        if (seen.add(e.id)) e,
+    ];
   }
 }
 
@@ -879,6 +1013,9 @@ String friendlySettingsError(Object e) => _friendly(e);
 // parseDioException() instead, which reads the real
 // {status, message, data} envelope. Backs every settings-screen mutation in
 // this file, including attendance rules and leave-policy CRUD.
+/// User-facing message for an Audit Log load failure.
+String friendlyAuditError(Object e) => _friendly(e);
+
 String _friendly(Object e) {
   if (e is DioException) return parseDioException(e).message;
   final msg = e.toString();

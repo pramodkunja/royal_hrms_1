@@ -60,6 +60,24 @@ class SeparationRemoteDataSource {
     return SeparationRequestPageModel.fromJson(_unwrap(res.data));
   }
 
+  /// The HR action-queue "Separation Requests" figure, exactly as web's
+  /// HrActionQueue reads it: GET /separation/requests/?scope=team&page_size=1
+  /// and the paginated envelope's `count` — the server's total across all
+  /// pages for this viewer's approval scope (_approval_scope_filter: own
+  /// requests excluded; branch / direct reports / company-wide by role). No
+  /// status filter, as on web. Only `count` is trusted: a missing or invalid
+  /// value throws rather than falling back to the one-row page's length.
+  Future<int> fetchTeamRequestCount() async {
+    final res = await _dio.get(ApiConstants.separationRequests,
+        queryParameters: {'scope': 'team', 'page_size': 1});
+    final data = _unwrap(res.data);
+    final count = data is Map ? data['count'] : null;
+    if (count is! num || !count.isFinite || count < 0 || count != count.roundToDouble()) {
+      throw const FormatException('Separation request count missing from the server response.');
+    }
+    return count.toInt();
+  }
+
   Future<SeparationRequestModel> fetchRequestById(String id) async {
     final res = await _dio.get(ApiConstants.separationRequestDetail(id));
     return SeparationRequestModel.fromJson(

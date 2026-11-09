@@ -352,3 +352,81 @@ class EmployeeBirthdayToday {
     return list.whereType<Map>().map((m) => EmployeeBirthdayToday.fromJson(Map<String, dynamic>.from(m))).toList();
   }
 }
+
+/// A person on web's Team / Manager birthday card
+/// (GET /dashboard/birthdays/mine/ → `team[]` / `manager`). The card shows
+/// only the name and the company's message; [email], [department] and
+/// [designation] are kept solely for "Send Wishes" (web SendWishModal), and
+/// the response's date of birth is not read at all.
+class BirthdayWidgetPerson {
+  final String employeeId;
+  final String fullName;
+  final String message;
+  final String email;
+  final String department;
+  final String designation;
+
+  const BirthdayWidgetPerson({
+    required this.employeeId,
+    required this.fullName,
+    required this.message,
+    this.email = '',
+    this.department = '',
+    this.designation = '',
+  });
+
+  factory BirthdayWidgetPerson.fromJson(Map<String, dynamic> json) => BirthdayWidgetPerson(
+        employeeId: json['employee_id']?.toString() ?? '',
+        fullName: json['full_name']?.toString() ?? '',
+        message: json['message']?.toString() ?? '',
+        email: json['email']?.toString() ?? '',
+        department: json['department']?.toString() ?? '',
+        designation: json['designation']?.toString() ?? '',
+      );
+}
+
+/// `data` of GET /dashboard/birthdays/mine/: `{team: [...], manager: {...} | null}`.
+class MyBirthdayWidgets {
+  final List<BirthdayWidgetPerson> team;
+  final BirthdayWidgetPerson? manager;
+
+  const MyBirthdayWidgets({required this.team, this.manager});
+
+  static const empty = MyBirthdayWidgets(team: []);
+
+  factory MyBirthdayWidgets.fromResponseData(Object? data) {
+    if (data is! Map) return empty;
+    final team = data['team'];
+    final manager = data['manager'];
+    return MyBirthdayWidgets(
+      team: team is List
+          ? team.whereType<Map>().map((m) => BirthdayWidgetPerson.fromJson(Map<String, dynamic>.from(m))).toList()
+          : const [],
+      manager: manager is Map ? BirthdayWidgetPerson.fromJson(Map<String, dynamic>.from(manager)) : null,
+    );
+  }
+}
+
+/// Web EmpPromotionCelebration: the newest unread promotion notification
+/// (GET /notifications/?notification_type=promotion&is_read=false&page_size=1).
+class PromotionCelebration {
+  final String id;
+  final String title;
+  final String message;
+
+  const PromotionCelebration({required this.id, required this.title, required this.message});
+
+  /// `data.results[0]`, or null when there is none.
+  static PromotionCelebration? fromListData(Object? data) {
+    final results = data is Map ? data['results'] : null;
+    if (results is! List || results.isEmpty || results.first is! Map) return null;
+    final n = Map<String, dynamic>.from(results.first as Map);
+    final id = n['id']?.toString() ?? '';
+    if (id.isEmpty) return null;
+    return PromotionCelebration(
+      id: id,
+      title: n['title']?.toString() ?? '',
+      message: n['message']?.toString() ?? '',
+    );
+  }
+}

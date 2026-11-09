@@ -43,6 +43,11 @@ class _AddCandidateFormContent extends StatelessWidget {
   final ValueChanged<int?> onBranchChanged;
   final ValueChanged<String?> onModeChanged;
   final ValueChanged<DateTime?> onDateChanged;
+  final TimeOfDay? interviewTime;
+  final ValueChanged<TimeOfDay?> onTimeChanged;
+  final TextEditingController meetingLinkCtrl;
+  final EmployeePickerOption? interviewer;
+  final ValueChanged<EmployeePickerOption?> onInterviewerChanged;
   final ScrollController scrollCtrl;
 
   const _AddCandidateFormContent({
@@ -65,6 +70,11 @@ class _AddCandidateFormContent extends StatelessWidget {
     required this.onBranchChanged,
     required this.onModeChanged,
     required this.onDateChanged,
+    required this.interviewTime,
+    required this.onTimeChanged,
+    required this.meetingLinkCtrl,
+    required this.interviewer,
+    required this.onInterviewerChanged,
     required this.scrollCtrl,
   });
 
@@ -103,7 +113,25 @@ class _AddCandidateFormContent extends StatelessWidget {
           const SizedBox(height: 14),
           _branchDropdown(context),
           const SizedBox(height: 14),
-          _row(_datePicker(context), _modePicker()),
+          _row(_datePicker(context), _timePicker(context)),
+          // Web Edit: shown once a date is being set for the first time.
+          if (isEdit && originalInterviewDate == null && interviewDate != null) ...[
+            const SizedBox(height: 6),
+            Row(children: [
+              Icon(Icons.mail_outline, size: 13, color: AppColors.info),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text('An interview invitation email will be sent to the candidate.',
+                    key: const Key('candidate-invite-note'),
+                    style: AppTextStyles.labelSmall.copyWith(color: AppColors.info)),
+              ),
+            ]),
+          ],
+          const SizedBox(height: 14),
+          _row(_modePicker(),
+              mode == 'video_call' ? _meetingLinkField() : const SizedBox.shrink()),
+          const SizedBox(height: 14),
+          _interviewerPicker(),
           const SizedBox(height: 14),
           _notesField(),
           const SizedBox(height: 20),
@@ -226,17 +254,97 @@ class _AddCandidateFormContent extends StatelessWidget {
             Icon(Icons.calendar_today_outlined,
                 size: 14, color: AppColors.textHint),
             const SizedBox(width: 8),
-            Text(
-              interviewDate == null
-                  ? 'dd/mm/yyyy'
-                  : '${interviewDate!.day}/${interviewDate!.month}/${interviewDate!.year}',
-              style: AppTextStyles.bodySmall.copyWith(
-                  color: interviewDate == null
-                      ? AppColors.textHint
-                      : AppColors.textPrimary),
+            Expanded(
+              child: Text(
+                interviewDate == null
+                    ? 'dd/mm/yyyy'
+                    : '${interviewDate!.day}/${interviewDate!.month}/${interviewDate!.year}',
+                style: AppTextStyles.bodySmall.copyWith(
+                    color: interviewDate == null
+                        ? AppColors.textHint
+                        : AppColors.textPrimary),
+              ),
             ),
+            // Web's date input can be emptied; an edit then sends null.
+            if (interviewDate != null)
+              GestureDetector(
+                key: const Key('candidate-interview-date-clear'),
+                onTap: () => onDateChanged(null),
+                child: Icon(Icons.close, size: 14, color: AppColors.textHint),
+              ),
           ]),
         ),
+      ),
+    ]);
+  }
+
+  Widget _timePicker(BuildContext context) {
+    final t = interviewTime;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Interview Time', style: _labelStyle),
+      const SizedBox(height: 6),
+      GestureDetector(
+        key: const Key('candidate-interview-time'),
+        onTap: () async {
+          final picked = await showTimePicker(
+            context: context,
+            initialTime: t ?? const TimeOfDay(hour: 10, minute: 0),
+          );
+          if (picked != null) onTimeChanged(picked);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(8),
+            color: AppColors.surface,
+          ),
+          child: Row(children: [
+            Icon(Icons.schedule, size: 14, color: AppColors.textHint),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                t == null ? '--:--' : formatInterviewTime(t),
+                style: AppTextStyles.bodySmall.copyWith(
+                    color: t == null ? AppColors.textHint : AppColors.textPrimary),
+              ),
+            ),
+            if (t != null)
+              GestureDetector(
+                key: const Key('candidate-interview-time-clear'),
+                onTap: () => onTimeChanged(null),
+                child: Icon(Icons.close, size: 14, color: AppColors.textHint),
+              ),
+          ]),
+        ),
+      ),
+    ]);
+  }
+
+  Widget _meetingLinkField() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Meeting Link', style: _labelStyle),
+      const SizedBox(height: 6),
+      TextFormField(
+        key: const Key('candidate-meeting-link'),
+        controller: meetingLinkCtrl,
+        keyboardType: TextInputType.url,
+        style: AppTextStyles.bodySmall,
+        decoration: _inputDec('https://meet.google.com/...'),
+      ),
+    ]);
+  }
+
+  Widget _interviewerPicker() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Interviewer', style: _labelStyle),
+      const SizedBox(height: 6),
+      EmployeePickerField(
+        key: const Key('candidate-interviewer'),
+        value: interviewer,
+        onChanged: onInterviewerChanged,
+        enabled: !loading,
+        hintText: 'Search interviewer by name or ID…',
       ),
     ]);
   }

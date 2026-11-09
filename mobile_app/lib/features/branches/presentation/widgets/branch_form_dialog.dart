@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../domain/branch_geofence.dart';
 import '../../domain/entities/branch_entity.dart';
 import '../providers/branch_providers.dart';
 import 'branch_dlg_header.dart';
 import 'branch_location_selector.dart';
+import 'branch_admin_reassign.dart';
 
 class BranchFormDialog extends ConsumerStatefulWidget {
   final BranchEntity? branch;
@@ -26,6 +28,16 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
   String? _nameError;
   String? _addressError;
 
+  // Geofencing (web Add/Edit Branch form): toggle + latitude / longitude
+  // (degrees) + allowed radius (metres, default 150).
+  bool _geoEnabled = false;
+  final _latCtrl = TextEditingController();
+  final _lonCtrl = TextEditingController();
+  final _radiusCtrl = TextEditingController(text: '${BranchGeofence.kDefaultRadius}');
+  Map<String, String> _geoErrors = const {};
+  // Server error from the last save, shown in the form; values are kept.
+  String? _saveError;
+
   bool get _isAdd => widget.branch == null;
 
   @override
@@ -37,6 +49,10 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
       _addressCtrl.text = b.address;
       _status = b.status;
       _isHeadquarter = b.isHeadquarter;
+      _geoEnabled = b.geofencingEnabled;
+      _latCtrl.text = b.latitude?.toString() ?? '';
+      _lonCtrl.text = b.longitude?.toString() ?? '';
+      _radiusCtrl.text = '${b.allowedRadiusMeters}';
     }
   }
 
@@ -44,6 +60,9 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
   void dispose() {
     _nameCtrl.dispose();
     _addressCtrl.dispose();
+    _latCtrl.dispose();
+    _lonCtrl.dispose();
+    _radiusCtrl.dispose();
     super.dispose();
   }
 
@@ -134,7 +153,11 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
                         border: Border.all(color: AppColors.border),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: CheckboxListTile(
+                      // Own Material so the tile's ink isn't hidden by the
+                      // form's coloured background (debug ListTile assertion).
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: CheckboxListTile(
                         value: _isHeadquarter,
                         onChanged: (val) =>
                             setState(() => _isHeadquarter = val ?? false),
@@ -151,8 +174,37 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
                       ),
+                      ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
+                    _buildGeofence(),
+                    // Web Edit Branch form: "Branch Admin" with Change / Assign
+                    // (the same flow as the details sheet). The branch is read
+                    // from the live list so a reassignment shows here at once.
+                    if (!_isAdd) ...[
+                      const SizedBox(height: 16),
+                      BranchAdminSection(
+                        key: const Key('edit-branch-admin'),
+                        branch: ref.watch(branchListProvider).valueOrNull?.where((b) => b.id == branch!.id).firstOrNull ??
+                            branch!,
+                        closeOnSuccess: false,
+                      ),
+                    ] else
+                      const SizedBox(height: 20),
+                    if (_saveError != null) ...[
+                      Container(
+                        key: const Key('branch-form-error'),
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(_saveError!, style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+                      ),
+                    ],
                     FilledButton(
                       onPressed: _saving ? null : _submit,
                       style: FilledButton.styleFrom(
@@ -184,6 +236,75 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
     );
   }
 
+  void _clearGeoError(String key) {
+    if (_geoErrors.containsKey(key)) setState(() => _geoErrors = {..._geoErrors}..remove(key));
+  }
+
+  Widget _buildGeofence() {
+    return Container(
+      key: const Key('branch-geofence'),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Material(
+          type: MaterialType.transparency,
+          child: SwitchListTile(
+            key: const Key('branch-geofence-toggle'),
+            value: _geoEnabled,
+            contentPadding: EdgeInsets.zero,
+            title: Text('Enable Geofencing', style: AppTextStyles.label),
+            activeTrackColor: AppColors.primary,
+            onChanged: _saving
+                ? null
+                : (v) => setState(() {
+                      _geoEnabled = v;
+                      _geoErrors = const {};
+                    }),
+          ),
+        ),
+        if (_geoEnabled) ...[
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(
+              child: TextField(
+                key: const Key('branch-geofence-latitude'),
+                controller: _latCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                onChanged: (_) => _clearGeoError('latitude'),
+                decoration: _dec('Latitude *', _geoErrors['latitude']).copyWith(hintText: 'e.g. 19.0760'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                key: const Key('branch-geofence-longitude'),
+                controller: _lonCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                onChanged: (_) => _clearGeoError('longitude'),
+                decoration: _dec('Longitude *', _geoErrors['longitude']).copyWith(hintText: 'e.g. 72.8777'),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 6),
+          Text(
+            'Enter the GPS coordinates of the office entrance. Use Google Maps — right-click the location and copy the coordinates.',
+            style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            key: const Key('branch-geofence-radius'),
+            controller: _radiusCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => _clearGeoError('allowed_radius_meters'),
+            decoration: _dec('Allowed Radius (metres) *', _geoErrors['allowed_radius_meters']),
+          ),
+        ],
+      ]),
+    );
+  }
+
   bool _validate() {
     final locationOk =
         _locationKey.currentState?.validate() ?? false;
@@ -201,9 +322,21 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
   }
 
   Future<void> _submit() async {
-    if (!_validate()) return;
+    if (_saving) return;
+    final coreOk = _validate();
+    final geo = validateBranchGeofence(
+      enabled: _geoEnabled,
+      latitude: _latCtrl.text,
+      longitude: _lonCtrl.text,
+      radius: _radiusCtrl.text,
+    );
+    setState(() => _geoErrors = geo.errors);
+    if (!coreOk || geo.value == null) return;
     final locState = _locationKey.currentState!;
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
     final notifier = ref.read(branchListProvider.notifier);
 
     final String? result;
@@ -215,6 +348,7 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
         address: _addressCtrl.text.trim(),
         status: _status,
         isHeadquarter: _isHeadquarter,
+        geofence: geo.value,
       );
     } else {
       result = await notifier.edit(
@@ -225,6 +359,7 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
         address: _addressCtrl.text.trim(),
         status: _status,
         isHeadquarter: _isHeadquarter,
+        geofence: geo.value,
       );
     }
 
@@ -236,13 +371,9 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
       ref.read(branchStatsProvider.notifier).refresh();
       ref.read(branchDistributionProvider.notifier).refresh();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ));
+      // Shown inside the dialog (it would sit behind it as a snackbar); every
+      // entered value is kept for a retry.
+      setState(() => _saveError = result);
     }
   }
 

@@ -11,6 +11,12 @@ import '../widgets/settings_app_bar.dart';
 import 'widgets/company_form_fields.dart';
 import 'widgets/financial_year_section.dart';
 
+/// Picks a new company logo image (gallery). Tests override it.
+final companyLogoPickerProvider = Provider<Future<File?> Function()>((ref) => () async {
+      final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 80);
+      return picked == null ? null : File(picked.path);
+    });
+
 class CompanyScreen extends ConsumerStatefulWidget {
   const CompanyScreen({super.key});
 
@@ -23,6 +29,10 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
   CompanyModel? _draft;
   File? _logoFile;
   bool _saving = false;
+
+  /// Web `logoRemoved`: the saved logo is marked for removal; it is sent as
+  /// `remove_logo=true` on Save. Nothing changes on the server until then.
+  bool _logoRemoved = false;
 
   @override
   Widget build(BuildContext context) {
@@ -39,16 +49,19 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
         error: (err, _) => _ErrorView(message: err.toString()),
         data: (company) {
           _draft ??= company;
-          final hasLogo = _logoFile != null || (_draft!.logoUrl?.isNotEmpty ?? false);
+          // Web displayLogo: picked image ?? (removed ? none : saved logo).
+          final hasLogo = _logoFile != null ||
+              (!_logoRemoved && (_draft!.logoUrl?.isNotEmpty ?? false));
           return _Body(
             formKey: _formKey,
             company: _draft!,
             logoFile: _logoFile,
+            logoRemoved: _logoRemoved,
             isSaving: _saving,
             canEdit: canEdit,
             onChanged: (updated) => setState(() => _draft = updated),
             onLogoTap: canEdit ? _pickLogo : null,
-            onRemoveLogo: canEdit && hasLogo ? _removeLogo : null,
+            onRemoveLogo: canEdit && hasLogo && !_saving ? _removeLogo : null,
             onSave: _submit,
           );
         },
@@ -57,27 +70,46 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
   }
 
   Future<void> _pickLogo() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-    if (picked != null) setState(() => _logoFile = File(picked.path));
-  }
-
-  void _removeLogo() {
+    final picked = await ref.read(companyLogoPickerProvider)();
+    if (picked == null || !mounted) return;
+    // Web handleLogoChange: a new image replaces any pending removal.
     setState(() {
-      if (_logoFile != null) {
-        _logoFile = null;
-      } else {
-        _draft = _draft!.copyWith(logoUrl: '');
-      }
+      _logoFile = picked;
+      _logoRemoved = false;
     });
   }
+
+  /// Web handleLogoRemove: local only — drops a picked image and marks the
+  /// saved logo for removal. No request, no confirmation.
+  void _removeLogo() => setState(() {
+        _logoFile = null;
+        _logoRemoved = true;
+      });
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _saving = true);
-    final error = await ref.read(companyProvider.notifier).save(_draft!, logoFile: _logoFile);
+    // Web precedence: a picked file is uploaded; otherwise a pending removal
+    // is sent as remove_logo=true; otherwise the logo is left alone.
+    final error = await ref.read(companyProvider.notifier).save(
+          _draft!,
+          logoFile: _logoFile,
+          removeLogo: _logoFile == null && _logoRemoved,
+        );
     if (!mounted) return;
-    setState(() => _saving = false);
+    setState(() {
+      _saving = false;
+      if (error == null) {
+        // The form now mirrors what the server saved (incl. its logo_url);
+        // the picked file / pending removal have been applied.
+        final saved = ref.read(companyProvider).valueOrNull;
+        if (saved != null) _draft = saved;
+        _logoFile = null;
+        _logoRemoved = false;
+      }
+      // On failure everything is kept (form edits, picked file, pending
+      // removal) so the user can retry; the saved company is unchanged.
+    });
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(error ?? 'Company info saved successfully.'),
       backgroundColor: error == null ? AppColors.success : AppColors.error,
@@ -93,6 +125,7 @@ class _Body extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final CompanyModel company;
   final File? logoFile;
+  final bool logoRemoved;
   final bool isSaving;
   final bool canEdit;
   final ValueChanged<CompanyModel> onChanged;
@@ -104,6 +137,7 @@ class _Body extends StatelessWidget {
     required this.formKey,
     required this.company,
     required this.logoFile,
+    required this.logoRemoved,
     required this.isSaving,
     required this.canEdit,
     required this.onChanged,
@@ -122,7 +156,8 @@ class _Body extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _LogoSection(
-              currentUrl: company.logoUrl,
+              // A pending removal hides the saved logo locally until Save.
+              currentUrl: logoRemoved ? null : company.logoUrl,
               logoFile: logoFile,
               companyName: company.companyName,
               onTap: onLogoTap,
@@ -288,6 +323,7 @@ class _LogoSection extends StatelessWidget {
                         top: -5,
                         left: -5,
                         child: GestureDetector(
+                          key: const Key('company-logo-remove'),
                           onTap: onRemove,
                           child: Container(
                             width: 26,

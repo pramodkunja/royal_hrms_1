@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -26,6 +27,7 @@ import '../widgets/punch_location_section.dart';
 import '../widgets/shift_assignment_tab.dart';
 import '../widgets/weekly_off_assignment_tab.dart';
 import '../widgets/hr_correction_card.dart';
+import '../widgets/record_corrections_section.dart';
 
 // ─── Colour helpers ───────────────────────────────────────────────────────────
 
@@ -1300,6 +1302,20 @@ final attendanceImportDatePickerProvider =
           );
         });
 
+/// Saves web's "Download Error Report" CSV (tests override it).
+final attendanceImportReportSaverProvider =
+    Provider<Future<String?> Function(String fileName, Uint8List bytes)>((ref) => (fileName, bytes) =>
+        FilePicker.platform.saveFile(fileName: fileName, bytes: bytes, type: FileType.custom, allowedExtensions: ['csv']));
+
+/// Web ACTION_LABEL for preview rows.
+const _kImportActionLabel = {
+  'create': 'New record',
+  'create_on_leave': 'New (approved leave day)',
+  'update': 'Replaces existing',
+  'skip_on_leave': 'Skipped — on leave',
+  'skip_duplicate': 'Skipped — duplicate row',
+};
+
 enum _ImportMode { bulk, single }
 
 class _ImportAttendanceDialog extends ConsumerStatefulWidget {
@@ -1322,6 +1338,15 @@ class _ImportAttendanceDialogState
   sep.EmployeePickerOption? _employee;
   DateTime? _dateFrom;
   DateTime? _dateTo;
+
+  /// The dry-run answer being reviewed, and exactly what was sent for it —
+  /// the confirmed import re-sends that same file and filters.
+  ImportPreviewEntity? _preview;
+  ({List<int> bytes, String name, AttendanceSingleImport? single})? _previewRequest;
+
+  /// Bumped on every form change; a preview that comes back after the form
+  /// changed is stale and ignored.
+  int _formVersion = 0;
 
   Future<void> _downloadSample(String format) async {
     setState(() => _downloadingSample = true);
@@ -1361,6 +1386,7 @@ class _ImportAttendanceDialogState
     setState(() {
       _file = file;
       _error = null;
+      _formVersion++;
     });
   }
 
@@ -1374,6 +1400,7 @@ class _ImportAttendanceDialogState
       _dateFrom = null;
       _dateTo = null;
       _error = null;
+      _formVersion++;
     });
   }
 
@@ -1387,10 +1414,12 @@ class _ImportAttendanceDialogState
         _dateTo = picked;
       }
       _error = null;
+      _formVersion++;
     });
   }
 
-  Future<void> _upload() async {
+  /// Web runPreview: the dry run of the current form. Nothing is saved.
+  Future<void> _runPreview() async {
     if (_uploading) return;
     final file = _file;
     if (file == null || file.bytes == null) {
@@ -1407,17 +1436,23 @@ class _ImportAttendanceDialogState
         return;
       }
     }
+    final request = (bytes: file.bytes!.toList(), name: file.name, single: single);
+    final version = _formVersion;
     setState(() {
       _uploading = true;
       _error = null;
     });
     try {
-      final result = await ref
-          .read(attendanceImportActionProvider)
-          .upload(file.bytes!, file.name, single: single);
+      final preview =
+          await ref.read(attendanceImportActionProvider).preview(request.bytes, request.name, single: request.single);
       if (!mounted) return;
+      if (version != _formVersion) {
+        setState(() => _uploading = false); // the form changed meanwhile — stale
+        return;
+      }
       setState(() {
-        _result = result;
+        _preview = preview;
+        _previewRequest = request;
         _uploading = false;
       });
     } catch (e) {
@@ -1429,44 +1464,113 @@ class _ImportAttendanceDialogState
     }
   }
 
+  /// Web confirmImport: the real import of exactly the previewed file and
+  /// filters (no dry_run). Attendance reloads only after this succeeds.
+  Future<void> _confirmImport() async {
+    final request = _previewRequest;
+    if (_uploading || request == null || (_preview?.importable ?? 0) == 0) return;
+    setState(() {
+      _uploading = true;
+      _error = null;
+    });
+    try {
+      final result =
+          await ref.read(attendanceImportActionProvider).upload(request.bytes, request.name, single: request.single);
+      if (!mounted) return;
+      setState(() {
+        _result = result;
+        _preview = null;
+        _uploading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      // Stay on the preview; the same request can be confirmed again.
+      setState(() {
+        _error = friendlyAttendanceError(e);
+        _uploading = false;
+      });
+    }
+  }
+
+  /// Web resetToForm (Back): drop the preview; nothing is sent.
+  void _backToForm() => setState(() {
+        _preview = null;
+        _previewRequest = null;
+        _error = null;
+      });
+
+  Future<void> _downloadReport(String base64Csv) async {
+    try {
+      final saved = await ref.read(attendanceImportReportSaverProvider)(
+          'attendance_import_errors.csv', base64Decode(base64Csv));
+      if (saved != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: const Text('Error report downloaded.'), backgroundColor: AppColors.success));
+      }
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not save the error report.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final result = _result;
-    return AlertDialog(
-      title: const Text('Import Attendance'),
-      content: SizedBox(
-        width: 340,
-        child: SingleChildScrollView(
-          child: result != null ? _buildResult(result) : _buildPicker(),
+    final preview = _preview;
+    Widget spinner() => const SizedBox(
+        width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white));
+    final importable = preview?.importable ?? 0;
+    return PopScope(
+      canPop: !_uploading,
+      child: AlertDialog(
+        title: const Text('Import Attendance'),
+        content: SizedBox(
+          width: 340,
+          child: SingleChildScrollView(
+            child: result != null
+                ? _buildResult(result)
+                : preview != null
+                    ? _buildPreview(preview)
+                    : _buildPicker(),
+          ),
         ),
+        actions: result != null
+            ? [
+                TextButton(
+                    key: const Key('attendance-import-done'),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Done'))
+              ]
+            : preview != null
+                ? [
+                    TextButton(
+                      key: const Key('attendance-import-back'),
+                      onPressed: _uploading ? null : _backToForm,
+                      child: const Text('Back'),
+                    ),
+                    ElevatedButton(
+                      key: const Key('attendance-import-confirm'),
+                      onPressed: _uploading || importable == 0 ? null : _confirmImport,
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                      child: _uploading
+                          ? spinner()
+                          : Text('Import $importable record${importable == 1 ? '' : 's'}'),
+                    ),
+                  ]
+                : [
+                    TextButton(
+                      onPressed: _uploading ? null : () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      key: const Key('attendance-import-preview'),
+                      onPressed: _uploading ? null : _runPreview,
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                      child: _uploading ? spinner() : const Text('Preview'),
+                    ),
+                  ],
       ),
-      actions: result != null
-          ? [
-              TextButton(
-                  key: const Key('attendance-import-done'),
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Done'))
-            ]
-          : [
-              TextButton(
-                onPressed: _uploading ? null : () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                key: const Key('attendance-import-upload'),
-                onPressed: _uploading ? null : _upload,
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white),
-                child: _uploading
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : const Text('Upload'),
-              ),
-            ],
     );
   }
 
@@ -1543,6 +1647,7 @@ class _ImportAttendanceDialogState
                           } else {
                             _dateTo = null;
                           }
+                          _formVersion++;
                         }),
               ),
           ]),
@@ -1576,6 +1681,7 @@ class _ImportAttendanceDialogState
             onChanged: (e) => setState(() {
               _employee = e;
               _error = null;
+              _formVersion++;
             }),
           ),
           const SizedBox(height: 8),
@@ -1650,6 +1756,106 @@ class _ImportAttendanceDialogState
     );
   }
 
+  Widget _errorList(List<ImportRowErrorEntity> errors, int total, String? reportCsv) {
+    if (errors.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 10),
+      Row(children: [
+        Expanded(
+          child: Text('$total row${total == 1 ? '' : 's'} with errors (not imported)',
+              key: const Key('attendance-import-errors-title'),
+              style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.error)),
+        ),
+        if (reportCsv != null)
+          TextButton(
+            key: const Key('attendance-import-report'),
+            onPressed: () => _downloadReport(reportCsv),
+            child: const Text('Download Error Report'),
+          ),
+      ]),
+      ...errors.map((e) {
+        final where = [e.employee, e.date].where((s) => s.isNotEmpty).join(' · ');
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Row ${e.row}${where.isEmpty ? '' : ' ($where)'}: ${e.message}',
+                style: AppTextStyles.labelSmall.copyWith(color: AppColors.error)),
+            if (e.resolution.isNotEmpty)
+              Text(e.resolution, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
+          ]),
+        );
+      }),
+    ]);
+  }
+
+  /// Web preview step: who it's for, the server's plan, warnings, row
+  /// errors (not imported) and the rows that would be imported.
+  Widget _buildPreview(ImportPreviewEntity p) {
+    Color actionColor(String a) => switch (a) {
+          'create' => AppColors.success,
+          'create_on_leave' => AppColors.info,
+          'update' => AppColors.warning,
+          _ => AppColors.textSecondary,
+        };
+    return Column(
+      key: const Key('attendance-import-preview-view'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${p.employeeName != null ? '${p.employeeName} (${p.employeeCode})' : 'All employees'} — ${p.message}',
+          key: const Key('attendance-import-preview-message'),
+          style: AppTextStyles.bodySmall,
+        ),
+        const SizedBox(height: 10),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final t in [
+            ('Rows in file', p.totalRecords, AppColors.primary),
+            ('New records', p.toCreate, AppColors.success),
+            ('Replace existing', p.toUpdate, AppColors.warning),
+            ('Skipped', p.skipped, AppColors.warning),
+            ('Errors', p.failed, AppColors.error),
+          ])
+            SizedBox(width: 100, child: _KV(k: t.$1, v: '${t.$2}', vColor: t.$2 > 0 ? t.$3 : null)),
+        ]),
+        if (p.toUpdate > 0) ...[
+          const SizedBox(height: 10),
+          Text('${p.toUpdate} row(s) will replace the punch times of an existing attendance record for that day.',
+              key: const Key('attendance-import-replace-warning'),
+              style: AppTextStyles.labelSmall.copyWith(color: AppColors.warning)),
+        ],
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(_error!,
+              key: const Key('attendance-import-error'),
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+        ],
+        _errorList(p.errors, p.failed, p.errorReportCsv),
+        if (p.rows.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text('Rows to import${p.rowsTruncated ? ' (first ${p.rows.length} shown)' : ''}',
+              style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
+          const SizedBox(height: 4),
+          for (final r in p.rows)
+            Padding(
+              key: Key('attendance-import-row-${r.row}'),
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(
+                  child: Text(
+                    'Row ${r.row} · ${r.employeeName} · ${r.employeeId}\n${r.date}  ${r.punchIn.isEmpty ? '—' : r.punchIn}–${r.punchOut.isEmpty ? '—' : r.punchOut}',
+                    style: AppTextStyles.labelSmall,
+                  ),
+                ),
+                Text(_kImportActionLabel[r.action] ?? r.action,
+                    style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w700, color: actionColor(r.action))),
+              ]),
+            ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildResult(ImportResultEntity r) {
     if (r.isQueued) {
       // Web: the message up to " Poll ", then a note to check back.
@@ -1691,33 +1897,8 @@ class _ImportAttendanceDialogState
                   v: '${r.skipped}',
                   vColor: r.skipped > 0 ? AppColors.warning : null)),
         ]),
-        if (r.errors.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          const Divider(height: 1),
-          const SizedBox(height: 8),
-          Text('First errors',
-              style: AppTextStyles.label
-                  .copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
-          const SizedBox(height: 4),
-          ...r.errors.take(5).map((e) {
-            final where = [e.employee, e.date].where((s) => s.isNotEmpty).join(' · ');
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Row ${e.row}${where.isEmpty ? '' : ' ($where)'}: ${e.message}',
-                      style: AppTextStyles.labelSmall
-                          .copyWith(color: AppColors.error)),
-                  if (e.resolution.isNotEmpty)
-                    Text(e.resolution,
-                        style: AppTextStyles.labelSmall
-                            .copyWith(color: AppColors.textSecondary)),
-                ],
-              ),
-            );
-          }),
-        ],
+        // Row errors, with web's error report download.
+        _errorList(r.errors.take(5).toList(), r.failed, r.errorReportCsv),
       ],
     );
   }
@@ -1777,40 +1958,14 @@ class _AttendanceCard extends ConsumerWidget {
                           style: AppTextStyles.label.copyWith(
                               fontWeight: FontWeight.w600, fontSize: 12)),
                       const SizedBox(height: 6),
-                      Consumer(builder: (context, ref, _) {
-                        final correctionsAsync = ref.watch(
-                          attendanceRecordCorrectionsProvider(
-                              (employeeId: d.employeeId, date: d.date)),
-                        );
-                        return correctionsAsync.when(
-                          data: (rows) => rows.isEmpty
-                              ? Text('No correction requests for this day.',
-                                  style: AppTextStyles.labelSmall
-                                      .copyWith(color: AppColors.textSecondary))
-                              : Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: rows
-                                      .map((c) => Padding(
-                                            padding: const EdgeInsets.only(
-                                                bottom: 6),
-                                            child: Text(
-                                              '${c.punchType} · ${c.reason} · ${c.status}',
-                                              style: AppTextStyles.bodySmall,
-                                            ),
-                                          ))
-                                      .toList(),
-                                ),
-                          loading: () => const SizedBox(
-                            height: 20,
-                            child: Center(
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2)),
-                          ),
-                          error: (e, _) => Text(friendlyAttendanceError(e),
-                              style: AppTextStyles.labelSmall
-                                  .copyWith(color: AppColors.error)),
-                        );
-                      }),
+                      // Web AttendanceDetailDrawer: pending corrections can
+                      // be approved/rejected here by attendance.create holders.
+                      RecordCorrectionsSection(
+                        employeeId: d.employeeId,
+                        date: d.date,
+                        detailKey: key,
+                        recordId: d.recordId,
+                      ),
                       const SizedBox(height: 12),
                       Divider(height: 1, color: AppColors.backgroundLow),
                       const SizedBox(height: 10),

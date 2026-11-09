@@ -9,6 +9,7 @@ import '../../../settings/data/models/roles_model.dart';
 import '../../../settings/presentation/providers/settings_providers.dart';
 import '../../data/datasources/employees_remote_datasource.dart';
 import '../../data/models/employee_model.dart';
+import '../../data/models/promotion_record_model.dart';
 
 // ── DataSource ─────────────────────────────────────────────────────────────────
 
@@ -555,5 +556,86 @@ class EmployeePasswordResetter {
     } finally {
       _inFlight.remove(employeeId);
     }
+  }
+}
+
+// ── HR-created custom fields on the employee profile ──────────────────────────
+// Web employees/[id]/page.tsx: editing and file upload/delete under
+// employees.edit (the backend also checks branch scope and returns 403/404).
+
+const kCustomFieldsEditDenied = 'You do not have permission to edit this employee.';
+
+bool _canEditEmployees(WidgetRef ref) =>
+    userHasPermission(ref.read(authStateProvider).valueOrNull?.user, 'employees.edit');
+
+/// PUT /employees/<id>/ {custom_field_values: payload}. Reloads the employee
+/// on success; returns the server's message on failure.
+Future<String?> saveEmployeeCustomFields(WidgetRef ref, String employeeId, Map<String, String> payload) async {
+  if (!_canEditEmployees(ref)) return kCustomFieldsEditDenied;
+  try {
+    await ref.read(employeesDataSourceProvider).updateCustomFieldValues(employeeId, payload);
+    ref.invalidate(employeeDetailProvider(employeeId));
+    return null;
+  } catch (e) {
+    return _friendlyError(e);
+  }
+}
+
+Future<String?> uploadEmployeeCustomFile(
+    WidgetRef ref, String employeeId, String fieldKey, String fileName, List<int> bytes) async {
+  if (!_canEditEmployees(ref)) return kCustomFieldsEditDenied;
+  try {
+    await ref.read(employeesDataSourceProvider).uploadCustomFile(employeeId, fieldKey, fileName, bytes);
+    ref.invalidate(employeeDetailProvider(employeeId));
+    return null;
+  } catch (e) {
+    return _friendlyError(e);
+  }
+}
+
+Future<String?> deleteEmployeeCustomFile(WidgetRef ref, String employeeId, int valueId) async {
+  if (!_canEditEmployees(ref)) return kCustomFieldsEditDenied;
+  try {
+    await ref.read(employeesDataSourceProvider).deleteCustomFile(valueId);
+    ref.invalidate(employeeDetailProvider(employeeId));
+    return null;
+  } catch (e) {
+    return _friendlyError(e);
+  }
+}
+
+// ── Promotion history (web PromotionTab) ──────────────────────────────────────
+// History: employees.view (the backend also 404s an employee outside the
+// viewer's branch). Promote: employees.edit.
+
+final employeePromotionsProvider =
+    FutureProvider.autoDispose.family<List<PromotionRecordModel>, String>((ref, employeeId) {
+  return ref.watch(employeesDataSourceProvider).fetchPromotions(employeeId);
+});
+
+const kPromotionNoChange = 'Choose a new designation or role before submitting.';
+const kPromotionDenied = 'You do not have permission to promote this employee.';
+
+/// Returns null on success (history and employee reloaded), or a message.
+Future<String?> promoteEmployeeAction(
+  WidgetRef ref,
+  String employeeId, {
+  required String fromDesignation,
+  required String fromRole,
+  required String designation,
+  required String role,
+  required String effectiveDate,
+  String remarks = '',
+}) async {
+  if (!_canEditEmployees(ref)) return kPromotionDenied;
+  if (designation == fromDesignation && role == fromRole) return kPromotionNoChange;
+  try {
+    await ref.read(employeesDataSourceProvider).promoteEmployee(employeeId,
+        designation: designation, role: role, effectiveDate: effectiveDate, remarks: remarks);
+    ref.invalidate(employeePromotionsProvider(employeeId));
+    ref.invalidate(employeeDetailProvider(employeeId));
+    return null;
+  } catch (e) {
+    return _friendlyError(e);
   }
 }

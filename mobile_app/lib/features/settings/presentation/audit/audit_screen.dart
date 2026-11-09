@@ -62,10 +62,13 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
           Expanded(
             child: async.when(
               loading: () => const AppLoadingWidget(),
-              error: (e, _) => _ErrorView(message: e.toString()),
-              data: (page) => page.entries.isEmpty
+              error: (e, _) => _ErrorView(
+                message: friendlyAuditError(e),
+                onRetry: () => ref.invalidate(auditLogProvider),
+              ),
+              data: (state) => state.entries.isEmpty
                   ? const _EmptyView()
-                  : _AuditList(page: page, filters: filters),
+                  : _AuditList(state: state),
             ),
           ),
         ],
@@ -93,7 +96,8 @@ class _SearchField extends StatelessWidget {
         style: AppTextStyles.body,
         onChanged: onChanged,
         decoration: InputDecoration(
-          hintText: 'Search by user, module or action…',
+          // Backend searches the actor's name and email only.
+          hintText: 'Search by user name or email…',
           hintStyle: AppTextStyles.body.copyWith(color: AppColors.textHint),
           prefixIcon: Icon(Icons.search, size: 20, color: AppColors.textHint),
           suffixIcon: controller.text.isNotEmpty
@@ -129,11 +133,6 @@ class _FilterRow extends ConsumerWidget {
   final AuditLogFilters filters;
   const _FilterRow({required this.filters});
 
-  static const _kModules = [
-    '', 'auth', 'employees', 'attendance', 'leave',
-    'payroll', 'recruitment', 'settings', 'documents',
-  ];
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Container(
@@ -143,13 +142,26 @@ class _FilterRow extends ConsumerWidget {
         children: [
           Expanded(
             child: DropdownButtonFormField<String>(
-              initialValue: filters.module.isEmpty ? '' : filters.module,
+              key: const Key('audit-module-filter'),
+              initialValue: filters.module,
+              isExpanded: true,
               style: AppTextStyles.body,
               decoration: _dec('Module'),
-              items: _kModules.map((m) => DropdownMenuItem(
-                value: m,
-                child: Text(m.isEmpty ? 'All modules' : m, style: AppTextStyles.body),
-              )).toList(),
+              items: [
+                DropdownMenuItem(
+                    value: '', child: Text('All modules', style: AppTextStyles.body)),
+                for (final m in kAuditLogModules)
+                  DropdownMenuItem(
+                      value: m.value,
+                      child: Text(m.label,
+                          style: AppTextStyles.body, overflow: TextOverflow.ellipsis)),
+                // A deep-linked value outside the known list stays selectable.
+                if (filters.module.isNotEmpty &&
+                    !kAuditLogModules.any((m) => m.value == filters.module))
+                  DropdownMenuItem(
+                      value: filters.module,
+                      child: Text(filters.module, style: AppTextStyles.body)),
+              ],
               onChanged: (v) => ref.read(auditFiltersProvider.notifier).state =
                   filters.copyWith(module: v ?? '', page: 1),
             ),
@@ -268,12 +280,12 @@ class _ActiveFilterBanner extends StatelessWidget {
 // ── List ──────────────────────────────────────────────────────────────────────
 
 class _AuditList extends ConsumerWidget {
-  final AuditLogPage page;
-  final AuditLogFilters filters;
-  const _AuditList({required this.page, required this.filters});
+  final AuditLogState state;
+  const _AuditList({required this.state});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final showFooter = state.hasMore || state.loadMoreError != null || state.page > 1;
     return Column(
       children: [
         Padding(
@@ -281,7 +293,8 @@ class _AuditList extends ConsumerWidget {
           child: Row(
             children: [
               Text(
-                '${page.total} record${page.total == 1 ? '' : 's'}  ·  Page ${page.currentPage} of ${page.totalPages}',
+                'Showing ${state.entries.length} of ${state.total} record${state.total == 1 ? '' : 's'}',
+                key: const Key('audit-count'),
                 style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
               ),
             ],
@@ -290,16 +303,16 @@ class _AuditList extends ConsumerWidget {
         Expanded(
           child: ListView.separated(
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
-            itemCount: page.entries.length + (page.hasNext ? 1 : 0),
+            itemCount: state.entries.length + (showFooter ? 1 : 0),
             separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (context, i) {
-              if (i == page.entries.length) {
-                return _LoadMoreBtn(
-                  onTap: () => ref.read(auditFiltersProvider.notifier).state =
-                      filters.copyWith(page: filters.page + 1),
+              if (i == state.entries.length) {
+                return _ListFooter(
+                  state: state,
+                  onLoadMore: () => ref.read(auditLogProvider.notifier).loadMore(),
                 );
               }
-              return _AuditCard(entry: page.entries[i]);
+              return _AuditCard(entry: state.entries[i]);
             },
           ),
         ),
@@ -308,9 +321,50 @@ class _AuditList extends ConsumerWidget {
   }
 }
 
+/// Load more / loading / load-more error with retry / end of list.
+class _ListFooter extends StatelessWidget {
+  final AuditLogState state;
+  final VoidCallback onLoadMore;
+  const _ListFooter({required this.state, required this.onLoadMore});
+
+  @override
+  Widget build(BuildContext context) {
+    if (state.loadingMore) {
+      return const Center(
+        key: Key('audit-loading-more'),
+        child: Padding(
+          padding: EdgeInsets.all(8),
+          child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
+      );
+    }
+    if (state.loadMoreError != null) {
+      return Column(
+        children: [
+          Text(state.loadMoreError!,
+              key: const Key('audit-load-more-error'),
+              textAlign: TextAlign.center,
+              style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+          const SizedBox(height: 6),
+          _LoadMoreBtn(key: const Key('audit-load-more-retry'), label: 'Retry', onTap: onLoadMore),
+        ],
+      );
+    }
+    if (state.hasMore) {
+      return _LoadMoreBtn(key: const Key('audit-load-more'), label: 'Load more', onTap: onLoadMore);
+    }
+    return Center(
+      key: const Key('audit-end-of-list'),
+      child: Text('End of audit log',
+          style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+    );
+  }
+}
+
 class _LoadMoreBtn extends StatelessWidget {
+  final String label;
   final VoidCallback onTap;
-  const _LoadMoreBtn({required this.onTap});
+  const _LoadMoreBtn({super.key, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -318,7 +372,7 @@ class _LoadMoreBtn extends StatelessWidget {
       child: OutlinedButton.icon(
         onPressed: onTap,
         icon: const Icon(Icons.expand_more, size: 18),
-        label: const Text('Load more'),
+        label: Text(label),
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.primary,
           side: BorderSide(color: AppColors.primary),
@@ -619,7 +673,8 @@ class _EmptyView extends StatelessWidget {
 
 class _ErrorView extends StatelessWidget {
   final String message;
-  const _ErrorView({required this.message});
+  final VoidCallback onRetry;
+  const _ErrorView({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -634,6 +689,12 @@ class _ErrorView extends StatelessWidget {
             Text('Could not load audit log', style: AppTextStyles.h4),
             const SizedBox(height: 6),
             Text(message, style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              key: const Key('audit-retry'),
+              onPressed: onRetry,
+              child: const Text('Retry'),
+            ),
           ],
         ),
       ),

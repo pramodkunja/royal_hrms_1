@@ -229,10 +229,9 @@ class AnnouncementFormData {
         'body':     body.trim(),
         'category': category,
         'visibility': visibility,
-        if (visibility == 'department' && targetDepartment != null)
-          'target_department': targetDepartment,
-        if (visibility == 'branch' && targetBranch != null)
-          'target_branch': targetBranch,
+        // As web: both targets are always sent, null when not used.
+        'target_department': visibility == 'department' ? targetDepartment : null,
+        'target_branch':     visibility == 'branch' ? targetBranch : null,
         'is_pinned':   isPinned,
         'send_email':  sendEmail,
       };

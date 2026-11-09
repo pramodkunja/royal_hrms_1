@@ -1,3 +1,4 @@
+import '../../domain/branch_geofence.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
@@ -129,6 +130,7 @@ class BranchListNotifier
     required String address,
     required String status,
     required bool isHeadquarter,
+    BranchGeofence? geofence,
   }) async {
     if (!canManageBranches(ref)) return kBranchEditDenied;
     try {
@@ -139,6 +141,7 @@ class BranchListNotifier
         address: address,
         status: status,
         isHeadquarter: isHeadquarter,
+        geofence: geofence,
       );
       state = AsyncData([...state.valueOrNull ?? [], created]);
       return null;
@@ -155,6 +158,7 @@ class BranchListNotifier
     required String address,
     required String status,
     required bool isHeadquarter,
+    BranchGeofence? geofence,
   }) async {
     if (!canManageBranches(ref)) return kBranchEditDenied;
     try {
@@ -166,6 +170,7 @@ class BranchListNotifier
         address: address,
         status: status,
         isHeadquarter: isHeadquarter,
+        geofence: geofence,
       );
       state = AsyncData(
         (state.valueOrNull ?? [])
@@ -225,6 +230,15 @@ class CitiesNotifier
 /// Turns a raw exception (DioException, SocketException, ...) into a message
 /// safe to show a user — never a stack trace or internal URL.
 String friendlyBranchError(Object e) {
+  // A validation refusal carries the server's own message (custom exception
+  // handler: "field: error", e.g. "geofencing_enabled: Set latitude and
+  // longitude before enabling geofencing.") — web shows response.data.message.
+  if (e is DioException && e.response?.statusCode == 400) {
+    final body = e.response?.data;
+    if (body is Map && body['message'] is String && (body['message'] as String).trim().isNotEmpty) {
+      return (body['message'] as String).trim();
+    }
+  }
   final msg = e.toString();
   if (msg.contains('SocketException') || msg.contains('connection')) {
     return 'Cannot reach server. Check your connection.';

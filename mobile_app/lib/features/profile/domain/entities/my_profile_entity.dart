@@ -29,6 +29,8 @@ class MyProfileDetailEntity {
   final String emergencyPhone;
   final String emergencyEmail;
   final String? updatedAt;
+  // profile.custom_field_values (HR-created custom fields), by field_key.
+  final Map<String, String> customFieldValues;
 
   const MyProfileDetailEntity({
     this.dateOfBirth,
@@ -57,6 +59,7 @@ class MyProfileDetailEntity {
     this.emergencyPhone = '',
     this.emergencyEmail = '',
     this.updatedAt,
+    this.customFieldValues = const {},
   });
 }
 

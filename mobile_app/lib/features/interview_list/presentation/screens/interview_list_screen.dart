@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -81,17 +83,22 @@ class _InterviewListScreenState extends ConsumerState<InterviewListScreen> {
                       onRetry: () => ref.invalidate(candidateListProvider),
                     ),
                   ),
-                  data: (_) => filtered.isEmpty
+                  data: (page) => filtered.isEmpty && !page.hasMore
                       ? SliverFillRemaining(child: _EmptyView())
                       : SliverPadding(
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
                           sliver: SliverList(
+                            // The footer is the last child, so it is built (and
+                            // the next page requested) only when it scrolls
+                            // into view.
                             delegate: SliverChildBuilderDelegate(
-                              (_, i) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: CandidateCard(candidate: filtered[i]),
-                              ),
-                              childCount: filtered.length,
+                              (_, i) => i == filtered.length
+                                  ? _ListFooter(page: page)
+                                  : Padding(
+                                      padding: const EdgeInsets.only(bottom: 12),
+                                      child: CandidateCard(candidate: filtered[i]),
+                                    ),
+                              childCount: filtered.length + 1,
                             ),
                           ),
                         ),

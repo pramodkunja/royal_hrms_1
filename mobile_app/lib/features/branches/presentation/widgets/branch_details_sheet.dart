@@ -1,3 +1,4 @@
+import '../../domain/branch_geofence.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -54,7 +55,7 @@ Future<void> showBranchDetailsSheet(BuildContext context, BranchEntity b) {
                     // Change / Assign Branch Admin for permitted users.
                     BranchAdminSection(branch: b),
                     _Section(title: 'Geolocation & Attendance', rows: [
-                      _row('Geofencing', b.geofencingEnabled ? 'Enabled' : 'Disabled'),
+                      _row('Geofencing', geofenceStatusLabel(b)),
                       _row('Allowed Radius', '${b.allowedRadiusMeters} m'),
                       _row('Coordinates',
                           b.hasCoordinates ? 'Available' : 'Not Available'),

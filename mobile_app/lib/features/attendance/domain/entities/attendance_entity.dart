@@ -556,6 +556,9 @@ class ImportResultEntity {
   final String message;
   final int skipped;
 
+  /// Base64 CSV of every row error (production `error_report_csv`), if any.
+  final String? errorReportCsv;
+
   const ImportResultEntity({
     required this.importId,
     required this.totalRows,
@@ -565,6 +568,7 @@ class ImportResultEntity {
     required this.errors,
     this.message = '',
     this.skipped = 0,
+    this.errorReportCsv,
   });
 
   /// Large files are processed in the background (HTTP 202).
@@ -606,4 +610,66 @@ class CorrectionReasonCodes {
     systemDowntime: 'System downtime',
     other: 'Other',
   };
+}
+
+/// One planned row of an attendance import preview (web ImportPreview.rows).
+/// [action]: create | create_on_leave | update | skip_on_leave | skip_duplicate.
+class ImportPreviewRowEntity {
+  final int row;
+  final String employeeId;
+  final String employeeName;
+  final String date;
+  final String punchIn;
+  final String punchOut;
+  final String action;
+
+  const ImportPreviewRowEntity({
+    required this.row,
+    required this.employeeId,
+    required this.employeeName,
+    required this.date,
+    required this.punchIn,
+    required this.punchOut,
+    required this.action,
+  });
+}
+
+/// The dry-run answer of POST /attendance/import/ with `dry_run=true`
+/// (production services_hr_ops._preview_import): what WOULD happen — nothing
+/// has been saved. Web ImportPreview.
+class ImportPreviewEntity {
+  final String message;
+  final int totalRecords;
+  final int toCreate;
+  final int toUpdate;
+  final int skipped;
+  final int failed;
+  final List<ImportRowErrorEntity> errors;
+  final List<ImportPreviewRowEntity> rows;
+  final bool rowsTruncated;
+
+  /// Base64 CSV of every row error, when there are errors.
+  final String? errorReportCsv;
+
+  /// Single-employee mode: the selected employee as the server resolved it.
+  final String? employeeCode;
+  final String? employeeName;
+
+  const ImportPreviewEntity({
+    required this.message,
+    required this.totalRecords,
+    required this.toCreate,
+    required this.toUpdate,
+    required this.skipped,
+    required this.failed,
+    required this.errors,
+    required this.rows,
+    this.rowsTruncated = false,
+    this.errorReportCsv,
+    this.employeeCode,
+    this.employeeName,
+  });
+
+  /// Web `importable` — rows the real import would write.
+  int get importable => toCreate + toUpdate;
 }

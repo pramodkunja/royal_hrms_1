@@ -74,7 +74,8 @@ class BranchModel extends BranchEntity {
         isHeadquarter: json['is_headquarter'] as bool? ?? false,
         latitude: _parseDouble(json['latitude']),
         longitude: _parseDouble(json['longitude']),
-        allowedRadiusMeters: json['allowed_radius_meters'] as int? ?? 0,
+        // Backend default (PositiveIntegerField default=150).
+        allowedRadiusMeters: (json['allowed_radius_meters'] as num?)?.toInt() ?? 150,
         geofencingEnabled: json['geofencing_enabled'] as bool? ?? false,
         hasCoordinates: json['has_coordinates'] as bool? ?? false,
         createdAt: _parseDate(json['created_at']),

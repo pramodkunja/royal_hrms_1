@@ -286,30 +286,32 @@ class _PayslipDetailCard extends ConsumerWidget {
         children: [
           companyAsync.maybeWhen(
             data: (company) => _CompanyLine(
-                companyName: company.companyName, cin: company.cin),
+                companyName: company.companyName,
+                cin: company.cin,
+                address: [company.address, company.city, company.state, company.pinCode]
+                    .where((s) => s.isNotEmpty)
+                    .join(', ')),
             orElse: () => const SizedBox.shrink(),
           ),
           const SizedBox(height: 4),
-          Text('Pay date: $payDateLabel',
+          // Web: "Salary Date: 09 Nov 2026" (fmtDate, en-IN).
+          Text('Salary Date: ${formatPayslipDate(payslip.payDate)}',
+              key: const Key('payslip-salary-date'),
               style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
           const SizedBox(height: 14),
           profileAsync.maybeWhen(
             data: (profile) => _EmployeeMetaGrid(
-              employeeIdCode: payslip.employeeIdCode.isNotEmpty
-                  ? payslip.employeeIdCode
-                  : profile.employeeId,
-              employeeName: profile.fullName,
-              department: profile.department,
+              employeeIdCode: payslip.employeeIdCode,
               bankName: profile.detail.bankName,
               accountNumber: profile.detail.accountNumber,
               ifscCode: profile.detail.ifscCode,
             ),
-            orElse: () => const SizedBox.shrink(),
+            orElse: () => _EmployeeMetaGrid(employeeIdCode: payslip.employeeIdCode),
           ),
           const SizedBox(height: 14),
           Divider(height: 1, color: AppColors.border),
           const SizedBox(height: 14),
-          _StatsRow(payslip: payslip),
+          _StatsRow(payslip: payslip, monthLabel: monthLabel),
           const SizedBox(height: 16),
           _EarningsSection(payslip: payslip),
           const SizedBox(height: 12),
@@ -319,7 +321,12 @@ class _PayslipDetailCard extends ConsumerWidget {
             _ReimbursementLine(amount: payslip.reimbursements),
           ],
           const SizedBox(height: 16),
-          _NetPayBanner(payslip: payslip),
+          _NetPayBanner(
+            payslip: payslip,
+            // Web netSubline: "Paid on <date>[ · <bank> ••••1234]".
+            subline: 'Paid on ${formatPayslipDate(payslip.payDate)}'
+                '${profileAsync.valueOrNull?.detail.bankName.isNotEmpty == true ? ' · ${profileAsync.valueOrNull!.detail.bankName} ${maskPayslipAccount(profileAsync.valueOrNull!.detail.accountNumber)}' : ''}',
+          ),
           if (payslip.payslipPdfUrl != null &&
               payslip.payslipPdfUrl!.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -353,8 +360,12 @@ class _PayslipDetailCard extends ConsumerWidget {
             ),
           ],
           const SizedBox(height: 14),
+          // Web footer.
           Text(
-            'This is a system-generated payslip. Queries on it are listed below.',
+            'This is a computer-generated payslip and does not require a signature.'
+            '${companyAsync.valueOrNull?.officialPhone.isNotEmpty == true ? ' For queries contact HR at ${companyAsync.valueOrNull!.officialPhone}.' : ''}',
+            key: const Key('payslip-footer'),
+            textAlign: TextAlign.center,
             style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
           ),
         ],
@@ -366,17 +377,26 @@ class _PayslipDetailCard extends ConsumerWidget {
 class _CompanyLine extends StatelessWidget {
   final String companyName;
   final String cin;
-  const _CompanyLine({required this.companyName, required this.cin});
+  final String address;
+  const _CompanyLine({required this.companyName, required this.cin, this.address = ''});
 
   @override
   Widget build(BuildContext context) {
     if (companyName.isEmpty) return const SizedBox.shrink();
-    return Text(
-      cin.isEmpty ? companyName : '$companyName · CIN: $cin',
-      style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-      maxLines: 2,
-      overflow: TextOverflow.ellipsis,
-    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(
+        cin.isEmpty ? companyName : '$companyName · CIN: $cin',
+        style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+      if (address.isNotEmpty)
+        Text(address,
+            key: const Key('payslip-company-address'),
+            style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis),
+    ]);
   }
 }
 
@@ -406,38 +426,29 @@ class _StatusChip extends StatelessWidget {
 
 class _EmployeeMetaGrid extends StatelessWidget {
   final String employeeIdCode;
-  final String employeeName;
-  final String department;
   final String bankName;
   final String accountNumber;
   final String ifscCode;
 
   const _EmployeeMetaGrid({
     required this.employeeIdCode,
-    required this.employeeName,
-    required this.department,
-    required this.bankName,
-    required this.accountNumber,
-    required this.ifscCode,
+    this.bankName = '',
+    this.accountNumber = '',
+    this.ifscCode = '',
   });
-
-  String get _maskedAccount {
-    if (accountNumber.length <= 4) return accountNumber;
-    return '••••${accountNumber.substring(accountNumber.length - 4)}';
-  }
 
   @override
   Widget build(BuildContext context) {
+    // Web strip: always these four, "—" when unknown.
     final items = <(String, String)>[
-      ('Employee', employeeName.isNotEmpty ? employeeName : '—'),
       ('Employee ID', employeeIdCode.isNotEmpty ? employeeIdCode : '—'),
-      if (department.isNotEmpty) ('Department', department),
-      if (bankName.isNotEmpty) ('Bank', bankName),
-      if (accountNumber.isNotEmpty) ('Account No.', _maskedAccount),
-      if (ifscCode.isNotEmpty) ('IFSC Code', ifscCode),
+      ('Bank', bankName.isNotEmpty ? bankName : '—'),
+      ('Account No.', maskPayslipAccount(accountNumber)),
+      ('IFSC Code', ifscCode.isNotEmpty ? ifscCode : '—'),
     ];
 
     return Wrap(
+      key: const Key('payslip-strip'),
       spacing: 20,
       runSpacing: 10,
       children: items
@@ -469,25 +480,26 @@ class _EmployeeMetaGrid extends StatelessWidget {
 
 class _StatsRow extends StatelessWidget {
   final PayslipModel payslip;
-  const _StatsRow({required this.payslip});
+  final String monthLabel;
+  const _StatsRow({required this.payslip, this.monthLabel = ''});
 
   @override
   Widget build(BuildContext context) {
+    final lop = payslip.lopDays > 0 ? payslip.lopDays : 0;
     final stats = [
       ('Working Days', payslip.totalWorkingDays.toString()),
-      (
-        'Paid Days',
-        payslip.paidDays.toStringAsFixed(
-            payslip.paidDays == payslip.paidDays.roundToDouble() ? 0 : 1)
-      ),
-      (
-        'Loss of Pay',
-        payslip.lopDays.toStringAsFixed(
-            payslip.lopDays == payslip.lopDays.roundToDouble() ? 0 : 1)
-      ),
+      ('Paid Days', payslipNumber(payslip.paidDays)),
+      ('Loss of Pay', payslipNumber(lop)),
+    ];
+    // Web sub-lines.
+    final subs = [
+      monthLabel,
+      'days credited',
+      payslip.lopDays > 0 ? '${formatPayslipInr(payslip.lopDeduction)} deducted' : 'no LOP',
     ];
     return Row(
-      children: stats
+      children: [for (var i = 0; i < stats.length; i++) (stats[i], subs[i])]
+          .map((e) => (e.$1.$1, e.$1.$2, e.$2))
           .map((s) => Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -498,6 +510,12 @@ class _StatsRow extends StatelessWidget {
                       s.$1,
                       style: AppTextStyles.caption
                           .copyWith(color: AppColors.textSecondary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      s.$3,
+                      style: AppTextStyles.caption.copyWith(fontSize: 10, color: AppColors.textHint),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -524,7 +542,8 @@ class _EarningsSection extends StatelessWidget {
       ('Bonus', payslip.bonus),
       for (final entry in payslip.otherEarnings.entries)
         (entry.key, double.tryParse(entry.value?.toString() ?? '') ?? 0.0),
-    ].where((r) => r.$2 > 0).toList();
+    // Web hides only zero amounts.
+    ].where((r) => r.$2 != 0).toList();
 
     return _MoneySection(
       title: 'EARNINGS',
@@ -546,9 +565,12 @@ class _DeductionsSection extends StatelessWidget {
       ('Provident Fund (PF)', payslip.pfEmployee),
       ('ESI', payslip.esiEmployee),
       ('Professional Tax (PT)', payslip.ptDeduction),
-      ('Labour Welfare Fund (LWF)', payslip.lwfEmployee),
-      ('Loss of Pay Deduction', payslip.lopDeduction),
-    ].where((r) => r.$2 > 0).toList();
+      ('Labour Welfare Fund', payslip.lwfEmployee),
+      for (final entry in payslip.otherDeductions.entries)
+        (entry.key, double.tryParse(entry.value?.toString() ?? '') ?? 0.0),
+      // Web: LOP last.
+      ('Loss of Pay (LOP)', payslip.lopDeduction),
+    ].where((r) => r.$2 != 0).toList();
 
     return _MoneySection(
       title: 'DEDUCTIONS',
@@ -597,12 +619,7 @@ class _MoneySection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          if (rows.isEmpty)
-            Text('None',
-                style:
-                    AppTextStyles.caption.copyWith(color: AppColors.textHint))
-          else
-            ...rows.map((r) => Padding(
+          ...rows.map((r) => Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
                   child: Row(
                     children: [
@@ -614,7 +631,7 @@ class _MoneySection extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      Text(formatPayslipCurrency(r.$2),
+                      Text(formatPayslipInr(r.$2),
                           style: AppTextStyles.body),
                     ],
                   ),
@@ -628,7 +645,7 @@ class _MoneySection extends StatelessWidget {
                         .copyWith(fontWeight: FontWeight.w700)),
               ),
               Text(
-                formatPayslipCurrency(total),
+                formatPayslipInr(total),
                 style: AppTextStyles.label
                     .copyWith(fontWeight: FontWeight.w800, color: color),
               ),
@@ -658,7 +675,7 @@ class _ReimbursementLine extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(child: Text('Reimbursements', style: AppTextStyles.label)),
           Text(
-            formatPayslipCurrency(amount),
+            formatPayslipInr(amount),
             style: AppTextStyles.label
                 .copyWith(fontWeight: FontWeight.w700, color: AppColors.info),
           ),
@@ -672,13 +689,14 @@ class _ReimbursementLine extends StatelessWidget {
 
 class _NetPayBanner extends StatelessWidget {
   final PayslipModel payslip;
-  const _NetPayBanner({required this.payslip});
+  final String subline;
+  const _NetPayBanner({required this.payslip, this.subline = ''});
 
   @override
   Widget build(BuildContext context) {
     final denom = payslip.grossEarnings + payslip.totalDeductions;
     final ratio =
-        denom <= 0 ? 0.0 : (payslip.grossEarnings / denom).clamp(0.0, 1.0);
+        denom <= 0 ? 0.5 : (payslip.grossEarnings / denom).clamp(0.0, 1.0); // web: 50% when both are 0
 
     return Container(
       width: double.infinity,
@@ -695,19 +713,26 @@ class _NetPayBanner extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'NET PAY',
+            'Net Salary Credited',
             style: AppTextStyles.caption.copyWith(
               color: Colors.white.withValues(alpha: 0.6),
               letterSpacing: 1,
               fontWeight: FontWeight.w700,
             ),
           ),
+          if (subline.isNotEmpty)
+            Text(subline,
+                key: const Key('payslip-net-subline'),
+                style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.8))),
           const SizedBox(height: 4),
           Text(
-            formatPayslipCurrency(payslip.netPay),
+            formatPayslipInr(payslip.netPay),
+            key: const Key('payslip-net-amount'),
             style: AppTextStyles.h2
                 .copyWith(color: Colors.white, fontWeight: FontWeight.w800),
           ),
+          Text('In Hand',
+              style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.75))),
           const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
@@ -719,20 +744,12 @@ class _NetPayBanner extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Deductions ${formatPayslipCurrency(payslip.totalDeductions)}',
-                style: AppTextStyles.caption
-                    .copyWith(color: Colors.white.withValues(alpha: 0.6)),
-              ),
-              Text(
-                'Gross ${formatPayslipCurrency(payslip.grossEarnings)}',
-                style: AppTextStyles.caption
-                    .copyWith(color: Colors.white.withValues(alpha: 0.6)),
-              ),
-            ],
+          // Web: "Gross ₹X − Ded. ₹Y [+ Reimb. ₹Z]".
+          Text(
+            'Gross ${formatPayslipInr(payslip.grossEarnings)} − Ded. ${formatPayslipInr(payslip.totalDeductions)}'
+            '${payslip.reimbursements > 0 ? ' + Reimb. ${formatPayslipInr(payslip.reimbursements)}' : ''}',
+            key: const Key('payslip-net-breakdown'),
+            style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.75)),
           ),
         ],
       ),

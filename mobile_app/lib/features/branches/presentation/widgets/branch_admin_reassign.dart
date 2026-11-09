@@ -13,8 +13,13 @@ import '../providers/branch_providers.dart';
 /// "Assign Branch Admin" for users allowed to reassign. There is no "remove":
 /// the server only supports replacing the admin.
 class BranchAdminSection extends ConsumerWidget {
-  const BranchAdminSection({super.key, required this.branch});
+  const BranchAdminSection({super.key, required this.branch, this.closeOnSuccess = true});
   final BranchEntity branch;
+
+  /// True in the details sheet (web closes the View modal after a
+  /// reassignment); false in the Edit Branch form, which web keeps open and
+  /// shows the new admin from the reloaded list.
+  final bool closeOnSuccess;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -52,7 +57,7 @@ class BranchAdminSection extends ConsumerWidget {
               onPressed: () async {
                 final done = await showReassignBranchAdminSheet(context, b);
                 // Web closes the View modal after a successful reassignment.
-                if (done == true && context.mounted) Navigator.of(context).pop();
+                if (closeOnSuccess && done == true && context.mounted) Navigator.of(context).pop();
               },
               icon: const Icon(Icons.swap_horiz, size: 16),
               label: Text(b.hasHr ? 'Change Branch Admin' : 'Assign Branch Admin'),

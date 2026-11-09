@@ -11,6 +11,7 @@ import '../../data/models/employee_dashboard_models.dart';
 import '../providers/dashboard_providers.dart';
 import '../widgets/attendance_ring_card.dart';
 import '../widgets/dashboard_section.dart';
+import '../widgets/emp_celebration_cards.dart';
 import '../widgets/emp_notice_period_card.dart';
 import '../widgets/emp_upcoming_holidays_card.dart';
 import '../widgets/leave_monthly_breakdown.dart';
@@ -46,6 +47,8 @@ class EmployeeDashboardView extends ConsumerWidget {
       ref.invalidate(sharedAnnouncementProvider);
       ref.invalidate(pendingAcknowledgementsProvider);
       ref.invalidate(employeeBirthdaysTodayProvider);
+      ref.invalidate(myBirthdayWidgetsProvider);
+      ref.invalidate(promotionCelebrationProvider);
     }
 
     // This view is reached via context.go() but every sub-section under it
@@ -91,6 +94,11 @@ class EmployeeDashboardView extends ConsumerWidget {
             // Today's birthdays for everyone, as web EmpBirthdayAnnouncement
             // (/dashboard/employee/birthdays/today/ needs no employees.view;
             // /birthdays/ does, so the old gated cards could never show here).
+            // Web EmployeeDashboard celebrations (promotion, team, manager);
+            // each renders nothing when there is nothing to celebrate.
+            const PromotionCelebrationCard(),
+            const TeamBirthdayCard(),
+            const ManagerBirthdayCard(),
             const _EmpBirthdaysTodayCard(),
             const SizedBox(height: 20),
             const _QuickLinksCard(),

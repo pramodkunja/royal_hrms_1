@@ -36,6 +36,12 @@ class CandidateEntity {
   final String branchName;
   final String interviewDate;   // yyyy-MM-dd or empty
   final String interviewMode;   // in_person | phone | video_call
+  // Web Candidate interview_time ("HH:MM[:SS]" or empty), meeting_link
+  // (video call URL or empty), interviewer (User uuid FK) + interviewer_name.
+  final String interviewTime;
+  final String meetingLink;
+  final String? interviewer;
+  final String interviewerName;
   final String status;
   final bool portalCredentialsSent;
   final String addedByName;
@@ -54,6 +60,10 @@ class CandidateEntity {
     required this.branchName,
     required this.interviewDate,
     required this.interviewMode,
+    this.interviewTime = '',
+    this.meetingLink = '',
+    this.interviewer,
+    this.interviewerName = '',
     required this.status,
     required this.portalCredentialsSent,
     required this.addedByName,

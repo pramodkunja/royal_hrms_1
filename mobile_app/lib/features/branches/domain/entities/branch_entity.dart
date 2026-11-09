@@ -68,7 +68,7 @@ class BranchEntity {
     required this.isHeadquarter,
     this.latitude,
     this.longitude,
-    this.allowedRadiusMeters = 0,
+    this.allowedRadiusMeters = 150,
     this.geofencingEnabled = false,
     this.hasCoordinates = false,
     this.createdAt,

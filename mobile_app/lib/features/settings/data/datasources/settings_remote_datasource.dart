@@ -26,7 +26,11 @@ class SettingsRemoteDataSource {
     return CompanyModel.fromJson(data as Map<String, dynamic>);
   }
 
-  Future<CompanyModel> saveCompany(CompanyModel model, {File? logoFile}) async {
+  /// PUT /settings/company/. As web's company form: a new [logoFile] is sent
+  /// as multipart `logo`; otherwise [removeLogo] sends multipart
+  /// `remove_logo=true` (the backend then clears the logo); a save with
+  /// neither leaves the logo untouched (no logo keys at all).
+  Future<CompanyModel> saveCompany(CompanyModel model, {File? logoFile, bool removeLogo = false}) async {
     Response res;
     if (logoFile != null) {
       final formData = FormData.fromMap({
@@ -37,6 +41,11 @@ class SettingsRemoteDataSource {
         ),
       });
       res = await _dio.put(ApiConstants.settingsCompany, data: formData);
+    } else if (removeLogo) {
+      res = await _dio.put(
+        ApiConstants.settingsCompany,
+        data: FormData.fromMap({...model.toJson(), 'remove_logo': 'true'}),
+      );
     } else {
       res = await _dio.put(ApiConstants.settingsCompany, data: model.toJson());
     }

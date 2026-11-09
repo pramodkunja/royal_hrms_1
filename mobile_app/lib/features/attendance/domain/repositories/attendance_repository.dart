@@ -113,7 +113,7 @@ abstract class AttendanceRepository {
     String? department,
     String? status,
   });
-  Future<void> reviewCorrection(String id, {required bool approve, String? remarks});
+  Future<String> reviewCorrection(String id, {required bool approve, String? remarks});
   Future<List<MyCorrectionEntity>> getMyCorrections();
 
   // Invalid Punch actions
@@ -136,6 +136,8 @@ abstract class AttendanceRepository {
     String? branch,
     String? department,
   });
+  Future<ImportPreviewEntity> previewImportCsv(List<int> bytes, String fileName,
+      {String? employeeId, String? dateFrom, String? dateTo});
   Future<ImportResultEntity> importCsv(List<int> bytes, String fileName,
       {String? employeeId, String? dateFrom, String? dateTo});
   Future<List<int>> fetchImportSample({String format});

@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
+import '../../../settings/data/models/departments_model.dart';
 import '../models/announcement_model.dart';
 
 class AnnouncementsRemoteDataSource {
@@ -36,13 +37,19 @@ class AnnouncementsRemoteDataSource {
 
   // ── Create / Update / Delete ───────────────────────────────────────────────
 
+  /// Web uses a longer timeout than its client default for posting/updating
+  /// (`{ timeout: 30000 }` — sending with email can be slow). Set explicitly
+  /// here so it holds even if the app-wide defaults change.
+  static const saveTimeout = Duration(seconds: 30);
+  static final _saveOptions = Options(sendTimeout: saveTimeout, receiveTimeout: saveTimeout);
+
   Future<AnnouncementModel> createAnnouncement(AnnouncementFormData form) async {
-    final res = await _dio.post(ApiConstants.announcements, data: form.toJson());
+    final res = await _dio.post(ApiConstants.announcements, data: form.toJson(), options: _saveOptions);
     return AnnouncementModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
   Future<AnnouncementModel> updateAnnouncement(String id, AnnouncementFormData form) async {
-    final res = await _dio.put(ApiConstants.announcementDetail(id), data: form.toJson());
+    final res = await _dio.put(ApiConstants.announcementDetail(id), data: form.toJson(), options: _saveOptions);
     return AnnouncementModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
@@ -71,8 +78,10 @@ class AnnouncementsRemoteDataSource {
 
   // ── Branches for form dropdown ─────────────────────────────────────────────
 
+  /// Active branches for the form, as web (`?status=active&page_size=100`).
   Future<List<BranchSimple>> fetchBranches() async {
-    final res = await _dio.get(ApiConstants.branches);
+    final res = await _dio.get(ApiConstants.branches,
+        queryParameters: {'status': 'active', 'page_size': 100});
     final data = _unwrap(res.data);
     final list = data is List
         ? data
@@ -80,6 +89,21 @@ class AnnouncementsRemoteDataSource {
     return list
         .map((e) => BranchSimple.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Departments for the form. Web passes `?branch=<own branch name>` for a
+  /// branch-scoped poster (departments with active employees there) and no
+  /// branch for an org-wide one.
+  Future<List<DepartmentModel>> fetchDepartments({String? branch}) async {
+    final res = await _dio.get(ApiConstants.departments, queryParameters: {
+      'page_size': 200,
+      if (branch != null && branch.isNotEmpty) 'branch': branch,
+    });
+    final data = _unwrap(res.data);
+    final list = data is List
+        ? data
+        : (data is Map<String, dynamic> ? data['results'] as List<dynamic>? ?? [] : []);
+    return list.map((e) => DepartmentModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   // ── Helper ─────────────────────────────────────────────────────────────────

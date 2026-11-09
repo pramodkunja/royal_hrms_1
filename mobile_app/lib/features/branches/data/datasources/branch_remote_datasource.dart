@@ -88,10 +88,11 @@ class BranchRemoteDataSource {
     return BranchModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
+  /// PATCH (partial) like web's Edit Branch — only the fields sent change.
   Future<BranchModel> updateBranch(
       int id, Map<String, dynamic> payload) async {
     final res =
-        await _dio.put(ApiConstants.branchDetail(id), data: payload);
+        await _dio.patch(ApiConstants.branchDetail(id), data: payload);
     return BranchModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 

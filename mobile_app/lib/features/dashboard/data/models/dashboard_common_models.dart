@@ -77,6 +77,8 @@ class DashboardBirthdayEmployee {
   final String branch;
   final String dateOfBirth;
   final int daysUntil;
+  // Sent by the backend (_serialize_birthday) — used in birthday wish emails.
+  final String designation;
 
   const DashboardBirthdayEmployee({
     required this.employeeId,
@@ -86,6 +88,7 @@ class DashboardBirthdayEmployee {
     required this.branch,
     required this.dateOfBirth,
     required this.daysUntil,
+    this.designation = '',
   });
 
   factory DashboardBirthdayEmployee.fromJson(Map<String, dynamic> json) {
@@ -97,6 +100,7 @@ class DashboardBirthdayEmployee {
       branch: json['branch'] as String? ?? '',
       dateOfBirth: json['date_of_birth'] as String? ?? '',
       daysUntil: (json['days_until'] as num? ?? 0).toInt(),
+      designation: json['designation'] as String? ?? '',
     );
   }
 }

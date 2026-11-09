@@ -31,6 +31,7 @@ class MyProfileDetailModel extends MyProfileDetailEntity {
     super.emergencyPhone,
     super.emergencyEmail,
     super.updatedAt,
+    super.customFieldValues,
   });
 
   static const empty = MyProfileDetailModel();
@@ -68,6 +69,12 @@ class MyProfileDetailModel extends MyProfileDetailEntity {
       emergencyPhone: json['emergency_phone'] as String? ?? '',
       emergencyEmail: json['emergency_email'] as String? ?? '',
       updatedAt: json['updated_at'] as String?,
+      customFieldValues: json['custom_field_values'] is Map
+          ? {
+              for (final e in (json['custom_field_values'] as Map).entries)
+                '${e.key}': e.value == null ? '' : '${e.value}'
+            }
+          : const {},
     );
   }
 
@@ -108,6 +115,7 @@ class MyProfileDetailModel extends MyProfileDetailEntity {
       emergencyRelationship: emergencyRelationship,
       emergencyPhone: emergencyPhone,
       emergencyEmail: emergencyEmail,
+      customFieldValues: customFieldValues,
       updatedAt: updatedAt,
     );
   }

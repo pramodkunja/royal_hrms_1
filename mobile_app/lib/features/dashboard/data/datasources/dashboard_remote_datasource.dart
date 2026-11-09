@@ -151,6 +151,24 @@ class DashboardRemoteDataSource {
   // ── Employee ────────────────────────────────────────────────────────────────
 
   /// Null when the employee has no fully approved separation.
+  /// GET /dashboard/birthdays/mine/ (web useMyBirthdayWidgets).
+  Future<MyBirthdayWidgets> fetchMyBirthdayWidgets() async {
+    final res = await _dio.get(ApiConstants.dashboardMyBirthdayWidgets);
+    return MyBirthdayWidgets.fromResponseData(_unwrap(res.data));
+  }
+
+  /// The newest unread promotion notification (web EmpPromotionCelebration).
+  Future<PromotionCelebration?> fetchUnreadPromotion() async {
+    final res = await _dio.get(ApiConstants.notifications,
+        queryParameters: {'notification_type': 'promotion', 'is_read': 'false', 'page_size': 1});
+    return PromotionCelebration.fromListData(_unwrap(res.data));
+  }
+
+  /// PATCH /notifications/<id>/read/ — web "Got it".
+  Future<void> markNotificationRead(String id) async {
+    await _dio.patch(ApiConstants.notificationRead(id));
+  }
+
   /// GET /dashboard/employee/birthdays/today/ (web useBirthdaysToday).
   Future<List<EmployeeBirthdayToday>> fetchEmployeeBirthdaysToday() async {
     final res = await _dio.get(ApiConstants.dashboardEmployeeBirthdaysToday);

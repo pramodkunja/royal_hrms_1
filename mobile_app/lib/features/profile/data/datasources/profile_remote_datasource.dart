@@ -44,6 +44,12 @@ class ProfileRemoteDataSource {
     await _dio.patch(ApiConstants.myProfile, data: data.toJson());
   }
 
+  /// PATCH /employees/me/ {custom_field_values} (web ProfileClient). The
+  /// backend keeps only Emergency-step custom keys and merges them in.
+  Future<void> updateMyCustomFields(Map<String, String> values) async {
+    await _dio.patch(ApiConstants.myProfile, data: {'custom_field_values': values});
+  }
+
   // ── Profile photo ─────────────────────────────────────────────────────────
 
   /// Returns the new `profile_photo_url` (or null if the backend somehow

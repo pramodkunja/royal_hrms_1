@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/models/announcement_model.dart';
+import '../announcement_permissions.dart';
 import '../providers/announcement_providers.dart';
 
 class PostAnnouncementSheet extends ConsumerStatefulWidget {
@@ -22,15 +24,31 @@ class _PostAnnouncementSheetState extends ConsumerState<PostAnnouncementSheet> {
   late AnnouncementFormData _form;
   Map<String, String> _errors = {};
   bool _saving = false;
+  // Server / scope error from the last save, shown in the form (web saveErr);
+  // every field keeps its value for a retry.
+  String? _saveError;
+
+  // Web form: the audience is "All Employees" or "By Department", plus a
+  // Branch field — chosen by org-wide posters (null = All Branches), locked to
+  // the poster's own branch for everyone else.
+  late bool _byDepartment;
+  int? _branchChoice;
 
   bool get _isEdit => widget.editing != null;
 
   @override
   void initState() {
     super.initState();
+    // Web openCreate: a new post starts with "Send email" on (send_email =
+    // canPost); openEdit keeps the announcement's saved value.
     _form = widget.editing != null
         ? AnnouncementFormData.fromModel(widget.editing!)
-        : AnnouncementFormData();
+        : AnnouncementFormData(
+            sendEmail: canPostAnnouncements(ref.read(authStateProvider).valueOrNull?.user));
+    _byDepartment = _form.visibility == 'department';
+    // Web openEdit: an org-wide editor keeps the post's branch (if it was a
+    // branch post); a branch-scoped one is always re-locked to their branch.
+    _branchChoice = _form.visibility == 'branch' ? _form.targetBranch : null;
     _titleCtrl = TextEditingController(text: _form.title);
     _bodyCtrl = TextEditingController(text: _form.body);
   }
@@ -51,7 +69,8 @@ class _PostAnnouncementSheetState extends ConsumerState<PostAnnouncementSheet> {
         children: [
           _SheetHeader(
             isEdit: _isEdit,
-            onClose: () => Navigator.pop(context),
+            // Web disables Cancel while saving.
+            onClose: _saving ? null : () => Navigator.pop(context),
           ),
           Flexible(
             child: Container(
@@ -83,38 +102,7 @@ class _PostAnnouncementSheetState extends ConsumerState<PostAnnouncementSheet> {
                       onChanged: (v) => setState(() => _form.category = v),
                     ),
                     const SizedBox(height: 12),
-                    _VisibilityDropdown(
-                      value: _form.visibility,
-                      onChanged: (v) => setState(() {
-                        _form.visibility = v;
-                        _form.targetDepartment = null;
-                        _form.targetBranch = null;
-                        _errors.remove('department');
-                        _errors.remove('branch');
-                      }),
-                    ),
-                    if (_form.visibility == 'department') ...[
-                      const SizedBox(height: 12),
-                      _DepartmentDropdown(
-                        value: _form.targetDepartment,
-                        error: _errors['department'],
-                        onChanged: (v) => setState(() {
-                          _form.targetDepartment = v;
-                          _errors.remove('department');
-                        }),
-                      ),
-                    ],
-                    if (_form.visibility == 'branch') ...[
-                      const SizedBox(height: 12),
-                      _BranchDropdown(
-                        value: _form.targetBranch,
-                        error: _errors['branch'],
-                        onChanged: (v) => setState(() {
-                          _form.targetBranch = v;
-                          _errors.remove('branch');
-                        }),
-                      ),
-                    ],
+                    _buildAudience(),
                     const SizedBox(height: 14),
                     _ToggleRow(
                       icon: Icons.push_pin_outlined,
@@ -124,11 +112,27 @@ class _PostAnnouncementSheetState extends ConsumerState<PostAnnouncementSheet> {
                     ),
                     const SizedBox(height: 8),
                     _ToggleRow(
+                      key: const Key('announcement-send-email'),
                       icon: Icons.email_outlined,
                       label: 'Send email notification',
                       value: _form.sendEmail,
                       onChanged: (v) => setState(() => _form.sendEmail = v),
                     ),
+                    if (_saveError != null) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        key: const Key('announcement-save-error'),
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(_saveError!,
+                            style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+                      ),
+                    ],
                     const SizedBox(height: 24),
                     FilledButton(
                       onPressed: _saving ? null : _submit,
@@ -162,6 +166,91 @@ class _PostAnnouncementSheetState extends ConsumerState<PostAnnouncementSheet> {
         ],
       ),
     );
+  }
+
+  Widget _buildAudience() {
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
+    final orgWide = isOrgWideAnnouncer(user);
+    final branchesAsync = ref.watch(announcementBranchesProvider);
+    final branches = branchesAsync.valueOrNull ?? const <BranchSimple>[];
+    final ownId = announcementOwnBranchId(user, branches);
+    final existing = widget.editing;
+    // A branch-scoped editor of a post aimed elsewhere (company-wide or
+    // another branch): saving limits it to their branch — say so up front.
+    final narrowed = !orgWide &&
+        existing != null &&
+        existing.visibility != 'department' &&
+        !_byDepartment &&
+        !(existing.visibility == 'branch' && existing.targetBranch == ownId);
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      if (orgWide)
+        branchesAsync.when(
+          loading: () => const LinearProgressIndicator(),
+          error: (_, __) => Text('Could not load branches.',
+              style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+          data: (list) => DropdownButtonFormField<int?>(
+            key: const Key('announcement-branch'),
+            initialValue: list.any((b) => b.id == _branchChoice) ? _branchChoice : null,
+            isExpanded: true,
+            items: [
+              const DropdownMenuItem<int?>(value: null, child: Text('All Branches')),
+              for (final b in list) DropdownMenuItem<int?>(value: b.id, child: Text(b.name)),
+            ],
+            onChanged: _byDepartment ? null : (v) => setState(() => _branchChoice = v),
+            decoration: _dropDec('Branch *'),
+          ),
+        )
+      else
+        InputDecorator(
+          key: const Key('announcement-branch-locked'),
+          decoration: _dropDec('Branch'),
+          child: Row(children: [
+            Icon(Icons.lock_outline, size: 14, color: AppColors.textHint),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                branchesAsync.isLoading
+                    ? 'Loading…'
+                    : (ownId == null ? 'Not assigned' : branches.firstWhere((b) => b.id == ownId).name),
+                style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
+              ),
+            ),
+          ]),
+        ),
+      if (_byDepartment) ...[
+        const SizedBox(height: 4),
+        Text('Not used for "By Department" — that reaches the department across all branches.',
+            style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+      ],
+      if (narrowed) ...[
+        const SizedBox(height: 4),
+        Text('Saving will limit this announcement to your branch.',
+            key: const Key('announcement-scope-note'),
+            style: AppTextStyles.caption.copyWith(color: AppColors.warning)),
+      ],
+      const SizedBox(height: 12),
+      _VisibilityDropdown(
+        value: _byDepartment ? 'department' : 'all',
+        onChanged: (v) => setState(() {
+          _byDepartment = v == 'department';
+          if (!_byDepartment) _form.targetDepartment = null;
+          _errors.remove('department');
+        }),
+      ),
+      if (_byDepartment) ...[
+        const SizedBox(height: 12),
+        _DepartmentDropdown(
+          branchFilter: orgWide ? null : user?.branch,
+          value: _form.targetDepartment,
+          error: _errors['department'],
+          onChanged: (v) => setState(() {
+            _form.targetDepartment = v;
+            _errors.remove('department');
+          }),
+        ),
+      ],
+    ]);
   }
 
   Widget _field({
@@ -198,17 +287,34 @@ class _PostAnnouncementSheetState extends ConsumerState<PostAnnouncementSheet> {
   }
 
   Future<void> _submit() async {
+    if (_saving) return;
     _form
       ..title = _titleCtrl.text
       ..body = _bodyCtrl.text;
+
+    // Web handleSave: department → department; else the branch (chosen, or
+    // the poster's own) → branch; no branch → company-wide (org-wide only).
+    final user = ref.read(authStateProvider).valueOrNull?.user;
+    final orgWide = isOrgWideAnnouncer(user);
+    final ownId = announcementOwnBranchId(user, ref.read(announcementBranchesProvider).valueOrNull ?? const []);
+    applyAnnouncementAudience(_form, byDepartment: _byDepartment, branchId: orgWide ? _branchChoice : ownId);
 
     final errs = _form.validate();
     if (errs.isNotEmpty) {
       setState(() => _errors = errs);
       return;
     }
+    // Never turn a branch-scoped post into a company-wide one.
+    final scope = announcementScopeError(_form, user, ownBranchId: ownId);
+    if (scope != null) {
+      setState(() => _saveError = scope);
+      return;
+    }
 
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
     final notifier = widget.ref.read(announcementsProvider.notifier);
     final error = _isEdit
         ? await notifier.edit(widget.editing!.id, _form)
@@ -220,12 +326,7 @@ class _PostAnnouncementSheetState extends ConsumerState<PostAnnouncementSheet> {
     if (error == null) {
       Navigator.pop(context);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(error),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ));
+      setState(() => _saveError = error);
     }
   }
 }
@@ -234,7 +335,7 @@ class _PostAnnouncementSheetState extends ConsumerState<PostAnnouncementSheet> {
 
 class _SheetHeader extends StatelessWidget {
   final bool isEdit;
-  final VoidCallback onClose;
+  final VoidCallback? onClose;
   const _SheetHeader({required this.isEdit, required this.onClose});
 
   @override
@@ -278,6 +379,7 @@ class _SheetHeader extends StatelessWidget {
             ),
           ),
           IconButton(
+            key: const Key('announcement-close'),
             icon: const Icon(Icons.close, color: Colors.white70, size: 20),
             onPressed: onClose,
             visualDensity: VisualDensity.compact,
@@ -339,12 +441,13 @@ class _VisibilityDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Web VISIBILITY_OPTIONS; branch targeting comes from the Branch field.
     const items = [
       DropdownMenuItem(value: 'all', child: Text('All Employees')),
-      DropdownMenuItem(value: 'department', child: Text('Specific Department')),
-      DropdownMenuItem(value: 'branch', child: Text('Specific Branch')),
+      DropdownMenuItem(value: 'department', child: Text('By Department')),
     ];
     return DropdownButtonFormField<String>(
+      key: const Key('announcement-visibility'),
       initialValue: value,
       items: items,
       onChanged: (v) {
@@ -356,48 +459,27 @@ class _VisibilityDropdown extends StatelessWidget {
 }
 
 class _DepartmentDropdown extends ConsumerWidget {
+  final String? branchFilter;
   final int? value;
   final String? error;
   final ValueChanged<int?> onChanged;
-  const _DepartmentDropdown({this.value, this.error, required this.onChanged});
+  const _DepartmentDropdown({this.branchFilter, this.value, this.error, required this.onChanged});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final deptsAsync = ref.watch(announcementDepartmentsProvider);
+    final deptsAsync = ref.watch(announcementDepartmentsProvider(branchFilter));
     return deptsAsync.when(
       loading: () => const LinearProgressIndicator(),
       error: (_, __) => const SizedBox.shrink(),
       data: (depts) => DropdownButtonFormField<int>(
-        initialValue: value,
+        key: const Key('announcement-department'),
+        initialValue: depts.any((d) => d.id == value) ? value : null,
+        isExpanded: true,
         items: depts
             .map((d) => DropdownMenuItem(value: d.id, child: Text(d.name)))
             .toList(),
         onChanged: onChanged,
         decoration: _dropDec('Target Department *', error),
-      ),
-    );
-  }
-}
-
-class _BranchDropdown extends ConsumerWidget {
-  final int? value;
-  final String? error;
-  final ValueChanged<int?> onChanged;
-  const _BranchDropdown({this.value, this.error, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final branchesAsync = ref.watch(announcementBranchesProvider);
-    return branchesAsync.when(
-      loading: () => const LinearProgressIndicator(),
-      error: (_, __) => const SizedBox.shrink(),
-      data: (branches) => DropdownButtonFormField<int>(
-        initialValue: value,
-        items: branches
-            .map((b) => DropdownMenuItem(value: b.id, child: Text(b.name)))
-            .toList(),
-        onChanged: onChanged,
-        decoration: _dropDec('Target Branch *', error),
       ),
     );
   }
@@ -411,7 +493,8 @@ class _ToggleRow extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
   const _ToggleRow(
-      {required this.icon,
+      {super.key,
+      required this.icon,
       required this.label,
       required this.value,
       required this.onChanged});

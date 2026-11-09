@@ -141,7 +141,7 @@ class _LoginFormState extends ConsumerState<LoginForm> {
             controller: _passwordCtrl,
             obscureText: !_showPassword,
             textInputAction: TextInputAction.done,
-            validator: FormValidators.password,
+            validator: FormValidators.loginPassword,
             enabled: !isLoading,
             onFieldSubmitted: (_) => _submit(),
             suffixIcon: IconButton(

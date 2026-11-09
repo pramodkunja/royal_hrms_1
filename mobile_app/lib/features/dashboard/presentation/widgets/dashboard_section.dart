@@ -677,6 +677,10 @@ class ActionRow extends StatelessWidget {
   final int count;
   final VoidCallback onTap;
 
+  /// Shown instead of [count] when the figure isn't known yet ("…") or
+  /// couldn't be loaded ("—") — so an unknown count never reads as 0.
+  final String? countText;
+
   const ActionRow({
     super.key,
     required this.icon,
@@ -684,6 +688,7 @@ class ActionRow extends StatelessWidget {
     required this.title,
     required this.count,
     required this.onTap,
+    this.countText,
   });
 
   @override
@@ -718,7 +723,7 @@ class ActionRow extends StatelessWidget {
             ),
           ),
           Text(
-            '$count',
+            countText ?? '$count',
             style: AppTextStyles.h4.copyWith(color: iconColor, fontWeight: FontWeight.w800),
           ),
           const SizedBox(width: 4),

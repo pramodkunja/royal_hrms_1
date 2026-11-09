@@ -246,7 +246,10 @@ class _RoleRow extends StatelessWidget {
                           ),
                         ),
                         if (isSystem)
-                          _SmallBadge(label: 'System', color: AppColors.accentPurple),
+                          _SmallBadge(
+                              key: Key('role-system-badge-${role.idStr}'),
+                              label: 'System',
+                              color: AppColors.accentPurple),
                       ],
                     ),
                     const SizedBox(height: 2),
@@ -293,7 +296,9 @@ class _RoleRow extends StatelessWidget {
                 Text('View only',
                     key: Key('role-view-only-${role.idStr}'),
                     style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
-              if (canEdit && !isSystem) ...[
+              // Web: Edit + active toggle for every role with settings.edit,
+              // system roles included (is_system_role only blocks deletion).
+              if (canEdit) ...[
                 _ActionBtn(
                   icon: Icons.edit_outlined,
                   tooltip: 'Edit',
@@ -309,7 +314,7 @@ class _RoleRow extends StatelessWidget {
                 alignment: Alignment.centerRight,
                 child: Switch(
                   value: role.isActive,
-                  onChanged: isSystem ? null : onToggle,
+                  onChanged: onToggle,
                   activeTrackColor: AppColors.success,
                 ),
               ),
@@ -592,7 +597,7 @@ class _StatusBadge extends StatelessWidget {
 class _SmallBadge extends StatelessWidget {
   final String label;
   final Color color;
-  const _SmallBadge({required this.label, required this.color});
+  const _SmallBadge({super.key, required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {

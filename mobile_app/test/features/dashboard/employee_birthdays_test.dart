@@ -257,7 +257,12 @@ void main() {
       expect(backend.count(hrPath), 0);
       expect(backend.count(adminPath), 0);
       expect(backend.paths.where((p) => p.startsWith('/employees/')), isEmpty);
-      expect(backend.paths.where((p) => p.contains('/birthdays/') && p != empPath), isEmpty);
+      // Web's Team / Manager birthday cards use /dashboard/birthdays/mine/,
+      // which is also open to every onboarded employee.
+      expect(
+          backend.paths.where(
+              (p) => p.contains('/birthdays/') && p != empPath && p != '/dashboard/birthdays/mine/'),
+          isEmpty);
       await unmount(tester);
     });
 

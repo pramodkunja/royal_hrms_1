@@ -8,15 +8,21 @@ import 'package:mobile_app/core/theme/app_text_styles.dart';
 import 'package:mobile_app/features/attendance/presentation/providers/attendance_providers.dart';
 import 'package:mobile_app/features/auth/presentation/providers/auth_providers.dart';
 import 'package:mobile_app/features/employees/data/models/employee_model.dart'
-    show EmployeeFilters;
+    show EmployeeFilters, EmployeeModel;
+import 'package:mobile_app/features/employees/presentation/widgets/send_wish_sheet.dart';
 import 'package:mobile_app/features/employees/presentation/providers/employee_providers.dart'
     show employeeFiltersProvider;
 import 'package:mobile_app/features/dashboard/data/models/admin_dashboard_models.dart';
 import 'package:mobile_app/features/dashboard/data/models/dashboard_common_models.dart';
+import 'package:mobile_app/features/dashboard/data/models/hr_dashboard_models.dart' show HrLifecycleEmployee;
 import 'package:mobile_app/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:mobile_app/features/dashboard/presentation/widgets/attendance_ring_card.dart';
 import 'package:mobile_app/features/dashboard/presentation/widgets/dashboard_section.dart';
+import 'package:mobile_app/features/dashboard/presentation/widgets/emp_celebration_cards.dart'
+    show canSendBirthdayWishes;
+import 'package:mobile_app/features/dashboard/presentation/widgets/hr_notice_period_row.dart';
 import 'package:mobile_app/features/dashboard/presentation/widgets/quick_access.dart';
+import 'package:mobile_app/features/dashboard/presentation/widgets/send_all_birthday_wishes_sheet.dart';
 
 /// Port of web's `AdminDashboard.tsx` — System Admin's role-specific
 /// dashboard. Single scrollable column (phone, not web's 2-column desktop
@@ -573,7 +579,7 @@ class _EmployeeLifecycleCardState extends ConsumerState<_EmployeeLifecycleCard> 
                 ],
               ),
               const SizedBox(height: 14),
-              _LifecycleList(group: groups[_tab], showYears: _tab == 2),
+              _LifecycleList(group: groups[_tab], tab: _tab),
             ],
           );
         },
@@ -593,25 +599,71 @@ class _EmployeeLifecycleCardState extends ConsumerState<_EmployeeLifecycleCard> 
 
 class _LifecycleList extends StatelessWidget {
   final AdminLifecycleGroup group;
-  final bool showYears;
+  // 0 = New Joiners, 1 = Notice Period, 2 = Anniversaries.
+  final int tab;
 
-  const _LifecycleList({required this.group, required this.showYears});
+  const _LifecycleList({required this.group, required this.tab});
 
   @override
   Widget build(BuildContext context) {
     if (group.employees.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Center(child: Text('No data', style: AppTextStyles.caption)),
+        // Web admin EmployeeLifecycleTabs: "No records" (Notice tab).
+        child: Center(child: Text(tab == 1 ? 'No records' : 'No data', style: AppTextStyles.caption)),
       );
     }
     return Column(
       children: [
         for (var i = 0; i < group.employees.length; i++) ...[
           if (i > 0) const Divider(height: 20),
-          _LifecycleRow(employee: group.employees[i], showYears: showYears),
+          // Server order (last working day, then name) is kept as sent.
+          if (tab == 1)
+            _AdminNoticeRow(employee: group.employees[i])
+          else
+            _LifecycleRow(employee: group.employees[i], showYears: tab == 2),
         ],
       ],
+    );
+  }
+}
+
+/// Notice Period tab: web components/dashboard/NoticePeriodRow.tsx (as used
+/// by the admin EmployeeLifecycleTabs) — name, "<employee id> · <department>
+/// · <branch>", "Approved <date>", "Last day: <date>" and the server's
+/// countdown / "Notice completed". Same widget as the HR dashboard's tab.
+/// Tapping opens the employee, as every other mobile lifecycle row does.
+class _AdminNoticeRow extends StatelessWidget {
+  const _AdminNoticeRow({required this.employee});
+
+  final AdminLifecycleEmployee employee;
+
+  @override
+  Widget build(BuildContext context) {
+    final e = employee;
+    return GestureDetector(
+      key: Key('admin-notice-row-${e.requestId ?? e.employeeId}'),
+      behavior: HitTestBehavior.opaque, // the whole row, not just its text
+      onTap: e.employeeId.isEmpty
+          ? null
+          : () => goToDashboardSection(context, '${AppRoutes.employees}/${e.employeeId}'),
+      child: HrNoticePeriodRow(
+        employee: HrLifecycleEmployee(
+          employeeId: e.employeeId,
+          fullName: e.fullName,
+          department: e.department,
+          designation: null,
+          dateOfJoining: null,
+          yearsCompleted: null,
+          anniversaryDate: null,
+          branch: e.branch.trim().isEmpty ? null : e.branch.trim(),
+          requestId: e.requestId,
+          approvedAt: e.approvedAt,
+          lastWorkingDay: e.lastWorkingDay,
+          daysRemaining: e.daysRemaining,
+          noticeStatus: e.noticeStatus,
+        ),
+      ),
     );
   }
 }
@@ -682,6 +734,32 @@ class _LifecycleRow extends StatelessWidget {
 }
 
 // ── Birthdays (two separate cards — Today / Upcoming) ────────────────────────
+// Web BirthdayWidget (admin dashboard): each row has Send Wish (→ "Resend"
+// once the server confirmed a send this session) and Today's card has Send
+// All. Shown only to users the backend lets send (canSendBirthdayWishes —
+// the send endpoint needs recruitment.edit; templates need settings.view).
+
+/// Employee ids whose wish the server confirmed during this dashboard visit
+/// (web `sentIds`, component state) — drives the Send Wish → Resend label.
+final adminBirthdayWishesSentProvider = StateProvider.autoDispose<Set<String>>((ref) => const {});
+
+Future<void> _sendWish(BuildContext context, WidgetRef ref, DashboardBirthdayEmployee e) async {
+  final sent = await SendWishSheet.show(
+    context,
+    employee: EmployeeModel.fromJson({
+      'employee_id': e.employeeId,
+      'full_name': e.fullName,
+      'email': e.email,
+      'department': e.department,
+      'designation': e.designation,
+    }),
+    occasionKey: 'birthday',
+  );
+  if (sent) {
+    final n = ref.read(adminBirthdayWishesSentProvider.notifier);
+    n.state = {...n.state, e.employeeId};
+  }
+}
 
 class _TodaysBirthdaysCard extends ConsumerWidget {
   const _TodaysBirthdaysCard();
@@ -689,11 +767,27 @@ class _TodaysBirthdaysCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final birthdaysAsync = ref.watch(systemAdminBirthdaysTodayProvider);
+    final canWish = canSendBirthdayWishes(ref.watch(authStateProvider).valueOrNull?.user);
+    final today = birthdaysAsync.valueOrNull ?? const <DashboardBirthdayEmployee>[];
 
     return SectionCard(
       title: "Today's Birthdays",
       iconWidget: const SectionIconAsset('assets/images/Birthday.png'),
       accentColor: AppColors.primary,
+      trailing: canWish && today.isNotEmpty
+          ? OutlinedButton.icon(
+              key: const Key('birthday-send-all'),
+              onPressed: () async {
+                final sent = await SendAllBirthdayWishesSheet.show(context, today);
+                if (sent.isNotEmpty) {
+                  final n = ref.read(adminBirthdayWishesSentProvider.notifier);
+                  n.state = {...n.state, ...sent};
+                }
+              },
+              icon: const Icon(Icons.celebration_outlined, size: 16),
+              label: const Text('Send All'),
+            )
+          : null,
       child: birthdaysAsync.when(
         data: (list) {
           if (list.isEmpty) {
@@ -706,7 +800,7 @@ class _TodaysBirthdaysCard extends ConsumerWidget {
             children: [
               for (var i = 0; i < list.length; i++) ...[
                 if (i > 0) const SizedBox(height: 10),
-                _BirthdayRow(entry: list[i], showDaysUntil: false),
+                _BirthdayRow(entry: list[i], showDaysUntil: false, canWish: canWish),
               ],
             ],
           );
@@ -730,6 +824,7 @@ class _UpcomingBirthdaysCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final birthdaysAsync = ref.watch(systemAdminBirthdaysUpcomingProvider);
+    final canWish = canSendBirthdayWishes(ref.watch(authStateProvider).valueOrNull?.user);
 
     return SectionCard(
       title: 'Upcoming Birthdays',
@@ -747,7 +842,7 @@ class _UpcomingBirthdaysCard extends ConsumerWidget {
             children: [
               for (var i = 0; i < list.length; i++) ...[
                 if (i > 0) const SizedBox(height: 10),
-                _BirthdayRow(entry: list[i], showDaysUntil: true),
+                _BirthdayRow(entry: list[i], showDaysUntil: true, canWish: canWish),
               ],
             ],
           );
@@ -765,14 +860,16 @@ class _UpcomingBirthdaysCard extends ConsumerWidget {
   }
 }
 
-class _BirthdayRow extends StatelessWidget {
+class _BirthdayRow extends ConsumerWidget {
   final DashboardBirthdayEmployee entry;
   final bool showDaysUntil;
+  final bool canWish;
 
-  const _BirthdayRow({required this.entry, required this.showDaysUntil});
+  const _BirthdayRow({required this.entry, required this.showDaysUntil, required this.canWish});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final alreadySent = ref.watch(adminBirthdayWishesSentProvider).contains(entry.employeeId);
     final sub = [entry.department, entry.branch]
         .where((s) => s.isNotEmpty)
         .join(' · ');
@@ -807,6 +904,18 @@ class _BirthdayRow extends StatelessWidget {
             style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
             overflow: TextOverflow.ellipsis,
           ),
+        if (canWish && entry.employeeId.isNotEmpty) ...[
+          const SizedBox(width: 8),
+          OutlinedButton(
+            key: Key('birthday-wish-${entry.employeeId}'),
+            onPressed: () => _sendWish(context, ref, entry),
+            style: OutlinedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
+            child: Text(alreadySent ? 'Resend' : 'Send Wish'),
+          ),
+        ],
       ],
     );
   }

@@ -61,19 +61,89 @@ Map<String, dynamic> resultBody({
           ],
     };
 
+Map<String, dynamic> previewBody({
+  int total = 3,
+  int toCreate = 1,
+  int toUpdate = 1,
+  int skipped = 0,
+  int failed = 1,
+  bool truncated = false,
+  String? reportCsv,
+  Map<String, dynamic>? employee,
+  List<Map<String, dynamic>>? rows,
+}) =>
+    {
+      'status': 'preview',
+      'message': 'Preview: ${toCreate + toUpdate} of $total rows will be imported. $failed have errors.',
+      'total_records': total,
+      'to_create': toCreate,
+      'to_update': toUpdate,
+      'skipped': skipped,
+      'failed': failed,
+      'errors': resultBody()['errors'],
+      'rows': rows ??
+          [
+            {
+              'row': 1,
+              'employee_id': 'TST001',
+              'employee_name': 'Test Person One',
+              'date': '2026-07-01',
+              'punch_in': '09:00',
+              'punch_out': '18:00',
+              'action': 'create'
+            },
+            {
+              'row': 2,
+              'employee_id': 'TST001',
+              'employee_name': 'Test Person One',
+              'date': '2026-07-02',
+              'punch_in': '09:05',
+              'punch_out': '18:15',
+              'action': 'update'
+            },
+          ],
+      'rows_truncated': truncated,
+      if (reportCsv != null) 'error_report_csv': reportCsv,
+      if (employee != null) 'employee': employee,
+    };
+
+bool isDryRun(Object? body) => body is FormData && body.fields.any((f) => f.key == 'dry_run' && f.value == 'true');
+
 class FakeServer implements HttpClientAdapter {
+  /// Answer for the real import (no dry_run).
   ({int status, Map<String, dynamic> body})? nextImport;
   Completer<void>? holdImport;
+
+  /// Answers for dry runs, used in order (the last one repeats).
+  final nextPreviews = <({int status, Map<String, dynamic> body})>[];
+  Completer<void>? holdPreview;
   final calls = <({String method, String path, Map<String, dynamic> query, Object? body})>[];
 
   List<({String method, String path, Map<String, dynamic> query, Object? body})> of(String method, String path) =>
       calls.where((c) => c.method == method && c.path == path).toList();
-  List<FormData> get imports => of('POST', importPath).map((c) => c.body as FormData).toList();
+  /// Real imports only (no dry_run).
+  List<FormData> get imports =>
+      of('POST', importPath).where((c) => !isDryRun(c.body)).map((c) => c.body as FormData).toList();
+
+  /// Dry runs only.
+  List<FormData> get previews =>
+      of('POST', importPath).where((c) => isDryRun(c.body)).map((c) => c.body as FormData).toList();
+
+  /// Every POST to the import endpoint, in order: 'preview' or 'import'.
+  List<String> get sequence => of('POST', importPath).map((c) => isDryRun(c.body) ? 'preview' : 'import').toList();
   int get otherGets => calls.where((c) => c.method == 'GET' && c.path != ApiConstants.employees).length;
 
   @override
   Future<ResponseBody> fetch(RequestOptions o, Stream<List<int>>? _, Future<void>? __) async {
     calls.add((method: o.method, path: o.path, query: Map.of(o.queryParameters), body: o.data));
+    if (o.method == 'POST' && o.path == importPath && isDryRun(o.data)) {
+      final gate = holdPreview;
+      if (gate != null) await gate.future;
+      final r = nextPreviews.isEmpty
+          ? (status: 200, body: {'status': 'success', 'message': 'preview', 'data': previewBody()})
+          : (nextPreviews.length > 1 ? nextPreviews.removeAt(0) : nextPreviews.first);
+      return _json(r.status, r.body);
+    }
     if (o.method == 'POST' && o.path == importPath) {
       final gate = holdImport;
       if (gate != null) await gate.future;
@@ -145,9 +215,11 @@ final viewer = hrUser(['attendance.view', 'attendance.export', 'employees.view']
 late FakeServer server;
 PlatformFile? nextFile;
 DateTime? nextDate;
+final savedReports = <({String name, List<int> bytes})>[];
 
-PlatformFile csv([String name = 'attendance.csv']) {
-  final bytes = Uint8List.fromList(utf8.encode('employee_id,date,punch_in,punch_out\nTST001,2026-07-02,09:05,18:15\n'));
+PlatformFile csv([String name = 'attendance.csv', String? body]) {
+  final bytes = Uint8List.fromList(
+      utf8.encode(body ?? 'employee_id,date,punch_in,punch_out\nTST001,2026-07-02,09:05,18:15\n'));
   return PlatformFile(name: name, size: bytes.length, bytes: bytes);
 }
 
@@ -158,6 +230,10 @@ List<Override> overrides(UserEntity u) => [
       secureStorageProvider.overrideWithValue(_NullStorage()),
       attendanceImportFilePickerProvider.overrideWithValue(() async => nextFile),
       attendanceImportDatePickerProvider.overrideWithValue((context, initial) async => nextDate),
+      attendanceImportReportSaverProvider.overrideWithValue((name, bytes) async {
+        savedReports.add((name: name, bytes: bytes));
+        return '/synthetic/$name';
+      }),
     ];
 
 Future<void> pumpScreen(WidgetTester tester, {UserEntity? as, FakeServer? with_}) async {
@@ -167,6 +243,7 @@ Future<void> pumpScreen(WidgetTester tester, {UserEntity? as, FakeServer? with_}
   server = with_ ?? FakeServer();
   nextFile = null;
   nextDate = null;
+  savedReports.clear();
   await tester.pumpWidget(ProviderScope(
     overrides: overrides(as ?? importer),
     child: const MaterialApp(home: Scaffold(body: AttendanceScreen())),
@@ -209,7 +286,22 @@ Future<void> pickDate(WidgetTester tester, String which, DateTime d) async {
   await tapKey(tester, 'attendance-import-date-$which');
 }
 
-Future<void> upload(WidgetTester tester) => tapKey(tester, 'attendance-import-upload');
+Future<void> preview(WidgetTester tester) => tapKey(tester, 'attendance-import-preview');
+
+/// Preview, then (if the preview came back) confirm — the full web flow.
+Future<void> upload(WidgetTester tester) async {
+  await preview(tester);
+  if (byKey('attendance-import-confirm').evaluate().isNotEmpty) await tapKey(tester, 'attendance-import-confirm');
+}
+
+String confirmLabel(WidgetTester tester) => tester
+    .widget<Text>(find.descendant(of: byKey('attendance-import-confirm'), matching: find.byType(Text)))
+    .data!;
+
+bool confirmEnabled(WidgetTester tester) =>
+    tester.widget<ElevatedButton>(byKey('attendance-import-confirm')).onPressed != null;
+
+Map<String, String> fieldMap(FormData f) => {for (final e in f.fields) e.key: e.value};
 
 String? errorText(WidgetTester tester) {
   final f = byKey('attendance-import-error');
@@ -308,7 +400,7 @@ void main() {
       await pickDate(tester, 'to', DateTime(2026, 7, 1));
       await upload(tester);
       expect(errorText(tester), 'The From date must be on or before the To date.');
-      expect(server.imports, isEmpty);
+      expect(server.calls.where((c) => c.method == 'POST'), isEmpty);
     });
   });
 
@@ -420,25 +512,27 @@ void main() {
       expect(server.imports, hasLength(1));
     });
 
-    testWidgets('11b. double-tapping Upload sends one request; mode and inputs are locked meanwhile', (tester) async {
-      final s = FakeServer()..holdImport = Completer();
+    testWidgets('11b. double-tapping Preview sends one request; mode and inputs are locked meanwhile',
+        (tester) async {
+      final s = FakeServer()..holdPreview = Completer();
       await pumpScreen(tester, with_: s);
       await openImport(tester);
       await tapKey(tester, 'attendance-import-mode-single');
       await pickEmployee(tester);
       await pickFile(tester);
-      await tester.tap(byKey('attendance-import-upload'));
+      await tester.tap(byKey('attendance-import-preview'));
       await tester.pump();
-      expect(tester.widget<ElevatedButton>(byKey('attendance-import-upload')).onPressed, isNull);
+      expect(tester.widget<ElevatedButton>(byKey('attendance-import-preview')).onPressed, isNull);
       expect(tester.widget<InkWell>(byKey('attendance-import-mode-bulk')).onTap, isNull);
       expect(tester.widget<InkWell>(byKey('attendance-import-mode-single')).onTap, isNull);
-      await tester.tap(byKey('attendance-import-upload'), warnIfMissed: false);
+      await tester.tap(byKey('attendance-import-preview'), warnIfMissed: false);
       await tester.tap(byKey('attendance-import-mode-bulk'), warnIfMissed: false);
       await tester.pump();
-      s.holdImport!.complete();
+      s.holdPreview!.complete();
       await tester.pumpAndSettle();
-      expect(s.imports, hasLength(1));
-      expect(fields(s.imports.single), ['employee_id=TST001']);
+      expect(s.previews, hasLength(1));
+      expect(fields(s.previews.single), ['employee_id=TST001', 'dry_run=true']);
+      expect(s.imports, isEmpty);
     });
   });
 
@@ -446,7 +540,7 @@ void main() {
     testWidgets('12a. a 404 for an employee outside the importer\'s scope is shown; nothing is imported',
         (tester) async {
       final s = FakeServer()
-        ..nextImport = (status: 404, body: {'status': 'error', 'message': 'Employee not found.', 'data': {}});
+        ..nextPreviews.add((status: 404, body: {'status': 'error', 'message': 'Employee not found.', 'data': {}}));
       await pumpScreen(tester, with_: s);
       await openImport(tester);
       await tapKey(tester, 'attendance-import-mode-single');
@@ -455,16 +549,19 @@ void main() {
       await upload(tester);
       expect(errorText(tester), 'Employee not found.');
       expect(byKey('attendance-import-message'), findsNothing);
+      expect(byKey('attendance-import-preview-view'), findsNothing);
+      expect(s.imports, isEmpty);
     });
 
     testWidgets('12b. a server permission refusal is shown', (tester) async {
       final s = FakeServer()
-        ..nextImport = (status: 403, body: {'status': 'error', 'message': 'Permission denied.', 'data': {}});
+        ..nextPreviews.add((status: 403, body: {'status': 'error', 'message': 'Permission denied.', 'data': {}}));
       await pumpScreen(tester, with_: s);
       await openImport(tester);
       await pickFile(tester);
       await upload(tester);
       expect(errorText(tester), 'Permission denied.');
+      expect(s.imports, isEmpty);
     });
 
     testWidgets('12c. a file whose every row failed (HTTP 400 with the result) shows the result and its rows',
@@ -531,6 +628,269 @@ void main() {
           tester.widget<Text>(byKey('attendance-import-queued')).data,
           'Your file has 900 records and is being processed in the background. '
           'You can close this window; refresh the attendance list in a few minutes.');
+    });
+  });
+  group('dry-run preview', () {
+    Future<String> content(WidgetTester tester, FormData f) async =>
+        (await tester.runAsync(() async => utf8.decode(
+            (await f.files.single.value.clone().finalize().toList()).expand((b) => b).toList())))!;
+
+    test('D1. the preview body is parsed with production keys', () {
+      final p = parseImportPreview(previewBody(
+          truncated: true, reportCsv: 'YQ==', employee: {'employee_id': 'TST001', 'full_name': 'Test Person One'}));
+      expect([p.totalRecords, p.toCreate, p.toUpdate, p.skipped, p.failed, p.importable], [3, 1, 1, 0, 1, 2]);
+      expect(p.message, 'Preview: 2 of 3 rows will be imported. 1 have errors.');
+      expect(p.rowsTruncated, isTrue);
+      expect(p.errorReportCsv, 'YQ==');
+      expect([p.employeeCode, p.employeeName], ['TST001', 'Test Person One']);
+      expect(p.rows.map((r) => [r.row, r.employeeId, r.date, r.punchIn, r.punchOut, r.action]), [
+        [1, 'TST001', '2026-07-01', '09:00', '18:00', 'create'],
+        [2, 'TST001', '2026-07-02', '09:05', '18:15', 'update'],
+      ]);
+      final e = p.errors.single;
+      expect([e.row, e.employee, e.date, e.resolution], [3, 'TST002', '2026-07-03', 'Remove this row or import it for the right employee.']);
+      final bare = parseImportPreview({});
+      expect([bare.totalRecords, bare.importable, bare.rows.length, bare.errors.length], [0, 0, 0, 0]);
+      expect(bare.employeeName, isNull);
+    });
+
+    testWidgets('D2. bulk: the first request is a dry run of exactly the file; the preview is shown; nothing '
+        'is imported or reloaded', (tester) async {
+      final s = FakeServer();
+      await pumpScreen(tester, with_: s);
+      await openImport(tester);
+      await pickFile(tester);
+      final before = s.otherGets;
+      await preview(tester);
+      expect(s.sequence, ['preview']);
+      final f = s.previews.single;
+      expect(fields(f), ['dry_run=true']);
+      expect(f.files.single.key, 'file');
+      expect(f.files.single.value.filename, 'attendance.csv');
+      expect(await content(tester, f), 'employee_id,date,punch_in,punch_out\nTST001,2026-07-02,09:05,18:15\n');
+      // preview, not a result
+      expect(byKey('attendance-import-preview-view'), findsOneWidget);
+      expect(byKey('attendance-import-message'), findsNothing);
+      expect(byKey('attendance-import-done'), findsNothing);
+      expect(tester.widget<Text>(byKey('attendance-import-preview-message')).data,
+          'All employees — Preview: 2 of 3 rows will be imported. 1 have errors.');
+      for (final t in ['Rows in file', 'New records', 'Replace existing', 'Skipped', 'Errors']) {
+        expect(find.text(t), findsOneWidget, reason: t);
+      }
+      expect(tester.widget<Text>(byKey('attendance-import-replace-warning')).data,
+          '1 row(s) will replace the punch times of an existing attendance record for that day.');
+      expect(tester.widget<Text>(byKey('attendance-import-errors-title')).data, '1 row with errors (not imported)');
+      expect(find.textContaining("Row 3 (TST002 · 2026-07-03): This row is for employee 'TST002'"), findsOneWidget);
+      expect(find.text('Remove this row or import it for the right employee.'), findsOneWidget);
+      expect(find.text('New record'), findsOneWidget);
+      expect(find.text('Replaces existing'), findsOneWidget);
+      expect(find.text('Rows to import'), findsOneWidget);
+      expect(confirmLabel(tester), 'Import 2 records');
+      expect(confirmEnabled(tester), isTrue);
+      expect(s.imports, isEmpty);
+      expect(s.otherGets, before, reason: 'a dry run is not an import — no reload');
+    });
+
+    testWidgets('D3. single: both requests carry the same employee and dates, file and name; only the dry run '
+        'has dry_run; the list reloads after the real import', (tester) async {
+      final s = FakeServer()
+        ..nextPreviews.add((
+          status: 200,
+          body: {
+            'status': 'success',
+            'message': 'preview',
+            'data': previewBody(employee: {'employee_id': 'TST001', 'full_name': 'Test Person One'}),
+          }
+        ));
+      await pumpScreen(tester, with_: s);
+      await openImport(tester);
+      await tapKey(tester, 'attendance-import-mode-single');
+      await pickEmployee(tester);
+      await pickDate(tester, 'from', DateTime(2026, 7, 1));
+      await pickDate(tester, 'to', DateTime(2026, 7, 31));
+      await pickFile(tester);
+      final before = s.otherGets;
+      await preview(tester);
+      expect(fields(s.previews.single), ['employee_id=TST001', 'date_from=2026-07-01', 'date_to=2026-07-31', 'dry_run=true']);
+      expect(tester.widget<Text>(byKey('attendance-import-preview-message')).data,
+          startsWith('Test Person One (TST001) — '));
+      expect(s.otherGets, before);
+      await tapKey(tester, 'attendance-import-confirm');
+      expect(s.sequence, ['preview', 'import']);
+      final real = s.imports.single;
+      expect(fields(real), ['employee_id=TST001', 'date_from=2026-07-01', 'date_to=2026-07-31']);
+      expect(fieldMap(real), {...fieldMap(s.previews.single)}..remove('dry_run'));
+      expect(real.files.single.key, 'file');
+      expect(real.files.single.value.filename, 'attendance.csv');
+      expect(await content(tester, real), await content(tester, s.previews.single));
+      expect(tester.widget<Text>(byKey('attendance-import-message')).data, '2 of 3 records imported. 1 failed.');
+      expect(s.otherGets, greaterThan(before));
+    });
+
+    testWidgets('D4. Back returns to the form and Cancel closes — neither sends a real import or reloads',
+        (tester) async {
+      final s = FakeServer();
+      await pumpScreen(tester, with_: s);
+      await openImport(tester);
+      await pickFile(tester);
+      final before = s.otherGets;
+      await preview(tester);
+      await tapKey(tester, 'attendance-import-back');
+      expect(byKey('attendance-import-preview-view'), findsNothing);
+      expect(byKey('attendance-import-preview'), findsOneWidget);
+      expect(find.text('attendance.csv'), findsOneWidget, reason: 'the chosen file is kept');
+      await tapKey(tester, 'attendance-import-preview');
+      await tapKey(tester, 'attendance-import-back');
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.text('Import Attendance'), findsNothing);
+      expect(s.sequence, ['preview', 'preview']);
+      expect(s.imports, isEmpty);
+      expect(s.otherGets, before);
+    });
+
+    testWidgets('D5. nothing importable: Import is disabled and sends nothing', (tester) async {
+      final s = FakeServer()
+        ..nextPreviews.add((
+          status: 200,
+          body: {
+            'status': 'success',
+            'message': 'preview',
+            'data': previewBody(total: 1, toCreate: 0, toUpdate: 0, failed: 1, rows: []),
+          }
+        ));
+      await pumpScreen(tester, with_: s);
+      await openImport(tester);
+      await pickFile(tester);
+      await preview(tester);
+      expect(confirmLabel(tester), 'Import 0 records');
+      expect(confirmEnabled(tester), isFalse);
+      expect(byKey('attendance-import-replace-warning'), findsNothing);
+      await tester.tap(byKey('attendance-import-confirm'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(s.imports, isEmpty);
+    });
+
+    testWidgets('D6. double-tapping Import sends one real import; Back is locked while it runs', (tester) async {
+      final s = FakeServer()..holdImport = Completer();
+      await pumpScreen(tester, with_: s);
+      await openImport(tester);
+      await pickFile(tester);
+      await preview(tester);
+      await tester.tap(byKey('attendance-import-confirm'));
+      await tester.pump();
+      expect(confirmEnabled(tester), isFalse);
+      expect(tester.widget<TextButton>(byKey('attendance-import-back')).onPressed, isNull);
+      await tester.tap(byKey('attendance-import-confirm'), warnIfMissed: false);
+      await tester.tap(byKey('attendance-import-back'), warnIfMissed: false);
+      await tester.pump();
+      s.holdImport!.complete();
+      await tester.pumpAndSettle();
+      expect(s.sequence, ['preview', 'import']);
+      expect(byKey('attendance-import-message'), findsOneWidget);
+    });
+
+    testWidgets('D7. a failed import keeps the preview and shows the error, with no reload; retry re-sends the '
+        'same request and then reloads', (tester) async {
+      final s = FakeServer()
+        ..nextImport = (status: 500, body: {'status': 'error', 'message': 'Server busy, try again.', 'data': {}});
+      await pumpScreen(tester, with_: s);
+      await openImport(tester);
+      await tapKey(tester, 'attendance-import-mode-single');
+      await pickEmployee(tester);
+      await pickFile(tester);
+      final before = s.otherGets;
+      await upload(tester);
+      expect(errorText(tester), 'Server busy, try again.');
+      expect(byKey('attendance-import-preview-view'), findsOneWidget);
+      expect(confirmEnabled(tester), isTrue);
+      expect(s.otherGets, before);
+      s.nextImport = null;
+      await tapKey(tester, 'attendance-import-confirm');
+      expect(s.sequence, ['preview', 'import', 'import']);
+      expect(fields(s.imports[0]), ['employee_id=TST001']);
+      expect(fields(s.imports[1]), ['employee_id=TST001']);
+      expect(await content(tester, s.imports[1]), await content(tester, s.imports[0]));
+      expect(byKey('attendance-import-message'), findsOneWidget);
+      expect(s.otherGets, greaterThan(before));
+    });
+
+    testWidgets('D8. a failed dry run stays on the form; previewing again works', (tester) async {
+      final s = FakeServer()
+        ..nextPreviews.addAll([
+          (status: 400, body: {'status': 'error', 'message': 'Only CSV files are supported.', 'data': {}}),
+          (status: 200, body: {'status': 'success', 'message': 'preview', 'data': previewBody()}),
+        ]);
+      await pumpScreen(tester, with_: s);
+      await openImport(tester);
+      await pickFile(tester);
+      await preview(tester);
+      expect(errorText(tester), 'Only CSV files are supported.');
+      expect(byKey('attendance-import-preview-view'), findsNothing);
+      await preview(tester);
+      expect(byKey('attendance-import-preview-view'), findsOneWidget);
+      expect(errorText(tester), isNull);
+      expect(s.imports, isEmpty);
+    });
+
+    testWidgets('D9. after Back and a new file, Import sends the new file — never the earlier preview\'s',
+        (tester) async {
+      final s = FakeServer();
+      await pumpScreen(tester, with_: s);
+      await openImport(tester);
+      await pickFile(tester, csv('first.csv', 'employee_id,date\nTST001,2026-07-01\n'));
+      await preview(tester);
+      await tapKey(tester, 'attendance-import-back');
+      await pickFile(tester, csv('second.csv', 'employee_id,date\nTST001,2026-07-09\n'));
+      await preview(tester);
+      await tapKey(tester, 'attendance-import-confirm');
+      expect(s.sequence, ['preview', 'preview', 'import']);
+      expect(s.imports.single.files.single.value.filename, 'second.csv');
+      expect(await content(tester, s.imports.single), 'employee_id,date\nTST001,2026-07-09\n');
+    });
+
+    testWidgets('D10. truncated rows are labelled, and the error report downloads as web names it', (tester) async {
+      final s = FakeServer()
+        ..nextPreviews.add((
+          status: 200,
+          body: {
+            'status': 'success',
+            'message': 'preview',
+            'data': previewBody(truncated: true, reportCsv: base64Encode(utf8.encode('row,reason\n3,bad\n'))),
+          }
+        ));
+      await pumpScreen(tester, with_: s);
+      await openImport(tester);
+      await pickFile(tester);
+      await preview(tester);
+      expect(find.text('Rows to import (first 2 shown)'), findsOneWidget);
+      await tapKey(tester, 'attendance-import-report');
+      expect(savedReports.single.name, 'attendance_import_errors.csv');
+      expect(utf8.decode(savedReports.single.bytes), 'row,reason\n3,bad\n');
+      expect(s.imports, isEmpty);
+    });
+
+    test('D11. the preview action refuses without attendance.create or with an invalid single import, and '
+        'shares the one-at-a-time guard with the import', () async {
+      server = FakeServer()..holdPreview = Completer();
+      final bytes = utf8.encode('employee_id,date\n');
+      final denied = await signedIn(hrUser(['attendance.view']));
+      await expectLater(denied.read(attendanceImportActionProvider).preview(bytes, 'a.csv'),
+          throwsA(kAttendanceImportDenied));
+      final allowed = await signedIn(importer);
+      await expectLater(
+          allowed
+              .read(attendanceImportActionProvider)
+              .preview(bytes, 'a.csv', single: const AttendanceSingleImport(employeeId: '')),
+          throwsA('Please select an employee.'));
+      expect(server.calls, isEmpty);
+      final first = allowed.read(attendanceImportActionProvider).preview(bytes, 'a.csv');
+      await Future<void>.delayed(Duration.zero);
+      await expectLater(allowed.read(attendanceImportActionProvider).upload(bytes, 'a.csv'),
+          throwsA(kAttendanceImportBusy));
+      server.holdPreview!.complete();
+      expect((await first).importable, 2);
+      expect(server.sequence, ['preview']);
     });
   });
 }

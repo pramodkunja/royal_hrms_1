@@ -228,7 +228,7 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
       _ds.fetchHrCorrections(branch: branch, department: department, status: status);
 
   @override
-  Future<void> reviewCorrection(String id, {required bool approve, String? remarks}) =>
+  Future<String> reviewCorrection(String id, {required bool approve, String? remarks}) =>
       _ds.reviewCorrection(id, approve: approve, remarks: remarks);
 
   @override
@@ -271,6 +271,11 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
         branch: branch,
         department: department,
       );
+
+  @override
+  Future<ImportPreviewEntity> previewImportCsv(List<int> bytes, String fileName,
+          {String? employeeId, String? dateFrom, String? dateTo}) =>
+      _ds.previewImportCsv(bytes, fileName, employeeId: employeeId, dateFrom: dateFrom, dateTo: dateTo);
 
   @override
   Future<ImportResultEntity> importCsv(List<int> bytes, String fileName,

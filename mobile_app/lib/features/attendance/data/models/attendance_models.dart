@@ -526,6 +526,7 @@ class ImportResultModel extends ImportResultEntity {
     required super.errors,
     super.message,
     super.skipped,
+    super.errorReportCsv,
   });
 
   /// Production HRAttendanceImportView / services_hr_ops._run_import_bulk:
@@ -542,6 +543,9 @@ class ImportResultModel extends ImportResultEntity {
       failed: _toInt(json['failed']),
       skipped: _toInt(json['skipped']),
       message: json['message']?.toString() ?? '',
+      errorReportCsv: json['error_report_csv'] is String && (json['error_report_csv'] as String).isNotEmpty
+          ? json['error_report_csv'] as String
+          : null,
       status: json['status'] as String? ?? '',
       errors: rawErrors.whereType<Map<String, dynamic>>().map((e) {
         final reason = e['reason'];
@@ -698,4 +702,40 @@ class MyCorrectionModel extends MyCorrectionEntity {
       createdAt: json['created_at'] as String? ?? '',
     );
   }
+}
+
+/// Parses the dry-run preview (`data` of POST /attendance/import/ with
+/// `dry_run=true`). Row errors use the same shape as the real import's.
+ImportPreviewEntity parseImportPreview(Map<String, dynamic> json) {
+  int n(Object? v) => v is num ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
+  String s(Object? v) => v?.toString() ?? '';
+  final rows = json['rows'] is List ? json['rows'] as List : const [];
+  final employee = json['employee'] is Map ? Map<String, dynamic>.from(json['employee'] as Map) : null;
+  final report = json['error_report_csv'];
+  return ImportPreviewEntity(
+    message: s(json['message']),
+    totalRecords: n(json['total_records']),
+    toCreate: n(json['to_create']),
+    toUpdate: n(json['to_update']),
+    skipped: n(json['skipped']),
+    failed: n(json['failed']),
+    // Same row-error parsing as the import result.
+    errors: ImportResultModel.fromJson({'errors': json['errors'] is List ? json['errors'] : const []}).errors,
+    rows: [
+      for (final r in rows.whereType<Map>())
+        ImportPreviewRowEntity(
+          row: n(r['row']),
+          employeeId: s(r['employee_id']),
+          employeeName: s(r['employee_name']),
+          date: s(r['date']),
+          punchIn: s(r['punch_in']),
+          punchOut: s(r['punch_out']),
+          action: s(r['action']),
+        ),
+    ],
+    rowsTruncated: json['rows_truncated'] == true,
+    errorReportCsv: report is String && report.isNotEmpty ? report : null,
+    employeeCode: employee == null ? null : s(employee['employee_id']),
+    employeeName: employee == null ? null : s(employee['full_name']),
+  );
 }

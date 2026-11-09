@@ -31,6 +31,10 @@ class RoleModel {
   final List<String> permissions; // codenames
   final int userCount;
   final bool isActive;
+  // Role.is_system_role (read-only): one of the roles the company was
+  // provisioned with. On the backend it only blocks deletion — permissions,
+  // name, capabilities and active state stay editable (web shows Edit and the
+  // toggle for every role), so this drives the "System" badge only.
   final bool isSystem;
   // Whether this role is a "manager"-type role for reporting-manager
   // purposes. Backend field is a stored Role.can_manage_team boolean, NOT
@@ -38,6 +42,13 @@ class RoleModel {
   // was later renamed to 'manager__team_lead' via Settings -> Roles), so
   // callers must use this flag instead of comparing `name == 'manager'`.
   final bool canManageTeam;
+  // Role.can_manage_branch: unconditional access to every employee, request
+  // and record in the user's own branch (the Branch Admin capability). Found
+  // by this flag, never by role name — same as canManageTeam.
+  final bool canManageBranch;
+  // Role.updated_at — echoed back as expected_updated_at on edit so the
+  // server can refuse a save based on stale data (409).
+  final String? updatedAt;
 
   const RoleModel({
     required this.id,
@@ -49,6 +60,8 @@ class RoleModel {
     required this.isActive,
     required this.isSystem,
     this.canManageTeam = false,
+    this.canManageBranch = false,
+    this.updatedAt,
   });
 
   String get idStr => id?.toString() ?? '';
@@ -63,6 +76,8 @@ class RoleModel {
     isActive:    isActive ?? this.isActive,
     isSystem:    isSystem,
     canManageTeam: canManageTeam,
+    canManageBranch: canManageBranch,
+    updatedAt:   updatedAt,
   );
 
   factory RoleModel.fromJson(Map<String, dynamic> json) => RoleModel(
@@ -76,8 +91,10 @@ class RoleModel {
         const [],
     userCount: json['user_count'] as int? ?? 0,
     isActive:  json['is_active'] as bool? ?? true,
-    isSystem:  json['is_system'] as bool? ?? false,
+    isSystem:  json['is_system_role'] as bool? ?? false,
     canManageTeam: json['can_manage_team'] as bool? ?? false,
+    canManageBranch: json['can_manage_branch'] as bool? ?? false,
+    updatedAt: json['updated_at']?.toString(),
   );
 }
 
@@ -96,12 +113,21 @@ class RoleFormData {
   String name;          // slug — auto-generated on add, immutable on edit
   bool isActive;
   Set<String> permissions; // codenames
+  // Web RoleForm can_manage_team / can_manage_branch ("Can manage team" /
+  // "Can manage branch"), both false for a new role.
+  bool canManageTeam;
+  bool canManageBranch;
+  // The role's updated_at when the edit form was opened (edit only).
+  String? expectedUpdatedAt;
 
   RoleFormData({
     this.displayName = '',
     this.name = '',
     this.isActive = true,
     Set<String>? permissions,
+    this.canManageTeam = false,
+    this.canManageBranch = false,
+    this.expectedUpdatedAt,
   }) : permissions = permissions ?? {};
 
   factory RoleFormData.fromModel(RoleModel model) => RoleFormData(
@@ -109,6 +135,9 @@ class RoleFormData {
     name:        model.name,
     isActive:    model.isActive,
     permissions: Set<String>.from(model.permissions),
+    canManageTeam:   model.canManageTeam,
+    canManageBranch: model.canManageBranch,
+    expectedUpdatedAt: model.updatedAt,
   );
 
   static String toSlug(String text) => text
@@ -117,11 +146,17 @@ class RoleFormData {
       .trim()
       .replaceAll(RegExp(r'\s+'), '_');
 
+  /// Web page.tsx addRole / editRole body. expected_updated_at is sent only
+  /// for an edit (the optimistic-concurrency check on RoleDetailView.put).
   Map<String, dynamic> toJson() => {
     'name':                 name,
     'display_name':         displayName,
     'is_active':            isActive,
+    'can_manage_team':      canManageTeam,
+    'can_manage_branch':    canManageBranch,
     'permission_codenames': permissions.toList(),
+    if (expectedUpdatedAt != null && expectedUpdatedAt!.isNotEmpty)
+      'expected_updated_at': expectedUpdatedAt,
   };
 
   Map<String, String?> validate() {

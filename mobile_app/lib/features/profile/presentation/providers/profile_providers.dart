@@ -70,6 +70,18 @@ class MyProfileNotifier extends AutoDisposeAsyncNotifier<MyProfileModel> {
     }
   }
 
+  /// Saves the self-editable (Emergency-step) custom fields, then reloads.
+  /// Returns null on success, a user-facing error message on failure.
+  Future<String?> saveCustomFields(Map<String, String> values) async {
+    try {
+      await _ds.updateMyCustomFields(values);
+      await refresh();
+      return null;
+    } catch (e) {
+      return friendlyProfileError(e);
+    }
+  }
+
   /// Returns null on success, a user-facing error message on failure.
   Future<String?> uploadPhoto(File file) async {
     final current = state.valueOrNull;
