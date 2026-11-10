@@ -235,15 +235,18 @@ void main() {
   group('history', () {
     testWidgets('shows the server\'s records in the server\'s order with web\'s fields and badges', (tester) async {
       await pumpTab(tester);
-      final cards = tester.widgetList<Container>(find.byWidgetPredicate(
-          (w) => w is Container && w.key is ValueKey<String> && RegExp(r'^promotion-\d+$').hasMatch((w.key as ValueKey<String>).value)));
+      final cards = tester.widgetList<Container>(find.byWidgetPredicate((w) =>
+          w is Container &&
+          w.key is ValueKey<String> &&
+          RegExp(r'^promotion-\d+$').hasMatch((w.key as ValueKey<String>).value)));
       expect(cards.map((c) => (c.key as ValueKey<String>).value), ['promotion-3', 'promotion-2', 'promotion-1']);
 
       // record 3: designation + role change, role slugs shown as role names
       expect(find.descendant(of: byKey('promotion-3-designation'), matching: find.text('Engineer → Senior Engineer')),
           findsOneWidget);
       expect(find.descendant(of: byKey('promotion-3-designation'), matching: find.text('Promotion')), findsOneWidget);
-      expect(find.descendant(of: byKey('promotion-3-role'), matching: find.text('Employee → Team Lead')), findsOneWidget);
+      expect(
+          find.descendant(of: byKey('promotion-3-role'), matching: find.text('Employee → Team Lead')), findsOneWidget);
       expect(find.descendant(of: byKey('promotion-3-role'), matching: find.text('Role change')), findsOneWidget);
       expect(text(tester, 'promotion-3-date'), '05 Nov 2026');
       expect(text(tester, 'promotion-3-by'), 'Test HR');
@@ -335,8 +338,8 @@ void main() {
       expect(server.puts.single['role'], 'manager_team_lead');
       expect(server.puts.single['designation'], 'Engineer');
       expect(server.puts.single.containsKey('remarks'), isFalse, reason: 'empty remarks are not sent');
-      expect(find.text("Designation and role updated. New access applies at the employee's next login."),
-          findsOneWidget);
+      expect(
+          find.text("Designation and role updated. New access applies at the employee's next login."), findsOneWidget);
     });
 
     testWidgets('a server error keeps the sheet and choices; retry succeeds', (tester) async {
@@ -376,7 +379,8 @@ void main() {
       await tester.pumpWidget(ProviderScope(
         overrides: [
           authStateProvider.overrideWith(() => _Auth(viewer)),
-          dioProvider.overrideWithValue(Dio(BaseOptions(baseUrl: 'https://test.invalid/api'))..httpClientAdapter = server),
+          dioProvider
+              .overrideWithValue(Dio(BaseOptions(baseUrl: 'https://test.invalid/api'))..httpClientAdapter = server),
           cookieJarProvider.overrideWithValue(CookieJar()),
           secureStorageProvider.overrideWithValue(_NullStorage()),
         ],

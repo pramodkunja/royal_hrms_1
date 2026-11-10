@@ -11,15 +11,16 @@ import '../../../../core/theme/app_text_styles.dart';
 class ActionTabs extends StatelessWidget {
   final bool isResultsActive;
   final VoidCallback onToggleResults;
-  final VoidCallback onItems;
-  final VoidCallback onAssign;
+  // null = hidden (web shows Sections / Assign only with assessments.edit).
+  final VoidCallback? onItems;
+  final VoidCallback? onAssign;
 
   const ActionTabs({
     super.key,
     required this.isResultsActive,
     required this.onToggleResults,
-    required this.onItems,
-    required this.onAssign,
+    this.onItems,
+    this.onAssign,
   });
 
   @override
@@ -40,22 +41,24 @@ class ActionTabs extends StatelessWidget {
               onTap: onToggleResults,
             ),
           ),
-          Expanded(
-            child: _TabButton(
-              icon: Icons.playlist_add_check_outlined,
-              label: 'Items',
-              active: false,
-              onTap: onItems,
+          if (onItems != null)
+            Expanded(
+              child: _TabButton(
+                icon: Icons.playlist_add_check_outlined,
+                label: 'Items',
+                active: false,
+                onTap: onItems!,
+              ),
             ),
-          ),
-          Expanded(
-            child: _TabButton(
-              icon: Icons.person_add_alt_1_outlined,
-              label: 'Assign',
-              active: false,
-              onTap: onAssign,
+          if (onAssign != null)
+            Expanded(
+              child: _TabButton(
+                icon: Icons.person_add_alt_1_outlined,
+                label: 'Assign',
+                active: false,
+                onTap: onAssign!,
+              ),
             ),
-          ),
         ],
       ),
     );

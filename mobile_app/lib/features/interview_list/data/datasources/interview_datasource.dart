@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
@@ -99,6 +100,38 @@ class InterviewDataSource {
   // Required columns: name, email, position_applied, branch_name. Optional:
   // phone, interview_date, interview_mode, notes. See
   // CandidateBulkImportRowSerializer in the backend for exact validation.
+
+  /// The import template, built by the server exactly as web downloads it:
+  /// GET /recruitment/candidates/bulk-import/sample/?format=csv|xlsx
+  /// (CandidateBulkImportSampleView, recruitment.view) → the file bytes
+  /// (header row "Candidate Name, Email, Mobile Number, Position Applied,
+  /// Branch, Interview Date, Interview Mode, Notes" + two example rows).
+  /// A refusal arrives as bytes too; it is decoded so its message is shown.
+  Future<List<int>> fetchBulkImportSample(String format) async {
+    try {
+      final res = await _dio.get(ApiConstants.candidateBulkImportSample,
+          queryParameters: {'format': format}, options: Options(responseType: ResponseType.bytes));
+      return res.data as List<int>;
+    } on DioException catch (e) {
+      final res = e.response;
+      final data = res?.data;
+      if (res != null && data is List<int>) {
+        Object? decoded;
+        try {
+          decoded = jsonDecode(utf8.decode(data, allowMalformed: true));
+        } catch (_) {}
+        if (decoded is Map) {
+          throw DioException(
+            requestOptions: e.requestOptions,
+            response: Response(requestOptions: res.requestOptions, statusCode: res.statusCode, data: decoded),
+            type: e.type,
+            error: e.error,
+          );
+        }
+      }
+      rethrow;
+    }
+  }
 
   Future<BulkImportResult> bulkImport({
     required Uint8List bytes,

@@ -1,12 +1,29 @@
 import 'package:dio/dio.dart' show DioException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../auth/domain/entities/user_entity.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/datasources/approval_datasource.dart';
 import '../../data/models/approval_model.dart';
 
 final approvalDataSourceProvider = Provider<ApprovalRemoteDataSource>((ref) {
   return ApprovalRemoteDataSource(ref.watch(dioProvider));
 });
+
+/// Web candidate-review/page.tsx: canApprove = usePermission("employees.approve")
+/// || usePermission("onboarding.approve") — a superuser, or either codename in
+/// the user's own permissions. No settings.edit bypass (web has none).
+bool canReviewOnboarding(UserEntity? user) =>
+    user != null &&
+    (user.isSuperuser ||
+        user.permissions.contains('employees.approve') ||
+        user.permissions.contains('onboarding.approve'));
+
+/// Web: a "rejected" (sent back) application shows "Awaiting resubmission"
+/// instead of Review, whoever is looking.
+bool isAwaitingResubmission(ApprovalUser u) => u.onboardingStatus == 'rejected';
+
+const kOnboardingReviewDenied = 'You do not have permission to review onboarding.';
 
 final approvalsProvider =
     AsyncNotifierProvider.autoDispose<ApprovalsNotifier, List<ApprovalUser>>(
@@ -36,6 +53,10 @@ class ApprovalsNotifier extends AutoDisposeAsyncNotifier<List<ApprovalUser>> {
     String? panNumber,
     String? assessmentId,
   }) async {
+    // Same rule as the Review button, so a decision can't be sent another way.
+    if (!canReviewOnboarding(ref.read(authStateProvider).valueOrNull?.user)) return kOnboardingReviewDenied;
+    final target = (state.valueOrNull ?? const <ApprovalUser>[]).where((u) => u.id == userId).firstOrNull;
+    if (target != null && isAwaitingResubmission(target)) return kOnboardingReviewDenied;
     try {
       await _ds.approveOrReject(
         userId,

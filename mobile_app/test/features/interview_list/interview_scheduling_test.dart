@@ -302,8 +302,10 @@ void main() {
       expect(b['interview_mode'], 'video_call');
       expect(b['meeting_link'], 'https://meet.example.test/abc');
       expect(b['interviewer'], 'u-int-1');
-      expect([b['name'], b['email'], b['position_applied'], b['branch']],
-          ['New Person', 'new@example.test', 'Analyst', 1]);
+      expect([b['name'], b['email'], b['position_applied']], ['New Person', 'new@example.test', 'Analyst']);
+      // Task 29: this user has no settings.edit, so (as web) the branch is
+      // locked to their own and the server sets it — none is sent.
+      expect(b.containsKey('branch'), isFalse);
       expect(server.sendEmailCalls, 0, reason: 'the backend queues the invitation');
       expect(find.text(invited), findsOneWidget);
     });

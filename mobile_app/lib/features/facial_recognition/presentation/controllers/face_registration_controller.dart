@@ -16,8 +16,7 @@ class FaceRegistrationController extends Notifier<FaceRegistrationUiState> {
 
   Future<void> loadStatus() async {
     try {
-      final registration =
-          await ref.read(facialRecognitionRepositoryProvider).getMyRegistrationStatus();
+      final registration = await ref.read(facialRecognitionRepositoryProvider).getMyRegistrationStatus();
       state = state.copyWith(phase: phaseForRegistration(registration), registration: registration);
     } catch (e) {
       state = state.copyWith(phase: FaceRegistrationPhase.error, errorMessage: _friendlyMessage(e));
@@ -42,6 +41,8 @@ class FaceRegistrationController extends Notifier<FaceRegistrationUiState> {
             livenessPassed: captured.livenessPassed,
             livenessScore: captured.livenessScore,
             consentAcknowledged: consentAcknowledged,
+            captureFrameCount: captured.captureFrameCount,
+            captureVariance: captured.captureVariance,
           );
       state = state.copyWith(phase: phaseForRegistration(registration), registration: registration);
     } catch (e) {
@@ -50,8 +51,7 @@ class FaceRegistrationController extends Notifier<FaceRegistrationUiState> {
   }
 }
 
-final faceRegistrationControllerProvider =
-    NotifierProvider<FaceRegistrationController, FaceRegistrationUiState>(
+final faceRegistrationControllerProvider = NotifierProvider<FaceRegistrationController, FaceRegistrationUiState>(
   FaceRegistrationController.new,
 );
 

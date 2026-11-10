@@ -83,6 +83,15 @@ const _kTiles = <_Tile>[
     desc: 'Prefix, padding and starting sequence',
     route: AppRoutes.settingsEmployeeCode,
   ),
+  _Tile(
+    cat: _Tab.company,
+    icon: Icons.contact_mail_outlined,
+    iconColor: Color(0xFF8C5A1E),
+    iconBg: Color(0xFFFAF1E6),
+    label: 'ID Card',
+    desc: 'Employee ID card design, terms and authorised signature',
+    route: AppRoutes.settingsIdCard,
+  ),
   // Modules
   _Tile(
     cat: _Tab.modules,

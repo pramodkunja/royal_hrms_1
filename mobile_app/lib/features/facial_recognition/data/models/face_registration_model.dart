@@ -27,9 +27,7 @@ class FaceRegistrationModel extends FaceRegistrationEntity {
       embeddingModelVersion: json['embedding_model_version'] as String? ?? '',
       status: faceRegistrationStatusFromJson(json['status'] as String?),
       approvedByName: json['approved_by_name'] as String? ?? '',
-      approvedAt: json['approved_at'] != null
-          ? DateTime.tryParse(json['approved_at'] as String)
-          : null,
+      approvedAt: json['approved_at'] != null ? DateTime.tryParse(json['approved_at'] as String) : null,
       notes: json['notes'] as String? ?? '',
       createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
     );

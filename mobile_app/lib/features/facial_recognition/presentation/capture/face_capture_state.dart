@@ -41,6 +41,11 @@ class FaceCaptureUiState {
   // _handleFaces).
   final String? liveHint;
 
+  /// How many quality-gated frames were averaged into [embedding], and their
+  /// mean pairwise distance — web's capture_frame_count / capture_variance.
+  final int? captureFrameCount;
+  final double? captureVariance;
+
   const FaceCaptureUiState({
     this.phase = FaceCapturePhase.idle,
     this.message,
@@ -49,6 +54,8 @@ class FaceCaptureUiState {
     this.livenessScore,
     this.captureSessionId = '',
     this.liveHint,
+    this.captureFrameCount,
+    this.captureVariance,
   });
 
   FaceCaptureUiState copyWith({
@@ -59,6 +66,8 @@ class FaceCaptureUiState {
     double? livenessScore,
     String? captureSessionId,
     String? liveHint,
+    int? captureFrameCount,
+    double? captureVariance,
   }) {
     return FaceCaptureUiState(
       phase: phase ?? this.phase,
@@ -68,6 +77,8 @@ class FaceCaptureUiState {
       livenessScore: livenessScore ?? this.livenessScore,
       captureSessionId: captureSessionId ?? this.captureSessionId,
       liveHint: liveHint,
+      captureFrameCount: captureFrameCount ?? this.captureFrameCount,
+      captureVariance: captureVariance ?? this.captureVariance,
     );
   }
 }

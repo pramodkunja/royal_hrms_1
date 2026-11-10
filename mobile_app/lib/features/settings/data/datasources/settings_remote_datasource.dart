@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../models/assessment_config_model.dart';
@@ -8,6 +9,7 @@ import '../models/company_model.dart';
 import '../models/departments_model.dart';
 import '../models/email_template_model.dart';
 import '../models/employee_code_model.dart';
+import '../models/id_card_settings_model.dart';
 import '../models/leave_import_model.dart';
 import '../models/leave_policy_model.dart';
 import '../models/onboarding_field_config_model.dart';
@@ -156,9 +158,33 @@ class SettingsRemoteDataSource {
         _unwrap(res.data) as Map<String, dynamic>);
   }
 
-  Future<List<EmailTemplateModel>> fetchTemplates() async {
-    final res = await _dio.get(ApiConstants.settingsEmailTemplates);
+  /// One page of GET /settings/email-templates/?page=&page_size=
+  /// (EmailTemplateListCreateView: core.pagination.paginate, default 20,
+  /// max 100; ordered template_type, display_name). The envelope is
+  /// {count, page, page_size, total_pages, results} with `results` GROUPED
+  /// by template_type ({type: [template, ...]}), flattened here. Web's page
+  /// sends no page params and so only ever sees the first 20 — mobile walks
+  /// every page (EmailTemplatesNotifier).
+  Future<({List<EmailTemplateModel> items, int count, int page, int totalPages})> fetchTemplatesPage({
+    required int page,
+    required int pageSize,
+  }) async {
+    final res = await _dio.get(ApiConstants.settingsEmailTemplates,
+        queryParameters: {'page': page, 'page_size': pageSize});
     final data = _unwrap(res.data);
+    final items = _flattenTemplates(data);
+    final env = data is Map ? data : const {};
+    int asInt(Object? v, int fallback) => v is num ? v.toInt() : fallback;
+    return (
+      items: items,
+      count: asInt(env['count'], items.length),
+      page: asInt(env['page'], page),
+      // A response without total_pages is treated as the last page.
+      totalPages: asInt(env['total_pages'], page),
+    );
+  }
+
+  List<EmailTemplateModel> _flattenTemplates(Object? data) {
     // Backend returns paginated with results as grouped dict: {template_type: [templates...], ...}
     final grouped =
         (data is Map<String, dynamic>) ? (data['results'] ?? data) : data;
@@ -589,6 +615,55 @@ class SettingsRemoteDataSource {
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   // Backend envelope: {success: true, message: "...", data: ...}
+  // ── ID Card ───────────────────────────────────────────────────────────────
+
+  Future<IdCardSettingsModel> fetchIdCardSettings() async {
+    final res = await _dio.get(ApiConstants.settingsIdCard);
+    final data = _unwrap(res.data);
+    return IdCardSettingsModel.fromJson(data is Map<String, dynamic> ? data : const {});
+  }
+
+  /// PUT /settings/id-card/ — always multipart, as web onSave: the text and
+  /// toggle fields, then `reference_pdf` (a new file) or else
+  /// `remove_reference_pdf=true`, then `signature_image` or else
+  /// `remove_signature=true`. Returns the saved settings.
+  Future<IdCardSettingsModel> saveIdCardSettings(
+    IdCardSettingsForm form, {
+    IdCardPickedFile? referencePdf,
+    bool removeReferencePdf = false,
+    IdCardPickedFile? signature,
+    bool removeSignature = false,
+  }) async {
+    final fd = FormData();
+    fd.fields.addAll(form.toFields().entries);
+    if (referencePdf != null) {
+      fd.files.add(MapEntry('reference_pdf', await MultipartFile.fromFile(referencePdf.path, filename: referencePdf.name)));
+    } else if (removeReferencePdf) {
+      fd.fields.add(const MapEntry('remove_reference_pdf', 'true'));
+    }
+    if (signature != null) {
+      fd.files.add(MapEntry('signature_image', await MultipartFile.fromFile(signature.path, filename: signature.name)));
+    } else if (removeSignature) {
+      fd.fields.add(const MapEntry('remove_signature', 'true'));
+    }
+    final res = await _dio.put(ApiConstants.settingsIdCard, data: fd);
+    final data = _unwrap(res.data);
+    return IdCardSettingsModel.fromJson(data is Map<String, dynamic> ? data : const {});
+  }
+
+  /// GET /settings/id-card/reference-pdf/ — the stored reference PDF's bytes
+  /// (streamed by the API with the user's login) and its content type.
+  Future<({Uint8List bytes, String contentType})> downloadIdCardReferencePdf() async {
+    final res = await _dio.get<List<int>>(
+      ApiConstants.settingsIdCardReferencePdf,
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return (
+      bytes: Uint8List.fromList(res.data ?? const []),
+      contentType: res.headers.value(Headers.contentTypeHeader) ?? '',
+    );
+  }
+
   dynamic _unwrap(dynamic body) {
     if (body is Map<String, dynamic>) {
       if (body.containsKey('data')) return body['data'];

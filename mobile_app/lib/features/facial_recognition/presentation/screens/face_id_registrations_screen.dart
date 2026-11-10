@@ -84,8 +84,7 @@ class _FaceIdRegistrationsScreenState extends ConsumerState<FaceIdRegistrationsS
       _loadingStatus = true;
     });
     try {
-      final status =
-          await ref.read(facialRecognitionRepositoryProvider).getEmployeeStatus(employee.uuid);
+      final status = await ref.read(facialRecognitionRepositoryProvider).getEmployeeStatus(employee.uuid);
       if (!mounted) return;
       setState(() => _status = status);
     } finally {
@@ -135,6 +134,8 @@ class _FaceIdRegistrationsScreenState extends ConsumerState<FaceIdRegistrationsS
             livenessPassed: result.captured.livenessPassed,
             livenessScore: result.captured.livenessScore,
             consentAcknowledged: result.consentAcknowledged,
+            captureFrameCount: result.captured.captureFrameCount,
+            captureVariance: result.captured.captureVariance,
           );
       if (!mounted) return;
       setState(() => _status = registration);
@@ -194,8 +195,7 @@ class _FaceIdRegistrationsScreenState extends ConsumerState<FaceIdRegistrationsS
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Face ID Registrations',
-                      style: AppTextStyles.h4.copyWith(color: Colors.white)),
+                  Text('Face ID Registrations', style: AppTextStyles.h4.copyWith(color: Colors.white)),
                   const SizedBox(height: 2),
                   Text(
                     'Register or update an employee\'s face ID in person — approved immediately.',
@@ -264,7 +264,8 @@ class _FaceIdRegistrationsScreenState extends ConsumerState<FaceIdRegistrationsS
             onTap: () => _selectEmployee(employee),
             child: Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
+              decoration:
+                  BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
               child: Row(
                 children: [
                   FaceInitialsAvatar(name: employee.fullName),
@@ -369,9 +370,12 @@ class _FaceIdRegistrationsScreenState extends ConsumerState<FaceIdRegistrationsS
                     onPressed: (_loadingStatus || _registering) ? null : _handleRegisterTap,
                     icon: _registering
                         ? const SizedBox(
-                            width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                         : const Icon(Icons.camera_alt_outlined),
-                    label: Text(_status?.status == FaceRegistrationStatus.approved ? 'Update Face ID' : 'Register Face ID'),
+                    label: Text(
+                        _status?.status == FaceRegistrationStatus.approved ? 'Update Face ID' : 'Register Face ID'),
                     style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 13)),
                   ),
                 ),

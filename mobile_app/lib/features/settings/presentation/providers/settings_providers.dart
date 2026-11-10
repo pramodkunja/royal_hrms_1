@@ -229,17 +229,105 @@ Future<EmailTemplateCategoryModel?> createEmailTemplateCategory(
   }
 }
 
+/// Whether every page of email templates has been loaded. [error] is set when
+/// a page after the first failed — the templates already loaded stay shown and
+/// [EmailTemplatesNotifier.loadRemaining] resumes from the failed page.
+class EmailTemplatesPaging {
+  const EmailTemplatesPaging({this.complete = true, this.loading = false, this.error, this.total});
+  final bool complete;
+  final bool loading;
+  final String? error;
+
+  /// The server's `count` (all templates), when known.
+  final int? total;
+}
+
+final emailTemplatesPagingProvider = StateProvider<EmailTemplatesPaging>((_) => const EmailTemplatesPaging());
+
 final emailTemplatesProvider =
     AsyncNotifierProvider.autoDispose<EmailTemplatesNotifier, List<EmailTemplateModel>>(
   EmailTemplatesNotifier.new,
 );
 
+/// All email templates. The list endpoint is paginated (default 20) and web
+/// only ever reads its first page; every page is loaded here so templates
+/// beyond the first 20 — and search over them — are reachable. Pages are
+/// fetched in order (100 per page, the backend maximum) and merged by id, so
+/// an overlap between pages never shows a template twice.
 class EmailTemplatesNotifier
     extends AutoDisposeAsyncNotifier<List<EmailTemplateModel>> {
   SettingsRemoteDataSource get _ds => ref.read(settingsDataSourceProvider);
 
+  static const pageSize = 100;
+
+  /// Safety stop for a misbehaving total_pages (10,000 templates).
+  static const maxPages = 100;
+
+  int _nextPage = 1;
+  int _totalPages = 1;
+  int? _count;
+  bool _loadingMore = false;
+
+  void _setPaging(EmailTemplatesPaging p) => ref.read(emailTemplatesPagingProvider.notifier).state = p;
+
+  static List<EmailTemplateModel> _merge(List<EmailTemplateModel> have, List<EmailTemplateModel> page) {
+    final seen = {for (final t in have) t.id};
+    return [...have, ...page.where((t) => seen.add(t.id))];
+  }
+
+  bool get _done => _nextPage > _totalPages || _nextPage > maxPages;
+
   @override
-  Future<List<EmailTemplateModel>> build() => _ds.fetchTemplates();
+  Future<List<EmailTemplateModel>> build() async {
+    _nextPage = 1;
+    _totalPages = 1;
+    _count = null;
+    _loadingMore = false;
+    // A first-page failure surfaces as the screen's error state.
+    final first = await _ds.fetchTemplatesPage(page: 1, pageSize: pageSize);
+    _totalPages = first.totalPages;
+    _count = first.count;
+    _nextPage = 2;
+    final items = _merge(const [], first.items);
+    if (first.items.isEmpty) _nextPage = _totalPages + 1;
+    return _loadPages(items);
+  }
+
+  /// Fetches the pages from [_nextPage] on; stops at the last page, on an
+  /// empty page, or at the first failure (keeping what was loaded).
+  Future<List<EmailTemplateModel>> _loadPages(List<EmailTemplateModel> items) async {
+    var list = items;
+    _setPaging(EmailTemplatesPaging(complete: _done, loading: !_done, total: _count));
+    while (!_done) {
+      try {
+        final page = await _ds.fetchTemplatesPage(page: _nextPage, pageSize: pageSize);
+        list = _merge(list, page.items);
+        _totalPages = page.totalPages;
+        _count = page.count;
+        _nextPage++;
+        if (page.items.isEmpty) _nextPage = _totalPages + 1;
+      } catch (e) {
+        _setPaging(EmailTemplatesPaging(complete: false, error: _friendly(e), total: _count));
+        return list;
+      }
+    }
+    _setPaging(EmailTemplatesPaging(total: _count));
+    return list;
+  }
+
+  /// Retry after a later page failed: continues from the failed page,
+  /// appending to the templates already shown. Ignored while a load is
+  /// running or once everything is loaded.
+  Future<void> loadRemaining() async {
+    if (_loadingMore || _done || state.isLoading) return;
+    _loadingMore = true;
+    try {
+      final list = await _loadPages(state.valueOrNull ?? const []);
+      state = AsyncData(list);
+    } finally {
+      _loadingMore = false;
+    }
+  }
 
   Future<String?> create(EmailTemplateFormData form) async {
     try {

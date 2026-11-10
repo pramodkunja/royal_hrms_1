@@ -9,20 +9,21 @@ class AssessmentCard extends StatelessWidget {
   final AssessmentModel assessment;
   final bool isExpanded;
   final VoidCallback onToggleResults;
-  final VoidCallback onItems;
-  final VoidCallback onAssign;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  // null = the user may not do it (web hides the button).
+  final VoidCallback? onItems;
+  final VoidCallback? onAssign;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   const AssessmentCard({
     super.key,
     required this.assessment,
     required this.isExpanded,
     required this.onToggleResults,
-    required this.onItems,
-    required this.onAssign,
-    required this.onEdit,
-    required this.onDelete,
+    this.onItems,
+    this.onAssign,
+    this.onEdit,
+    this.onDelete,
   });
 
   @override
@@ -90,10 +91,18 @@ class AssessmentCard extends StatelessWidget {
                   onAssign: onAssign,
                 ),
               ),
-              const SizedBox(width: 6),
-              IconOnlyChip(icon: Icons.edit_outlined, onTap: onEdit),
-              const SizedBox(width: 4),
-              IconOnlyChip(icon: Icons.delete_outline, color: AppColors.error, onTap: onDelete),
+              if (onEdit != null) ...[
+                const SizedBox(width: 6),
+                IconOnlyChip(key: const Key('assessment-edit'), icon: Icons.edit_outlined, onTap: onEdit!),
+              ],
+              if (onDelete != null) ...[
+                const SizedBox(width: 4),
+                IconOnlyChip(
+                    key: const Key('assessment-delete'),
+                    icon: Icons.delete_outline,
+                    color: AppColors.error,
+                    onTap: onDelete!),
+              ],
             ],
           ),
           if (isExpanded) ...[

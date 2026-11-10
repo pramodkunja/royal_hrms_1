@@ -7,6 +7,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_app/core/network/api_client.dart';
+import 'package:mobile_app/features/auth/domain/entities/user_entity.dart';
+import 'package:mobile_app/features/auth/presentation/controllers/auth_notifier.dart';
+import 'package:mobile_app/features/auth/presentation/providers/auth_providers.dart';
+import 'package:mobile_app/features/auth/presentation/states/auth_state.dart';
 import 'package:mobile_app/features/candidate_review/data/models/approval_model.dart';
 import 'package:mobile_app/features/candidate_review/presentation/screens/candidate_review_screen.dart';
 import 'package:mobile_app/features/candidate_review/presentation/widgets/approval_identity_fields.dart';
@@ -122,6 +126,23 @@ class FakeApprovalsServer implements HttpClientAdapter {
 
 late FakeApprovalsServer server;
 
+/// An onboarding approver — the Review action needs web's canApprove
+/// (employees.approve / onboarding.approve, or superuser).
+class _Approver extends AuthNotifier {
+  @override
+  Future<AuthState> build() async => const AuthState(
+      user: UserEntity(
+          id: 'hr1',
+          email: 'hr@example.test',
+          fullName: 'Test HR',
+          role: 'hr',
+          roleDisplay: 'HR',
+          mustChangePassword: false,
+          permissions: ['recruitment.view', 'onboarding.approve'],
+          onboardingStatus: 'complete',
+          assessmentStatus: 'complete'));
+}
+
 Future<void> pumpScreen(WidgetTester tester, List<Map<String, dynamic>> rows, {FakeApprovalsServer? s}) async {
   tester.view.physicalSize = const Size(1080, 3200);
   tester.view.devicePixelRatio = 1;
@@ -131,8 +152,14 @@ Future<void> pumpScreen(WidgetTester tester, List<Map<String, dynamic>> rows, {F
     key: UniqueKey(),
     overrides: [
       dioProvider.overrideWithValue(Dio(BaseOptions(baseUrl: 'https://test.invalid/api'))..httpClientAdapter = server),
+      authStateProvider.overrideWith(_Approver.new),
     ],
-    child: const MaterialApp(home: Scaffold(body: CandidateReviewScreen())),
+    child: MaterialApp(
+      home: Consumer(builder: (_, ref, child) {
+        ref.watch(authStateProvider); // loaded, as in the app
+        return child!;
+      }, child: const Scaffold(body: CandidateReviewScreen())),
+    ),
   ));
   await tester.pumpAndSettle();
 }

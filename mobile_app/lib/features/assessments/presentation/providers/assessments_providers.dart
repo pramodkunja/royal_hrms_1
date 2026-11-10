@@ -26,7 +26,10 @@ class AssessmentsNotifier extends AutoDisposeAsyncNotifier<List<AssessmentModel>
   @override
   Future<List<AssessmentModel>> build() => _ds.fetchAssessments();
 
+  UserEntity? get _user => ref.read(authStateProvider).valueOrNull?.user;
+
   Future<String?> createAssessment(AssessmentFormData form) async {
+    if (!canCreateAssessments(_user)) return kAssessmentEditDenied;
     try {
       final created = await _ds.createAssessment(form);
       state = AsyncData([...state.valueOrNull ?? [], created]);
@@ -37,6 +40,7 @@ class AssessmentsNotifier extends AutoDisposeAsyncNotifier<List<AssessmentModel>
   }
 
   Future<String?> editAssessment(String id, AssessmentFormData form) async {
+    if (!canEditAssessments(_user)) return kAssessmentEditDenied;
     try {
       final updated = await _ds.updateAssessment(id, form);
       state = AsyncData(
@@ -49,6 +53,7 @@ class AssessmentsNotifier extends AutoDisposeAsyncNotifier<List<AssessmentModel>
   }
 
   Future<String?> removeAssessment(String id) async {
+    if (!canDeleteAssessments(_user)) return kAssessmentEditDenied;
     try {
       await _ds.deleteAssessment(id);
       state = AsyncData(
@@ -138,11 +143,30 @@ class AssessmentItemsNotifier
 
 // ── Assessment sections (web ItemsModal; fetched while the dialog is open) ────
 
-/// Production assessments views: item and section writes need
-/// `has_perm(user, 'assessments.edit')` (superuser or the role's codename);
-/// reading needs `assessments.view`.
-bool canEditAssessments(UserEntity? user) =>
-    user != null && (user.isSuperuser || user.permissions.contains('assessments.edit'));
+/// Web assessments/page.tsx uses usePermission / useAnyPermission — a
+/// superuser, or the codename in the user's own permissions (no settings.edit
+/// bypass):
+///  - isAdminView (the management screen; else "My Assessments"):
+///    any of assessments.view / .create / .edit / .delete;
+///  - "New Assessment" / "Create Assessment": assessments.create;
+///  - Sections, Assign, Edit: assessments.edit;
+///  - Delete: assessments.delete. Results: everyone on the screen.
+/// The backend (apps/assessments/views) checks the same codenames per request.
+bool _has(UserEntity? user, String codename) =>
+    user != null && (user.isSuperuser || user.permissions.contains(codename));
+
+bool canManageAssessmentsView(UserEntity? user) => [
+      'assessments.view',
+      'assessments.create',
+      'assessments.edit',
+      'assessments.delete',
+    ].any((c) => _has(user, c));
+
+bool canCreateAssessments(UserEntity? user) => _has(user, 'assessments.create');
+
+bool canEditAssessments(UserEntity? user) => _has(user, 'assessments.edit');
+
+bool canDeleteAssessments(UserEntity? user) => _has(user, 'assessments.delete');
 
 const kAssessmentEditDenied = 'Permission denied.';
 
@@ -213,6 +237,8 @@ Future<String?> assignCandidateToAssessment(
   required String assessmentId,
   required String templateName,
 }) async {
+  // Web: Assign is offered only with assessments.edit (AssignAssessmentView).
+  if (!canEditAssessments(ref.read(authStateProvider).valueOrNull?.user)) return kAssessmentEditDenied;
   try {
     await ref.read(assessmentsDataSourceProvider).assignAssessment(
           candidateId: candidateId,

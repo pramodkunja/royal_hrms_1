@@ -30,8 +30,7 @@ class SendWishSheet extends ConsumerStatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) =>
-          SendWishSheet(employee: employee, occasionKey: occasionKey),
+      builder: (_) => SendWishSheet(employee: employee, occasionKey: occasionKey),
     );
     return result ?? false;
   }
@@ -53,9 +52,7 @@ class _SendWishSheetState extends ConsumerState<SendWishSheet> {
   Map<String, String> _employeeVars(String companyName) {
     final emp = widget.employee;
     final parts = emp.fullName.trim().split(RegExp(r'\s+'));
-    final firstName = parts.isNotEmpty && parts.first.isNotEmpty
-        ? parts.first
-        : emp.fullName;
+    final firstName = parts.isNotEmpty && parts.first.isNotEmpty ? parts.first : emp.fullName;
     final lastName = parts.length > 1 ? parts.last : '';
     return {
       'employee_name': emp.fullName,
@@ -104,10 +101,8 @@ class _SendWishSheetState extends ConsumerState<SendWishSheet> {
     });
   }
 
-  static String _stripHtml(String html) => html
-      .replaceAll(RegExp(r'<[^>]*>'), '')
-      .replaceAll(RegExp(r'\n{3,}'), '\n\n')
-      .trim();
+  static String _stripHtml(String html) =>
+      html.replaceAll(RegExp(r'<[^>]*>'), '').replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
 
   Future<void> _confirm(EmailTemplateModel template, String companyName) async {
     setState(() {
@@ -136,8 +131,7 @@ class _SendWishSheetState extends ConsumerState<SendWishSheet> {
     final companyAsync = ref.watch(companyProvider);
 
     final loadingTemplates = templatesAsync.isLoading && !templatesAsync.hasValue;
-    final activeTemplates =
-        (templatesAsync.valueOrNull ?? []).where((t) => t.isActive).toList();
+    final activeTemplates = (templatesAsync.valueOrNull ?? []).where((t) => t.isActive).toList();
 
     final preferred = activeTemplates.isEmpty
         ? null
@@ -145,26 +139,20 @@ class _SendWishSheetState extends ConsumerState<SendWishSheet> {
             (t) => t.name.toLowerCase().contains(widget.occasionKey),
             orElse: () => activeTemplates.first,
           );
-    final manualStillValid = _manualSelected != null &&
-        activeTemplates.any((t) => t.id == _manualSelected!.id);
+    final manualStillValid = _manualSelected != null && activeTemplates.any((t) => t.id == _manualSelected!.id);
     final selected = manualStillValid ? _manualSelected : preferred;
 
     final company = companyAsync.valueOrNull;
-    final companyName =
-        (company?.companyName.isNotEmpty ?? false) ? company!.companyName : '[Company]';
+    final companyName = (company?.companyName.isNotEmpty ?? false) ? company!.companyName : '[Company]';
 
     final vars = _employeeVars(companyName);
-    final subjectPreview =
-        selected == null ? '' : _renderTemplateVars(selected.subject, vars);
-    final bodyPreview = selected == null
-        ? ''
-        : _stripHtml(_renderTemplateVars(selected.body, vars));
+    final subjectPreview = selected == null ? '' : _renderTemplateVars(selected.subject, vars);
+    final bodyPreview = selected == null ? '' : _stripHtml(_renderTemplateVars(selected.body, vars));
 
     return SafeArea(
       top: false,
       child: ConstrainedBox(
-        constraints:
-            BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
         child: Container(
           decoration: BoxDecoration(
             color: AppColors.surface,
@@ -188,8 +176,7 @@ class _SendWishSheetState extends ConsumerState<SendWishSheet> {
                         color: AppColors.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(Icons.celebration_outlined,
-                          size: 18, color: AppColors.primary),
+                      child: Icon(Icons.celebration_outlined, size: 18, color: AppColors.primary),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -222,8 +209,7 @@ class _SendWishSheetState extends ConsumerState<SendWishSheet> {
                       if (_error != null) ...[
                         Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           decoration: BoxDecoration(
                             color: AppColors.errorContainer,
                             borderRadius: BorderRadius.circular(8),
@@ -231,8 +217,7 @@ class _SendWishSheetState extends ConsumerState<SendWishSheet> {
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(Icons.error_outline,
-                                  size: 16, color: AppColors.error),
+                              Icon(Icons.error_outline, size: 16, color: AppColors.error),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -253,8 +238,7 @@ class _SendWishSheetState extends ConsumerState<SendWishSheet> {
                       // Recipient info
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
                           color: AppColors.infoContainer,
                           borderRadius: BorderRadius.circular(8),
@@ -262,14 +246,12 @@ class _SendWishSheetState extends ConsumerState<SendWishSheet> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.send_outlined,
-                                size: 15, color: AppColors.info),
+                            Icon(Icons.send_outlined, size: 15, color: AppColors.info),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text.rich(
                                 TextSpan(
-                                  style: AppTextStyles.body
-                                      .copyWith(fontSize: 12, color: AppColors.textPrimary),
+                                  style: AppTextStyles.body.copyWith(fontSize: 12, color: AppColors.textPrimary),
                                   children: [
                                     const TextSpan(text: 'Sending a wish email to '),
                                     TextSpan(
@@ -312,15 +294,13 @@ class _SendWishSheetState extends ConsumerState<SendWishSheet> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
                             const SizedBox(width: 8),
-                            Text('Loading templates…',
-                                style: AppTextStyles.caption),
+                            Text('Loading templates…', style: AppTextStyles.caption),
                           ],
                         )
                       else if (activeTemplates.isEmpty)
                         Text(
                           'No active templates — create one in Settings → Email Templates.',
-                          style: AppTextStyles.caption
-                              .copyWith(color: AppColors.warning),
+                          style: AppTextStyles.caption.copyWith(color: AppColors.warning),
                         )
                       else
                         DropdownButtonFormField<EmailTemplateModel>(
@@ -330,8 +310,7 @@ class _SendWishSheetState extends ConsumerState<SendWishSheet> {
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: AppColors.surface,
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 11),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                               borderSide: BorderSide(color: AppColors.border),
@@ -342,8 +321,7 @@ class _SendWishSheetState extends ConsumerState<SendWishSheet> {
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide(
-                                  color: AppColors.primary, width: 1.5),
+                              borderSide: BorderSide(color: AppColors.primary, width: 1.5),
                             ),
                             isDense: true,
                           ),
@@ -389,9 +367,7 @@ class _SendWishSheetState extends ConsumerState<SendWishSheet> {
                                   TextSpan(
                                     style: AppTextStyles.caption.copyWith(fontSize: 11),
                                     children: [
-                                      const TextSpan(
-                                          text: 'To: ',
-                                          style: TextStyle(fontWeight: FontWeight.w700)),
+                                      const TextSpan(text: 'To: ', style: TextStyle(fontWeight: FontWeight.w700)),
                                       TextSpan(text: widget.employee.email),
                                     ],
                                   ),
@@ -402,9 +378,7 @@ class _SendWishSheetState extends ConsumerState<SendWishSheet> {
                                 TextSpan(
                                   style: AppTextStyles.caption.copyWith(fontSize: 11),
                                   children: [
-                                    const TextSpan(
-                                        text: 'Subject: ',
-                                        style: TextStyle(fontWeight: FontWeight.w700)),
+                                    const TextSpan(text: 'Subject: ', style: TextStyle(fontWeight: FontWeight.w700)),
                                     TextSpan(text: subjectPreview),
                                   ],
                                 ),
@@ -440,8 +414,7 @@ class _SendWishSheetState extends ConsumerState<SendWishSheet> {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.textSecondary,
                           side: BorderSide(color: AppColors.border),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         child: const Text('Cancel'),
@@ -456,8 +429,7 @@ class _SendWishSheetState extends ConsumerState<SendWishSheet> {
                             : () => _confirm(selected, companyName),
                         style: FilledButton.styleFrom(
                           backgroundColor: AppColors.primary,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         icon: _sending

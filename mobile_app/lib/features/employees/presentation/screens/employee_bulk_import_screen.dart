@@ -34,7 +34,10 @@ class _EmployeeBulkImportScreenState extends ConsumerState<EmployeeBulkImportScr
     if (result == null || result.files.isEmpty) return;
     final file = result.files.first;
     if (file.size > _kMaxImportBytes) {
-      setState(() { _pickError = 'File exceeds 5 MB.'; _picked = null; });
+      setState(() {
+        _pickError = 'File exceeds 5 MB.';
+        _picked = null;
+      });
       return;
     }
     setState(() {
@@ -48,14 +51,20 @@ class _EmployeeBulkImportScreenState extends ConsumerState<EmployeeBulkImportScr
   Future<void> _upload() async {
     final file = _picked;
     if (file == null || file.bytes == null) return;
-    setState(() { _uploading = true; _uploadError = null; });
+    setState(() {
+      _uploading = true;
+      _uploadError = null;
+    });
     try {
       final result = await ref.read(employeesDataSourceProvider).bulkImport(
             bytes: file.bytes!,
             filename: file.name,
           );
       if (!mounted) return;
-      setState(() { _result = result; _uploading = false; });
+      setState(() {
+        _result = result;
+        _uploading = false;
+      });
       if (result.created > 0) {
         ref.invalidate(employeesProvider);
         ref.invalidate(employeeListProvider);
@@ -63,7 +72,10 @@ class _EmployeeBulkImportScreenState extends ConsumerState<EmployeeBulkImportScr
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() { _uploading = false; _uploadError = _friendly(e); });
+      setState(() {
+        _uploading = false;
+        _uploadError = _friendly(e);
+      });
     }
   }
 
@@ -89,12 +101,22 @@ class _EmployeeBulkImportScreenState extends ConsumerState<EmployeeBulkImportScr
             children: [
               const _InfoCard(
                 requiredCols: [
-                  'first_name', 'last_name', 'email', 'role',
-                  'department', 'designation', 'branch', 'date_of_joining',
+                  'first_name',
+                  'last_name',
+                  'email',
+                  'role',
+                  'department',
+                  'designation',
+                  'branch',
+                  'date_of_joining',
                 ],
                 optionalCols: [
-                  'phone', 'employee_type', 'gender', 'date_of_birth',
-                  'blood_group', 'address',
+                  'phone',
+                  'employee_type',
+                  'gender',
+                  'date_of_birth',
+                  'blood_group',
+                  'address',
                 ],
               ),
               const SizedBox(height: 16),
@@ -122,7 +144,8 @@ class _EmployeeBulkImportScreenState extends ConsumerState<EmployeeBulkImportScr
                       onPressed: (_picked == null || _uploading) ? null : _upload,
                       icon: _uploading
                           ? const SizedBox(
-                              width: 14, height: 14,
+                              width: 14,
+                              height: 14,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.upload_file_outlined, size: 18),
                       label: Text(_uploading ? 'Importing…' : 'Import',
@@ -248,12 +271,12 @@ class _FilePickerCard extends StatelessWidget {
         child: picked == null
             ? Column(
                 children: [
-                  Icon(Icons.cloud_upload_outlined, size: 36,
-                      color: error != null ? AppColors.error : AppColors.textHint),
+                  Icon(Icons.cloud_upload_outlined,
+                      size: 36, color: error != null ? AppColors.error : AppColors.textHint),
                   const SizedBox(height: 8),
                   Text('Tap to select CSV or XLSX file',
-                      style: AppTextStyles.label.copyWith(
-                          color: error != null ? AppColors.error : AppColors.textSecondary)),
+                      style: AppTextStyles.label
+                          .copyWith(color: error != null ? AppColors.error : AppColors.textSecondary)),
                   if (error != null) ...[
                     const SizedBox(height: 2),
                     Text(error!, style: AppTextStyles.caption.copyWith(color: AppColors.error, fontSize: 10)),
@@ -268,8 +291,10 @@ class _FilePickerCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(picked!.name, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600),
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(picked!.name,
+                            style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
                         Text(_formatSize(picked!.size), style: AppTextStyles.caption.copyWith(fontSize: 10)),
                       ],
                     ),

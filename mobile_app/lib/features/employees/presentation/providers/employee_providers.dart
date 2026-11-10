@@ -8,6 +8,7 @@ import '../../../settings/data/models/departments_model.dart';
 import '../../../settings/data/models/roles_model.dart';
 import '../../../settings/presentation/providers/settings_providers.dart';
 import '../../data/datasources/employees_remote_datasource.dart';
+import '../../data/models/employee_id_card_model.dart';
 import '../../data/models/employee_model.dart';
 import '../../data/models/promotion_record_model.dart';
 
@@ -19,8 +20,7 @@ final employeesDataSourceProvider = Provider<EmployeesRemoteDataSource>((ref) {
 
 // ── Filters (search / status / department) ─────────────────────────────────────
 
-final employeeFiltersProvider =
-    StateProvider.autoDispose<EmployeeFilters>((ref) => const EmployeeFilters());
+final employeeFiltersProvider = StateProvider.autoDispose<EmployeeFilters>((ref) => const EmployeeFilters());
 
 // ── Full list ──────────────────────────────────────────────────────────────────
 //
@@ -35,8 +35,7 @@ final employeeFiltersProvider =
 // EmployeesRemoteDataSource directly instead and are what the Add/Edit
 // Employee sheet and the Profile screen's status toggle use now.
 
-final employeesProvider =
-    AsyncNotifierProvider.autoDispose<EmployeesNotifier, List<EmployeeModel>>(
+final employeesProvider = AsyncNotifierProvider.autoDispose<EmployeesNotifier, List<EmployeeModel>>(
   EmployeesNotifier.new,
 );
 
@@ -127,8 +126,7 @@ class EmployeeListState {
   bool get hasMore => page < totalPages;
 }
 
-final employeeListProvider =
-    AsyncNotifierProvider.autoDispose<EmployeeListNotifier, EmployeeListState>(
+final employeeListProvider = AsyncNotifierProvider.autoDispose<EmployeeListNotifier, EmployeeListState>(
   EmployeeListNotifier.new,
 );
 
@@ -152,8 +150,7 @@ class EmployeeListNotifier extends AutoDisposeAsyncNotifier<EmployeeListState> {
     // page 1 and load only the filtered page 1."
     final filters = ref.watch(employeeFiltersProvider);
     _generation++;
-    final result =
-        await _ds.fetchEmployeesPage(page: 1, pageSize: _pageSize, filters: filters);
+    final result = await _ds.fetchEmployeesPage(page: 1, pageSize: _pageSize, filters: filters);
     return EmployeeListState(
       items: result.items,
       page: result.page,
@@ -221,8 +218,7 @@ class EmployeeListNotifier extends AutoDisposeAsyncNotifier<EmployeeListState> {
     final filters = ref.read(employeeFiltersProvider);
     state = const AsyncLoading<EmployeeListState>().copyWithPrevious(state);
     state = await AsyncValue.guard(() async {
-      final result =
-          await _ds.fetchEmployeesPage(page: 1, pageSize: _pageSize, filters: filters);
+      final result = await _ds.fetchEmployeesPage(page: 1, pageSize: _pageSize, filters: filters);
       return EmployeeListState(
         items: result.items,
         page: result.page,
@@ -281,43 +277,61 @@ final employeeListBranchOptionsProvider = Provider.autoDispose<List<String>>((re
 
 final employeeDepartmentListProvider = Provider.autoDispose<List<String>>((ref) {
   final employees = ref.watch(employeesProvider).valueOrNull ?? [];
-  return (employees.map((e) => e.department).where((d) => d.isNotEmpty).toSet().toList())
-    ..sort();
+  return (employees.map((e) => e.department).where((d) => d.isNotEmpty).toSet().toList())..sort();
 });
 
 final employeeDesignationListProvider = Provider.autoDispose<List<String>>((ref) {
   final employees = ref.watch(employeesProvider).valueOrNull ?? [];
-  return (employees.map((e) => e.designation).where((d) => d.isNotEmpty).toSet().toList())
-    ..sort();
+  return (employees.map((e) => e.designation).where((d) => d.isNotEmpty).toSet().toList())..sort();
 });
 
 final employeeBranchNameListProvider = Provider.autoDispose<List<String>>((ref) {
   final employees = ref.watch(employeesProvider).valueOrNull ?? [];
-  return (employees.map((e) => e.branch).where((b) => b.isNotEmpty).toSet().toList())
-    ..sort();
+  return (employees.map((e) => e.branch).where((b) => b.isNotEmpty).toSet().toList())..sort();
 });
 
 // ── Employee detail (for profile screen) ──────────────────────────────────────
 
-final employeeDetailProvider = FutureProvider.autoDispose
-    .family<EmployeeModel, String>((ref, employeeId) {
+final employeeDetailProvider = FutureProvider.autoDispose.family<EmployeeModel, String>((ref, employeeId) {
   return ref.read(employeesDataSourceProvider).fetchEmployee(employeeId);
 });
 
+/// The employee's ID card data (web /dashboard/employees/<id>/id-card).
+final employeeIdCardProvider = FutureProvider.autoDispose.family<IdCardData, String>(
+  (ref, employeeId) => ref.read(employeesDataSourceProvider).fetchIdCard(employeeId),
+);
+
+/// Web ID card page's error text for a failed load.
+String idCardLoadError(Object e) {
+  if (e is DioException) {
+    final status = e.response?.statusCode;
+    if (status == 403) return "You don't have permission to generate ID cards.";
+    if (status == 404) return 'Employee not found.';
+    final body = e.response?.data;
+    if (body is Map && body['message'] is String && (body['message'] as String).trim().isNotEmpty) {
+      return body['message'] as String;
+    }
+    if (e.type == DioExceptionType.connectionError ||
+        e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.receiveTimeout) {
+      return 'Cannot reach server. Check your connection.';
+    }
+  }
+  return 'Could not load the ID card.';
+}
+
 // ── Approval matrix (per-employee) ─────────────────────────────────────────────
 
-final employeeApprovalMatrixProvider = AsyncNotifierProvider.autoDispose
-    .family<EmployeeApprovalMatrixNotifier, List<EmployeeApprovalMatrixRow>, String>(
+final employeeApprovalMatrixProvider =
+    AsyncNotifierProvider.autoDispose.family<EmployeeApprovalMatrixNotifier, List<EmployeeApprovalMatrixRow>, String>(
   EmployeeApprovalMatrixNotifier.new,
 );
 
-class EmployeeApprovalMatrixNotifier extends AutoDisposeFamilyAsyncNotifier<
-    List<EmployeeApprovalMatrixRow>, String> {
+class EmployeeApprovalMatrixNotifier extends AutoDisposeFamilyAsyncNotifier<List<EmployeeApprovalMatrixRow>, String> {
   EmployeesRemoteDataSource get _ds => ref.read(employeesDataSourceProvider);
 
   @override
-  Future<List<EmployeeApprovalMatrixRow>> build(String employeeId) =>
-      _ds.fetchApprovalMatrix(employeeId);
+  Future<List<EmployeeApprovalMatrixRow>> build(String employeeId) => _ds.fetchApprovalMatrix(employeeId);
 
   // Backend PATCH response is just the single updated row, not the full
   // list — refetch the whole matrix afterwards so overrides for other
@@ -346,32 +360,27 @@ class EmployeeApprovalMatrixNotifier extends AutoDisposeFamilyAsyncNotifier<
 // ── Form support providers ─────────────────────────────────────────────────────
 
 // Roles — reuse from settings to avoid duplicate API calls
-final employeeFormRolesProvider =
-    Provider.autoDispose<AsyncValue<List<RoleModel>>>((ref) {
+final employeeFormRolesProvider = Provider.autoDispose<AsyncValue<List<RoleModel>>>((ref) {
   return ref.watch(rolesProvider);
 });
 
 // Departments — reuse from settings
-final employeeFormDepartmentsProvider =
-    Provider.autoDispose<AsyncValue<List<DepartmentModel>>>((ref) {
+final employeeFormDepartmentsProvider = Provider.autoDispose<AsyncValue<List<DepartmentModel>>>((ref) {
   return ref.watch(departmentsProvider);
 });
 
 // Branches — fetched by employees feature
-final employeeBranchesProvider =
-    FutureProvider.autoDispose<List<EmployeeBranch>>((ref) {
+final employeeBranchesProvider = FutureProvider.autoDispose<List<EmployeeBranch>>((ref) {
   return ref.read(employeesDataSourceProvider).fetchBranches();
 });
 
 // Designations filtered by department ID
-final employeeDesignationsByDeptProvider =
-    FutureProvider.autoDispose.family<List<String>, int>((ref, deptId) {
+final employeeDesignationsByDeptProvider = FutureProvider.autoDispose.family<List<String>, int>((ref, deptId) {
   return ref.read(employeesDataSourceProvider).fetchDesignationNames(deptId);
 });
 
 // HR contact options, filtered by branch (Edit Employee sheet, edit-only)
-final employeeHrOptionsProvider =
-    FutureProvider.autoDispose.family<List<EmployeePickerOption>, String>((ref, branch) {
+final employeeHrOptionsProvider = FutureProvider.autoDispose.family<List<EmployeePickerOption>, String>((ref, branch) {
   return ref.read(employeesDataSourceProvider).fetchHrs(branch);
 });
 
@@ -380,6 +389,21 @@ final employeeHrOptionsProvider =
 final employeeManagerOptionsProvider =
     FutureProvider.autoDispose.family<List<EmployeePickerOption>, String>((ref, branch) {
   return ref.read(employeesDataSourceProvider).fetchManagers(branch);
+});
+
+// Add Employee "Reporting Manager" options — web AddEmployeeModal: by branch,
+// and by department too once one is chosen. Only called with a branch.
+final employeeCreateManagerOptionsProvider =
+    FutureProvider.autoDispose.family<List<EmployeePickerOption>, ({String branch, String department})>((ref, key) {
+  return ref.read(employeesDataSourceProvider).fetchManagers(key.branch, department: key.department);
+});
+
+// Edit Employee "Reporting Approver" options (web reportingApproverListEndpoint).
+final employeeApproverOptionsProvider = FutureProvider.autoDispose
+    .family<List<EmployeePickerOption>, ({String branch, bool managerRole, String designation})>((ref, key) {
+  return ref
+      .read(employeesDataSourceProvider)
+      .fetchReportingApprovers(branch: key.branch, managerRole: key.managerRole, designation: key.designation);
 });
 
 // ── Create / Update / Status mutations (Add/Edit Employee sheet, Profile) ──────
@@ -567,6 +591,40 @@ const kCustomFieldsEditDenied = 'You do not have permission to edit this employe
 
 bool _canEditEmployees(WidgetRef ref) =>
     userHasPermission(ref.read(authStateProvider).valueOrNull?.user, 'employees.edit');
+
+/// Outcome of saving an Education / Bank / Emergency section: null on
+/// success, else the message to show and the server's per-field errors
+/// (EmployeeProfileSerializer `data: {field: [message]}`).
+typedef ProfileSectionSaveError = ({String message, Map<String, String> fieldErrors});
+
+/// PUT /employees/<code>/ with one section's fields (see
+/// employee_profile_sections.dart). employees.edit is checked first (web
+/// canEdit; the backend also enforces it plus branch scope). On success the
+/// employee is reloaded so the profile shows what was persisted.
+Future<ProfileSectionSaveError?> saveEmployeeProfileSection(
+    WidgetRef ref, String employeeId, Map<String, dynamic> payload) async {
+  if (!_canEditEmployees(ref)) return (message: kCustomFieldsEditDenied, fieldErrors: const <String, String>{});
+  try {
+    await ref.read(employeesDataSourceProvider).updateProfileSection(employeeId, payload);
+    ref.invalidate(employeeDetailProvider(employeeId));
+    ref.invalidate(employeesProvider);
+    ref.invalidate(employeeListProvider);
+    return null;
+  } catch (e) {
+    final fieldErrors = <String, String>{};
+    if (e is DioException) {
+      final body = e.response?.data;
+      final data = body is Map ? body['data'] : null;
+      if (data is Map) {
+        data.forEach((k, v) {
+          final msg = v is List && v.isNotEmpty ? '${v.first}' : (v is String ? v : null);
+          if (k is String && msg != null && payload.containsKey(k)) fieldErrors[k] = msg;
+        });
+      }
+    }
+    return (message: _friendlyError(e), fieldErrors: fieldErrors);
+  }
+}
 
 /// PUT /employees/<id>/ {custom_field_values: payload}. Reloads the employee
 /// on success; returns the server's message on failure.

@@ -38,6 +38,10 @@ class ApiConstants {
   // Settings — Employee Code
   static const String settingsEmployeeCode = '/settings/employee-code/';
 
+  // Settings — ID Card (GET settings.view; PUT multipart settings.edit)
+  static const String settingsIdCard = '/settings/id-card/';
+  static const String settingsIdCardReferencePdf = '/settings/id-card/reference-pdf/';
+
   // Settings — Approval Rules (GET/PATCH require hr_admin/system_admin —
   // CanManageRoles on backend, not a settings.view/edit permission codename).
   // PATCH targets this same collection URL; the row to update is identified
@@ -91,6 +95,8 @@ class ApiConstants {
   static String employeeDetail(String employeeId) => '/employees/$employeeId/';
   static String employeeCustomFileFields(String employeeId) => '/employees/$employeeId/custom-file-fields/';
   static String employeePromotions(String employeeId) => '/employees/$employeeId/promotions/';
+  // Web API.employees.idCard (EmployeeIdCardView: employees.view + branch scope).
+  static String employeeIdCard(String employeeId) => '/employees/$employeeId/id-card/';
   // Settings → Notice Period → Import (web API.employees.noticePeriodImport*).
   static const String employeeNoticePeriodImport = '/employees/notice-period/import/';
   static const String employeeNoticePeriodImportSample = '/employees/notice-period/import/sample/';
@@ -149,6 +155,7 @@ class ApiConstants {
   static String candidateResendLogin(int id) =>
       '/recruitment/candidates/$id/resend-portal-login/';
   static const String candidateBulkImport = '/recruitment/candidates/bulk-import/';
+  static const String candidateBulkImportSample = '/recruitment/candidates/bulk-import/sample/';
   // Accepts either the numeric candidate pk or the human-readable employee
   // code (e.g. "EMP0001") — SendCandidateEmailView falls back to
   // `portal_user__employee_id` when the path segment isn't purely digits.

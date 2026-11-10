@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../data/models/assessment_model.dart';
+import 'assessment_video_preview.dart';
 
 const _kMonthShort = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
@@ -37,8 +38,12 @@ class ItemRow extends StatelessWidget {
           ? '${(item.durationSecs! / 60).ceil()} min'
           : 'Video';
     } else {
-      subtitle = 'Quiz · ${item.passScore} pt${item.passScore == 1 ? '' : 's'}'
-          '${item.correctOption.isNotEmpty ? ' · Correct: ${item.correctOption.toUpperCase()}' : ''}';
+      // Web ItemsModal: the question (first 60 characters, "…" after) and
+      // "· Correct: X" ("—" when unset). Items carry no points.
+      final q = item.question;
+      final excerpt = q.length > 60 ? '${q.substring(0, 60)}…' : q;
+      final correct = item.correctOption.isEmpty ? '—' : item.correctOption.toUpperCase();
+      subtitle = '$excerpt · Correct: $correct';
     }
 
     return Container(
@@ -70,6 +75,8 @@ class ItemRow extends StatelessWidget {
                     style: AppTextStyles.caption.copyWith(fontSize: 11),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
+                // Web VideoLink: "Watch video" / the shortened URL.
+                if (isVideo && item.videoUrl.isNotEmpty) AssessmentVideoLink(url: item.videoUrl),
               ],
             ),
           ),

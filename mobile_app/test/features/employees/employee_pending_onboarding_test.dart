@@ -243,7 +243,8 @@ void main() {
       await tester.pumpWidget(ProviderScope(
         overrides: [
           authStateProvider.overrideWith(() => _Auth(editor)),
-          dioProvider.overrideWithValue(Dio(BaseOptions(baseUrl: 'https://test.invalid/api'))..httpClientAdapter = server),
+          dioProvider
+              .overrideWithValue(Dio(BaseOptions(baseUrl: 'https://test.invalid/api'))..httpClientAdapter = server),
           cookieJarProvider.overrideWithValue(CookieJar()),
           secureStorageProvider.overrideWithValue(_NullStorage()),
           employeeDetailProvider.overrideWith((ref, id) async => EmployeeModel.fromJson(ref.watch(source))),
@@ -270,7 +271,8 @@ void main() {
       await tester.pumpWidget(ProviderScope(
         overrides: [
           authStateProvider.overrideWith(() => _Auth(editor)),
-          dioProvider.overrideWithValue(Dio(BaseOptions(baseUrl: 'https://test.invalid/api'))..httpClientAdapter = slow),
+          dioProvider
+              .overrideWithValue(Dio(BaseOptions(baseUrl: 'https://test.invalid/api'))..httpClientAdapter = slow),
           cookieJarProvider.overrideWithValue(CookieJar()),
           secureStorageProvider.overrideWithValue(_NullStorage()),
         ],

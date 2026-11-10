@@ -17,6 +17,7 @@ import '../../features/settings/presentation/company/company_screen.dart';
 import '../../features/settings/presentation/smtp/smtp_screen.dart';
 import '../../features/settings/presentation/email_templates/email_templates_screen.dart';
 import '../../features/settings/presentation/departments/departments_screen.dart';
+import '../../features/settings/presentation/id_card/id_card_settings_screen.dart';
 import '../../features/settings/presentation/employee_code/employee_code_screen.dart';
 import '../../features/settings/presentation/roles/roles_screen.dart';
 import '../../features/settings/presentation/audit/audit_screen.dart';
@@ -33,6 +34,7 @@ import '../../features/settings/presentation/onboarding_fields/onboarding_fields
 import '../../features/announcements/presentation/announcements_screen.dart';
 import '../../features/employees/presentation/employees_screen.dart';
 import '../../features/employees/presentation/screens/employee_bulk_import_screen.dart';
+import '../../features/employees/presentation/screens/employee_id_card_screen.dart';
 import '../../features/employees/presentation/screens/employee_profile_screen.dart';
 import '../../features/employees/data/models/employee_model.dart';
 import '../../features/branches/presentation/screens/branches_screen.dart';
@@ -90,6 +92,9 @@ class AppRoutes {
   static const String employees = '/dashboard/employees';
   static String employeeProfilePath(String employeeId) =>
       '/dashboard/employees/$employeeId';
+  // Web /dashboard/employees/<id>/id-card (inherits /dashboard/employees).
+  static String employeeIdCardPath(String employeeId) =>
+      '/dashboard/employees/$employeeId/id-card';
   static const String employeeBulkImport = '/employees/bulk-import';
   static const String candidateBulkImport = '/interview-list/bulk-import';
   static const String orgChart = '/dashboard/org-chart';
@@ -127,6 +132,7 @@ class AppRoutes {
   static const String settingsDepartments = '/settings/departments';
   static const String settingsRoles = '/settings/roles';
   static const String settingsEmployeeCode = '/settings/employee-code';
+  static const String settingsIdCard = '/settings/id-card';
   static const String settingsEmailTemplates = '/settings/email-templates';
   static const String settingsSmtp = '/settings/smtp';
   static const String settingsAuditLog = '/settings/audit';
@@ -420,6 +426,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const EmployeeCodeScreen(),
       ),
       GoRoute(
+        path: AppRoutes.settingsIdCard,
+        builder: (_, __) => const IdCardSettingsScreen(),
+      ),
+      GoRoute(
         path: AppRoutes.settingsEmailTemplates,
         builder: (_, __) => const EmailTemplatesScreen(),
       ),
@@ -536,6 +546,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   employeeId: state.pathParameters['employeeId']!,
                   initialEmployee: state.extra as EmployeeModel?,
                 ),
+                routes: [
+                  GoRoute(
+                    path: 'id-card',
+                    builder: (context, state) =>
+                        EmployeeIdCardScreen(employeeId: state.pathParameters['employeeId']!),
+                  ),
+                ],
               ),
             ],
           ),

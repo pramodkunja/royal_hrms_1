@@ -36,7 +36,11 @@ import 'package:mobile_app/features/onboarding/presentation/widgets/onboarding_c
 const code = 'EMP-7';
 
 Map<String, dynamic> cfg(String key, String type, int step,
-        {List<String> options = const [], bool visible = true, bool required = false, bool custom = true, int order = 0}) =>
+        {List<String> options = const [],
+        bool visible = true,
+        bool required = false,
+        bool custom = true,
+        int order = 0}) =>
     {
       'field_key': key,
       'label': 'Label $key',
@@ -101,7 +105,14 @@ Map<String, dynamic> employee() => {
         },
       },
       'custom_file_fields': [
-        {'id': 5, 'field_key': 'cf_doc', 'file': 'https://files.example.test/5/', 'file_name': 'proof.pdf', 'file_size': 2048, 'uploaded_at': '2026-11-01T10:00:00Z'},
+        {
+          'id': 5,
+          'field_key': 'cf_doc',
+          'file': 'https://files.example.test/5/',
+          'file_name': 'proof.pdf',
+          'file_size': 2048,
+          'uploaded_at': '2026-11-01T10:00:00Z'
+        },
       ],
     };
 
@@ -135,18 +146,31 @@ class Server implements HttpClientAdapter {
         final profile = Map<String, dynamic>.from(detail['profile'] as Map);
         final stored = Map<String, dynamic>.from(profile['custom_field_values'] as Map);
         stored.addAll(Map<String, dynamic>.from((o.data as Map)['custom_field_values'] as Map));
-        detail = {...detail, 'profile': {...profile, 'custom_field_values': stored}};
+        detail = {
+          ...detail,
+          'profile': {...profile, 'custom_field_values': stored}
+        };
         return _json(200, {'status': 'success', 'message': 'Employee updated.', 'data': detail});
       }
       if (o.method == 'POST' && o.path == ApiConstants.employeeCustomFileFields(code)) {
         return _json(201, {
           'status': 'success',
-          'data': {'id': 9, 'field_key': 'cf_doc', 'file_url': 'https://files.example.test/9/', 'file_name': 'new.pdf', 'file_size': 10, 'uploaded_at': '2026-11-09T10:00:00Z'}
+          'data': {
+            'id': 9,
+            'field_key': 'cf_doc',
+            'file_url': 'https://files.example.test/9/',
+            'file_name': 'new.pdf',
+            'file_size': 10,
+            'uploaded_at': '2026-11-09T10:00:00Z'
+          }
         });
       }
       if (o.method == 'DELETE') return _json(200, {'status': 'success', 'message': 'Deleted.', 'data': {}});
     }
-    return _json(200, {'status': 'success', 'data': {'results': [], 'count': 0}});
+    return _json(200, {
+      'status': 'success',
+      'data': {'results': [], 'count': 0}
+    });
   }
 
   @override
@@ -228,10 +252,10 @@ Future<void> save(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-Finder field(String key) =>
-    find.descendant(of: byKey('onboarding-field-$key'), matching: find.byType(TextField));
+Finder field(String key) => find.descendant(of: byKey('onboarding-field-$key'), matching: find.byType(TextField));
 
-Map<String, dynamic> lastPutValues() => Map<String, dynamic>.from((server.writes.last.body as Map)['custom_field_values'] as Map);
+Map<String, dynamic> lastPutValues() =>
+    Map<String, dynamic>.from((server.writes.last.body as Map)['custom_field_values'] as Map);
 
 void main() {
   setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
@@ -273,7 +297,8 @@ void main() {
   });
 
   group('edit (employees.edit)', () {
-    testWidgets('saving sends PUT {custom_field_values} with every configured text key — hidden kept, '
+    testWidgets(
+        'saving sends PUT {custom_field_values} with every configured text key — hidden kept, '
         'removed/file keys not sent, nothing else sent', (tester) async {
       await pumpDetail(tester);
       await openEdit(tester, 0);

@@ -7,8 +7,8 @@ import '../entities/face_verification_status_entity.dart';
 // that accepts an image or computes anything server-side — it only ever
 // accepts an already-computed embedding, exactly like the browser's
 // face-api.js output. Mobile has no browser, so the embedding is computed
-// entirely on-device instead (see presentation/capture/ — a bundled
-// MobileFaceNet TFLite model); this repository never sees a raw image, only
+// entirely on-device instead (see presentation/capture/ and face_api/ — the
+// web app's own face-api.js networks as TFLite); this repository never sees a raw image, only
 // the finished float vector, same as web.
 abstract class FacialRecognitionRepository {
   Future<FaceVerificationStatusEntity> getVerificationStatus();
@@ -20,6 +20,8 @@ abstract class FacialRecognitionRepository {
     required bool livenessPassed,
     double? livenessScore,
     required bool consentAcknowledged,
+    int? captureFrameCount,
+    double? captureVariance,
   });
 
   Future<PaginatedFaceRegistrations> getPendingRegistrations({int page = 1, int pageSize = 20});
@@ -40,5 +42,7 @@ abstract class FacialRecognitionRepository {
     required bool livenessPassed,
     double? livenessScore,
     required bool consentAcknowledged,
+    int? captureFrameCount,
+    double? captureVariance,
   });
 }

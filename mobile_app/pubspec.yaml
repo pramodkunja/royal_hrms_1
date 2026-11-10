@@ -59,14 +59,11 @@ dependencies:
   audioplayers: ^6.8.1
 
   # Face ID registration/verification — live camera preview + capture,
-  # on-device face detection for liveness cues (blink / head-turn), and a
-  # bundled on-device embedding model (MobileFaceNet, assets/models/
-  # mobilefacenet.tflite) — see features/facial_recognition. There is no
-  # backend endpoint for computing embeddings server-side, so the whole
-  # capture pipeline runs on-device end to end; the embedding is NOT
-  # numerically compatible with the web app's face-api.js embeddings (a
-  # different model entirely) — an employee must register and verify on the
-  # same platform.
+  # ML Kit face detection for liveness cues (blink / head-turn), and the web
+  # app's own face-api.js 0.22.2 networks converted to TFLite (assets/
+  # face_api/ — see tool/face_api_conversion/) for the 128-d descriptor, so
+  # mobile and web registrations/verifications share one descriptor space.
+  # There is no backend endpoint for computing embeddings server-side.
   camera: ^0.11.0+2
   google_mlkit_face_detection: ^0.13.1
   tflite_flutter: ^0.12.1
@@ -78,6 +75,8 @@ dependencies:
   # with Flutter's own Image widget. Opened with PdfDocument.openFile (not
   # openData, which leaves an undeleted copy in the cache on Android).
   pdfx: ^2.11.0
+  pdf: ">=3.12.0 <3.13.0"
+  printing: ">=5.14.3 <5.15.0"
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -90,8 +89,26 @@ flutter:
 
   assets:
     - assets/images/
-    - assets/models/
+    # face-api.js models (detector, 68 landmarks, recognition) + licence.
+    # (assets/models/mobilefacenet.tflite is no longer used or bundled.)
+    - assets/face_api/
     - assets/animations/
+    # Noto fonts (SIL Open Font License 1.1 — licence texts shipped beside
+    # them) for the Employee ID card PDF: Noto Sans is web's card font, and
+    # Noto Sans Devanagari lets Hindi names/addresses render offline.
+    - assets/fonts/
+
+  fonts:
+    - family: NotoSans
+      fonts:
+        - asset: assets/fonts/NotoSans-Regular.ttf
+        - asset: assets/fonts/NotoSans-Bold.ttf
+          weight: 700
+    - family: NotoSansDevanagari
+      fonts:
+        - asset: assets/fonts/NotoSansDevanagari-Regular.ttf
+        - asset: assets/fonts/NotoSansDevanagari-Bold.ttf
+          weight: 700
 
 # Config for `dart run flutter_native_splash:create` — generates the native
 # (pre-Flutter-engine) launch screen shown the instant the app icon is

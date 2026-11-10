@@ -187,6 +187,9 @@ Future<void> pumpHost(WidgetTester tester, Future<void> Function(BuildContext) o
     child: MaterialApp(
       home: Scaffold(
         body: Consumer(builder: (context, ref, _) {
+          // The signed-in user is always loaded in the app (the router
+          // watches it); the status-change guard reads its permissions.
+          ref.watch(authStateProvider);
           ref.watch(candidateListProvider);
           return Center(
             child: ElevatedButton(

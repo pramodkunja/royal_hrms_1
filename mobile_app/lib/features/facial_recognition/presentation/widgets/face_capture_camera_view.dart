@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../capture/face_capture_controller.dart';
 import '../capture/face_capture_state.dart';
+import '../capture/liveness_tracker.dart';
 
 /// Live camera preview + phase-driven status card for face capture — shared
 /// by self-registration, HR-assisted registration, and clock-in
@@ -18,6 +19,13 @@ import '../capture/face_capture_state.dart';
 /// natural (non-flex) height never causes a layout overflow.
 class FaceCaptureCameraView extends ConsumerStatefulWidget {
   final String instructionText;
+
+  /// Frames averaged into the descriptor (null: the controller's default,
+  /// clock-in's 3). Registration passes 4, as web.
+  final int? framesToCapture;
+
+  /// Blink AND turn (registration) or turn only (clock-in), as web.
+  final LivenessMode? livenessMode;
   final void Function(FaceCaptureUiState state) onReady;
   final VoidCallback? onCancel;
 
@@ -26,6 +34,8 @@ class FaceCaptureCameraView extends ConsumerStatefulWidget {
     required this.instructionText,
     required this.onReady,
     this.onCancel,
+    this.framesToCapture,
+    this.livenessMode,
   });
 
   @override
@@ -39,7 +49,9 @@ class _FaceCaptureCameraViewState extends ConsumerState<FaceCaptureCameraView> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(faceCaptureControllerProvider.notifier).start();
+      ref
+          .read(faceCaptureControllerProvider.notifier)
+          .start(framesToCapture: widget.framesToCapture, livenessMode: widget.livenessMode);
     });
   }
 
@@ -90,7 +102,8 @@ class _FaceCaptureCameraViewState extends ConsumerState<FaceCaptureCameraView> {
                           child: SizedBox(
                             width: 28,
                             height: 28,
-                            child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white.withValues(alpha: 0.8)),
+                            child:
+                                CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white.withValues(alpha: 0.8)),
                           ),
                         ),
                 ),
@@ -152,7 +165,7 @@ class _FaceCaptureCameraViewState extends ConsumerState<FaceCaptureCameraView> {
       // priority over the caller's static instruction whenever there's
       // something specific to correct; falls back to it otherwise.
       FaceCapturePhase.detecting => state.liveHint ?? instructionText,
-      FaceCapturePhase.livenessChecking => 'Blink, or slowly turn your head',
+      FaceCapturePhase.livenessChecking => state.liveHint ?? 'Please blink naturally AND turn your head slightly',
       _ => '',
     };
   }
@@ -168,7 +181,10 @@ class _StatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final (icon, label, color, showRetry) = switch (state.phase) {
       FaceCapturePhase.idle || FaceCapturePhase.initializingCamera => (
-          Icons.hourglass_top_outlined, 'Starting camera…', AppColors.textSecondary, false,
+          Icons.hourglass_top_outlined,
+          'Starting camera…',
+          AppColors.textSecondary,
+          false,
         ),
       FaceCapturePhase.unsupportedPlatform => (
           Icons.phonelink_lock_outlined,
@@ -184,10 +200,16 @@ class _StatusCard extends StatelessWidget {
         ),
       FaceCapturePhase.detecting => (Icons.face_outlined, 'Looking for a face…', AppColors.primary, false),
       FaceCapturePhase.livenessChecking => (
-          Icons.remove_red_eye_outlined, 'Confirming it\'s really you…', AppColors.primary, false,
+          Icons.remove_red_eye_outlined,
+          'Confirming it\'s really you…',
+          AppColors.primary,
+          false,
         ),
       FaceCapturePhase.livenessFailed => (
-          Icons.replay_outlined, state.message ?? 'Could not confirm liveness in time.', AppColors.error, true,
+          Icons.replay_outlined,
+          state.message ?? 'Could not confirm liveness in time.',
+          AppColors.error,
+          true,
         ),
       FaceCapturePhase.extractingEmbedding => (Icons.hourglass_top_outlined, 'Processing…', AppColors.primary, false),
       // Recoverable, expected — a lighting/eye-occlusion check on the
@@ -195,11 +217,17 @@ class _StatusCard extends StatelessWidget {
       // phase's own doc comment in face_capture_state.dart). Same "Try
       // again" shape as livenessFailed, just its own icon/message.
       FaceCapturePhase.qualityFailed => (
-          Icons.wb_sunny_outlined, state.message ?? 'Capture quality check failed.', AppColors.warning, true,
+          Icons.wb_sunny_outlined,
+          state.message ?? 'Capture quality check failed.',
+          AppColors.warning,
+          true,
         ),
       FaceCapturePhase.ready => (Icons.check_circle_outline, 'Captured', AppColors.success, false),
       FaceCapturePhase.error => (
-          Icons.error_outline, state.message ?? 'Something went wrong.', AppColors.error, true,
+          Icons.error_outline,
+          state.message ?? 'Something went wrong.',
+          AppColors.error,
+          true,
         ),
     };
 

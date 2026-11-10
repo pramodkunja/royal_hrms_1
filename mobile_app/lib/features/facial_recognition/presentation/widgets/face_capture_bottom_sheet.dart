@@ -4,6 +4,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../branches/presentation/widgets/branch_dlg_header.dart';
 import '../capture/face_capture_state.dart';
+import '../../face_api/face_api_pipeline.dart' show kRegistrationFramesToCapture, kVerificationFramesToCapture;
+import '../capture/liveness_tracker.dart';
 import 'face_capture_camera_view.dart';
 import 'face_consent_panel.dart';
 
@@ -133,6 +135,14 @@ class _SheetBodyState extends State<_SheetBody> {
           const SizedBox(height: 16),
           FaceCaptureCameraView(
             instructionText: widget.instructionText,
+            // Registration (a consent notice is shown) averages 4 frames,
+            // clock-in verification 3 — web REGISTRATION_ / VERIFICATION_
+            // FRAMES_TO_CAPTURE.
+            framesToCapture:
+                widget.consentNoticeText != null ? kRegistrationFramesToCapture : kVerificationFramesToCapture,
+            // Registration needs a blink AND a head turn; clock-in a head turn
+            // (web liveness.ts "blink_and_turn" / "turn_only").
+            livenessMode: widget.consentNoticeText != null ? LivenessMode.blinkAndTurn : LivenessMode.turnOnly,
             onReady: (captured) => widget.onDone(FaceCaptureSheetResult(
               captured: captured,
               consentAcknowledged: widget.consentNoticeText != null,

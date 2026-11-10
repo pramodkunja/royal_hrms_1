@@ -7,8 +7,7 @@ import '../../domain/entities/face_registration_entity.dart';
 import '../../domain/entities/face_verification_status_entity.dart';
 import '../../domain/repositories/facial_recognition_repository.dart';
 
-final facialRecognitionRemoteDataSourceProvider =
-    Provider<FacialRecognitionRemoteDataSource>(
+final facialRecognitionRemoteDataSourceProvider = Provider<FacialRecognitionRemoteDataSource>(
   (ref) => FacialRecognitionRemoteDataSource(ref.watch(dioProvider)),
 );
 
@@ -40,8 +39,7 @@ final facePendingRegistrationsPageProvider = StateProvider.autoDispose<int>((ref
 /// Pending face-registration queue backing the Approvals "Face ID Approvals"
 /// tab, one page at a time — ref.invalidate this after acting on a request
 /// to refresh the current page.
-final facePendingRegistrationsProvider =
-    FutureProvider.autoDispose<PaginatedFaceRegistrations>((ref) {
+final facePendingRegistrationsProvider = FutureProvider.autoDispose<PaginatedFaceRegistrations>((ref) {
   final page = ref.watch(facePendingRegistrationsPageProvider);
   return ref.watch(facialRecognitionRepositoryProvider).getPendingRegistrations(page: page);
 });

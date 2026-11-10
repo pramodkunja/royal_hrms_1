@@ -35,6 +35,11 @@ class _InfoBanner extends StatelessWidget {
 }
 
 class _EmptyView extends StatelessWidget {
+  const _EmptyView({this.branchName});
+
+  /// Web: "No candidates in <branch>" when a branch is picked.
+  final String? branchName;
+
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -43,7 +48,7 @@ class _EmptyView extends StatelessWidget {
         children: [
           Icon(Icons.people_outline, size: 48, color: AppColors.textHint),
           const SizedBox(height: 12),
-          Text('No candidates found',
+          Text(branchName != null ? 'No candidates in $branchName' : 'No candidates found',
               style:
                   AppTextStyles.label.copyWith(color: AppColors.textSecondary)),
         ],
@@ -198,8 +203,100 @@ class _SearchFilterState extends ConsumerState<_SearchFilter> {
           },
         ),
       ),
+      const SizedBox(height: 10),
+      const _BranchFilter(),
       const SizedBox(height: 12),
     ]);
+  }
+}
+
+/// Web interview-list branch filter. Unrestricted users (superuser /
+/// settings.edit) pick "All Branches" (default) or an active branch; the list
+/// restarts at page 1 for the new branch. Everyone else sees their own branch,
+/// locked — the server scopes their candidates to it.
+class _BranchFilter extends ConsumerWidget {
+  const _BranchFilter();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
+    final box = BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppColors.border),
+    );
+    if (!isUnrestrictedCandidateViewer(user)) {
+      final own = (user?.branch ?? '').trim();
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Tooltip(
+          message: 'Scoped to your branch',
+          child: Container(
+            key: const Key('candidate-branch-locked'),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: box.copyWith(color: AppColors.background),
+            child: Row(children: [
+              Icon(Icons.apartment_outlined, size: 16, color: AppColors.textSecondary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(own.isEmpty ? '—' : own,
+                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+              ),
+              Icon(Icons.lock_outline, size: 15, color: AppColors.textSecondary),
+            ]),
+          ),
+        ),
+      );
+    }
+
+    final optionsAsync = ref.watch(candidateBranchOptionsProvider);
+    final options = optionsAsync.valueOrNull ?? const [];
+    final picked = ref.watch(candidateBranchFilterProvider);
+    // A pick that's no longer among the options shows as All Branches.
+    final value = options.any((b) => b.id == picked) ? picked : null;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(children: [
+        Expanded(
+          child: DropdownButtonFormField<int?>(
+            key: const Key('candidate-branch-filter'),
+            initialValue: value,
+            isExpanded: true,
+            decoration: InputDecoration(
+              isDense: true,
+              prefixIcon: Icon(Icons.apartment_outlined, size: 18, color: AppColors.textSecondary),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+            items: [
+              const DropdownMenuItem<int?>(value: null, child: Text('All Branches')),
+              for (final b in options)
+                DropdownMenuItem<int?>(value: b.id, child: Text('${b.branchName} (${b.branchCode})')),
+            ],
+            // Disabled until the branches have loaded (web shows only "All
+            // Branches" until then).
+            onChanged: optionsAsync.isLoading
+                ? null
+                : (v) => ref.read(candidateBranchFilterProvider.notifier).state = v,
+          ),
+        ),
+        if (optionsAsync.isLoading) ...[
+          const SizedBox(width: 10),
+          const SizedBox(
+              key: Key('candidate-branch-loading'),
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2)),
+        ],
+        if (optionsAsync.hasError && !optionsAsync.isLoading)
+          IconButton(
+            key: const Key('candidate-branch-retry'),
+            tooltip: 'Couldn\'t load branches — retry',
+            icon: Icon(Icons.refresh, color: AppColors.error),
+            onPressed: () => ref.invalidate(candidateBranchOptionsProvider),
+          ),
+      ]),
+    );
   }
 }
 

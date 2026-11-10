@@ -37,8 +37,8 @@ class PromotionRecordModel {
         newDesignation: j['new_designation'] as String? ?? '',
         previousRole: j['previous_role'] as String? ?? '',
         newRole: j['new_role'] as String? ?? '',
-        roleChanged: j['role_changed'] as bool? ??
-            ((j['previous_role'] as String? ?? '') != (j['new_role'] as String? ?? '')),
+        roleChanged:
+            j['role_changed'] as bool? ?? ((j['previous_role'] as String? ?? '') != (j['new_role'] as String? ?? '')),
         effectiveDate: j['effective_date'] as String? ?? '',
         remarks: j['remarks'] as String? ?? '',
         promotedBy: j['promoted_by'] as String? ?? '',

@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -9,8 +8,12 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:image/image.dart' as img;
 import 'package:uuid/uuid.dart';
 
+import '../../face_api/face_api_image.dart';
+import '../../face_api/face_api_nets.dart';
+import '../../face_api/face_api_pipeline.dart';
 import 'face_capture_state.dart';
 import 'face_embedding_model.dart';
+import 'liveness_tracker.dart';
 
 // How many consecutive single-face frames are required before the liveness
 // challenge starts, and how long the challenge itself has to complete —
@@ -19,9 +22,6 @@ import 'face_embedding_model.dart';
 // hand-computed eye-aspect-ratio from 68 landmarks.
 const _kStableFramesToStart = 10;
 const _kLivenessTimeout = Duration(milliseconds: 9000);
-const _kBlinkClosedThreshold = 0.3;
-const _kBlinkOpenThreshold = 0.6;
-const _kHeadTurnDegrees = 15.0;
 
 // ─── Pre-capture quality checks (FR-2) ─────────────────────────────────────
 // Five signals gating a doomed capture before it ever reaches the backend —
@@ -52,34 +52,10 @@ const _kMaxFaceWidthRatio = 0.75;
 // pipelines for "facing the camera" and leaves clear separation from 15°.
 const _kMaxFrontalYawDegrees = 12.0;
 
-// Lighting — same 0-255 mean-luminance scale regardless of platform (ITU-R
-// BT.601, computed identically below), so ported verbatim from
-// qualityGate.ts's MIN/MAX_MEAN_LUMINANCE.
-const _kMinMeanLuminance = 60.0;
-const _kMaxMeanLuminance = 200.0;
-
-// Eye occlusion — same luminance/contrast signal and formula as web's
-// frameCapture.ts (EYE_OCCLUSION_MAX_LUMINANCE/MAX_STD_DEV), ported verbatim.
-// Deliberately conservative, same as web: BOTH eyes must read as
-// dark-AND-flat, run only once the frame has already cleared every other
-// check above, and framed to the user as a best-effort guess, never a
-// certainty — see _assessEyeOcclusion's own doc comment.
-const _kEyeOcclusionMaxLuminance = 50.0;
-const _kEyeOcclusionMaxStdDev = 10.0;
-
 const _kMultipleFacesHint = 'Multiple faces detected — make sure only your face is in frame.';
 const _kTooFarHint = 'Move closer to the camera.';
 const _kTooCloseHint = 'Move back a little.';
 const _kNotFrontalHint = 'Face the camera directly.';
-const _kTooDarkMessage = 'Lighting too dark — move to a better-lit area and try again.';
-const _kTooBrightMessage = 'Lighting too bright — avoid direct backlight or glare and try again.';
-// Verbatim match of web's EYE_OCCLUSION_MESSAGE (frameCapture.ts) — same
-// deliberately non-accusatory framing ("we couldn't clearly detect", not
-// "you're wearing sunglasses"), since this is a heuristic guess, not a
-// certain diagnosis.
-const _kEyeOcclusionMessage =
-    "We couldn't clearly detect your eyes — please remove sunglasses or anything covering your face and try again.";
-
 final _orientations = {
   DeviceOrientation.portraitUp: 0,
   DeviceOrientation.landscapeLeft: 90,
@@ -87,22 +63,33 @@ final _orientations = {
   DeviceOrientation.landscapeRight: 270,
 };
 
+/// The face-api.js networks, loaded once per app session (~25 MB of models;
+/// web likewise keeps them cached after the first load). Tests override it.
+final faceApiNetsProvider = FutureProvider<FaceApiNets>((ref) async {
+  final nets = await loadFaceApiNets();
+  ref.onDispose(nets.dispose);
+  return nets;
+});
+
 /// Drives live camera preview + on-device liveness detection (blink or head
 /// turn, via ML Kit's face classification/head-angle output) and, once
-/// liveness passes, captures a still and runs it through a bundled
-/// on-device embedding model (see face_embedding_model.dart — the backend
-/// has no endpoint that accepts an image or computes anything server-side).
+/// liveness passes, takes [kRegistrationFramesToCapture] /
+/// [kVerificationFramesToCapture] stills and runs them through the web app's
+/// own face pipeline (face-api.js 0.22.2 networks, CLAHE, quality gate,
+/// multi-frame averaging — see face_api/face_api_pipeline.dart), so the
+/// descriptor is comparable with web registrations and verifications. The
+/// backend has no endpoint that accepts an image.
 /// Shared by self-registration, HR-assisted registration, and clock-in
 /// verification — none of them need anything beyond "give me a
 /// liveness-checked embedding".
 class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
   CameraController? _cameraController;
   FaceDetector? _detector;
-  final _embedder = MobileFaceNetEmbedder();
+  int _framesToCapture = kVerificationFramesToCapture;
   int _stableFrames = 0;
   DateTime? _livenessDeadline;
-  double? _baselineYaw;
-  bool _blinkDipped = false;
+  LivenessMode _livenessMode = LivenessMode.turnOnly;
+  LivenessTracker? _liveness;
   bool _processingFrame = false;
   bool _stopped = false;
 
@@ -111,15 +98,16 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
   @override
   FaceCaptureUiState build() {
     ref.onDispose(_teardown);
-    // Kept alive across retry()'s camera-only teardown/restart cycle (see
-    // _teardown below) — reloading the 5MB model from the asset bundle on
-    // every retry would add a needless delay; only actually released when
-    // this whole provider is torn down (the capture sheet closes).
-    ref.onDispose(_embedder.dispose);
     return const FaceCaptureUiState();
   }
 
-  Future<void> start() async {
+  /// [framesToCapture]: 4 for registration, 3 for clock-in verification
+  /// (web REGISTRATION_/VERIFICATION_FRAMES_TO_CAPTURE).
+  /// [livenessMode]: blink AND head turn for registration, head turn for
+  /// clock-in verification (web liveness.ts / FaceVerificationModal).
+  Future<void> start({int? framesToCapture, LivenessMode? livenessMode}) async {
+    if (framesToCapture != null) _framesToCapture = framesToCapture;
+    if (livenessMode != null) _livenessMode = livenessMode;
     if (kIsWeb) {
       // Never even touches getUserMedia/camera on web — google_mlkit_face_detection
       // has no web implementation, so face detection could never run even if
@@ -159,21 +147,16 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
       _detector = FaceDetector(
         options: FaceDetectorOptions(
           enableClassification: true,
-          // Contours (not landmarks) — FaceLandmarkType.leftEye/rightEye is
-          // a single center point, too coarse to build a real eye-region box
-          // from; FaceContourType.leftEye/rightEye gives the multi-point
-          // outline this needs, the same shape web's per-eye landmark set
-          // gives boundingBoxOfPoints() in frameCapture.ts. Only consumed
-          // once, post-liveness, against the still photo (see
-          // _assessEyeOcclusion) — computed on every live frame too since
-          // FaceDetectorOptions is shared by both passes and ML Kit has no
-          // per-call override, a deliberate simplicity/perf tradeoff worth
-          // revisiting if real-device profiling shows it matters.
-          enableContours: true,
+          // Live framing + liveness only (eye-open probabilities, head
+          // angle). The captured frames are analysed by the face-api.js
+          // pipeline, with web's own 68-landmark eye-occlusion check.
           performanceMode: FaceDetectorMode.fast,
         ),
       );
       state = state.copyWith(phase: FaceCapturePhase.detecting);
+      // Load the descriptor models during framing/liveness (web: the big
+      // recognition net downloads while the person blinks and turns).
+      ref.read(faceApiNetsProvider.future).ignore();
       await _cameraController!.startImageStream(_onFrame);
     } on CameraException catch (e) {
       state = state.copyWith(
@@ -188,8 +171,7 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
   Future<void> retry() async {
     await _teardown();
     _stableFrames = 0;
-    _blinkDipped = false;
-    _baselineYaw = null;
+    _liveness = null;
     await start();
   }
 
@@ -249,40 +231,32 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
       _stableFrames++;
       if (_stableFrames >= _kStableFramesToStart) {
         _livenessDeadline = DateTime.now().add(_kLivenessTimeout);
-        _baselineYaw = face.headEulerAngleY;
-        state = state.copyWith(phase: FaceCapturePhase.livenessChecking);
+        final tracker = _liveness = LivenessTracker(_livenessMode);
+        tracker.addSample(yaw: face.headEulerAngleY); // facing-the-camera baseline
+        state = state.copyWith(phase: FaceCapturePhase.livenessChecking, liveHint: tracker.prompt);
       }
       return;
     }
 
     if (state.phase == FaceCapturePhase.livenessChecking) {
-      if (_livenessDeadline != null && DateTime.now().isAfter(_livenessDeadline!)) {
-        state = state.copyWith(
-          phase: FaceCapturePhase.livenessFailed,
-          message: 'We could not confirm liveness in time. Please try again.',
-        );
+      final tracker = _liveness;
+      if (tracker == null) return;
+      // Web LivenessTracker: a head turn AND (registration) a blink, both
+      // within the window, in any order.
+      tracker.addSample(
+        leftEyeOpen: face.leftEyeOpenProbability,
+        rightEyeOpen: face.rightEyeOpenProbability,
+        yaw: face.headEulerAngleY,
+      );
+      if (tracker.passed) {
+        await _onLivenessPassed(score: tracker.score);
         return;
       }
-
-      final leftOpen = face.leftEyeOpenProbability;
-      final rightOpen = face.rightEyeOpenProbability;
-      if (leftOpen != null && rightOpen != null) {
-        final avgOpen = (leftOpen + rightOpen) / 2;
-        if (avgOpen < _kBlinkClosedThreshold) _blinkDipped = true;
-        if (_blinkDipped && avgOpen > _kBlinkOpenThreshold) {
-          await _onLivenessPassed(score: avgOpen);
-          return;
-        }
+      if (_livenessDeadline != null && DateTime.now().isAfter(_livenessDeadline!)) {
+        state = state.copyWith(phase: FaceCapturePhase.livenessFailed, message: tracker.missingMessage);
+        return;
       }
-
-      final yaw = face.headEulerAngleY;
-      if (yaw != null && _baselineYaw != null) {
-        final delta = (yaw - _baselineYaw!).abs();
-        if (delta > _kHeadTurnDegrees) {
-          await _onLivenessPassed(score: (delta / 45.0).clamp(0.0, 1.0));
-          return;
-        }
-      }
+      if (state.liveHint != tracker.prompt) state = state.copyWith(liveHint: tracker.prompt);
     }
   }
 
@@ -312,43 +286,20 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
     state = state.copyWith(phase: FaceCapturePhase.extractingEmbedding, livenessPassed: true, livenessScore: score);
     try {
       await _cameraController?.stopImageStream();
-      final picture = await _cameraController!.takePicture();
-
-      // Detect against the still photo itself (not the live stream frame) so
-      // the crop used for embedding matches exactly what was captured —
-      // reuses the same detector instance already loaded for liveness.
-      final stillFaces = await _detector!.processImage(InputImage.fromFilePath(picture.path));
-      if (stillFaces.isEmpty) {
-        state = state.copyWith(
-          phase: FaceCapturePhase.error,
-          message: 'Could not find your face in the captured photo. Please try again.',
-        );
+      final nets = await ref.read(faceApiNetsProvider.future);
+      final outcome = await FaceApiPipeline(nets).capture(nextFrame: _takeFrame, framesToCapture: _framesToCapture);
+      final descriptor = outcome.descriptor;
+      if (descriptor == null) {
+        // Web "quality_failed": retryable (reposition / relight), not broken.
+        state = state.copyWith(phase: FaceCapturePhase.qualityFailed, message: outcome.message);
         return;
       }
-      final stillFace = stillFaces.first;
-
-      // Lighting + eye-occlusion — the two checks that need actual pixel
-      // data, so (unlike distance/frontality above) these run once, here, on
-      // the committed still photo rather than on every live preview frame —
-      // matches web's own captureOneQualityGatedFrame, which likewise only
-      // samples pixel luminance on the frame that's actually a capture
-      // candidate, never on every frame of its live preview loop.
-      final decoded = img.decodeImage(await File(picture.path).readAsBytes());
-      if (decoded != null) {
-        final qualityFailure = _assessStillPhotoQuality(decoded, stillFace);
-        if (qualityFailure != null) {
-          state = state.copyWith(phase: FaceCapturePhase.qualityFailed, message: qualityFailure);
-          return;
-        }
-      }
-      // decoded == null (a still photo the `image` package couldn't parse)
-      // deliberately falls through rather than blocking the capture — the
-      // photo already passed ML Kit's own detection above, so treating an
-      // unrelated decode failure as a hard rejection would block a
-      // perfectly usable capture over a problem in an unrelated check.
-
-      final embedding = await _embedder.embed(picture.path, stillFace.boundingBox);
-      state = state.copyWith(phase: FaceCapturePhase.ready, embedding: embedding);
+      state = state.copyWith(
+        phase: FaceCapturePhase.ready,
+        embedding: descriptor,
+        captureFrameCount: outcome.frameCount,
+        captureVariance: outcome.variance,
+      );
     } catch (_) {
       state = state.copyWith(phase: FaceCapturePhase.error, message: 'Could not process the captured photo.');
     } finally {
@@ -356,101 +307,26 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
     }
   }
 
-  /// Lighting first, then eye occlusion — matches web's own ordering
-  /// (assessFrameQuality's luminance check, then assessEyeOcclusion only
-  /// once everything else already passed). Returns the user-facing message
-  /// for whichever check fails first, or null if both pass.
-  String? _assessStillPhotoQuality(img.Image decoded, Face face) {
-    final box = _clampedBox(face.boundingBox, decoded.width, decoded.height);
-    if (box == null) return null; // degenerate box — nothing meaningful to sample
-
-    final luminance = _meanLuminanceOfBox(decoded, box);
-    if (luminance < _kMinMeanLuminance) return _kTooDarkMessage;
-    if (luminance > _kMaxMeanLuminance) return _kTooBrightMessage;
-
-    if (_assessEyeOcclusion(decoded, face)) return _kEyeOcclusionMessage;
-    return null;
-  }
-
-  ({int x0, int y0, int x1, int y1})? _clampedBox(Rect box, int imageWidth, int imageHeight) {
-    final x0 = box.left.floor().clamp(0, imageWidth);
-    final y0 = box.top.floor().clamp(0, imageHeight);
-    final x1 = box.right.ceil().clamp(0, imageWidth);
-    final y1 = box.bottom.ceil().clamp(0, imageHeight);
-    if (x1 <= x0 || y1 <= y0) return null;
-    return (x0: x0, y0: y0, x1: x1, y1: y1);
-  }
-
-  /// ITU-R BT.601 mean luminance over a pixel region — identical formula and
-  /// scale (0-255) to web's meanLuminanceOfBox (frameCapture.ts), just read
-  /// from a decoded still photo via package:image instead of canvas
-  /// ImageData.
-  double _meanLuminanceOfBox(img.Image image, ({int x0, int y0, int x1, int y1}) box) {
-    double sum = 0;
-    var count = 0;
-    for (var y = box.y0; y < box.y1; y++) {
-      for (var x = box.x0; x < box.x1; x++) {
-        final p = image.getPixel(x, y);
-        sum += 0.299 * p.r + 0.587 * p.g + 0.114 * p.b;
-        count++;
+  /// One still from the camera, decoded upright; the photo file is deleted
+  /// straight away (nothing of the face is kept on the device). Null when no
+  /// usable photo could be taken — counted as a failed attempt.
+  Future<RgbaBuffer?> _takeFrame() async {
+    final camera = _cameraController;
+    if (camera == null || !camera.value.isInitialized) return null;
+    XFile? shot;
+    try {
+      shot = await camera.takePicture();
+      final decoded = img.decodeImage(await shot.readAsBytes());
+      return decoded == null ? null : RgbaBuffer.fromImage(decoded);
+    } catch (_) {
+      return null;
+    } finally {
+      if (shot != null) {
+        try {
+          await File(shot.path).delete();
+        } catch (_) {}
       }
     }
-    return count == 0 ? 0 : sum / count;
-  }
-
-  /// Best-effort guess at covered eyes (sunglasses, a mask pulled up too
-  /// high, a hand, ...) — NOT a dedicated occlusion detector; ML Kit has no
-  /// signal for this any more than face-api.js did. Mirrors web's
-  /// assessEyeOcclusion exactly: both eye regions must read as
-  /// dark-AND-flat (low mean luminance AND low standard deviation — a real,
-  /// visible open eye has internal contrast a covered one doesn't), using
-  /// FaceContourType eye outlines for the region instead of face-api.js's
-  /// landmark points. Deliberately conservative — this only ever runs after
-  /// lighting has already passed above, so a dark reading here reflects the
-  /// eye region specifically, not just a dim room. Prefer under-triggering
-  /// over over-triggering: telling a legitimately dim-lit but unobstructed
-  /// user to "remove sunglasses" they aren't wearing is worse than missing
-  /// an actual pair once in a while.
-  bool _assessEyeOcclusion(img.Image decoded, Face face) {
-    final left = face.contours[FaceContourType.leftEye]?.points;
-    final right = face.contours[FaceContourType.rightEye]?.points;
-    if (left == null || left.isEmpty || right == null || right.isEmpty) {
-      return false; // no contour data this attempt — fail open, same as a null headEulerAngleY does above
-    }
-    final leftBox = _clampedBox(_boundingBoxOfPoints(left), decoded.width, decoded.height);
-    final rightBox = _clampedBox(_boundingBoxOfPoints(right), decoded.width, decoded.height);
-    if (leftBox == null || rightBox == null) return false;
-
-    return _looksOccluded(decoded, leftBox) && _looksOccluded(decoded, rightBox);
-  }
-
-  bool _looksOccluded(img.Image decoded, ({int x0, int y0, int x1, int y1}) box) {
-    double sum = 0, sumSquares = 0;
-    var count = 0;
-    for (var y = box.y0; y < box.y1; y++) {
-      for (var x = box.x0; x < box.x1; x++) {
-        final p = decoded.getPixel(x, y);
-        final luminance = 0.299 * p.r + 0.587 * p.g + 0.114 * p.b;
-        sum += luminance;
-        sumSquares += luminance * luminance;
-        count++;
-      }
-    }
-    if (count == 0) return false;
-    final mean = sum / count;
-    final variance = (sumSquares / count - mean * mean).clamp(0.0, double.infinity);
-    final stdDev = sqrt(variance);
-    return mean < _kEyeOcclusionMaxLuminance && stdDev < _kEyeOcclusionMaxStdDev;
-  }
-
-  Rect _boundingBoxOfPoints(List<Point<int>> points) {
-    final xs = points.map((p) => p.x.toDouble());
-    final ys = points.map((p) => p.y.toDouble());
-    final minX = xs.reduce((a, b) => a < b ? a : b);
-    final maxX = xs.reduce((a, b) => a > b ? a : b);
-    final minY = ys.reduce((a, b) => a < b ? a : b);
-    final maxY = ys.reduce((a, b) => a > b ? a : b);
-    return Rect.fromLTRB(minX, minY, maxX, maxY);
   }
 
   InputImage? _toInputImage(CameraImage image, CameraDescription camera) {
@@ -519,7 +395,6 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
   }
 }
 
-final faceCaptureControllerProvider =
-    AutoDisposeNotifierProvider<FaceCaptureController, FaceCaptureUiState>(
+final faceCaptureControllerProvider = AutoDisposeNotifierProvider<FaceCaptureController, FaceCaptureUiState>(
   FaceCaptureController.new,
 );

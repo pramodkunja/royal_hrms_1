@@ -43,7 +43,8 @@ class _ItemsManagerDialogState extends ConsumerState<ItemsManagerDialog> {
   String? _deletingSectionId;
 
   late TextEditingController _titleCtrl;
-  late TextEditingController _orderCtrl;
+  // Set as web does: next number on add, the item's own order on edit.
+  int _order = 1;
   late TextEditingController _videoUrlCtrl;
   late TextEditingController _durationCtrl;
   late TextEditingController _questionCtrl;
@@ -51,9 +52,9 @@ class _ItemsManagerDialogState extends ConsumerState<ItemsManagerDialog> {
   late TextEditingController _optBCtrl;
   late TextEditingController _optCCtrl;
   late TextEditingController _optDCtrl;
-  late TextEditingController _passScoreCtrl;
   String _itemType = AssessmentItemType.video;
   String _correctOption = 'a';
+  String _questionType = kQuestionTypeMcq;
   bool _saving = false;
   String? _error;
 
@@ -63,7 +64,6 @@ class _ItemsManagerDialogState extends ConsumerState<ItemsManagerDialog> {
   void initState() {
     super.initState();
     _titleCtrl = TextEditingController();
-    _orderCtrl = TextEditingController();
     _videoUrlCtrl = TextEditingController();
     _durationCtrl = TextEditingController();
     _questionCtrl = TextEditingController();
@@ -71,13 +71,11 @@ class _ItemsManagerDialogState extends ConsumerState<ItemsManagerDialog> {
     _optBCtrl = TextEditingController();
     _optCCtrl = TextEditingController();
     _optDCtrl = TextEditingController();
-    _passScoreCtrl = TextEditingController();
   }
 
   @override
   void dispose() {
     _titleCtrl.dispose();
-    _orderCtrl.dispose();
     _videoUrlCtrl.dispose();
     _durationCtrl.dispose();
     _questionCtrl.dispose();
@@ -85,7 +83,6 @@ class _ItemsManagerDialogState extends ConsumerState<ItemsManagerDialog> {
     _optBCtrl.dispose();
     _optCCtrl.dispose();
     _optDCtrl.dispose();
-    _passScoreCtrl.dispose();
     _secTitleCtrl.dispose();
     _secOrderCtrl.dispose();
     _secScoreCtrl.dispose();
@@ -94,7 +91,7 @@ class _ItemsManagerDialogState extends ConsumerState<ItemsManagerDialog> {
 
   void _fillControllers(AssessmentItemFormData d) {
     _titleCtrl.text = d.title;
-    _orderCtrl.text = '${d.order}';
+    _order = d.order;
     _videoUrlCtrl.text = d.videoUrl;
     _durationCtrl.text = d.durationSecs?.toString() ?? '';
     _questionCtrl.text = d.question;
@@ -102,9 +99,14 @@ class _ItemsManagerDialogState extends ConsumerState<ItemsManagerDialog> {
     _optBCtrl.text = d.optionB;
     _optCCtrl.text = d.optionC;
     _optDCtrl.text = d.optionD;
-    _passScoreCtrl.text = '${d.passScore}';
     _itemType = d.itemType;
     _correctOption = d.correctOption.isEmpty ? 'a' : d.correctOption;
+    // Web: a new item starts as Multiple Choice; an existing True/False
+    // question reopens as True/False.
+    _questionType = isTrueFalseQuestion(
+            itemType: d.itemType, optionA: d.optionA, optionB: d.optionB, optionC: d.optionC)
+        ? kQuestionTypeTrueFalse
+        : kQuestionTypeMcq;
   }
 
   /// Web openAddItem(sectionId): next order across all items.
@@ -229,7 +231,7 @@ class _ItemsManagerDialogState extends ConsumerState<ItemsManagerDialog> {
     if (_saving) return;
     final form = AssessmentItemFormData(
       itemType: _itemType,
-      order: int.tryParse(_orderCtrl.text.trim()) ?? 1,
+      order: _order,
       title: _titleCtrl.text,
       videoUrl: _videoUrlCtrl.text,
       durationSecs: int.tryParse(_durationCtrl.text.trim()),
@@ -239,7 +241,6 @@ class _ItemsManagerDialogState extends ConsumerState<ItemsManagerDialog> {
       optionC: _optCCtrl.text,
       optionD: _optDCtrl.text,
       correctOption: _correctOption,
-      passScore: int.tryParse(_passScoreCtrl.text.trim()) ?? 0,
       // Web: `section: forSectionId` on every save. On edit it is the item's
       // own section — sent only when the server reported it.
       sectionId: _forSectionId,
@@ -375,7 +376,6 @@ class _ItemsManagerDialogState extends ConsumerState<ItemsManagerDialog> {
                         itemType: _itemType,
                         correctOption: _correctOption,
                         titleCtrl: _titleCtrl,
-                        orderCtrl: _orderCtrl,
                         videoUrlCtrl: _videoUrlCtrl,
                         durationCtrl: _durationCtrl,
                         questionCtrl: _questionCtrl,
@@ -383,9 +383,18 @@ class _ItemsManagerDialogState extends ConsumerState<ItemsManagerDialog> {
                         optBCtrl: _optBCtrl,
                         optCCtrl: _optCCtrl,
                         optDCtrl: _optDCtrl,
-                        passScoreCtrl: _passScoreCtrl,
+                        questionType: _questionType,
+                        onQuestionTypeChanged: (qt) => setState(() {
+                          _questionType = qt;
+                          if (qt == kQuestionTypeTrueFalse) {
+                            _correctOption = applyTrueFalse(
+                                a: _optACtrl, b: _optBCtrl, c: _optCCtrl, d: _optDCtrl, correctOption: _correctOption);
+                          }
+                        }),
                         onTypeChanged: (t) => setState(() {
                           _itemType = t;
+                          // Web: changing the item type resets to Multiple Choice.
+                          _questionType = kQuestionTypeMcq;
                           _error = null;
                         }),
                         onCorrectOptionChanged: (v) => setState(() => _correctOption = v),

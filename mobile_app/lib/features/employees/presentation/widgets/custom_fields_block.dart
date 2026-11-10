@@ -113,8 +113,7 @@ class CustomFieldsBlock extends ConsumerWidget {
       error: (_, __) => Padding(
         padding: const EdgeInsets.only(top: 8),
         child: Text('Could not load custom fields.',
-            key: Key('custom-fields-error-$step'),
-            style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+            key: Key('custom-fields-error-$step'), style: AppTextStyles.caption.copyWith(color: AppColors.error)),
       ),
       data: (config) {
         final fields = customFieldsForStep(config, step);
@@ -134,8 +133,7 @@ class CustomFieldsBlock extends ConsumerWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Expanded(
-                child: Text('Additional information',
-                    style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
+                child: Text('Additional information', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
               ),
               if (save != null && textFields.isNotEmpty)
                 TextButton.icon(
@@ -199,7 +197,9 @@ class _ReadOnlyFiles extends StatelessWidget {
         else
           for (final f in files)
             InkWell(
-              onTap: f.fileUrl == null ? null : () => launchUrl(Uri.parse(f.fileUrl!), mode: LaunchMode.externalApplication),
+              onTap: f.fileUrl == null
+                  ? null
+                  : () => launchUrl(Uri.parse(f.fileUrl!), mode: LaunchMode.externalApplication),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Text(f.fileName, style: AppTextStyles.body.copyWith(color: AppColors.primary)),
@@ -312,7 +312,9 @@ class _CustomFieldsEditSheetState extends State<CustomFieldsEditSheet> {
                       onPressed: _saving ? null : _save,
                       child: _saving
                           ? const SizedBox(
-                              width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Text('Save'),
                     ),
                   ),

@@ -36,8 +36,7 @@ class ApprovalOverrideSheet extends ConsumerStatefulWidget {
   }
 
   @override
-  ConsumerState<ApprovalOverrideSheet> createState() =>
-      _ApprovalOverrideSheetState();
+  ConsumerState<ApprovalOverrideSheet> createState() => _ApprovalOverrideSheetState();
 }
 
 class _ApprovalOverrideSheetState extends ConsumerState<ApprovalOverrideSheet> {
@@ -74,9 +73,7 @@ class _ApprovalOverrideSheetState extends ConsumerState<ApprovalOverrideSheet> {
       _submitting = true;
       _error = null;
     });
-    final err = await ref
-        .read(employeeApprovalMatrixProvider(widget.employee.employeeId).notifier)
-        .updateOverride(
+    final err = await ref.read(employeeApprovalMatrixProvider(widget.employee.employeeId).notifier).updateOverride(
           widget.row.workflowType,
           l1OverrideId: _l1?.id,
           l2OverrideId: widget.row.isSingleLevel ? null : _l2?.id,
@@ -141,16 +138,13 @@ class _ApprovalOverrideSheetState extends ConsumerState<ApprovalOverrideSheet> {
                 style: AppTextStyles.caption,
               ),
               const SizedBox(height: 18),
-
               _OverrideDropdown(
-                label: widget.row.l1ApproverLabel.isEmpty
-                    ? 'L1 Approver'
-                    : 'L1 Approver (${widget.row.l1ApproverLabel})',
+                label:
+                    widget.row.l1ApproverLabel.isEmpty ? 'L1 Approver' : 'L1 Approver (${widget.row.l1ApproverLabel})',
                 options: managers,
                 selected: selectedL1,
                 onSelected: (o) => setState(() => _l1 = o),
               ),
-
               if (!widget.row.isSingleLevel) ...[
                 const SizedBox(height: 14),
                 _OverrideDropdown(
@@ -162,16 +156,10 @@ class _ApprovalOverrideSheetState extends ConsumerState<ApprovalOverrideSheet> {
                   onSelected: (o) => setState(() => _l2 = o),
                 ),
               ],
-
               if (_error != null) ...[
                 const SizedBox(height: 12),
-                Text(_error!,
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.error,
-                        fontWeight: FontWeight.w500)),
+                Text(_error!, style: TextStyle(fontSize: 12, color: AppColors.error, fontWeight: FontWeight.w500)),
               ],
-
               const SizedBox(height: 20),
               Row(
                 children: [
@@ -181,8 +169,7 @@ class _ApprovalOverrideSheetState extends ConsumerState<ApprovalOverrideSheet> {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.textSecondary,
                         side: BorderSide(color: AppColors.border),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       child: const Text('Cancel'),
@@ -195,8 +182,7 @@ class _ApprovalOverrideSheetState extends ConsumerState<ApprovalOverrideSheet> {
                       onPressed: _submitting ? null : _save,
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.primary,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       child: _submitting
@@ -254,11 +240,8 @@ class _OverrideDropdown extends StatelessWidget {
           decoration: InputDecoration(
             filled: true,
             fillColor: AppColors.surface,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: AppColors.border),
@@ -269,13 +252,11 @@ class _OverrideDropdown extends StatelessWidget {
             ),
             isDense: true,
           ),
-          hint: Text('— Global default —',
-              style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
+          hint: Text('— Global default —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
           items: [
             DropdownMenuItem<EmployeePickerOption?>(
               value: null,
-              child: Text('— Global default —',
-                  style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
+              child: Text('— Global default —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
             ),
             ...options.map((o) => DropdownMenuItem<EmployeePickerOption?>(
                   value: o,

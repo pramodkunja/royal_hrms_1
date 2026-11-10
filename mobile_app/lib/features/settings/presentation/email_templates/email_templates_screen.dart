@@ -129,6 +129,7 @@ class _EmailTemplatesScreenState extends ConsumerState<EmailTemplatesScreen> {
               style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
             ),
           ),
+        _PagingStatus(loaded: templates.length),
         Expanded(
           child: filtered.isEmpty
               ? const _NoResultsView()
@@ -490,6 +491,56 @@ class _ErrorView extends StatelessWidget {
             Text(message, style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Shown while later pages of templates are still loading, or when one
+/// failed (the templates already loaded stay listed; Retry resumes).
+class _PagingStatus extends ConsumerWidget {
+  const _PagingStatus({required this.loaded});
+
+  final int loaded;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final paging = ref.watch(emailTemplatesPagingProvider);
+    if (paging.complete) return const SizedBox.shrink();
+    final of = paging.total != null ? ' ($loaded of ${paging.total})' : '';
+    if (paging.error == null) {
+      return Padding(
+        key: const Key('email-templates-loading-more'),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+        child: Row(
+          children: [
+            const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+            const SizedBox(width: 8),
+            Text('Loading more templates…$of', style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+          ],
+        ),
+      );
+    }
+    return Container(
+      key: const Key('email-templates-load-more-error'),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+      padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text('Some templates couldn\'t be loaded$of. ${paging.error}',
+                style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+          ),
+          TextButton(
+            key: const Key('email-templates-load-more-retry'),
+            onPressed: () => ref.read(emailTemplatesProvider.notifier).loadRemaining(),
+            child: const Text('Retry'),
+          ),
+        ],
       ),
     );
   }

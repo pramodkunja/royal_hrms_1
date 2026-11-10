@@ -59,8 +59,7 @@ class EmployeeAttendanceTab extends ConsumerStatefulWidget {
   const EmployeeAttendanceTab({super.key, required this.employee});
 
   @override
-  ConsumerState<EmployeeAttendanceTab> createState() =>
-      _EmployeeAttendanceTabState();
+  ConsumerState<EmployeeAttendanceTab> createState() => _EmployeeAttendanceTabState();
 }
 
 class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
@@ -85,8 +84,7 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
     return _month.year == now.year && _month.month == now.month;
   }
 
-  void _prevMonth() =>
-      setState(() => _month = DateTime(_month.year, _month.month - 1, 1));
+  void _prevMonth() => setState(() => _month = DateTime(_month.year, _month.month - 1, 1));
 
   void _nextMonth() {
     if (_isCurrentMonth) return;
@@ -158,8 +156,7 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
       error: (e, _) => SizedBox(
         height: 60,
         child: Center(
-          child: Text(friendlyAttendanceError(e),
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+          child: Text(friendlyAttendanceError(e), style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
         ),
       ),
     );
@@ -180,8 +177,7 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
         children: [
           Row(
             children: [
-              Icon(Icons.calendar_month_outlined,
-                  size: 18, color: AppColors.primary),
+              Icon(Icons.calendar_month_outlined, size: 18, color: AppColors.primary),
               const SizedBox(width: 8),
               Text('Monthly Summary', style: AppTextStyles.h4),
             ],
@@ -190,30 +186,12 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
           summaryAsync.when(
             data: (summary) {
               final cells = [
-                _SummaryCell(
-                    label: 'Working Days',
-                    value: '${summary.workingDays}',
-                    color: AppColors.primary),
-                _SummaryCell(
-                    label: 'Days Present',
-                    value: '${summary.daysPresent}',
-                    color: AppColors.success),
-                _SummaryCell(
-                    label: 'Days Absent',
-                    value: '${summary.daysAbsent}',
-                    color: AppColors.error),
-                _SummaryCell(
-                    label: 'Leave Days',
-                    value: '${summary.leaveDays}',
-                    color: AppColors.warning),
-                _SummaryCell(
-                    label: 'Half Days',
-                    value: '${summary.halfDays}',
-                    color: AppColors.info),
-                _SummaryCell(
-                    label: 'OT Hours',
-                    value: summary.otHours,
-                    color: AppColors.success),
+                _SummaryCell(label: 'Working Days', value: '${summary.workingDays}', color: AppColors.primary),
+                _SummaryCell(label: 'Days Present', value: '${summary.daysPresent}', color: AppColors.success),
+                _SummaryCell(label: 'Days Absent', value: '${summary.daysAbsent}', color: AppColors.error),
+                _SummaryCell(label: 'Leave Days', value: '${summary.leaveDays}', color: AppColors.warning),
+                _SummaryCell(label: 'Half Days', value: '${summary.halfDays}', color: AppColors.info),
+                _SummaryCell(label: 'OT Hours', value: summary.otHours, color: AppColors.success),
               ];
               return GridView.builder(
                 shrinkWrap: true,
@@ -238,9 +216,8 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
               padding: EdgeInsets.symmetric(vertical: 20),
               child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
             ),
-            error: (e, _) => Text(friendlyAttendanceError(e),
-                style:
-                    AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+            error: (e, _) =>
+                Text(friendlyAttendanceError(e), style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
           ),
         ],
       ),
@@ -249,8 +226,7 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
 
   // ── Calendar / History card (read-only: no Regularize action anywhere) ───
 
-  Widget _buildCalendarCard(
-      AsyncValue<AttendanceCalendarEntity> calendarAsync) {
+  Widget _buildCalendarCard(AsyncValue<AttendanceCalendarEntity> calendarAsync) {
     final daysInMonth = DateUtils.getDaysInMonth(_month.year, _month.month);
     final firstWd = DateTime(_month.year, _month.month, 1).weekday % 7;
     final today = DateTime.now();
@@ -311,9 +287,7 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
                 IconButton(
                   icon: const Icon(Icons.chevron_right, size: 20),
                   onPressed: _isCurrentMonth ? null : _nextMonth,
-                  color: _isCurrentMonth
-                      ? AppColors.textHint.withValues(alpha: 0.4)
-                      : AppColors.textSecondary,
+                  color: _isCurrentMonth ? AppColors.textHint.withValues(alpha: 0.4) : AppColors.textSecondary,
                   visualDensity: VisualDensity.compact,
                 ),
               ],
@@ -325,9 +299,7 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
               child: Wrap(
                 spacing: 6,
                 runSpacing: 6,
-                children: _kDayStatusColors.entries
-                    .map((e) => _LegendChip(e.key, e.value))
-                    .toList(),
+                children: _kDayStatusColors.entries.map((e) => _LegendChip(e.key, e.value)).toList(),
               ),
             ),
           const SizedBox(height: 10),
@@ -359,13 +331,11 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
               data: (calendar) => Padding(
                 padding: const EdgeInsets.fromLTRB(10, 0, 10, 14),
                 child: Container(
-                  decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.border)),
+                  decoration: BoxDecoration(border: Border.all(color: AppColors.border)),
                   child: GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 7,
                       childAspectRatio: 0.95,
                     ),
@@ -375,25 +345,17 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
                         return const _DayCell.blank();
                       }
                       final day = idx - firstWd + 1;
-                      final isToday = day == today.day &&
-                          _month.month == today.month &&
-                          _month.year == today.year;
+                      final isToday = day == today.day && _month.month == today.month && _month.year == today.year;
                       final dayRecord = calendar.days[day];
-                      final statusColor = dayRecord != null
-                          ? _kDayStatusColors[dayRecord.status]
-                          : null;
-                      final code = dayRecord != null
-                          ? _kStatusShortCode[dayRecord.status]
-                          : null;
+                      final statusColor = dayRecord != null ? _kDayStatusColors[dayRecord.status] : null;
+                      final code = dayRecord != null ? _kStatusShortCode[dayRecord.status] : null;
 
                       return _DayCell(
                         day: day,
                         isToday: isToday,
                         statusColor: statusColor,
                         code: code,
-                        onTap: dayRecord == null
-                            ? null
-                            : () => _showDayDetail(day, dayRecord),
+                        onTap: dayRecord == null ? null : () => _showDayDetail(day, dayRecord),
                       );
                     },
                   ),
@@ -405,9 +367,8 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
               ),
               error: (e, _) => Padding(
                 padding: const EdgeInsets.all(20),
-                child: Text(friendlyAttendanceError(e),
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.error)),
+                child:
+                    Text(friendlyAttendanceError(e), style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
               ),
             ),
           ] else
@@ -419,9 +380,8 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
               ),
               error: (e, _) => Padding(
                 padding: const EdgeInsets.all(20),
-                child: Text(friendlyAttendanceError(e),
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.error)),
+                child:
+                    Text(friendlyAttendanceError(e), style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
               ),
             ),
         ],
@@ -475,11 +435,9 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
                   : record.status,
             ),
             if (record.clockIn != null) _DetailRow('Clock In', record.clockIn!),
-            if (record.clockOut != null)
-              _DetailRow('Clock Out', record.clockOut!),
+            if (record.clockOut != null) _DetailRow('Clock Out', record.clockOut!),
             if (record.hours != null) _DetailRow('Hours', record.hours!),
-            if (record.note != null && record.note!.isNotEmpty)
-              _DetailRow('Note', record.note!),
+            if (record.note != null && record.note!.isNotEmpty) _DetailRow('Note', record.note!),
           ],
         ),
         actions: [
@@ -499,8 +457,7 @@ class _SummaryCell extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-  const _SummaryCell(
-      {required this.label, required this.value, required this.color});
+  const _SummaryCell({required this.label, required this.value, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -517,8 +474,7 @@ class _SummaryCell extends StatelessWidget {
         children: [
           Text(
             label,
-            style: TextStyle(
-                fontSize: 10, color: AppColors.textSecondary, height: 1.2),
+            style: TextStyle(fontSize: 10, color: AppColors.textSecondary, height: 1.2),
           ),
           const SizedBox(height: 4),
           _AnimatedCellValue(value: value, color: color),
@@ -553,8 +509,7 @@ class _AnimatedCellValue extends StatelessWidget {
       tween: Tween(begin: 0, end: target.toDouble()),
       duration: const Duration(milliseconds: 700),
       curve: Curves.easeOutCubic,
-      builder: (context, animated, _) =>
-          Text('${animated.round()}', style: style),
+      builder: (context, animated, _) => Text('${animated.round()}', style: style),
     );
   }
 }
@@ -586,8 +541,7 @@ class _LegendChip extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             label,
-            style: TextStyle(
-                fontSize: 10, fontWeight: FontWeight.w600, color: color),
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color),
           ),
         ],
       ),
@@ -709,19 +663,14 @@ class _CalTabButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 9),
         decoration: BoxDecoration(
-          color: selected
-              ? AppColors.primary.withValues(alpha: 0.10)
-              : Colors.transparent,
+          color: selected ? AppColors.primary.withValues(alpha: 0.10) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-              color: selected ? AppColors.primary : AppColors.border),
+          border: Border.all(color: selected ? AppColors.primary : AppColors.border),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon,
-                size: 15,
-                color: selected ? AppColors.primary : AppColors.textSecondary),
+            Icon(icon, size: 15, color: selected ? AppColors.primary : AppColors.textSecondary),
             const SizedBox(width: 6),
             Text(
               label,
@@ -747,8 +696,7 @@ class _HistoryRow extends StatelessWidget {
 
   const _HistoryRow({required this.row, required this.statusColor});
 
-  bool get _isLateArrival =>
-      row.clockIn != null && row.clockIn!.compareTo('09:15') > 0;
+  bool get _isLateArrival => row.clockIn != null && row.clockIn!.compareTo('09:15') > 0;
 
   @override
   Widget build(BuildContext context) {
@@ -764,12 +712,8 @@ class _HistoryRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(row.date,
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary)),
-                Text(row.day,
-                    style: TextStyle(fontSize: 10, color: AppColors.textHint)),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                Text(row.day, style: TextStyle(fontSize: 10, color: AppColors.textHint)),
               ],
             ),
           ),
@@ -785,25 +729,17 @@ class _HistoryRow extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: _isLateArrival
-                            ? AppColors.error
-                            : AppColors.textPrimary,
+                        color: _isLateArrival ? AppColors.error : AppColors.textPrimary,
                       ),
                     ),
-                    Text(' → ',
-                        style:
-                            TextStyle(fontSize: 12, color: AppColors.textHint)),
+                    Text(' → ', style: TextStyle(fontSize: 12, color: AppColors.textHint)),
                     Text(row.clockOut ?? '—',
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary)),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                     if (row.hours != null) ...[
                       const SizedBox(width: 8),
                       Flexible(
                         child: Text('· ${row.hours}',
-                            style: TextStyle(
-                                fontSize: 11, color: AppColors.textSecondary),
+                            style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                             overflow: TextOverflow.ellipsis),
                       ),
                     ],
@@ -811,18 +747,14 @@ class _HistoryRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     row.status,
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: color),
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color),
                   ),
                 ),
               ],
@@ -849,14 +781,10 @@ class _DetailRow extends StatelessWidget {
           children: [
             SizedBox(
               width: 90,
-              child: Text(label,
-                  style:
-                      TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              child: Text(label, style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
             ),
             Expanded(
-              child: Text(value,
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600)),
+              child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             ),
           ],
         ),

@@ -9,12 +9,10 @@ class FacialRecognitionRepositoryImpl implements FacialRecognitionRepository {
   FacialRecognitionRepositoryImpl(this._dataSource);
 
   @override
-  Future<FaceVerificationStatusEntity> getVerificationStatus() =>
-      _dataSource.getVerificationStatus();
+  Future<FaceVerificationStatusEntity> getVerificationStatus() => _dataSource.getVerificationStatus();
 
   @override
-  Future<FaceRegistrationEntity?> getMyRegistrationStatus() =>
-      _dataSource.getMyRegistrationStatus();
+  Future<FaceRegistrationEntity?> getMyRegistrationStatus() => _dataSource.getMyRegistrationStatus();
 
   @override
   Future<FaceRegistrationEntity> submitRegistration({
@@ -22,12 +20,16 @@ class FacialRecognitionRepositoryImpl implements FacialRecognitionRepository {
     required bool livenessPassed,
     double? livenessScore,
     required bool consentAcknowledged,
+    int? captureFrameCount,
+    double? captureVariance,
   }) =>
       _dataSource.submitRegistration(
         faceEmbedding: faceEmbedding,
         livenessPassed: livenessPassed,
         livenessScore: livenessScore,
         consentAcknowledged: consentAcknowledged,
+        captureFrameCount: captureFrameCount,
+        captureVariance: captureVariance,
       );
 
   @override
@@ -43,12 +45,10 @@ class FacialRecognitionRepositoryImpl implements FacialRecognitionRepository {
       _dataSource.reviewRegistration(id: id, approve: approve, notes: notes);
 
   @override
-  Future<List<FaceEmployeeEntity>> searchEmployees(String query) =>
-      _dataSource.searchEmployees(query);
+  Future<List<FaceEmployeeEntity>> searchEmployees(String query) => _dataSource.searchEmployees(query);
 
   @override
-  Future<FaceRegistrationEntity?> getEmployeeStatus(String employeeUuid) =>
-      _dataSource.getEmployeeStatus(employeeUuid);
+  Future<FaceRegistrationEntity?> getEmployeeStatus(String employeeUuid) => _dataSource.getEmployeeStatus(employeeUuid);
 
   @override
   Future<FaceRegistrationEntity> hrRegister({
@@ -57,6 +57,8 @@ class FacialRecognitionRepositoryImpl implements FacialRecognitionRepository {
     required bool livenessPassed,
     double? livenessScore,
     required bool consentAcknowledged,
+    int? captureFrameCount,
+    double? captureVariance,
   }) =>
       _dataSource.hrRegister(
         employeeUuid: employeeUuid,
@@ -64,5 +66,7 @@ class FacialRecognitionRepositoryImpl implements FacialRecognitionRepository {
         livenessPassed: livenessPassed,
         livenessScore: livenessScore,
         consentAcknowledged: consentAcknowledged,
+        captureFrameCount: captureFrameCount,
+        captureVariance: captureVariance,
       );
 }

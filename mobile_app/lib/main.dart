@@ -9,9 +9,13 @@ import 'core/network/api_client.dart';
 import 'core/security/secure_storage.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/theme_mode_provider.dart';
+import 'features/employees/presentation/id_card/id_card_text.dart' show registerIdCardFontLicenses;
+import 'features/facial_recognition/face_api/face_api_licence.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerIdCardFontLicenses(); // bundled Noto fonts (SIL OFL 1.1)
+  registerFaceApiLicense(); // face-api.js models (MIT)
 
   // Portrait-only on native until tablet layout is added (no-op on web)
   if (!kIsWeb) {

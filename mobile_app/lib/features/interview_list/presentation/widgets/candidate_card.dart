@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/permissions/permission_providers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/candidate_entity.dart';
 import '../providers/interview_providers.dart';
 import 'activity_log_dialog.dart';
@@ -202,7 +202,9 @@ class _EditButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!ref.watch(permissionProvider('recruitment.edit')) || candidate.isConverted) {
+    // Web: canEditRec (superuser or own recruitment.edit — no settings.edit
+    // bypass) && status !== "converted".
+    if (!canEditCandidate(ref.watch(authStateProvider).valueOrNull?.user, candidate)) {
       return const SizedBox.shrink();
     }
     return IconButton(
@@ -229,8 +231,11 @@ class _StatusChangeButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (candidate.isConverted) return const SizedBox.shrink();
+    // Web StatusDropdown visibility (see canChangeCandidateStatus).
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
+    if (!canChangeCandidateStatus(user, candidate)) return const SizedBox.shrink();
     return PopupMenuButton<String>(
+      key: Key('candidate-status-menu-${candidate.id}'),
       icon: Icon(Icons.more_vert, size: 18,
           color: AppColors.textSecondary),
       tooltip: 'Change status',
@@ -274,32 +279,52 @@ class _StatusChangeButton extends ConsumerWidget {
 
 // ── Portal action button ───────────────────────────────────────────────────────
 
-class _PortalActionButton extends ConsumerWidget {
+class _PortalActionButton extends ConsumerStatefulWidget {
   final CandidateEntity candidate;
   const _PortalActionButton({required this.candidate});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PortalActionButton> createState() => _PortalActionButtonState();
+}
+
+class _PortalActionButtonState extends ConsumerState<_PortalActionButton> {
+  // Web disables Send Login and shows "Sending…" while the request runs.
+  bool _sending = false;
+
+  Future<void> _send() async {
+    if (_sending) return;
+    setState(() => _sending = true);
+    final err = await ref.read(candidateListProvider.notifier).sendLogin(widget.candidate.id);
+    if (!mounted) return;
+    setState(() => _sending = false);
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(err),
+          backgroundColor: AppColors.error));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final candidate = widget.candidate;
     if (candidate.isConverted) {
       return _chip('Employee', AppColors.info);
     }
-    if (candidate.portalCredentialsSent || candidate.isOfferSent) {
+    // Web: the "Login Sent" badge is shown for offer_sent candidates only.
+    if (candidate.isOfferSent) {
       return _chip('Login Sent', AppColors.textHint);
     }
-    if (candidate.canSendLogin) {
+    // Web: canEditRec && status === "selected" (see canSendCandidateLogin).
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
+    if (canSendCandidateLogin(user, candidate)) {
       return FilledButton.icon(
-        onPressed: () async {
-          final err = await ref
-              .read(candidateListProvider.notifier)
-              .sendLogin(candidate.id);
-          if (err != null && context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(err),
-                backgroundColor: AppColors.error));
-          }
-        },
-        icon: const Icon(Icons.send_outlined, size: 13),
-        label: const Text('Send Login'),
+        key: Key('candidate-send-login-${candidate.id}'),
+        onPressed: _sending ? null : _send,
+        icon: _sending
+            ? const SizedBox(
+                width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            : const Icon(Icons.send_outlined, size: 13),
+        label: Text(_sending ? 'Sending…' : 'Send Login'),
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.primary,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

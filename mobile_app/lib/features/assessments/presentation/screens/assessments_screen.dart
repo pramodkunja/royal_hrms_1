@@ -4,12 +4,14 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/blue_hero_banner.dart';
 import '../../../../shared/widgets/stat_card.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/models/assessment_model.dart';
 import '../providers/assessments_providers.dart';
 import '../widgets/assessment_card.dart';
 import '../widgets/assessment_form_dialog.dart';
 import '../widgets/assign_dialog.dart';
 import '../widgets/items_manager_dialog.dart';
+import 'my_assessments_screen.dart';
 import 'package:mobile_app/shared/widgets/app_error_state.dart';
 
 class AssessmentsScreen extends ConsumerStatefulWidget {
@@ -24,6 +26,13 @@ class _AssessmentsScreenState extends ConsumerState<AssessmentsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
+    // Web: without isAdminView this page renders the employee's own
+    // "My Assessments" — and never fetches the management list.
+    if (!canManageAssessmentsView(user)) return const MyAssessmentsScreen();
+    final canCreate = canCreateAssessments(user);
+    final canEdit = canEditAssessments(user);
+    final canDelete = canDeleteAssessments(user);
     final assessmentsAsync = ref.watch(assessmentsProvider);
 
     return Scaffold(
@@ -60,7 +69,7 @@ class _AssessmentsScreenState extends ConsumerState<AssessmentsScreen> {
                       child: Column(
                         children: [
                           const _Header(),
-                          _EmptyView(onAdd: () => _openForm(null)),
+                          _EmptyView(onAdd: canCreate ? () => _openForm(null) : null),
                         ],
                       ),
                     )
@@ -92,10 +101,10 @@ class _AssessmentsScreenState extends ConsumerState<AssessmentsScreen> {
                                           () => _expandedId =
                                               _expandedId == a.id ? null : a.id,
                                         ),
-                                        onItems: () => _openItems(a),
-                                        onAssign: () => _openAssign(a),
-                                        onEdit: () => _openForm(a),
-                                        onDelete: () => _confirmDelete(a),
+                                        onItems: canEdit ? () => _openItems(a) : null,
+                                        onAssign: canEdit ? () => _openAssign(a) : null,
+                                        onEdit: canEdit ? () => _openForm(a) : null,
+                                        onDelete: canDelete ? () => _confirmDelete(a) : null,
                                       ),
                                     ))
                                 .toList(),
@@ -113,7 +122,8 @@ class _AssessmentsScreenState extends ConsumerState<AssessmentsScreen> {
       // screen. Once the list is non-empty, this becomes the quick way to
       // add another without scrolling back to the top.
       floatingActionButton: assessmentsAsync.maybeWhen(
-        data: (assessments) => assessments.isEmpty
+        // Web: "New Assessment" only with assessments.create.
+        data: (assessments) => assessments.isEmpty || !canCreate
             ? null
             : FloatingActionButton.extended(
                 onPressed: () => _openForm(null),
@@ -404,7 +414,8 @@ class _LoadingView extends StatelessWidget {
 }
 
 class _EmptyView extends StatelessWidget {
-  final VoidCallback onAdd;
+  // null = no Create button (web: only with assessments.create).
+  final VoidCallback? onAdd;
   const _EmptyView({required this.onAdd});
 
   @override
@@ -427,6 +438,7 @@ class _EmptyView extends StatelessWidget {
             style: AppTextStyles.bodySecondary,
             textAlign: TextAlign.center,
           ),
+          if (onAdd != null) ...[
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
@@ -442,6 +454,7 @@ class _EmptyView extends StatelessWidget {
               ),
             ),
           ),
+          ],
         ],
       ),
     );

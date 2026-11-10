@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../../shared/models/bulk_import_result.dart';
 import '../../../../shared/widgets/bulk_import_result_view.dart';
 import '../providers/interview_providers.dart';
@@ -25,6 +28,40 @@ class _CandidateBulkImportScreenState extends ConsumerState<CandidateBulkImportS
   BulkImportResult? _result;
   String? _uploadError;
 
+  // Web CandidateBulkImportModal: "Sample CSV" / "Sample XLSX" — both
+  // disabled while either downloads; a failure is shown under them.
+  String? _sampleDownloading;
+  String? _sampleError;
+
+  bool get _allowed => canOpenCandidateBulkImport(ref.read(authStateProvider).valueOrNull?.user);
+
+  Future<void> _downloadSample(String format) async {
+    if (_sampleDownloading != null || !_allowed) return;
+    setState(() {
+      _sampleDownloading = format;
+      _sampleError = null;
+    });
+    try {
+      final bytes = await ref.read(interviewDataSourceProvider).fetchBulkImportSample(format);
+      final path = await ref.read(candidateSampleSaverProvider)(
+          'candidate_import_sample.$format', Uint8List.fromList(bytes));
+      if (!mounted) return;
+      if (path != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('Sample downloaded.'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      final msg = _friendly(e);
+      setState(() => _sampleError = msg.isEmpty ? 'Failed to download sample file.' : msg);
+    } finally {
+      if (mounted) setState(() => _sampleDownloading = null);
+    }
+  }
+
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -34,7 +71,8 @@ class _CandidateBulkImportScreenState extends ConsumerState<CandidateBulkImportS
     if (result == null || result.files.isEmpty) return;
     final file = result.files.first;
     if (file.size > _kMaxImportBytes) {
-      setState(() { _pickError = 'File exceeds 5 MB.'; _picked = null; });
+      // Web validateFile wording.
+      setState(() { _pickError = 'File is too large. Maximum allowed size is 5 MB.'; _picked = null; });
       return;
     }
     setState(() {
@@ -47,7 +85,7 @@ class _CandidateBulkImportScreenState extends ConsumerState<CandidateBulkImportS
 
   Future<void> _upload() async {
     final file = _picked;
-    if (file == null || file.bytes == null) return;
+    if (file == null || file.bytes == null || !_allowed) return;
     setState(() { _uploading = true; _uploadError = null; });
     try {
       final result = await ref.read(interviewDataSourceProvider).bulkImport(
@@ -77,6 +115,27 @@ class _CandidateBulkImportScreenState extends ConsumerState<CandidateBulkImportS
 
   @override
   Widget build(BuildContext context) {
+    // Reached without web's canCreate (e.g. a link, or settings.edit alone,
+    // which the router lets through): nothing to pick, download or import.
+    if (!canOpenCandidateBulkImport(ref.watch(authStateProvider).valueOrNull?.user)) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(title: const Text('Bulk Import Candidates')),
+        body: Center(
+          key: const Key('candidate-import-denied'),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.lock_outline, size: 40, color: AppColors.textHint),
+              const SizedBox(height: 12),
+              Text(kCandidateImportDenied,
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.label.copyWith(color: AppColors.textSecondary)),
+            ]),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Bulk Import Candidates')),
@@ -86,9 +145,21 @@ class _CandidateBulkImportScreenState extends ConsumerState<CandidateBulkImportS
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const _InfoCard(
-                requiredCols: ['name', 'email', 'position_applied', 'branch_name'],
-                optionalCols: ['phone', 'interview_date', 'interview_mode', 'notes'],
+              _InfoCard(
+                samples: Row(children: [
+                  for (final format in const ['csv', 'xlsx']) ...[
+                    OutlinedButton.icon(
+                      key: Key('candidate-sample-$format'),
+                      onPressed: _sampleDownloading != null ? null : () => _downloadSample(format),
+                      icon: _sampleDownloading == format
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.download_outlined, size: 16),
+                      label: Text(_sampleDownloading == format ? 'Downloading…' : 'Sample ${format.toUpperCase()}'),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+                ]),
+                sampleError: _sampleError,
               ),
               const SizedBox(height: 16),
               _FilePickerCard(picked: _picked, error: _pickError, onPick: _pickFile),
@@ -146,14 +217,27 @@ class _CandidateBulkImportScreenState extends ConsumerState<CandidateBulkImportS
   }
 }
 
+/// Web CandidateBulkImportModal "File Requirements": accepted formats and
+/// size, required columns (as chips), optional columns (plain), then the
+/// Sample CSV / Sample XLSX buttons and their error — same words, same order.
 class _InfoCard extends StatelessWidget {
-  final List<String> requiredCols;
-  final List<String> optionalCols;
-  const _InfoCard({required this.requiredCols, required this.optionalCols});
+  const _InfoCard({required this.samples, required this.sampleError});
+
+  final Widget samples;
+  final String? sampleError;
+
+  static const requiredCols = ['Name', 'Email', 'Position', 'Branch'];
+  static const optionalCols = 'Phone, Interview Date, Interview Mode, Notes';
 
   @override
   Widget build(BuildContext context) {
+    final body = AppTextStyles.caption.copyWith(fontSize: 12, color: AppColors.textSecondary, height: 1.6);
+    Widget bullet(Widget child) => Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [Text('•  ', style: body), Expanded(child: child)],
+        );
     return Container(
+      key: const Key('candidate-import-requirements'),
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -167,22 +251,40 @@ class _InfoCard extends StatelessWidget {
           Row(
             children: [
               Icon(Icons.info_outline, size: 16, color: AppColors.primary),
-              const SizedBox(width: 8),
-              Text('CSV / XLSX format', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
+              const SizedBox(width: 6),
+              Text('File Requirements',
+                  style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, color: AppColors.primary)),
             ],
           ),
+          const SizedBox(height: 6),
+          bullet(Text.rich(
+            key: const Key('candidate-import-formats'),
+            TextSpan(style: body, children: const [
+              TextSpan(text: 'Accepted formats: '),
+              TextSpan(text: '.csv', style: TextStyle(fontWeight: FontWeight.w700)),
+              TextSpan(text: ', '),
+              TextSpan(text: '.xlsx', style: TextStyle(fontWeight: FontWeight.w700)),
+              TextSpan(text: ' (max 5 MB)'),
+            ]),
+          )),
+          bullet(Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 4,
+            runSpacing: 4,
+            children: [
+              Text('Required columns:', style: body),
+              for (final c in requiredCols) _ColChip(c, required: true),
+            ],
+          )),
+          bullet(Text('Optional columns: $optionalCols', key: const Key('candidate-import-optional'), style: body)),
           const SizedBox(height: 10),
-          Text('Required columns', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 4),
-          Wrap(spacing: 6, runSpacing: 6, children: requiredCols.map((c) => _ColChip(c, required: true)).toList()),
-          const SizedBox(height: 10),
-          Text('Optional columns', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 4),
-          Wrap(spacing: 6, runSpacing: 6, children: optionalCols.map((c) => _ColChip(c, required: false)).toList()),
-          const SizedBox(height: 10),
-          Text('branch_name must match an existing branch exactly (name or code) — branches are never auto-created. '
-              'Max 1000 rows, 5 MB. Existing emails/phones are skipped, not failed.',
-              style: AppTextStyles.caption.copyWith(fontSize: 10.5, color: AppColors.textHint)),
+          samples,
+          if (sampleError != null)
+            Padding(
+              key: const Key('candidate-sample-error'),
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(sampleError!, style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+            ),
         ],
       ),
     );

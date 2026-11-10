@@ -79,14 +79,23 @@ class _AddCandidateDialogState
         );
       }
     }
-    _loadBranches();
+    final user = ref.read(authStateProvider).valueOrNull?.user;
+    // Web AddCandidateModal / EditCandidateModal: only an unrestricted user
+    // (isUnrestrictedUser — superuser or settings.edit) picks a branch;
+    // everyone else is locked to their own. A locked Add needs no branch
+    // list at all — the server sets their own branch
+    // (_scoped_candidate_branch) — so none is requested; Edit keeps its
+    // existing fetch to fill a branchless candidate with the user's branch.
+    // Create mode without web's canCreate shows no form, so loads nothing.
+    _branchLocked = !isUnrestrictedCandidateViewer(user);
+    if (_isEdit || (canCreateCandidates(user) && !_branchLocked)) _loadBranches();
   }
 
   Future<void> _loadBranches() async {
     try {
       final dio = ref.read(dioProvider);
       final res = await dio.get(ApiConstants.branches,
-          queryParameters: {'page_size': 100});
+          queryParameters: {'status': 'active', 'page_size': 100});
       final data = res.data is Map ? res.data['data'] : res.data;
       final results =
           (data is Map ? data['results'] : data) as List<dynamic>;
@@ -98,15 +107,12 @@ class _AddCandidateDialogState
               })
           .toList();
 
-      // Mirrors the web app: non-system_admin users can only add/edit
-      // candidates under their own branch, so the picker is pre-filled and
-      // locked rather than left open (the backend doesn't enforce this
-      // server-side, so the client is the only guard).
+      // Locked (see initState): pre-fill the user's own branch. Web
+      // EditCandidateModal does the same for a candidate with no branch yet
+      // (e.g. a referral). The server enforces it for non-settings.edit users.
       final user = ref.read(authStateProvider).valueOrNull?.user;
-      final locked = user != null && user.role != 'system_admin';
-      // Web EditCandidateModal does the same for a candidate with no branch
-      // yet (e.g. a referral): fill in the user's own branch.
-      if (locked && (!_isEdit || _selectedBranch == null)) {
+      final locked = _branchLocked;
+      if (locked && user != null && (!_isEdit || _selectedBranch == null)) {
         final own = branches.firstWhere(
           (b) => (b['name'] as String).toLowerCase() ==
               (user.branch ?? '').toLowerCase(),
@@ -115,10 +121,7 @@ class _AddCandidateDialogState
         if (own.isNotEmpty) _selectedBranch = own['id'] as int;
       }
 
-      setState(() {
-        _branches = branches;
-        _branchLocked = locked;
-      });
+      setState(() => _branches = branches);
     } catch (_) {}
   }
 
@@ -141,7 +144,9 @@ class _AddCandidateDialogState
   Future<void> _submit() async {
     if (_loading) return;
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedBranch == null) {
+    // Web: a branch is required only from an unrestricted user (a locked
+    // user's branch is resolved by the server).
+    if (!_branchLocked && _selectedBranch == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a branch')),
       );
@@ -166,7 +171,7 @@ class _AddCandidateDialogState
       if (!_isEdit) 'email': _emailCtrl.text.trim(),
       'position_applied': _posCtrl.text.trim(),
       'phone': _phoneCtrl.text.trim(),
-      'branch': _selectedBranch,
+      if (_selectedBranch != null) 'branch': _selectedBranch,
       'interview_mode': _mode,
       // As web EditCandidateModal: an edit always sends the date, null when
       // cleared (the backend then sends no invitation); Add omits it.
@@ -245,6 +250,16 @@ class _AddCandidateDialogState
 
   @override
   Widget build(BuildContext context) {
+    // Web: Add Candidate exists only for canCreate (recruitment.create).
+    // Editing keeps its own rule (recruitment.edit on the card's Edit button).
+    if (!_isEdit && !canCreateCandidates(ref.watch(authStateProvider).valueOrNull?.user)) {
+      return AlertDialog(
+        key: const Key('add-candidate-denied'),
+        title: const Text('Add Candidate'),
+        content: const Text(kCandidateCreateDenied),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+      );
+    }
     final mq = MediaQuery.of(context);
     // Popup dialog box (centered), not a bottom sheet — the form's own
     // ListView scrolls internally, and maxHeight is recomputed against the
@@ -291,6 +306,7 @@ class _AddCandidateDialogState
                 selectedBranch: _selectedBranch,
                 branches: _branches,
                 branchLocked: _branchLocked,
+                lockedBranchName: ref.read(authStateProvider).valueOrNull?.user?.branch,
                 mode: _mode,
                 interviewDate: _interviewDate,
                 originalInterviewDate: _originalInterviewDate,

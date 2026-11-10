@@ -1,7 +1,9 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/permissions/permission_providers.dart';
@@ -11,12 +13,14 @@ import '../../../separation/presentation/notice_period.dart' show formatNoticePe
 import '../../../../shared/widgets/app_button.dart';
 import '../../data/datasources/employees_remote_datasource.dart';
 import '../../data/models/employee_model.dart';
+import '../../domain/employee_profile_sections.dart';
 import '../providers/employee_providers.dart';
 import '../widgets/add_employee_sheet.dart';
 import '../widgets/approval_override_sheet.dart';
 import '../widgets/custom_fields_block.dart';
 import '../widgets/employee_attendance_tab.dart';
 import '../widgets/employee_leave_tab.dart';
+import '../widgets/employee_section_edit_sheet.dart';
 import '../widgets/promotion_tab.dart';
 import '../widgets/reset_password_dialog.dart';
 import '../widgets/wishes_tab.dart';
@@ -49,8 +53,7 @@ class EmployeeProfileScreen extends ConsumerWidget {
             color: AppColors.textPrimary,
             onPressed: () => Navigator.of(context).pop(),
           ),
-          title: Text('Employee Profile',
-              style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
+          title: Text('Employee Profile', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
         ),
         body: detailAsync.isLoading
             ? const Center(child: CircularProgressIndicator())
@@ -73,11 +76,11 @@ class _ProfileShell extends ConsumerStatefulWidget {
   ConsumerState<_ProfileShell> createState() => _ProfileShellState();
 }
 
-class _ProfileShellState extends ConsumerState<_ProfileShell>
-    with SingleTickerProviderStateMixin {
+class _ProfileShellState extends ConsumerState<_ProfileShell> with SingleTickerProviderStateMixin {
   late final TabController _tabCtrl;
   bool? _isActiveOverride;
   bool _toggling = false;
+  bool _confirmingStatus = false;
 
   @override
   void initState() {
@@ -99,9 +102,24 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
 
   bool get _isActive => _isActiveOverride ?? widget.employee.isActive;
 
+  /// Web employees/page.tsx "Activate/Deactivate Employee" confirmation:
+  /// nothing is sent until the user confirms; Cancel (or dismissing) sends
+  /// nothing. While the dialog or the request is open, further taps on the
+  /// switch are ignored.
   Future<void> _onToggle(bool value) async {
-    if (_toggling) return;
-    setState(() { _isActiveOverride = value; _toggling = true; });
+    if (_toggling || _confirmingStatus) return;
+    _confirmingStatus = true;
+    final confirmed = await confirmEmployeeStatusChange(
+      context,
+      fullName: widget.employee.fullName,
+      activate: value,
+    );
+    _confirmingStatus = false;
+    if (!confirmed || !mounted) return;
+    setState(() {
+      _isActiveOverride = value;
+      _toggling = true;
+    });
     final err = await updateEmployeeStatusAction(ref, widget.employee.id, value);
     if (!mounted) return;
     if (err != null) {
@@ -138,6 +156,20 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
           behavior: SnackBarBehavior.floating,
         ));
       }
+    }
+  }
+
+  /// Education / Bank / Emergency: web edits these sections in place under
+  /// employees.edit; here each opens its own form (EmployeeSectionEditSheet),
+  /// which saves just that section and reloads the employee.
+  Future<void> _onEditSection(EmployeeProfileSection section) async {
+    final ok = await EmployeeSectionEditSheet.show(context, widget.employee, section);
+    if (ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Changes saved successfully.'),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+      ));
     }
   }
 
@@ -189,9 +221,17 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
           color: AppColors.textPrimary,
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text('Employee Profile',
-            style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
+        title: Text('Employee Profile', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
         actions: [
+          // Web ProfileHeader: "ID Card" (→ /dashboard/employees/<id>/id-card),
+          // offered unless the employee's onboarding is still pending.
+          if (!pendingOnboarding)
+            TextButton.icon(
+              key: const Key('employee-id-card'),
+              onPressed: () => context.push(AppRoutes.employeeIdCardPath(widget.employeeId)),
+              icon: const Icon(Icons.badge_outlined, size: 16),
+              label: const Text('ID Card', style: TextStyle(fontSize: 12.5)),
+            ),
           // Web ProfileHeader: "Reset Password" for employees.edit holders.
           if (canEdit)
             TextButton.icon(
@@ -224,60 +264,62 @@ class _ProfileShellState extends ConsumerState<_ProfileShell>
               ],
             )
           : NestedScrollView(
-        headerSliverBuilder: (_, __) => [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-              child: profileCard,
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 10)),
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: _TabBarDelegate(
-              tabBar: TabBar(
+              headerSliverBuilder: (_, __) => [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                    child: profileCard,
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 10)),
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _TabBarDelegate(
+                    tabBar: TabBar(
+                      controller: _tabCtrl,
+                      isScrollable: true,
+                      tabAlignment: TabAlignment.start,
+                      labelStyle: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700),
+                      unselectedLabelStyle: AppTextStyles.label.copyWith(fontWeight: FontWeight.w500),
+                      labelColor: AppColors.primary,
+                      unselectedLabelColor: AppColors.textSecondary,
+                      indicatorColor: AppColors.primary,
+                      indicatorWeight: 2.5,
+                      dividerColor: AppColors.border,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      tabs: const [
+                        Tab(text: 'Profile'),
+                        Tab(text: 'Leave'),
+                        Tab(text: 'Attendance'),
+                        Tab(text: 'Approval Matrix'),
+                        Tab(text: 'Promotion'),
+                        Tab(text: 'Benefit'),
+                        Tab(text: 'Send Wishes'),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              body: TabBarView(
                 controller: _tabCtrl,
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                labelStyle: AppTextStyles.label
-                    .copyWith(fontWeight: FontWeight.w700),
-                unselectedLabelStyle: AppTextStyles.label
-                    .copyWith(fontWeight: FontWeight.w500),
-                labelColor: AppColors.primary,
-                unselectedLabelColor: AppColors.textSecondary,
-                indicatorColor: AppColors.primary,
-                indicatorWeight: 2.5,
-                dividerColor: AppColors.border,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                tabs: const [
-                  Tab(text: 'Profile'),
-                  Tab(text: 'Leave'),
-                  Tab(text: 'Attendance'),
-                  Tab(text: 'Approval Matrix'),
-                  Tab(text: 'Promotion'),
-                  Tab(text: 'Benefit'),
-                  Tab(text: 'Send Wishes'),
+                children: [
+                  _ProfileTab(
+                    employee: emp,
+                    onEdit: canEdit ? _onSave : null,
+                    onEditSection: canEdit ? _onEditSection : null,
+                  ),
+                  EmployeeLeaveTab(employee: emp),
+                  EmployeeAttendanceTab(employee: emp),
+                  _ApprovalMatrixTab(employee: emp),
+                  PromotionTab(employee: emp),
+                  const _ComingSoon(
+                    label: 'Benefit',
+                    icon: Icons.card_giftcard_outlined,
+                  ),
+                  WishesTab(employee: emp),
                 ],
               ),
             ),
-          ),
-        ],
-        body: TabBarView(
-          controller: _tabCtrl,
-          children: [
-            _ProfileTab(employee: emp, onEdit: canEdit ? _onSave : null),
-            EmployeeLeaveTab(employee: emp),
-            EmployeeAttendanceTab(employee: emp),
-            _ApprovalMatrixTab(employee: emp),
-            PromotionTab(employee: emp),
-            const _ComingSoon(
-              label: 'Benefit',
-              icon: Icons.card_giftcard_outlined,
-            ),
-            WishesTab(employee: emp),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -355,8 +397,18 @@ String _fmtDate(String raw) {
   try {
     final dt = DateTime.parse(raw);
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
   } catch (_) {
@@ -414,9 +466,7 @@ class _ProfileCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.20),
                         shape: BoxShape.circle,
-                        border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.50),
-                            width: 2.5),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.50), width: 2.5),
                       ),
                       child: Center(
                         child: Text(
@@ -438,12 +488,9 @@ class _ProfileCard extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           shape: BoxShape.circle,
-                          border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.6),
-                              width: 1.5),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 1.5),
                         ),
-                        child: Icon(Icons.camera_alt_outlined,
-                            size: 13, color: AppColors.primary),
+                        child: Icon(Icons.camera_alt_outlined, size: 13, color: AppColors.primary),
                       ),
                     ),
                   ],
@@ -467,8 +514,7 @@ class _ProfileCard extends StatelessWidget {
                   children: [
                     if (emp.employeeId.isNotEmpty)
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
@@ -482,8 +528,7 @@ class _ProfileCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                    if (emp.employeeId.isNotEmpty &&
-                        emp.status.isNotEmpty) ...[
+                    if (emp.employeeId.isNotEmpty && emp.status.isNotEmpty) ...[
                       const SizedBox(width: 6),
                       Container(
                           width: 4,
@@ -505,13 +550,10 @@ class _ProfileCard extends StatelessWidget {
                       ),
                   ],
                 ),
-                if (emp.designation.isNotEmpty ||
-                    emp.department.isNotEmpty) ...[
+                if (emp.designation.isNotEmpty || emp.department.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Text(
-                    [emp.designation, emp.department]
-                        .where((s) => s.isNotEmpty)
-                        .join(' · '),
+                    [emp.designation, emp.department].where((s) => s.isNotEmpty).join(' · '),
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.white.withValues(alpha: 0.75),
@@ -536,8 +578,7 @@ class _ProfileCard extends StatelessWidget {
                     icon: Icons.calendar_today_outlined,
                   ),
                 ),
-                VerticalDivider(
-                    width: 1, thickness: 1, color: AppColors.border),
+                VerticalDivider(width: 1, thickness: 1, color: AppColors.border),
                 Expanded(
                   child: _InfoCell(
                     label: 'BRANCH',
@@ -545,8 +586,7 @@ class _ProfileCard extends StatelessWidget {
                     icon: Icons.location_on_outlined,
                   ),
                 ),
-                VerticalDivider(
-                    width: 1, thickness: 1, color: AppColors.border),
+                VerticalDivider(width: 1, thickness: 1, color: AppColors.border),
                 Expanded(
                   child: _InfoCell(
                     label: 'DEPT',
@@ -570,8 +610,7 @@ class _ProfileCard extends StatelessWidget {
                     icon: Icons.cake_outlined,
                   ),
                 ),
-                VerticalDivider(
-                    width: 1, thickness: 1, color: AppColors.border),
+                VerticalDivider(width: 1, thickness: 1, color: AppColors.border),
                 Expanded(
                   child: _InfoCell(
                     label: 'PHONE',
@@ -684,7 +723,8 @@ class _InfoCell extends StatelessWidget {
 class _ProfileTab extends StatefulWidget {
   final EmployeeModel employee;
   final VoidCallback? onEdit; // null: read-only
-  const _ProfileTab({required this.employee, required this.onEdit});
+  final ValueChanged<EmployeeProfileSection>? onEditSection; // null: read-only
+  const _ProfileTab({required this.employee, required this.onEdit, this.onEditSection});
 
   @override
   State<_ProfileTab> createState() => _ProfileTabState();
@@ -736,31 +776,21 @@ class _ProfileTabState extends State<_ProfileTab> {
                 return GestureDetector(
                   onTap: () => setState(() => _sub = index),
                   child: Container(
-                    margin: EdgeInsets.only(
-                        right: index < _sections.length - 1 ? 10 : 0),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
+                    margin: EdgeInsets.only(right: index < _sections.length - 1 ? 10 : 0),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppColors.primary.withValues(alpha: 0.10)
-                          : Colors.transparent,
+                      color: isSelected ? AppColors.primary.withValues(alpha: 0.10) : Colors.transparent,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: isSelected
-                            ? AppColors.primary
-                            : AppColors.border,
+                        color: isSelected ? AppColors.primary : AppColors.border,
                       ),
                     ),
                     child: Text(
                       label,
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: isSelected
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                        color: isSelected
-                            ? AppColors.primary
-                            : AppColors.textSecondary,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        color: isSelected ? AppColors.primary : AppColors.textSecondary,
                       ),
                     ),
                   ),
@@ -777,8 +807,8 @@ class _ProfileTabState extends State<_ProfileTab> {
             decoration: BoxDecoration(
               color: AppColors.surface,
               // Matches the app's other card radius (12) rather than this
-        // section's previous one-off 14.
-        borderRadius: BorderRadius.circular(12),
+              // section's previous one-off 14.
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.border),
               boxShadow: AppColors.cardShadow,
             ),
@@ -821,17 +851,20 @@ class _ProfileTabState extends State<_ProfileTab> {
                         ),
                       ),
                       const Spacer(),
-                      if (_sub == 0 && widget.onEdit != null)
+                      if ((_sub == 0 && widget.onEdit != null) ||
+                          (_sub >= 1 && _sub <= 3 && widget.onEditSection != null))
                         InkWell(
-                          onTap: widget.onEdit,
+                          key: Key(
+                              'profile-edit-${_sub == 0 ? 'personal' : EmployeeProfileSection.values[_sub - 1].name}'),
+                          onTap: _sub == 0
+                              ? widget.onEdit
+                              : () => widget.onEditSection!(EmployeeProfileSection.values[_sub - 1]),
                           borderRadius: BorderRadius.circular(8),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                             child: Row(
                               children: [
-                                Icon(Icons.edit_outlined,
-                                    size: 16, color: AppColors.primary),
+                                Icon(Icons.edit_outlined, size: 16, color: AppColors.primary),
                                 const SizedBox(width: 4),
                                 Text('Edit',
                                     style: AppTextStyles.labelSmall.copyWith(
@@ -906,24 +939,36 @@ class _PersonalContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _FieldRow(
-          label1: 'Employee ID', value1: _s(emp.employeeId), locked1: true,
-          label2: 'Role',        value2: _s(emp.roleDisplay),
+          label1: 'Employee ID',
+          value1: _s(emp.employeeId),
+          locked1: true,
+          label2: 'Role',
+          value2: _s(emp.roleDisplay),
         ),
         _FieldRow(
-          label1: 'Department',  value1: _s(emp.department),
-          label2: 'Designation', value2: _s(emp.designation),
+          label1: 'Department',
+          value1: _s(emp.department),
+          label2: 'Designation',
+          value2: _s(emp.designation),
         ),
         _FieldRow(
-          label1: 'Date of Birth', value1: _fmtDate(emp.dateOfBirth),
-          label2: 'Gender',        value2: _s(emp.gender),
+          label1: 'Date of Birth',
+          value1: _fmtDate(emp.dateOfBirth),
+          label2: 'Gender',
+          value2: _s(emp.gender),
         ),
         _FieldRow(
-          label1: 'Marital Status', value1: _s(emp.maritalStatus),
-          label2: "Father's Name",  value2: _s(emp.fatherName),
+          label1: 'Marital Status',
+          value1: _s(emp.maritalStatus),
+          label2: "Father's Name",
+          value2: _s(emp.fatherName),
         ),
         _FieldRow(
-          label1: 'Blood Group', value1: _s(emp.bloodGroup),
-          label2: 'Phone',       value2: _s(emp.phone), locked2: true,
+          label1: 'Blood Group',
+          value1: _s(emp.bloodGroup),
+          label2: 'Phone',
+          value2: _s(emp.phone),
+          locked2: true,
         ),
         _FieldRow(
           label1: 'Reporting Manager',
@@ -932,9 +977,7 @@ class _PersonalContent extends StatelessWidget {
               : emp.reportingManagerName!,
           locked1: true,
           label2: 'HR Contact',
-          value2: emp.hrName == null || emp.hrName!.isEmpty
-              ? 'Not assigned'
-              : emp.hrName!,
+          value2: emp.hrName == null || emp.hrName!.isEmpty ? 'Not assigned' : emp.hrName!,
           locked2: true,
         ),
         // Web Personal card: "Notice Period" (read-only; set on Settings →
@@ -965,7 +1008,12 @@ class _PersonalContent extends StatelessWidget {
   String _s(String v) => v.isEmpty ? '—' : v;
 }
 
-// ── Education & Experience section ────────────────────────────────────────────
+// ── Education & Experience / Bank Details / Emergency Contact ─────────────────
+// Web PROFILE_SECTIONS "education" / "bank" / "emergency": each a single
+// record of fields (labels and select labels from employee_profile_sections),
+// built-in fields hidden per Settings → Onboarding Fields as web
+// applyFieldConfig, then that step's custom fields. Edited through
+// EmployeeSectionEditSheet (the header's Edit, employees.edit).
 
 class _EducationContent extends StatelessWidget {
   final EmployeeModel emp;
@@ -973,41 +1021,9 @@ class _EducationContent extends StatelessWidget {
   const _EducationContent({required this.emp, this.canEdit = false});
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _FieldRow(
-          label1: 'Highest Qualification', value1: _s(emp.highestQualification),
-          label2: 'Specialization',        value2: _s(emp.specialization),
-        ),
-        _DisplayField(
-          label: 'Institution / University',
-          value: _s(emp.institution),
-        ),
-        _FieldRow(
-          label1: 'Year of Passing',      value1: _s(emp.yearOfPassing),
-          label2: 'Total Experience (yrs)', value2: _s(emp.totalExperienceYears),
-        ),
-        _FieldRow(
-          label1: 'Previous Employer',    value1: _s(emp.previousEmployer),
-          label2: 'Previous Designation', value2: _s(emp.previousDesignation),
-        ),
-        _DisplayField(
-          label: 'Reason for Leaving',
-          value: _s(emp.leavingReason),
-          maxLines: 3,
-          padBottom: false,
-        ),
-        _EmployeeCustomFields(emp: emp, step: 1, canEdit: canEdit),
-      ],
-    );
-  }
-
-  String _s(String v) => v.isEmpty ? '—' : v;
+  Widget build(BuildContext context) =>
+      _ProfileSectionView(emp: emp, section: EmployeeProfileSection.education, canEdit: canEdit);
 }
-
-// ── Bank Details section ──────────────────────────────────────────────────────
 
 class _BankContent extends StatelessWidget {
   final EmployeeModel emp;
@@ -1015,31 +1031,9 @@ class _BankContent extends StatelessWidget {
   const _BankContent({required this.emp, this.canEdit = false});
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _FieldRow(
-          label1: 'Account Holder Name', value1: _s(emp.accountHolderName),
-          label2: 'Account Type',        value2: _s(emp.accountType),
-        ),
-        _FieldRow(
-          label1: 'Account Number', value1: _s(emp.accountNumber),
-          label2: 'IFSC Code',      value2: _s(emp.ifscCode),
-        ),
-        _FieldRow(
-          label1: 'Bank Name',   value1: _s(emp.bankName),
-          label2: 'Bank Branch', value2: _s(emp.bankBranch),
-        ),
-        _EmployeeCustomFields(emp: emp, step: 2, canEdit: canEdit),
-      ],
-    );
-  }
-
-  String _s(String v) => v.isEmpty ? '—' : v;
+  Widget build(BuildContext context) =>
+      _ProfileSectionView(emp: emp, section: EmployeeProfileSection.bank, canEdit: canEdit);
 }
-
-// ── Emergency Contact section ─────────────────────────────────────────────────
 
 class _EmergencyContent extends StatelessWidget {
   final EmployeeModel emp;
@@ -1047,25 +1041,52 @@ class _EmergencyContent extends StatelessWidget {
   const _EmergencyContent({required this.emp, this.canEdit = false});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      _ProfileSectionView(emp: emp, section: EmployeeProfileSection.emergency, canEdit: canEdit);
+}
+
+class _ProfileSectionView extends ConsumerWidget {
+  const _ProfileSectionView({required this.emp, required this.section, required this.canEdit});
+
+  final EmployeeModel emp;
+  final EmployeeProfileSection section;
+  final bool canEdit;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final def = kEmployeeProfileSections[section]!;
+    final config = ref.watch(profileFieldConfigProvider).valueOrNull;
+    final values = profileSectionValues(section, emp);
+    final fields = def.fields.where((f) => isProfileFieldVisible(section, f.key, config)).toList();
+    Widget cell(ProfileFieldDef f) => _DisplayField(
+          key: Key('profile-field-${f.key}'),
+          label: f.label,
+          value: profileFieldDisplay(f, values[f.key] ?? ''),
+          maxLines: f.kind == ProfileFieldKind.textarea ? 3 : 1,
+        );
+    // Two per row like web's grid; a "full" field takes its own row.
+    final rows = <Widget>[];
+    for (var i = 0; i < fields.length; i++) {
+      final f = fields[i];
+      final next = i + 1 < fields.length ? fields[i + 1] : null;
+      if (f.full || next == null || next.full) {
+        rows.add(cell(f));
+      } else {
+        rows.add(Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [Expanded(child: cell(f)), const SizedBox(width: 12), Expanded(child: cell(next))],
+        ));
+        i++;
+      }
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _FieldRow(
-          label1: 'Contact Name', value1: _s(emp.emergencyName),
-          label2: 'Relationship', value2: _s(emp.emergencyRelationship),
-        ),
-        _FieldRow(
-          label1: 'Phone Number', value1: _s(emp.emergencyPhone),
-          label2: 'Email',        value2: _s(emp.emergencyEmail),
-          padBottom: false,
-        ),
-        _EmployeeCustomFields(emp: emp, step: 3, canEdit: canEdit),
+        ...rows,
+        _EmployeeCustomFields(emp: emp, step: def.step, canEdit: canEdit),
       ],
     );
   }
-
-  String _s(String v) => v.isEmpty ? '—' : v;
 }
 
 // ── Documents section ─────────────────────────────────────────────────────────
@@ -1151,8 +1172,7 @@ class _DocumentsContentState extends ConsumerState<_DocumentsContent> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text('Select Document Type',
-                  style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
+              child: Text('Select Document Type', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
             ),
             ..._kEmployeeDocTypes.map((t) => ListTile(
                   title: Text(t['label']!, style: AppTextStyles.body),
@@ -1180,8 +1200,7 @@ class _DocumentsContentState extends ConsumerState<_DocumentsContent> {
                 ? SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppColors.primary),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
                   )
                 : Icon(Icons.upload_outlined, size: 16, color: AppColors.primary),
             label: Text(_uploading ? 'Uploading…' : 'Upload Document'),
@@ -1199,11 +1218,9 @@ class _DocumentsContentState extends ConsumerState<_DocumentsContent> {
             child: Center(
               child: Column(
                 children: [
-                  Icon(Icons.folder_off_outlined,
-                      size: 28, color: AppColors.textHint),
+                  Icon(Icons.folder_off_outlined, size: 28, color: AppColors.textHint),
                   const SizedBox(height: 10),
-                  Text('No documents uploaded yet.',
-                      style: AppTextStyles.bodySecondary),
+                  Text('No documents uploaded yet.', style: AppTextStyles.bodySecondary),
                 ],
               ),
             ),
@@ -1268,8 +1285,7 @@ class _DocCard extends StatelessWidget {
               color: AppColors.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(Icons.insert_drive_file_outlined,
-                size: 18, color: AppColors.primary),
+            child: Icon(Icons.insert_drive_file_outlined, size: 18, color: AppColors.primary),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1277,29 +1293,23 @@ class _DocCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  doc.documentTypeDisplay.isEmpty
-                      ? doc.fileName
-                      : doc.documentTypeDisplay,
+                  doc.documentTypeDisplay.isEmpty ? doc.fileName : doc.documentTypeDisplay,
                   style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 2),
                 Text(meta.isEmpty ? doc.fileName : meta,
-                    style: AppTextStyles.caption,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                    style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
           IconButton(
-            icon: Icon(Icons.refresh_outlined,
-                size: 18, color: AppColors.textSecondary),
+            icon: Icon(Icons.refresh_outlined, size: 18, color: AppColors.textSecondary),
             tooltip: 'Replace',
             onPressed: onReplace,
             visualDensity: VisualDensity.compact,
           ),
           IconButton(
-            icon: Icon(Icons.visibility_outlined,
-                size: 18, color: AppColors.primary),
+            icon: Icon(Icons.visibility_outlined, size: 18, color: AppColors.primary),
             tooltip: 'View',
             onPressed: doc.fileUrl.isEmpty ? null : _open,
             visualDensity: VisualDensity.compact,
@@ -1317,7 +1327,6 @@ class _FieldRow extends StatelessWidget {
   final String value1;
   final String label2;
   final String value2;
-  final bool padBottom;
   // Matches web's Personal card: identity fields the employee/admin can
   // never edit here (Employee ID, Phone, Reporting Manager, HR Contact,
   // Work Email) render with a tinted "locked" style instead of the plain one.
@@ -1329,7 +1338,6 @@ class _FieldRow extends StatelessWidget {
     required this.value1,
     required this.label2,
     required this.value2,
-    this.padBottom = true,
     this.locked1 = false,
     this.locked2 = false,
   });
@@ -1337,7 +1345,7 @@ class _FieldRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: padBottom ? 14 : 0),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1410,16 +1418,12 @@ class _DisplayField extends StatelessWidget {
             child: Text(
               isEmpty ? '—' : value,
               style: AppTextStyles.body.copyWith(
-                color: isEmpty
-                    ? AppColors.textHint
-                    : (locked ? AppColors.primary : AppColors.textPrimary),
+                color: isEmpty ? AppColors.textHint : (locked ? AppColors.primary : AppColors.textPrimary),
                 fontWeight: locked ? FontWeight.w700 : FontWeight.w500,
                 fontSize: 13,
               ),
               maxLines: maxLines,
-              overflow: maxLines > 1
-                  ? TextOverflow.visible
-                  : TextOverflow.ellipsis,
+              overflow: maxLines > 1 ? TextOverflow.visible : TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -1453,8 +1457,7 @@ class _BottomBar extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 side: BorderSide(color: AppColors.border),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               child: Text(
                 'Cancel',
@@ -1514,8 +1517,7 @@ class _ComingSoon extends StatelessWidget {
                 Text('$label coming soon', style: AppTextStyles.h4),
                 const SizedBox(height: 6),
                 Text('This section is under development.',
-                    style: AppTextStyles.bodySecondary,
-                    textAlign: TextAlign.center),
+                    style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
               ],
             ),
           ),
@@ -1533,17 +1535,14 @@ class _ApprovalMatrixTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final matrixAsync =
-        ref.watch(employeeApprovalMatrixProvider(employee.employeeId));
+    final matrixAsync = ref.watch(employeeApprovalMatrixProvider(employee.employeeId));
     // Matches web's ApprovalMatrixTab exactly — it gates the Override action
     // on usePermission("settings.edit"), not a hardcoded role list (role
     // slugs like 'hr_admin' vs the current 'hr' aren't stable across
     // deployments, but permission grants are). Everyone who can reach this
     // screen at all can already VIEW the matrix (gated server-side by the
     // same `employees.view` permission as the profile itself).
-    final canEdit =
-        ref.watch(authStateProvider).valueOrNull?.user?.hasPermission('settings.edit') ??
-            false;
+    final canEdit = ref.watch(authStateProvider).valueOrNull?.user?.hasPermission('settings.edit') ?? false;
 
     return ListView(
       primary: false,
@@ -1557,8 +1556,7 @@ class _ApprovalMatrixTab extends ConsumerWidget {
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 24),
                 child: Center(
-                  child: Text('No approval workflows configured.',
-                      style: AppTextStyles.bodySecondary),
+                  child: Text('No approval workflows configured.', style: AppTextStyles.bodySecondary),
                 ),
               );
             }
@@ -1615,8 +1613,7 @@ class _ReportingRelationshipsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Reporting Relationships',
-              style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
+          Text('Reporting Relationships', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
           Text(
             'Reporting manager and branch HR assigned to this employee',
@@ -1639,9 +1636,8 @@ class _ReportingRelationshipsCard extends StatelessWidget {
                       employee: employee,
                       currentId: employee.reportingManagerId,
                       optionsProvider: employeeManagerOptionsProvider,
-                      onSave: (ref, employeeId, selectedId) => ref
-                          .read(employeesProvider.notifier)
-                          .updateReportingManager(employeeId, selectedId),
+                      onSave: (ref, employeeId, selectedId) =>
+                          ref.read(employeesProvider.notifier).updateReportingManager(employeeId, selectedId),
                     );
                     if (ok && context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1667,9 +1663,8 @@ class _ReportingRelationshipsCard extends StatelessWidget {
                       employee: employee,
                       currentId: employee.hrId,
                       optionsProvider: employeeHrOptionsProvider,
-                      onSave: (ref, employeeId, selectedId) => ref
-                          .read(employeesProvider.notifier)
-                          .updateHr(employeeId, selectedId),
+                      onSave: (ref, employeeId, selectedId) =>
+                          ref.read(employeesProvider.notifier).updateHr(employeeId, selectedId),
                     );
                     if (ok && context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1756,8 +1751,7 @@ class _RelationshipCell extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                   child: Padding(
                     padding: const EdgeInsets.all(2),
-                    child: Icon(Icons.edit_outlined,
-                        size: 15, color: AppColors.textSecondary),
+                    child: Icon(Icons.edit_outlined, size: 15, color: AppColors.textSecondary),
                   ),
                 ),
             ],
@@ -1774,10 +1768,8 @@ class _RelationshipEditDialog extends ConsumerStatefulWidget {
   final String title;
   final EmployeeModel employee;
   final String? currentId;
-  final AutoDisposeFutureProviderFamily<List<EmployeePickerOption>, String>
-      optionsProvider;
-  final Future<String?> Function(
-      WidgetRef ref, String employeeId, String? selectedId) onSave;
+  final AutoDisposeFutureProviderFamily<List<EmployeePickerOption>, String> optionsProvider;
+  final Future<String?> Function(WidgetRef ref, String employeeId, String? selectedId) onSave;
 
   const _RelationshipEditDialog({
     required this.title,
@@ -1792,11 +1784,8 @@ class _RelationshipEditDialog extends ConsumerStatefulWidget {
     required String title,
     required EmployeeModel employee,
     required String? currentId,
-    required AutoDisposeFutureProviderFamily<List<EmployeePickerOption>, String>
-        optionsProvider,
-    required Future<String?> Function(
-            WidgetRef ref, String employeeId, String? selectedId)
-        onSave,
+    required AutoDisposeFutureProviderFamily<List<EmployeePickerOption>, String> optionsProvider,
+    required Future<String?> Function(WidgetRef ref, String employeeId, String? selectedId) onSave,
   }) async {
     final result = await showDialog<bool>(
       context: context,
@@ -1812,12 +1801,10 @@ class _RelationshipEditDialog extends ConsumerStatefulWidget {
   }
 
   @override
-  ConsumerState<_RelationshipEditDialog> createState() =>
-      _RelationshipEditDialogState();
+  ConsumerState<_RelationshipEditDialog> createState() => _RelationshipEditDialogState();
 }
 
-class _RelationshipEditDialogState
-    extends ConsumerState<_RelationshipEditDialog> {
+class _RelationshipEditDialogState extends ConsumerState<_RelationshipEditDialog> {
   String? _selectedId;
   bool _saving = false;
   String? _error;
@@ -1833,8 +1820,7 @@ class _RelationshipEditDialogState
       _saving = true;
       _error = null;
     });
-    final err = await widget.onSave(
-        ref, widget.employee.employeeId, _selectedId);
+    final err = await widget.onSave(ref, widget.employee.employeeId, _selectedId);
     if (!mounted) return;
     setState(() => _saving = false);
     if (err != null) {
@@ -1846,8 +1832,7 @@ class _RelationshipEditDialogState
 
   @override
   Widget build(BuildContext context) {
-    final optionsAsync =
-        ref.watch(widget.optionsProvider(widget.employee.branch));
+    final optionsAsync = ref.watch(widget.optionsProvider(widget.employee.branch));
     final options = optionsAsync.valueOrNull ?? [];
     final loading = optionsAsync.isLoading;
 
@@ -1870,8 +1855,7 @@ class _RelationshipEditDialogState
             decoration: InputDecoration(
               filled: true,
               fillColor: AppColors.surface,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(color: AppColors.border),
@@ -1885,8 +1869,7 @@ class _RelationshipEditDialogState
               ),
               ...options.map((o) => DropdownMenuItem<String?>(
                     value: o.id,
-                    child: Text('${o.fullName} (${o.employeeId})',
-                        overflow: TextOverflow.ellipsis),
+                    child: Text('${o.fullName} (${o.employeeId})', overflow: TextOverflow.ellipsis),
                   )),
             ],
             onChanged: loading ? null : (v) => setState(() => _selectedId = v),
@@ -1904,8 +1887,7 @@ class _RelationshipEditDialogState
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                 )
               : const Text('Save'),
         ),
@@ -1978,8 +1960,7 @@ class _ApprovalMatrixCard extends StatelessWidget {
                 ),
                 if (canEdit)
                   IconButton(
-                    icon: Icon(Icons.edit_outlined,
-                        size: 17, color: AppColors.textSecondary),
+                    icon: Icon(Icons.edit_outlined, size: 17, color: AppColors.textSecondary),
                     tooltip: 'Override',
                     onPressed: () => _edit(context),
                     visualDensity: VisualDensity.compact,
@@ -1993,9 +1974,7 @@ class _ApprovalMatrixCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _ApproverLine(
-                  label: row.l1ApproverLabel.isEmpty
-                      ? 'L1 Approver'
-                      : row.l1ApproverLabel,
+                  label: row.l1ApproverLabel.isEmpty ? 'L1 Approver' : row.l1ApproverLabel,
                   name: row.l1ApproverName,
                   isOverride: row.l1IsOverride,
                 ),
@@ -2017,9 +1996,7 @@ class _ApprovalMatrixCard extends StatelessWidget {
                   )
                 else
                   _ApproverLine(
-                    label: (row.l2ApproverLabel ?? '').isEmpty
-                        ? 'L2 Approver'
-                        : row.l2ApproverLabel!,
+                    label: (row.l2ApproverLabel ?? '').isEmpty ? 'L2 Approver' : row.l2ApproverLabel!,
                     name: row.l2ApproverName,
                     isOverride: row.l2IsOverride,
                   ),
@@ -2113,15 +2090,69 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar tabBar;
   const _TabBarDelegate({required this.tabBar});
 
-  @override double get minExtent => tabBar.preferredSize.height;
-  @override double get maxExtent => tabBar.preferredSize.height;
+  @override
+  double get minExtent => tabBar.preferredSize.height;
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
 
   @override
-  Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(color: AppColors.surface, child: tabBar);
   }
 
   @override
   bool shouldRebuild(_TabBarDelegate old) => false;
+}
+
+/// Web employees/page.tsx Activate/Deactivate confirm modal: title
+/// "<Activate|Deactivate> Employee", "Are you sure you want to
+/// <activate|deactivate> <b>Full Name</b>?", Cancel and a confirm button
+/// (red for Deactivate). True only when confirmed — and only once, however
+/// fast the button is tapped.
+Future<bool> confirmEmployeeStatusChange(
+  BuildContext context, {
+  required String fullName,
+  required bool activate,
+}) async {
+  final label = activate ? 'Activate' : 'Deactivate';
+  var done = false;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) {
+      void close(bool result) {
+        if (done) return;
+        done = true;
+        Navigator.of(dialogContext).pop(result);
+      }
+
+      return AlertDialog(
+        key: const Key('employee-status-confirm'),
+        title: Text('$label Employee'),
+        content: Text.rich(
+          TextSpan(
+            style: AppTextStyles.body.copyWith(color: AppColors.textSecondary, height: 1.6),
+            children: [
+              TextSpan(text: 'Are you sure you want to ${label.toLowerCase()} '),
+              TextSpan(text: fullName, style: const TextStyle(fontWeight: FontWeight.w700)),
+              const TextSpan(text: '?'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            key: const Key('employee-status-cancel'),
+            onPressed: () => close(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('employee-status-confirm-button'),
+            style: activate ? null : FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => close(true),
+            child: Text(label),
+          ),
+        ],
+      );
+    },
+  );
+  return ok ?? false;
 }

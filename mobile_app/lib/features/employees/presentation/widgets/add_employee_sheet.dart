@@ -21,8 +21,7 @@ class AddEmployeeSheet extends ConsumerStatefulWidget {
       context: context,
       barrierDismissible: false,
       builder: (_) => Dialog(
-        insetPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
         backgroundColor: Colors.transparent,
         elevation: 0,
         child: AddEmployeeSheet(editing: editing),
@@ -65,9 +64,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
     if (branchLocked && !_branchPrefilled) {
       final branches = ref.watch(employeeBranchesProvider).valueOrNull;
       if (branches != null && (_createForm?.branch.isEmpty ?? false)) {
-        final own = branches
-            .where((b) => b.name.toLowerCase() == (currentUser.branch ?? '').toLowerCase())
-            .toList();
+        final own = branches.where((b) => b.name.toLowerCase() == (currentUser.branch ?? '').toLowerCase()).toList();
         if (own.isNotEmpty) {
           _createForm!.branch = own.first.name;
           _branchPrefilled = true;
@@ -187,6 +184,9 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
               selectedName: form.department.isEmpty ? null : form.department,
               error: _errors['department'],
               onSelected: (dept) => setState(() {
+                // Web: a manager picked for one department isn't valid for
+                // another — drop it when the department changes.
+                if ((dept?.name ?? '') != form.department) form.reportingManagerId = null;
                 form.department = dept?.name ?? '';
                 form.departmentId = dept?.id;
                 form.designation = '';
@@ -213,7 +213,15 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
               selectedBranch: form.branch.isEmpty ? null : form.branch,
               error: _errors['branch'],
               locked: branchLocked,
-              onSelected: (v) => setState(() => form.branch = v ?? ''),
+              onSelected: (v) => setState(() {
+                // Web: HR and manager lists are per branch — drop both
+                // selections when the branch changes.
+                if ((v ?? '') != form.branch) {
+                  form.hrId = null;
+                  form.reportingManagerId = null;
+                }
+                form.branch = v ?? '';
+              }),
             ),
           ),
         ],
@@ -234,6 +242,16 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
           ),
         ],
       ),
+      const SizedBox(height: 14),
+      // Assign HR + Reporting Manager (both optional)
+      _CreateReportingPickers(
+        branch: form.branch,
+        department: form.department,
+        hrId: form.hrId,
+        managerId: form.reportingManagerId,
+        onHr: (id) => setState(() => form.hrId = id),
+        onManager: (id) => setState(() => form.reportingManagerId = id),
+      ),
       const SizedBox(height: 18),
       Container(
         padding: const EdgeInsets.all(12),
@@ -247,8 +265,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.info_outline,
-                size: 16, color: AppColors.primary),
+            Icon(Icons.info_outline, size: 16, color: AppColors.primary),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -290,23 +307,43 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
       final match = roles.where((r) => r.name == form.role).firstOrNull;
       if (match != null) form.canManageTeam = match.canManageTeam;
     }
+    // Web page.tsx keeps who a Manager may report to loaded while editing
+    // (managerEligibleList), whatever the current role — it decides whether a
+    // role change to Manager keeps the selected reporting manager.
+    ref.watch(employeeApproverOptionsProvider(_managerEligibleKey(form)));
     return [
       const _SectionHeader(
         icon: Icons.person_outline,
         label: 'PERSONAL INFORMATION',
       ),
       const SizedBox(height: 14),
-      // Full Name, Phone and Date of Joining are read-only forever here —
-      // matches web's Profile tab, which never offers them as editable even
-      // though the backend's PUT would technically accept a change.
+      // Full Name is read-only (immutable on the backend). Login Email,
+      // Phone and Date of Joining are editable, as in web's profile form
+      // (employees/_data.ts Personal section).
       _ReadOnlyField(label: 'Full Name', value: form.fullName),
+      const SizedBox(height: 14),
+      _Field(
+        key: const Key('edit-employee-email'),
+        label: 'Login Email',
+        required: true,
+        initialValue: form.email,
+        error: _errors['email'],
+        onChanged: (v) => form.email = v,
+        hint: 'name@company.com',
+        keyboardType: TextInputType.emailAddress,
+      ),
       const SizedBox(height: 14),
       Row(
         children: [
           Expanded(
-            child: _ReadOnlyField(
+            child: _Field(
+              key: const Key('edit-employee-phone'),
               label: 'Phone',
-              value: form.phone.isEmpty ? '—' : form.phone,
+              initialValue: form.phone,
+              error: _errors['phone'],
+              onChanged: (v) => form.phone = v,
+              hint: '+91 98765 43210',
+              keyboardType: TextInputType.phone,
             ),
           ),
           const SizedBox(width: 12),
@@ -414,14 +451,26 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
               selectedName: form.role,
               error: _errors['role'],
               onSelected: (name) => setState(() {
+                final wasManager = form.isManagerRole;
                 form.role = name;
                 // Re-resolve immediately (rather than waiting for the
                 // `_editFields()` build-time lookup above) so a role change
                 // that flips manager-ness takes effect in the same frame —
                 // e.g. hiding the Reporting Manager field right away.
                 final roles = ref.read(employeeFormRolesProvider).valueOrNull ?? [];
-                form.canManageTeam =
-                    roles.where((r) => r.name == name).firstOrNull?.canManageTeam ?? false;
+                form.canManageTeam = roles.where((r) => r.name == name).firstOrNull?.canManageTeam ?? false;
+                // Web shouldClearReportingManager: becoming a Manager with a
+                // reporting manager who isn't eligible for one clears it (it
+                // would be refused on save). Not loaded yet counts as not
+                // eligible, as on web.
+                final rm = form.reportingManagerId;
+                if (form.isManagerRole && !wasManager && rm != null && rm.isNotEmpty) {
+                  final eligible = ref.read(employeeApproverOptionsProvider(_managerEligibleKey(form))).valueOrNull;
+                  if (!(eligible ?? const <EmployeePickerOption>[]).any((o) => o.id == rm)) {
+                    form.reportingManagerId = null;
+                    form.reportingManagerName = null;
+                  }
+                }
               }),
             ),
           ),
@@ -469,9 +518,13 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
         ],
       ),
       const SizedBox(height: 14),
-      _ReadOnlyField(
+      _DateField(
+        key: const Key('edit-employee-doj'),
         label: 'Date of Joining',
-        value: form.dateOfJoining.isEmpty ? '—' : form.dateOfJoining,
+        required: false,
+        isoValue: form.dateOfJoining,
+        error: _errors['date_of_joining'],
+        onChanged: (iso) => setState(() => form.dateOfJoining = iso),
       ),
       const SizedBox(height: 22),
       const _SectionHeader(
@@ -487,8 +540,10 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
           form.hrName = opt?.fullName;
         }),
       ),
-      if (!form.isManagerRole) ...[
-        const SizedBox(height: 14),
+      const SizedBox(height: 14),
+      // Reporting Manager: non-managers keep the branch list; a Manager gets
+      // web's eligible list (same rules as the approver below).
+      if (!form.isManagerRole)
         _ManagerDropdown(
           branch: form.branch,
           selectedId: form.reportingManagerId,
@@ -496,12 +551,46 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
             form.reportingManagerId = opt?.id;
             form.reportingManagerName = opt?.fullName;
           }),
+        )
+      else
+        _ReportingPersonDropdown(
+          key: const Key('edit-employee-manager'),
+          label: 'Reporting Manager',
+          noteKey: const Key('edit-employee-manager-note'),
+          branch: form.branch,
+          designation: form.designation,
+          managerRole: true,
+          selfUuid: form.selfUuid,
+          selectedId: form.reportingManagerId,
+          selectedName: form.reportingManagerName,
+          onSelected: (id, name) => setState(() {
+            form.reportingManagerId = id;
+            form.reportingManagerName = name;
+          }),
         ),
-      ],
+      const SizedBox(height: 14),
+      _ReportingPersonDropdown(
+        key: const Key('edit-employee-approver'),
+        label: 'Reporting Approver',
+        noteKey: const Key('edit-employee-approver-note'),
+        branch: form.branch,
+        designation: form.designation,
+        managerRole: form.isManagerRole,
+        selfUuid: form.selfUuid,
+        selectedId: form.reportingApproverId,
+        selectedName: form.reportingApproverName,
+        onSelected: (id, name) => setState(() {
+          form.reportingApproverId = id;
+          form.reportingApproverName = name;
+        }),
+      ),
     ];
   }
 
   void _rebuild() => setState(() {});
+
+  static ({String branch, bool managerRole, String designation}) _managerEligibleKey(EmployeeUpdateFormData f) =>
+      (branch: f.branch, managerRole: true, designation: f.designation);
 
   Future<void> _submit() async {
     if (_isEditing) {
@@ -583,8 +672,7 @@ class _Header extends StatelessWidget {
               color: AppColors.primary.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(Icons.person_add_outlined,
-                size: 20, color: AppColors.primary),
+            child: Icon(Icons.person_add_outlined, size: 20, color: AppColors.primary),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -646,6 +734,7 @@ class _Field extends StatelessWidget {
   final int maxLines;
 
   const _Field({
+    super.key,
     required this.label,
     this.required = false,
     this.initialValue,
@@ -673,11 +762,7 @@ class _Field extends StatelessWidget {
         ),
         if (error != null) ...[
           const SizedBox(height: 3),
-          Text(error!,
-              style: TextStyle(
-                  fontSize: 10,
-                  color: AppColors.error,
-                  fontWeight: FontWeight.w500)),
+          Text(error!, style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
         ],
       ],
     );
@@ -712,10 +797,12 @@ class _ChoiceDropdown extends StatelessWidget {
           isExpanded: true,
           decoration: _inputDec('— Select —'),
           hint: Text('— Select —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
-          items: items.map((it) => DropdownMenuItem<String>(
-            value: it['value'],
-            child: Text(it['label']!, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
-          )).toList(),
+          items: items
+              .map((it) => DropdownMenuItem<String>(
+                    value: it['value'],
+                    child: Text(it['label']!, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+                  ))
+              .toList(),
           onChanged: onChanged,
         ),
       ],
@@ -750,8 +837,7 @@ class _ReadOnlyField extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: AppColors.border),
           ),
-          child: Text(value,
-              style: AppTextStyles.body.copyWith(color: AppColors.textSecondary)),
+          child: Text(value, style: AppTextStyles.body.copyWith(color: AppColors.textSecondary)),
         ),
       ],
     );
@@ -776,8 +862,7 @@ class _RoleIdDropdown extends ConsumerWidget {
     final rolesAsync = ref.watch(employeeFormRolesProvider);
     // system_admin is never assignable via employee create/edit — the
     // backend rejects it outright, and web excludes it from this dropdown.
-    final roles =
-        (rolesAsync.valueOrNull ?? []).where((r) => r.name != 'system_admin').toList();
+    final roles = (rolesAsync.valueOrNull ?? []).where((r) => r.name != 'system_admin').toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -790,10 +875,12 @@ class _RoleIdDropdown extends ConsumerWidget {
           isExpanded: true,
           decoration: _inputDec('— Select Role —', error: error),
           hint: Text('— Select Role —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
-          items: roles.map((r) => DropdownMenuItem<dynamic>(
-            value: r.id,
-            child: Text(r.displayName, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
-          )).toList(),
+          items: roles
+              .map((r) => DropdownMenuItem<dynamic>(
+                    value: r.id,
+                    child: Text(r.displayName, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+                  ))
+              .toList(),
           onChanged: onSelected,
         ),
         if (error != null) ...[
@@ -823,8 +910,7 @@ class _RoleSlugDropdown extends ConsumerWidget {
     final rolesAsync = ref.watch(employeeFormRolesProvider);
     // system_admin is never assignable via employee create/edit — the
     // backend rejects it outright, and web excludes it from this dropdown.
-    final roles =
-        (rolesAsync.valueOrNull ?? []).where((r) => r.name != 'system_admin').toList();
+    final roles = (rolesAsync.valueOrNull ?? []).where((r) => r.name != 'system_admin').toList();
     final selected = roles.where((r) => r.name == selectedName).firstOrNull;
 
     return Column(
@@ -838,10 +924,12 @@ class _RoleSlugDropdown extends ConsumerWidget {
           isExpanded: true,
           decoration: _inputDec('— Select Role —', error: error),
           hint: Text('— Select Role —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
-          items: roles.map((r) => DropdownMenuItem(
-            value: r,
-            child: Text(r.displayName, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
-          )).toList(),
+          items: roles
+              .map((r) => DropdownMenuItem(
+                    value: r,
+                    child: Text(r.displayName, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+                  ))
+              .toList(),
           onChanged: (r) => onSelected(r?.name ?? ''),
         ),
         if (error != null) ...[
@@ -871,9 +959,7 @@ class _DeptDropdown extends ConsumerWidget {
     final deptsAsync = ref.watch(employeeFormDepartmentsProvider);
     final depts = deptsAsync.valueOrNull ?? [];
 
-    final selected = depts
-        .where((d) => d.name == selectedName)
-        .firstOrNull;
+    final selected = depts.where((d) => d.name == selectedName).firstOrNull;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -886,10 +972,12 @@ class _DeptDropdown extends ConsumerWidget {
           isExpanded: true,
           decoration: _inputDec('— Select Dept —', error: error),
           hint: Text('— Select Dept —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
-          items: depts.map((d) => DropdownMenuItem(
-            value: d,
-            child: Text(d.name, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
-          )).toList(),
+          items: depts
+              .map((d) => DropdownMenuItem(
+                    value: d,
+                    child: Text(d.name, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+                  ))
+              .toList(),
           onChanged: onSelected,
         ),
         if (error != null) ...[
@@ -951,10 +1039,12 @@ class _DesignationDropdown extends ConsumerWidget {
             style: AppTextStyles.body.copyWith(color: AppColors.textHint),
           ),
           items: isEnabled
-              ? names.map((n) => DropdownMenuItem(
-                    value: n,
-                    child: Text(n, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
-                  )).toList()
+              ? names
+                  .map((n) => DropdownMenuItem(
+                        value: n,
+                        child: Text(n, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+                      ))
+                  .toList()
               : null,
           onChanged: isEnabled ? onSelected : null,
         ),
@@ -993,8 +1083,7 @@ class _BranchDropdown extends ConsumerWidget {
     // name when that branch isn't in the fetched list (e.g. renamed,
     // deactivated, or paginated out) makes the field disable itself
     // entirely, which reads as "not accessible".
-    final selected =
-        branches.any((b) => b.name == selectedBranch) ? selectedBranch : null;
+    final selected = branches.any((b) => b.name == selectedBranch) ? selectedBranch : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1017,10 +1106,12 @@ class _BranchDropdown extends ConsumerWidget {
               isExpanded: true,
               decoration: _inputDec('— Select Branch —', error: error),
               hint: Text('— Select Branch —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
-              items: branches.map((b) => DropdownMenuItem(
-                value: b.name,
-                child: Text(b.name, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
-              )).toList(),
+              items: branches
+                  .map((b) => DropdownMenuItem(
+                        value: b.name,
+                        child: Text(b.name, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+                      ))
+                  .toList(),
               onChanged: onSelected,
             ),
           ),
@@ -1082,6 +1173,256 @@ class _HrDropdown extends ConsumerWidget {
   }
 }
 
+// ── Assign HR + Reporting Manager (create-only) ───────────────────────────────
+//
+// Web AddEmployeeModal: both lists load once a branch is chosen — HR from
+// /employees/hrs/?branch=, managers from /employees/managers/?branch=
+// (&department= once one is chosen). Both pickers stay disabled until there
+// is a branch and while either list is loading. Both are optional:
+// "— Auto-assign —" leaves the choice to the backend. A list that fails to
+// load is treated as empty (web Promise.allSettled), so the picker says
+// "No HR found for this branch" / "No managers found for this branch".
+// Options read "Full Name (EMP-CODE)".
+
+class _CreateReportingPickers extends ConsumerWidget {
+  const _CreateReportingPickers({
+    required this.branch,
+    required this.department,
+    required this.hrId,
+    required this.managerId,
+    required this.onHr,
+    required this.onManager,
+  });
+
+  final String branch;
+  final String department;
+  final String? hrId;
+  final String? managerId;
+  final ValueChanged<String?> onHr;
+  final ValueChanged<String?> onManager;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hasBranch = branch.isNotEmpty;
+    final hrAsync = hasBranch ? ref.watch(employeeHrOptionsProvider(branch)) : null;
+    final mgrAsync =
+        hasBranch ? ref.watch(employeeCreateManagerOptionsProvider((branch: branch, department: department))) : null;
+    final loading = (hrAsync?.isLoading ?? false) || (mgrAsync?.isLoading ?? false);
+    final hrs = hrAsync?.valueOrNull ?? const <EmployeePickerOption>[];
+    final managers = mgrAsync?.valueOrNull ?? const <EmployeePickerOption>[];
+
+    String placeholder(List<EmployeePickerOption> list, String none) => !hasBranch
+        ? 'Select branch first'
+        : loading
+            ? 'Loading…'
+            : list.isEmpty
+                ? none
+                : '— Auto-assign —';
+
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Expanded(
+        child: _PersonPicker(
+          key: const Key('add-employee-hr'),
+          label: 'Assign HR',
+          options: hrs,
+          selectedId: hrId,
+          placeholder: placeholder(hrs, 'No HR found for this branch'),
+          enabled: hasBranch && !loading,
+          onChanged: onHr,
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: _PersonPicker(
+          key: const Key('add-employee-manager'),
+          label: 'Reporting Manager',
+          options: managers,
+          selectedId: managerId,
+          placeholder: placeholder(managers, 'No managers found for this branch'),
+          enabled: hasBranch && !loading,
+          onChanged: onManager,
+        ),
+      ),
+    ]);
+  }
+}
+
+class _PersonPicker extends StatelessWidget {
+  const _PersonPicker({
+    super.key,
+    required this.label,
+    required this.options,
+    required this.selectedId,
+    required this.placeholder,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final String label;
+  final List<EmployeePickerOption> options;
+  final String? selectedId;
+  final String placeholder;
+  final bool enabled;
+  final ValueChanged<String?> onChanged;
+
+  static String optionLabel(EmployeePickerOption o) =>
+      o.employeeId.isEmpty ? o.fullName : '${o.fullName} (${o.employeeId})';
+
+  @override
+  Widget build(BuildContext context) {
+    // A selection that isn't (or is no longer) in the list shows as unset.
+    final value = options.any((o) => o.id == selectedId) ? selectedId : null;
+    final hintStyle = AppTextStyles.body.copyWith(color: AppColors.textHint);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _Label(text: label),
+        const SizedBox(height: 5),
+        DropdownButtonFormField<String?>(
+          // Rebuilt when the value or the list changes, so a cleared
+          // selection shows as cleared.
+          key: ValueKey('$label|$value|${options.length}|$enabled'),
+          initialValue: value,
+          style: AppTextStyles.body,
+          isExpanded: true,
+          decoration: _inputDec(placeholder, enabled: enabled),
+          hint: Text(placeholder, style: hintStyle, overflow: TextOverflow.ellipsis),
+          disabledHint: Text(placeholder, style: hintStyle, overflow: TextOverflow.ellipsis),
+          items: [
+            DropdownMenuItem<String?>(
+              value: null,
+              child: Text(placeholder, style: hintStyle, overflow: TextOverflow.ellipsis),
+            ),
+            for (final o in options)
+              DropdownMenuItem<String?>(
+                value: o.id,
+                child: Text(optionLabel(o), style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+              ),
+          ],
+          onChanged: enabled ? onChanged : null,
+        ),
+      ],
+    );
+  }
+}
+
+// ── Reporting approver / Manager's reporting manager (edit-only) ─────────────────
+//
+// Web employees/[id]/page.tsx "Reporting Approver" and, for a manager-type
+// role, "Reporting Manager" — both EmployeePickerInline with these rules:
+//  - list: /employees/managers/?branch=<branch>; for a manager-type role
+//    ?manager_approvers=1&branch=&designation= instead (see
+//    fetchReportingApprovers), with the employee themself left out;
+//  - "None — no reporting manager" (web's wording) clears it — offered only
+//    for manager-type roles, as on web;
+//  - the current approver is shown by name even when it isn't in the list
+//    (web shows the stored name), and is kept unless the user picks another;
+//  - "Loading…" while loading, "No options available." when the list is
+//    empty or can't be loaded;
+//  - options read "Name (EMP-CODE · role or department)".
+
+const kManagerReportingNote =
+    'Managers can only have the COO / CMD, Admin Head, or the HR Manager / HR Admin / Branch Admin of their branch.';
+
+class _ReportingPersonDropdown extends ConsumerWidget {
+  const _ReportingPersonDropdown({
+    super.key,
+    required this.label,
+    required this.noteKey,
+    required this.branch,
+    required this.designation,
+    required this.managerRole,
+    required this.selfUuid,
+    required this.selectedId,
+    required this.selectedName,
+    required this.onSelected,
+  });
+
+  final String label;
+  final Key noteKey;
+  final String branch;
+  final String designation;
+  final bool managerRole;
+  final String? selfUuid;
+  final String? selectedId;
+  final String? selectedName;
+  final void Function(String? id, String? name) onSelected;
+
+  static const _none = '\u0000none';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref
+        .watch(employeeApproverOptionsProvider((branch: branch, managerRole: managerRole, designation: designation)));
+    final loading = async.isLoading;
+    final options = (async.valueOrNull ?? const <EmployeePickerOption>[])
+        .where((o) => !managerRole || selfUuid == null || o.id != selfUuid)
+        .toList();
+    final hasSelection = selectedId != null && selectedId!.isNotEmpty;
+    final selectionListed = hasSelection && options.any((o) => o.id == selectedId);
+    final hintStyle = AppTextStyles.body.copyWith(color: AppColors.textHint);
+    final hint = loading ? 'Loading…' : (options.isEmpty && !hasSelection ? 'No options available.' : '—');
+
+    String optionLabel(EmployeePickerOption o) {
+      final detail = [o.employeeId, o.role.isNotEmpty ? o.role : o.department].where((x) => x.isNotEmpty).join(' · ');
+      return detail.isEmpty ? o.fullName : '${o.fullName} ($detail)';
+    }
+
+    final items = <DropdownMenuItem<String>>[
+      if (managerRole && !loading)
+        DropdownMenuItem(
+          value: _none,
+          child: Text('None — no reporting manager',
+              style: hintStyle.copyWith(fontStyle: FontStyle.italic), overflow: TextOverflow.ellipsis),
+        ),
+      if (hasSelection && !selectionListed)
+        DropdownMenuItem(
+          value: selectedId,
+          child: Text(selectedName?.isNotEmpty == true ? selectedName! : '—',
+              style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+        ),
+      for (final o in options)
+        DropdownMenuItem(
+          value: o.id,
+          child: Text(optionLabel(o), style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+        ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _Label(text: label),
+        const SizedBox(height: 5),
+        DropdownButtonFormField<String>(
+          key: ValueKey('$label|$selectedId|${items.length}|$loading'),
+          initialValue: hasSelection ? selectedId : null,
+          style: AppTextStyles.body,
+          isExpanded: true,
+          decoration: _inputDec(hint, enabled: !loading),
+          hint: Text(hint, style: hintStyle, overflow: TextOverflow.ellipsis),
+          disabledHint: Text(hasSelection ? (selectedName ?? '—') : hint, style: hintStyle),
+          items: items,
+          onChanged: loading || items.isEmpty
+              ? null
+              : (v) {
+                  if (v == null || v == _none) {
+                    onSelected(null, null);
+                    return;
+                  }
+                  final o = options.where((x) => x.id == v).firstOrNull;
+                  onSelected(v, o?.fullName ?? selectedName);
+                },
+        ),
+        if (managerRole) ...[
+          const SizedBox(height: 4),
+          Text(kManagerReportingNote,
+              key: noteKey, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontSize: 11.5)),
+        ],
+      ],
+    );
+  }
+}
+
 // ── Reporting manager dropdown (edit-only) ─────────────────────────────────────
 
 class _ManagerDropdown extends ConsumerWidget {
@@ -1098,9 +1439,8 @@ class _ManagerDropdown extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isEnabled = branch.isNotEmpty;
-    final options = isEnabled
-        ? (ref.watch(employeeManagerOptionsProvider(branch)).valueOrNull ?? [])
-        : <EmployeePickerOption>[];
+    final options =
+        isEnabled ? (ref.watch(employeeManagerOptionsProvider(branch)).valueOrNull ?? []) : <EmployeePickerOption>[];
     final selected = options.where((o) => o.id == selectedId).firstOrNull;
 
     return Column(
@@ -1161,10 +1501,12 @@ class _EmployeeTypeDropdown extends StatelessWidget {
           style: AppTextStyles.body,
           isExpanded: true,
           decoration: _inputDec('Select type'),
-          items: types.map((t) => DropdownMenuItem(
-            value: t,
-            child: Text(t, style: AppTextStyles.body),
-          )).toList(),
+          items: types
+              .map((t) => DropdownMenuItem(
+                    value: t,
+                    child: Text(t, style: AppTextStyles.body),
+                  ))
+              .toList(),
           onChanged: (value) {
             form.employeeType = value ?? 'Permanent';
             onChanged();
@@ -1187,6 +1529,7 @@ class _DateField extends StatefulWidget {
   final DateTime? lastDate;
 
   const _DateField({
+    super.key,
     required this.label,
     this.required = true,
     required this.isoValue,
@@ -1227,7 +1570,7 @@ class _DateFieldState extends State<_DateField> {
     if (iso.isEmpty) return '';
     try {
       final dt = DateTime.parse(iso);
-      const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return '${m[dt.month - 1]} ${dt.day}, ${dt.year}';
     } catch (_) {
       return iso;
@@ -1238,9 +1581,7 @@ class _DateFieldState extends State<_DateField> {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: widget.isoValue.isNotEmpty
-          ? DateTime.tryParse(widget.isoValue) ?? now
-          : now,
+      initialDate: widget.isoValue.isNotEmpty ? DateTime.tryParse(widget.isoValue) ?? now : now,
       firstDate: widget.firstDate ?? DateTime(2000),
       lastDate: widget.lastDate ?? DateTime(2100),
       builder: (context, child) => Theme(
@@ -1251,8 +1592,7 @@ class _DateFieldState extends State<_DateField> {
       ),
     );
     if (picked == null) return;
-    final iso =
-        '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+    final iso = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
     _ctrl.text = _display(iso);
     widget.onChanged(iso);
   }
@@ -1270,14 +1610,12 @@ class _DateFieldState extends State<_DateField> {
           style: AppTextStyles.body,
           onTap: _pick,
           decoration: _inputDec('dd/mm/yyyy', error: widget.error).copyWith(
-            suffixIcon: Icon(Icons.calendar_today_outlined,
-                size: 16, color: AppColors.textHint),
+            suffixIcon: Icon(Icons.calendar_today_outlined, size: 16, color: AppColors.textHint),
           ),
         ),
         if (widget.error != null) ...[
           const SizedBox(height: 3),
-          Text(widget.error!,
-              style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
+          Text(widget.error!, style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
         ],
       ],
     );
@@ -1314,8 +1652,7 @@ class _Footer extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.textSecondary,
                 side: BorderSide(color: AppColors.border),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
               child: const Text('Cancel'),
@@ -1366,18 +1703,14 @@ class _Label extends StatelessWidget {
   }
 }
 
-InputDecoration _inputDec(String hint, {String? error, bool enabled = true}) =>
-    InputDecoration(
+InputDecoration _inputDec(String hint, {String? error, bool enabled = true}) => InputDecoration(
       hintText: hint,
       hintStyle: AppTextStyles.body.copyWith(color: AppColors.textHint),
       filled: true,
       fillColor: enabled ? AppColors.surface : AppColors.background,
-      errorText: null,  // we show errors manually
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-      border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide.none),
+      errorText: null, // we show errors manually
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(

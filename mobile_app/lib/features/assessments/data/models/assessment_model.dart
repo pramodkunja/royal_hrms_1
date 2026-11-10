@@ -193,7 +193,6 @@ class AssessmentItemModel {
   final String optionC;
   final String optionD;
   final String correctOption; // a | b | c | d
-  final int passScore;
   final DateTime? createdAt;
 
   /// The section this item belongs to (`section_id`; null = unsectioned).
@@ -216,7 +215,6 @@ class AssessmentItemModel {
     required this.optionC,
     required this.optionD,
     required this.correctOption,
-    required this.passScore,
     this.createdAt,
     this.sectionId,
     this.sectionKnown = false,
@@ -240,7 +238,6 @@ class AssessmentItemModel {
       optionC: json['option_c'] as String? ?? '',
       optionD: json['option_d'] as String? ?? '',
       correctOption: json['correct_option'] as String? ?? 'a',
-      passScore: json['pass_score'] as int? ?? 0,
       createdAt: _parseDate(json['created_at']),
     );
   }
@@ -370,7 +367,6 @@ class AssessmentItemFormData {
   String optionC;
   String optionD;
   String correctOption;
-  int passScore;
 
   /// Web sends `section` with every item save: the section the item is
   /// added under (null = unsectioned) or, on edit, the item's own section.
@@ -391,7 +387,6 @@ class AssessmentItemFormData {
     this.optionC = '',
     this.optionD = '',
     this.correctOption = 'a',
-    this.passScore = 0,
     this.sectionId,
     this.sendSection = false,
   });
@@ -410,40 +405,37 @@ class AssessmentItemFormData {
     correctOption: model.correctOption,
     sectionId: model.sectionId,
     sendSection: model.sectionKnown,
-    passScore: model.passScore,
   );
 
   bool get isVideo => itemType == AssessmentItemType.video;
 
+  /// Exactly web ItemsModal saveItem's body (POST /assessments/<id>/items/
+  /// and PUT /assessments/items/<id>/ send the same):
+  ///   base  = section (see [sendSection]), item_type, title (trimmed),
+  ///           order (web `Number(order) || 1`)
+  ///   video = base + video_url, duration_secs (null when empty)
+  ///   quiz  = base + question, option_a–d (trimmed), correct_option
+  /// Nothing else: no pass_score (AssessmentItemCreateSerializer has no such
+  /// field) and no empty fields of the other item type — on PUT the server
+  /// keeps what isn't sent. The one deliberate difference: a video link typed
+  /// without a scheme gets "https://" (see [_normalizeVideoUrl]); web sends it
+  /// as typed and the server rejects it.
   Map<String, dynamic> toJson() {
     return {
       if (sendSection) 'section': sectionId,
       'item_type': itemType,
       'title': title.trim(),
-      'order': order < 1 ? 1 : order,
+      'order': order == 0 ? 1 : order,
       if (isVideo) ...{
         'video_url': _normalizeVideoUrl(videoUrl),
         'duration_secs': durationSecs,
       } else ...{
-        'video_url': '',
-        'duration_secs': null,
-      },
-      if (!isVideo) ...{
         'question': question.trim(),
         'option_a': optionA.trim(),
         'option_b': optionB.trim(),
         'option_c': optionC.trim(),
         'option_d': optionD.trim(),
         'correct_option': correctOption,
-        'pass_score': passScore < 0 ? 0 : passScore,
-      } else ...{
-        'question': '',
-        'option_a': '',
-        'option_b': '',
-        'option_c': '',
-        'option_d': '',
-        'correct_option': '',
-        'pass_score': 0,
       },
     };
   }

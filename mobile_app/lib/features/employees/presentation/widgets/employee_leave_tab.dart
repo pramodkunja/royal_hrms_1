@@ -13,11 +13,7 @@ import 'leave_credits_section.dart';
 // stays consistent across the whole Leave feature (Dashboard, this HR tab).
 final _kBalanceDisplay = [
   (code: 'casual', icon: Icons.check_circle_outline, color: AppColors.success),
-  (
-    code: 'earned',
-    icon: Icons.calendar_month_outlined,
-    color: AppColors.primary
-  ),
+  (code: 'earned', icon: Icons.calendar_month_outlined, color: AppColors.primary),
   (code: 'sick', icon: Icons.medical_services_outlined, color: AppColors.info),
 ];
 
@@ -28,21 +24,7 @@ String _fmtIso(String iso) {
   if (iso.isEmpty) return '—';
   try {
     final d = DateTime.parse(iso);
-    const m = [
-      '',
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ];
+    const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return '${d.day} ${m[d.month]}';
   } catch (_) {
     return iso;
@@ -53,21 +35,7 @@ String _fmtDateTime(String? iso) {
   if (iso == null || iso.isEmpty) return '—';
   try {
     final d = DateTime.parse(iso.length >= 10 ? iso.substring(0, 10) : iso);
-    const m = [
-      '',
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ];
+    const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return '${d.day} ${m[d.month]} ${d.year}';
   } catch (_) {
     return iso;
@@ -111,10 +79,8 @@ class _EmployeeLeaveTabState extends ConsumerState<EmployeeLeaveTab> {
   @override
   Widget build(BuildContext context) {
     final empId = widget.employee.employeeId;
-    final statsAsync =
-        ref.watch(employeeLeaveStatsProvider((empId, _year)));
-    final requestsAsync =
-        ref.watch(employeeLeaveRequestsProvider((empId, _year, _page)));
+    final statsAsync = ref.watch(employeeLeaveStatsProvider((empId, _year)));
+    final requestsAsync = ref.watch(employeeLeaveRequestsProvider((empId, _year, _page)));
 
     return ListView(
       // See employee_profile_screen.dart's _ProfileTab for why this is
@@ -138,9 +104,7 @@ class _EmployeeLeaveTabState extends ConsumerState<EmployeeLeaveTab> {
             ),
             error: (e, _) => Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text('Could not load leave stats.',
-                  style: AppTextStyles.caption
-                      .copyWith(color: AppColors.error)),
+              child: Text('Could not load leave stats.', style: AppTextStyles.caption.copyWith(color: AppColors.error)),
             ),
           ),
         ),
@@ -151,8 +115,7 @@ class _EmployeeLeaveTabState extends ConsumerState<EmployeeLeaveTab> {
         const SizedBox(height: 18),
         Row(
           children: [
-            Icon(Icons.list_alt_outlined,
-                size: 15, color: AppColors.primary),
+            Icon(Icons.list_alt_outlined, size: 15, color: AppColors.primary),
             const SizedBox(width: 6),
             Text('Leave Requests', style: AppTextStyles.label),
           ],
@@ -162,15 +125,12 @@ class _EmployeeLeaveTabState extends ConsumerState<EmployeeLeaveTab> {
           data: _buildRequestsSection,
           loading: () => Padding(
             padding: const EdgeInsets.symmetric(vertical: 40),
-            child:
-                Center(child: CircularProgressIndicator(color: AppColors.primary)),
+            child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
           ),
           error: (e, _) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 20),
-            child: Text(
-                'Could not load requests: ${friendlyLeaveError(e)}',
-                style: AppTextStyles.caption
-                    .copyWith(color: AppColors.error)),
+            child: Text('Could not load requests: ${friendlyLeaveError(e)}',
+                style: AppTextStyles.caption.copyWith(color: AppColors.error)),
           ),
         ),
       ],
@@ -180,9 +140,7 @@ class _EmployeeLeaveTabState extends ConsumerState<EmployeeLeaveTab> {
   // ── Stat / balance cards row ────────────────────────────────────────────
 
   Widget _buildStatsRow(LeaveStatsEntity stats) {
-    final byType = {
-      for (final b in stats.balances) b.leaveTypeCode.toLowerCase(): b
-    };
+    final byType = {for (final b in stats.balances) b.leaveTypeCode.toLowerCase(): b};
     final balanceCards = _kBalanceDisplay.map((d) {
       final b = byType[d.code];
       return _BalanceCard(
@@ -214,8 +172,7 @@ class _EmployeeLeaveTabState extends ConsumerState<EmployeeLeaveTab> {
         _MiniStatCard(
           label: 'Loss of Pay (LOP)',
           value: _fmtNum(stats.lopDays),
-          subtitle:
-              '${stats.lopRequests} request${stats.lopRequests == 1 ? '' : 's'} in $_year',
+          subtitle: '${stats.lopRequests} request${stats.lopRequests == 1 ? '' : 's'} in $_year',
           icon: Icons.money_off_outlined,
           color: AppColors.error,
         ),
@@ -233,12 +190,10 @@ class _EmployeeLeaveTabState extends ConsumerState<EmployeeLeaveTab> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.business_outlined,
-                  size: 44, color: AppColors.textHint),
+              Icon(Icons.business_outlined, size: 44, color: AppColors.textHint),
               const SizedBox(height: 10),
               Text('No leave requests found for $_year.',
-                  style: AppTextStyles.bodySecondary,
-                  textAlign: TextAlign.center),
+                  style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
             ],
           ),
         ),
@@ -263,8 +218,7 @@ class _EmployeeLeaveTabState extends ConsumerState<EmployeeLeaveTab> {
           page: page.page,
           totalPages: page.totalPages,
           onPrev: page.page > 1 ? () => setState(() => _page--) : null,
-          onNext:
-              page.page < page.totalPages ? () => setState(() => _page++) : null,
+          onNext: page.page < page.totalPages ? () => setState(() => _page++) : null,
         ),
       ],
     );
@@ -361,11 +315,8 @@ class _BalanceCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 1),
-                    Text(_fmtNum(available),
-                        style: AppTextStyles.h3
-                            .copyWith(color: color, fontSize: 20)),
-                    Text('of ${_fmtNum(total)} days left',
-                        style: AppTextStyles.caption.copyWith(fontSize: 10)),
+                    Text(_fmtNum(available), style: AppTextStyles.h3.copyWith(color: color, fontSize: 20)),
+                    Text('of ${_fmtNum(total)} days left', style: AppTextStyles.caption.copyWith(fontSize: 10)),
                   ],
                 ),
               ),
@@ -443,9 +394,7 @@ class _MiniStatCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 1),
-                    Text(value,
-                        style: AppTextStyles.h3
-                            .copyWith(color: color, fontSize: 20)),
+                    Text(value, style: AppTextStyles.h3.copyWith(color: color, fontSize: 20)),
                     Text(
                       subtitle,
                       style: AppTextStyles.caption.copyWith(fontSize: 10),
@@ -521,18 +470,14 @@ class _LeaveRequestRow extends StatelessWidget {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: AppColors.primary.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Text(
-                          LeaveTypeColors.shortLabelForCode(r.leaveTypeCode),
-                          style: AppTextStyles.caption.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 10)),
+                      child: Text(LeaveTypeColors.shortLabelForCode(r.leaveTypeCode),
+                          style: AppTextStyles.caption
+                              .copyWith(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 10)),
                     ),
                     const SizedBox(width: 6),
                     Expanded(
@@ -543,68 +488,54 @@ class _LeaveRequestRow extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                       decoration: BoxDecoration(
                         color: sc.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: sc.withValues(alpha: 0.3)),
                       ),
                       child: Text(r.status,
-                          style: AppTextStyles.caption.copyWith(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              color: sc)),
+                          style: AppTextStyles.caption.copyWith(fontSize: 9, fontWeight: FontWeight.w700, color: sc)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Icon(Icons.calendar_month_outlined,
-                        size: 11, color: AppColors.textHint),
+                    Icon(Icons.calendar_month_outlined, size: 11, color: AppColors.textHint),
                     const SizedBox(width: 4),
                     Flexible(
                       child: Text(
                         '${_fmtIso(r.from)} – ${_fmtIso(r.to)}',
-                        style: AppTextStyles.caption.copyWith(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary),
+                        style: AppTextStyles.caption
+                            .copyWith(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: AppColors.info.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text('${r.days}d',
-                          style: AppTextStyles.caption.copyWith(
-                              color: AppColors.info,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 10)),
+                          style: AppTextStyles.caption
+                              .copyWith(color: AppColors.info, fontWeight: FontWeight.w700, fontSize: 10)),
                     ),
                     if (r.hasLopDays) ...[
                       const SizedBox(width: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: AppColors.warning.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                              color: AppColors.warning.withValues(alpha: 0.3)),
+                          border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
                         ),
                         child: Text('LOP ${_fmtNum(r.lopDays)}d',
-                            style: AppTextStyles.caption.copyWith(
-                                color: AppColors.warning,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 9)),
+                            style: AppTextStyles.caption
+                                .copyWith(color: AppColors.warning, fontWeight: FontWeight.w700, fontSize: 9)),
                       ),
                     ],
                   ],
@@ -612,13 +543,9 @@ class _LeaveRequestRow extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    Icon(Icons.access_time_outlined,
-                        size: 10, color: AppColors.textHint),
+                    Icon(Icons.access_time_outlined, size: 10, color: AppColors.textHint),
                     const SizedBox(width: 3),
-                    Text(
-                        r.appliedOn.isEmpty
-                            ? 'Applied —'
-                            : 'Applied ${_fmtIso(r.appliedOn)}',
+                    Text(r.appliedOn.isEmpty ? 'Applied —' : 'Applied ${_fmtIso(r.appliedOn)}',
                         style: AppTextStyles.caption.copyWith(fontSize: 10)),
                   ],
                 ),
@@ -626,8 +553,7 @@ class _LeaveRequestRow extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.person_outline,
-                        size: 10, color: AppColors.textHint),
+                    Icon(Icons.person_outline, size: 10, color: AppColors.textHint),
                     const SizedBox(width: 3),
                     Expanded(
                       child: Text(
@@ -653,13 +579,11 @@ class _LeaveRequestRow extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.message_outlined,
-                            size: 10, color: AppColors.error),
+                        Icon(Icons.message_outlined, size: 10, color: AppColors.error),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(r.rejectReason!,
-                              style: AppTextStyles.caption.copyWith(
-                                  color: AppColors.error, fontSize: 10),
+                              style: AppTextStyles.caption.copyWith(color: AppColors.error, fontSize: 10),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis),
                         ),
@@ -703,15 +627,13 @@ class _PaginationBar extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
               side: BorderSide(color: AppColors.primary),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
           ),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text('Page $page of $totalPages',
-              style: AppTextStyles.caption.copyWith(fontSize: 11)),
+          child: Text('Page $page of $totalPages', style: AppTextStyles.caption.copyWith(fontSize: 11)),
         ),
         Expanded(
           child: OutlinedButton.icon(
@@ -721,8 +643,7 @@ class _PaginationBar extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
               side: BorderSide(color: AppColors.primary),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
           ),
         ),

@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../shared/models/bulk_import_result.dart';
 import '../../../onboarding/data/models/onboarding_config_models.dart' show CustomFileValue, onboardingUploadMime;
+import '../models/employee_id_card_model.dart';
 import '../models/employee_model.dart';
 import '../models/promotion_record_model.dart';
 
@@ -42,20 +43,19 @@ class EmployeeApprovalMatrixRow {
 
   bool get isSingleLevel => l2ApproverRole == null || l2ApproverRole!.isEmpty;
 
-  factory EmployeeApprovalMatrixRow.fromJson(Map<String, dynamic> json) =>
-      EmployeeApprovalMatrixRow(
-        workflowType:    json['workflow_type'] as String? ?? '',
-        workflowLabel:   json['workflow_label'] as String? ?? '',
-        l1ApproverRole:  json['l1_approver_role'] as String? ?? '',
+  factory EmployeeApprovalMatrixRow.fromJson(Map<String, dynamic> json) => EmployeeApprovalMatrixRow(
+        workflowType: json['workflow_type'] as String? ?? '',
+        workflowLabel: json['workflow_label'] as String? ?? '',
+        l1ApproverRole: json['l1_approver_role'] as String? ?? '',
         l1ApproverLabel: json['l1_approver_label'] as String? ?? '',
-        l1ApproverId:    json['l1_approver_id'] as String?,
-        l1ApproverName:  json['l1_approver_name'] as String?,
-        l1IsOverride:    json['l1_is_override'] as bool? ?? false,
-        l2ApproverRole:  json['l2_approver_role'] as String?,
+        l1ApproverId: json['l1_approver_id'] as String?,
+        l1ApproverName: json['l1_approver_name'] as String?,
+        l1IsOverride: json['l1_is_override'] as bool? ?? false,
+        l2ApproverRole: json['l2_approver_role'] as String?,
         l2ApproverLabel: json['l2_approver_label'] as String?,
-        l2ApproverId:    json['l2_approver_id'] as String?,
-        l2ApproverName:  json['l2_approver_name'] as String?,
-        l2IsOverride:    json['l2_is_override'] as bool? ?? false,
+        l2ApproverId: json['l2_approver_id'] as String?,
+        l2ApproverName: json['l2_approver_name'] as String?,
+        l2IsOverride: json['l2_is_override'] as bool? ?? false,
       );
 }
 
@@ -104,13 +104,11 @@ class EmployeesRemoteDataSource {
       );
       final raw = _unwrap(res.data);
       if (raw is List) {
-        employees.addAll(
-            raw.whereType<Map<String, dynamic>>().map(EmployeeModel.fromJson));
+        employees.addAll(raw.whereType<Map<String, dynamic>>().map(EmployeeModel.fromJson));
         break;
       } else if (raw is Map<String, dynamic>) {
         final list = raw['results'] as List<dynamic>? ?? [];
-        employees.addAll(
-            list.whereType<Map<String, dynamic>>().map(EmployeeModel.fromJson));
+        employees.addAll(list.whereType<Map<String, dynamic>>().map(EmployeeModel.fromJson));
         totalPages = raw['total_pages'] as int? ?? 1;
       } else {
         break;
@@ -148,8 +146,7 @@ class EmployeesRemoteDataSource {
     final raw = _unwrap(res.data);
     if (raw is Map<String, dynamic>) {
       final list = raw['results'] as List<dynamic>? ?? [];
-      final items =
-          list.whereType<Map<String, dynamic>>().map(EmployeeModel.fromJson).toList();
+      final items = list.whereType<Map<String, dynamic>>().map(EmployeeModel.fromJson).toList();
       return EmployeePageResult(
         items: items,
         page: raw['page'] as int? ?? page,
@@ -160,8 +157,7 @@ class EmployeesRemoteDataSource {
     // Defensive fallback matching fetchEmployees()'s handling above — this
     // endpoint always returns the paginated envelope in practice.
     if (raw is List) {
-      final items =
-          raw.whereType<Map<String, dynamic>>().map(EmployeeModel.fromJson).toList();
+      final items = raw.whereType<Map<String, dynamic>>().map(EmployeeModel.fromJson).toList();
       return EmployeePageResult(items: items, page: 1, totalPages: 1, count: items.length);
     }
     return const EmployeePageResult(items: [], page: 1, totalPages: 1, count: 0);
@@ -194,6 +190,14 @@ class EmployeesRemoteDataSource {
   }
 
   // ── Detail ─────────────────────────────────────────────────────────────────
+
+  /// GET /employees/<employee_id>/id-card/ — the card's data (web ID card page).
+  Future<IdCardData> fetchIdCard(String employeeId) async {
+    final res = await _dio.get(ApiConstants.employeeIdCard(employeeId));
+    final body = res.data;
+    final data = body is Map && body['data'] is Map ? body['data'] : body;
+    return IdCardData.fromJson((data as Map).cast<String, dynamic>());
+  }
 
   Future<EmployeeModel> fetchEmployee(String employeeId) async {
     final res = await _dio.get(ApiConstants.employeeDetail(employeeId));
@@ -260,18 +264,11 @@ class EmployeesRemoteDataSource {
     // already asks for a larger page_size for the same reason. Without this,
     // the Branch dropdown in the employee edit form can be missing the
     // employee's actual branch, making the field look unselectable.
-    final res = await _dio
-        .get(ApiConstants.branches, queryParameters: {'page_size': 50});
+    final res = await _dio.get(ApiConstants.branches, queryParameters: {'page_size': 50});
     final raw = _unwrap(res.data);
-    final list = raw is List
-        ? raw
-        : (raw is Map<String, dynamic>
-            ? raw['results'] as List<dynamic>? ?? []
-            : <dynamic>[]);
-    return list
-        .whereType<Map<String, dynamic>>()
-        .map(EmployeeBranch.fromJson)
-        .toList();
+    final list =
+        raw is List ? raw : (raw is Map<String, dynamic> ? raw['results'] as List<dynamic>? ?? [] : <dynamic>[]);
+    return list.whereType<Map<String, dynamic>>().map(EmployeeBranch.fromJson).toList();
   }
 
   // ── HR / Reporting-manager pickers (Edit Employee sheet, edit-only) ─────────
@@ -286,25 +283,45 @@ class EmployeesRemoteDataSource {
     return _unwrapPickerList(res.data);
   }
 
-  Future<List<EmployeePickerOption>> fetchManagers(String branch) async {
+  /// [department] narrows the list further (web AddEmployeeModal sends it
+  /// once a department is chosen; the Edit sheet doesn't).
+  Future<List<EmployeePickerOption>> fetchManagers(String branch, {String? department}) async {
     final res = await _dio.get(
       ApiConstants.employeesManagerList,
-      queryParameters: {'branch': branch},
+      queryParameters: {
+        'branch': branch,
+        if (department != null && department.isNotEmpty) 'department': department,
+      },
+    );
+    return _unwrapPickerList(res.data);
+  }
+
+  /// Web employees/[id] "Reporting Approver" list (lib/reportingManager.ts
+  /// reportingApproverListEndpoint): /employees/managers/?branch=<branch>,
+  /// or — when the employee's role is manager-type —
+  /// ?manager_approvers=1&branch=&designation= (who a Manager may have).
+  /// Empty values are left out, as web does.
+  Future<List<EmployeePickerOption>> fetchReportingApprovers({
+    required String branch,
+    required bool managerRole,
+    required String designation,
+  }) async {
+    final res = await _dio.get(
+      ApiConstants.employeesManagerList,
+      queryParameters: {
+        if (managerRole) 'manager_approvers': '1',
+        if (branch.isNotEmpty) 'branch': branch,
+        if (managerRole && designation.isNotEmpty) 'designation': designation,
+      },
     );
     return _unwrapPickerList(res.data);
   }
 
   List<EmployeePickerOption> _unwrapPickerList(dynamic body) {
     final raw = _unwrap(body);
-    final list = raw is List
-        ? raw
-        : (raw is Map<String, dynamic>
-            ? raw['results'] as List<dynamic>? ?? []
-            : <dynamic>[]);
-    return list
-        .whereType<Map<String, dynamic>>()
-        .map(EmployeePickerOption.fromJson)
-        .toList();
+    final list =
+        raw is List ? raw : (raw is Map<String, dynamic> ? raw['results'] as List<dynamic>? ?? [] : <dynamic>[]);
+    return list.whereType<Map<String, dynamic>>().map(EmployeePickerOption.fromJson).toList();
   }
 
   // ── Approval matrix (per-employee) ──────────────────────────────────────────
@@ -338,8 +355,7 @@ class EmployeesRemoteDataSource {
         'l2_override_id': l2OverrideId,
       },
     );
-    return EmployeeApprovalMatrixRow.fromJson(
-        _unwrap(res.data) as Map<String, dynamic>);
+    return EmployeeApprovalMatrixRow.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
   // ── Send wish email (Wishes tab) ────────────────────────────────────────────
@@ -391,6 +407,14 @@ class EmployeesRemoteDataSource {
     await _dio.put(ApiConstants.employeeDetail(employeeId), data: {'custom_field_values': values});
   }
 
+  // ── Education / Bank / Emergency (web employees/[id]/page.tsx onSave) ────
+  // PUT /employees/<code>/ with one section's EmployeeProfile keys; the
+  // backend validates them with EmployeeProfileSerializer(partial=True) and
+  // changes nothing else. Values (bank details included) are never logged.
+  Future<void> updateProfileSection(String employeeId, Map<String, dynamic> fields) async {
+    await _dio.put(ApiConstants.employeeDetail(employeeId), data: fields);
+  }
+
   /// POST multipart {field_key, file} → the stored value (a single-file
   /// field's previous file is replaced server-side).
   Future<CustomFileValue> uploadCustomFile(String employeeId, String fieldKey, String fileName, List<int> bytes) async {
@@ -434,11 +458,8 @@ class EmployeesRemoteDataSource {
       queryParameters: {'department': deptId},
     );
     final raw = _unwrap(res.data);
-    final list = raw is List
-        ? raw
-        : (raw is Map<String, dynamic>
-            ? raw['results'] as List<dynamic>? ?? []
-            : <dynamic>[]);
+    final list =
+        raw is List ? raw : (raw is Map<String, dynamic> ? raw['results'] as List<dynamic>? ?? [] : <dynamic>[]);
     return list
         .whereType<Map<String, dynamic>>()
         .map((e) => e['name'] as String? ?? '')

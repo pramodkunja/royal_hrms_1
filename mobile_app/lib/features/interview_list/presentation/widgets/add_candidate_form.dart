@@ -33,6 +33,8 @@ class _AddCandidateFormContent extends StatelessWidget {
   final int? selectedBranch;
   final List<Map<String, dynamic>> branches;
   final bool branchLocked;
+  /// Web: a locked user sees their own branch name (effectiveBranch).
+  final String? lockedBranchName;
   final String mode;
   final DateTime? interviewDate;
   final DateTime? originalInterviewDate;
@@ -60,6 +62,7 @@ class _AddCandidateFormContent extends StatelessWidget {
     required this.selectedBranch,
     required this.branches,
     this.branchLocked = false,
+    this.lockedBranchName,
     required this.mode,
     required this.interviewDate,
     this.originalInterviewDate,
@@ -198,6 +201,21 @@ class _AddCandidateFormContent extends StatelessWidget {
         ],
       ]),
       const SizedBox(height: 6),
+      // Web: `<input value={effectiveBranch} disabled readOnly />`.
+      if (branchLocked)
+        Container(
+          key: const Key('candidate-branch-locked-field'),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Text((lockedBranchName ?? '').trim().isEmpty ? '—' : lockedBranchName!.trim(),
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+        )
+      else
       IgnorePointer(
         ignoring: branchLocked,
         child: Opacity(

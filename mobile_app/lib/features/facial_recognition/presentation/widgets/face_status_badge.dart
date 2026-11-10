@@ -63,7 +63,8 @@ class FaceInitialsAvatar extends StatelessWidget {
       ),
       child: Text(
         _initials,
-        style: AppTextStyles.label.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: size * 0.36),
+        style:
+            AppTextStyles.label.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: size * 0.36),
       ),
     );
   }

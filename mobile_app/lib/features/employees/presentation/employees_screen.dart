@@ -81,8 +81,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     _searchDebounce = Timer(const Duration(milliseconds: 400), () {
       if (!mounted) return;
       final current = ref.read(employeeFiltersProvider);
-      ref.read(employeeFiltersProvider.notifier).state =
-          current.copyWith(search: value);
+      ref.read(employeeFiltersProvider.notifier).state = current.copyWith(search: value);
     });
   }
 
@@ -95,20 +94,22 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
         AppRoutes.employeeProfilePath(emp.employeeId),
         extra: emp,
       ),
-      onEdit: !canEdit ? null : () async {
-        final updated = await AddEmployeeSheet.show(context, editing: emp);
-        if (updated == true) {
-          ref.invalidate(employeeListProvider);
-          ref.invalidate(employeeStatsProvider);
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: const Text('Employee updated successfully.'),
-              backgroundColor: AppColors.success,
-              behavior: SnackBarBehavior.floating,
-            ));
-          }
-        }
-      },
+      onEdit: !canEdit
+          ? null
+          : () async {
+              final updated = await AddEmployeeSheet.show(context, editing: emp);
+              if (updated == true) {
+                ref.invalidate(employeeListProvider);
+                ref.invalidate(employeeStatsProvider);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: const Text('Employee updated successfully.'),
+                    backgroundColor: AppColors.success,
+                    behavior: SnackBarBehavior.floating,
+                  ));
+                }
+              }
+            },
     );
   }
 
@@ -152,8 +153,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                           Navigator.pop(sheetContext);
                         },
                         child: Text('Clear all',
-                            style: AppTextStyles.caption
-                                .copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)),
+                            style:
+                                AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)),
                       ),
                   ],
                 ),
@@ -169,8 +170,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                     title: 'Filter by Branch',
                     options: branches,
                     current: filters.branch,
-                    onSelect: (v) =>
-                        ref.read(employeeFiltersProvider.notifier).state = filters.copyWith(branch: v),
+                    onSelect: (v) => ref.read(employeeFiltersProvider.notifier).state = filters.copyWith(branch: v),
                   ),
                 ),
               if (depts.isNotEmpty)
@@ -183,8 +183,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                     title: 'Filter by Department',
                     options: depts,
                     current: filters.department,
-                    onSelect: (v) =>
-                        ref.read(employeeFiltersProvider.notifier).state = filters.copyWith(department: v),
+                    onSelect: (v) => ref.read(employeeFiltersProvider.notifier).state = filters.copyWith(department: v),
                   ),
                 ),
               _FilterSheetRow(
@@ -202,8 +201,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                   options: const ['active', 'onboarding', 'inactive'],
                   current: filters.status,
                   displayMap: const {'active': 'Active', 'onboarding': 'Onboarding', 'inactive': 'Inactive'},
-                  onSelect: (v) =>
-                      ref.read(employeeFiltersProvider.notifier).state = filters.copyWith(status: v),
+                  onSelect: (v) => ref.read(employeeFiltersProvider.notifier).state = filters.copyWith(status: v),
                 ),
               ),
               const SizedBox(height: 12),
@@ -246,17 +244,13 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
               const SizedBox(height: 12),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                child: Text(title,
-                    style: AppTextStyles.label
-                        .copyWith(fontWeight: FontWeight.w800)),
+                child: Text(title, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w800)),
               ),
               const Divider(),
               // "All" option
               ListTile(
                 title: Text('All', style: AppTextStyles.body),
-                trailing: current.isEmpty
-                    ? Icon(Icons.check, color: AppColors.primary, size: 18)
-                    : null,
+                trailing: current.isEmpty ? Icon(Icons.check, color: AppColors.primary, size: 18) : null,
                 onTap: () {
                   onSelect('');
                   Navigator.pop(context);
@@ -264,9 +258,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
               ),
               ...options.map((opt) => ListTile(
                     title: Text(displayMap?[opt] ?? opt, style: AppTextStyles.body),
-                    trailing: current == opt
-                        ? Icon(Icons.check, color: AppColors.primary, size: 18)
-                        : null,
+                    trailing: current == opt ? Icon(Icons.check, color: AppColors.primary, size: 18) : null,
                     onTap: () {
                       onSelect(opt);
                       Navigator.pop(context);
@@ -323,8 +315,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                           onClear: () {
                             _searchDebounce?.cancel();
                             setState(() => _searchCtrl.clear());
-                            ref.read(employeeFiltersProvider.notifier).state =
-                                filters.copyWith(search: '');
+                            ref.read(employeeFiltersProvider.notifier).state = filters.copyWith(search: '');
                           },
                         ),
                       ),
@@ -367,40 +358,42 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      floatingActionButton: !canCreate ? null : ExpandableFab(
-        heroTag: 'employees_fab',
-        expanded: _fabExpanded,
-        onToggle: () => setState(() => _fabExpanded = !_fabExpanded),
-        actions: [
-          ExpandableFabAction(
-            icon: Icons.upload_file_outlined,
-            label: 'Bulk Import',
-            onTap: () {
-              setState(() => _fabExpanded = false);
-              context.push(AppRoutes.employeeBulkImport);
-            },
-          ),
-          ExpandableFabAction(
-            icon: Icons.person_add_outlined,
-            label: 'Add Employee',
-            onTap: () async {
-              setState(() => _fabExpanded = false);
-              final added = await AddEmployeeSheet.show(context);
-              if (added == true) {
-                ref.invalidate(employeeListProvider);
-                ref.invalidate(employeeStatsProvider);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: const Text('Employee created successfully.'),
-                    backgroundColor: AppColors.success,
-                    behavior: SnackBarBehavior.floating,
-                  ));
-                }
-              }
-            },
-          ),
-        ],
-      ),
+      floatingActionButton: !canCreate
+          ? null
+          : ExpandableFab(
+              heroTag: 'employees_fab',
+              expanded: _fabExpanded,
+              onToggle: () => setState(() => _fabExpanded = !_fabExpanded),
+              actions: [
+                ExpandableFabAction(
+                  icon: Icons.upload_file_outlined,
+                  label: 'Bulk Import',
+                  onTap: () {
+                    setState(() => _fabExpanded = false);
+                    context.push(AppRoutes.employeeBulkImport);
+                  },
+                ),
+                ExpandableFabAction(
+                  icon: Icons.person_add_outlined,
+                  label: 'Add Employee',
+                  onTap: () async {
+                    setState(() => _fabExpanded = false);
+                    final added = await AddEmployeeSheet.show(context);
+                    if (added == true) {
+                      ref.invalidate(employeeListProvider);
+                      ref.invalidate(employeeStatsProvider);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: const Text('Employee created successfully.'),
+                          backgroundColor: AppColors.success,
+                          behavior: SnackBarBehavior.floating,
+                        ));
+                      }
+                    }
+                  },
+                ),
+              ],
+            ),
       body: Stack(
         children: [
           RefreshIndicator(
@@ -425,28 +418,23 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                       child: Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               color: AppColors.primary.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                  color: AppColors.primary
-                                      .withValues(alpha: 0.20)),
+                              border: Border.all(color: AppColors.primary.withValues(alpha: 0.20)),
                             ),
                             child: Text(
                               '${filters.activeCount} filter${filters.activeCount == 1 ? '' : 's'} active',
-                              style: AppTextStyles.caption.copyWith(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.w600),
+                              style:
+                                  AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
                             ),
                           ),
                           const SizedBox(width: 10),
                           GestureDetector(
                             onTap: () {
                               _searchCtrl.clear();
-                              ref.read(employeeFiltersProvider.notifier).state =
-                                  const EmployeeFilters();
+                              ref.read(employeeFiltersProvider.notifier).state = const EmployeeFilters();
                             },
                             child: Text('Clear all',
                                 style: AppTextStyles.caption.copyWith(
@@ -516,9 +504,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                           : 'No employees yet',
                       message: filters.search.isNotEmpty
                           ? 'No employees match your search.'
-                          : (filters.status.isNotEmpty ||
-                                  filters.department.isNotEmpty ||
-                                  filters.branch.isNotEmpty)
+                          : (filters.status.isNotEmpty || filters.department.isNotEmpty || filters.branch.isNotEmpty)
                               ? 'No employees match the selected filters.'
                               : 'Employees will appear here once added.',
                     ),
@@ -580,15 +566,12 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                           children: [
                             Text(
                               listState.loadMoreError!,
-                              style: AppTextStyles.caption
-                                  .copyWith(color: AppColors.textHint),
+                              style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 6),
                             TextButton(
-                              onPressed: () => ref
-                                  .read(employeeListProvider.notifier)
-                                  .loadNextPage(),
+                              onPressed: () => ref.read(employeeListProvider.notifier).loadNextPage(),
                               child: const Text('Retry'),
                             ),
                           ],
@@ -626,8 +609,13 @@ class _StatsGrid extends StatelessWidget {
       cards: [
         StatCard(icon: Icons.groups_outlined, count: stats.total, label: 'Total', color: AppColors.primary),
         StatCard(icon: Icons.person_outlined, count: stats.active, label: 'Active', color: AppColors.success),
-        StatCard(icon: Icons.person_add_outlined, count: stats.onboarding, label: 'Onboarding', color: AppColors.warning),
-        StatCard(icon: Icons.business_outlined, count: stats.departments, label: 'Departments', color: const Color(0xFF7C3AED)),
+        StatCard(
+            icon: Icons.person_add_outlined, count: stats.onboarding, label: 'Onboarding', color: AppColors.warning),
+        StatCard(
+            icon: Icons.business_outlined,
+            count: stats.departments,
+            label: 'Departments',
+            color: const Color(0xFF7C3AED)),
       ],
     );
   }

@@ -9,10 +9,10 @@ import '../../data/models/employee_model.dart';
 // green bar on the Active card; the employee's own avatar color is a
 // separate, per-person identity color, not tied to status).
 (Color, Color, String) _statusStyle(String status) => switch (status) {
-      'active'     => (AppColors.successContainer, AppColors.success,  'Active'),
-      'onboarding' => (AppColors.warningContainer, AppColors.warning,  'Onboarding'),
-      'inactive'   => (AppColors.errorContainer,   AppColors.error,    'Inactive'),
-      _            => (AppColors.border,            AppColors.textHint, status),
+      'active' => (AppColors.successContainer, AppColors.success, 'Active'),
+      'onboarding' => (AppColors.warningContainer, AppColors.warning, 'Onboarding'),
+      'inactive' => (AppColors.errorContainer, AppColors.error, 'Inactive'),
+      _ => (AppColors.border, AppColors.textHint, status),
     };
 
 /// A compact, portrait "directory" card — a status-colored top accent bar,
@@ -33,9 +33,7 @@ class EmployeeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = employee.fullName.isEmpty
-        ? '${employee.firstName} ${employee.lastName}'.trim()
-        : employee.fullName;
+    final name = employee.fullName.isEmpty ? '${employee.firstName} ${employee.lastName}'.trim() : employee.fullName;
     final (_, statusColor, _) = _statusStyle(employee.status);
 
     return Container(

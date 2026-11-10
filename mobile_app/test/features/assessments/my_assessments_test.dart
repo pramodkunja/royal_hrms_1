@@ -143,14 +143,14 @@ void main() {
           AppRoutes.changePassword);
     });
 
-    test('assessment management stays behind assessments.view', () {
+    test('assessment management stays behind the assessments.* codenames (web isAdminView)', () {
       expect(_go(roles.employee, AppRoutes.assessments), AppRoutes.dashboard);
       expect(
           _go(roles.noPermissions, AppRoutes.assessments), AppRoutes.dashboard);
       expect(_go(roles.branchAdmin, AppRoutes.assessments), isNull);
       expect(_go(roles.systemAdmin, AppRoutes.assessments), isNull);
-      expect(
-          requiredPermissionsFor(AppRoutes.assessments), ['assessments.view']);
+      expect(requiredPermissionsFor(AppRoutes.assessments),
+          ['assessments.view', 'assessments.create', 'assessments.edit', 'assessments.delete']);
       // Assessment configuration (settings) is unchanged too.
       expect(_go(roles.employee, AppRoutes.settingsAssessmentConfig),
           AppRoutes.dashboard);

@@ -34,8 +34,18 @@ int _yearsCompleted(String isoDate) {
 }
 
 const _months = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 String _fmtDayMonth(String isoDate) {
@@ -139,21 +149,18 @@ class _WishesTabState extends State<WishesTab> {
               Expanded(
                 child: Text.rich(
                   TextSpan(
-                    style: AppTextStyles.body
-                        .copyWith(fontSize: 12.5, color: AppColors.textSecondary),
+                    style: AppTextStyles.body.copyWith(fontSize: 12.5, color: AppColors.textSecondary),
                     children: [
                       const TextSpan(text: 'Wish emails will be sent to '),
                       TextSpan(
                         text: emp.fullName,
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                        style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                       ),
                       if (emp.email.isNotEmpty) ...[
                         const TextSpan(text: ' at '),
                         TextSpan(
                           text: emp.email,
-                          style: TextStyle(
-                              fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                          style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                         ),
                       ],
                     ],
@@ -198,8 +205,7 @@ class _OccasionCard extends StatelessWidget {
     final isToday = daysUntil == 0;
     final isSoon = daysUntil != null && daysUntil > 0 && daysUntil <= 7;
     final isAnniversary = occasion.key == 'anniversary';
-    final years =
-        dateStr.isNotEmpty && isAnniversary ? _yearsCompleted(dateStr) : null;
+    final years = dateStr.isNotEmpty && isAnniversary ? _yearsCompleted(dateStr) : null;
 
     return Stack(
       clipBehavior: Clip.none,
@@ -259,8 +265,7 @@ class _OccasionCard extends StatelessWidget {
                     width: 1.5,
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 icon: Icon(alreadySent ? Icons.send_outlined : occasion.icon, size: 14),
                 label: Text(
@@ -318,16 +323,14 @@ class _DateLine extends StatelessWidget {
         style: AppTextStyles.caption.copyWith(fontSize: 11.5, color: AppColors.textHint),
       );
     }
-    final yearsSuffix =
-        (years != null && years! > 0) ? ' · ${years!} yr${years != 1 ? 's' : ''}' : '';
+    final yearsSuffix = (years != null && years! > 0) ? ' · ${years!} yr${years != 1 ? 's' : ''}' : '';
     final text = isToday
         ? '${isBirthday ? 'Birthday' : 'Anniversary'} is today!$yearsSuffix'
         : '${_fmtDayMonth(dateStr)} · $daysUntil day${daysUntil == 1 ? '' : 's'} away$yearsSuffix';
 
     return Row(
       children: [
-        Icon(Icons.calendar_today_outlined,
-            size: 11, color: isToday ? color : AppColors.textHint),
+        Icon(Icons.calendar_today_outlined, size: 11, color: isToday ? color : AppColors.textHint),
         const SizedBox(width: 5),
         Expanded(
           child: Text(

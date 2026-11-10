@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../../shared/widgets/blue_hero_banner.dart';
 import '../../../../shared/widgets/expandable_fab.dart';
 import '../../../../shared/widgets/stat_card.dart';
@@ -27,6 +28,14 @@ class InterviewListScreen extends ConsumerStatefulWidget {
 
 class _InterviewListScreenState extends ConsumerState<InterviewListScreen> {
   bool _fabExpanded = false;
+
+  /// Web activeBranch: the picked branch's name (unrestricted users only).
+  String? _activeBranchName(WidgetRef ref) {
+    final id = ref.watch(candidateBranchFilterProvider);
+    if (id == null || !isUnrestrictedCandidateViewer(ref.watch(authStateProvider).valueOrNull?.user)) return null;
+    final options = ref.watch(candidateBranchOptionsProvider).valueOrNull ?? const [];
+    return options.where((b) => b.id == id).firstOrNull?.branchName;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +93,7 @@ class _InterviewListScreenState extends ConsumerState<InterviewListScreen> {
                     ),
                   ),
                   data: (page) => filtered.isEmpty && !page.hasMore
-                      ? SliverFillRemaining(child: _EmptyView())
+                      ? SliverFillRemaining(child: _EmptyView(branchName: _activeBranchName(ref)))
                       : SliverPadding(
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
                           sliver: SliverList(
@@ -112,7 +121,11 @@ class _InterviewListScreenState extends ConsumerState<InterviewListScreen> {
           ),
         ],
       ),
-      floatingActionButton: ExpandableFab(
+      // Web shows Bulk Import and Add Candidate only with canCreate
+      // (recruitment.create); without it there is nothing to offer here.
+      floatingActionButton: !canCreateCandidates(ref.watch(authStateProvider).valueOrNull?.user)
+          ? null
+          : ExpandableFab(
         heroTag: 'interview_list_fab',
         expanded: _fabExpanded,
         onToggle: () => setState(() => _fabExpanded = !_fabExpanded),

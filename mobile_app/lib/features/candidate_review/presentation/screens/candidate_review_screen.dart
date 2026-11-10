@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/blue_hero_banner.dart';
 import '../../../../shared/widgets/stat_card.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../assessments/data/models/assessment_model.dart';
 import '../../../assessments/presentation/providers/assessments_providers.dart' show assessmentsDataSourceProvider;
 import '../../data/datasources/approval_datasource.dart';
@@ -172,6 +173,9 @@ class _Body extends ConsumerWidget {
                 delegate: SliverChildBuilderDelegate(
                   (context, i) => _ApprovalTile(
                     user: rows[i],
+                    canReview: canReviewOnboarding(ref.watch(authStateProvider).valueOrNull?.user),
+                    // Web: the Branch column only when currentUser.is_superuser.
+                    showBranch: ref.watch(authStateProvider).valueOrNull?.user?.isSuperuser == true,
                     onReview: () => _openReview(context, ref, rows[i]),
                   ),
                   childCount: rows.length,
@@ -184,6 +188,8 @@ class _Body extends ConsumerWidget {
   }
 
   void _openReview(BuildContext context, WidgetRef ref, ApprovalUser user) {
+    // Web: Review exists only for canApprove, and never for a sent-back row.
+    if (!canReviewOnboarding(ref.read(authStateProvider).valueOrNull?.user) || isAwaitingResubmission(user)) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -268,8 +274,10 @@ class _StatsBar extends StatelessWidget {
 
 class _ApprovalTile extends StatelessWidget {
   final ApprovalUser user;
+  final bool canReview;
+  final bool showBranch;
   final VoidCallback onReview;
-  const _ApprovalTile({required this.user, required this.onReview});
+  const _ApprovalTile({required this.user, required this.canReview, this.showBranch = false, required this.onReview});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -347,17 +355,42 @@ class _ApprovalTile extends StatelessWidget {
                 children: [
                   if (user.designation.isNotEmpty)
                     _Meta(icon: Icons.badge_outlined, text: user.designation),
-                  if (user.branch.isNotEmpty)
-                    _Meta(icon: Icons.business_outlined, text: user.branch),
+                  // Web candidate-review page: Branch column (row.branch || "—")
+                  // for superusers only. The review sheet still shows it.
+                  if (showBranch)
+                    _Meta(
+                        key: Key('review-branch-${user.id}'),
+                        icon: Icons.business_outlined,
+                        text: user.branch.isNotEmpty ? user.branch : '—'),
                   _Meta(
                       icon: Icons.calendar_today_outlined,
                       text: _fmtDate(user.dateJoined)),
                 ],
               ),
+              // Web: sent back → "Awaiting resubmission" (for everyone);
+              // otherwise Review only for canApprove; else nothing.
+              if (isAwaitingResubmission(user)) ...[
+                const SizedBox(height: 12),
+                Tooltip(
+                  message: 'Waiting for the employee to correct and resubmit',
+                  child: Container(
+                    key: Key('review-awaiting-${user.id}'),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Text('Awaiting resubmission',
+                        style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
+                  ),
+                ),
+              ] else if (canReview) ...[
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
+                  key: Key('review-button-${user.id}'),
                   onPressed: onReview,
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 9),
@@ -372,6 +405,7 @@ class _ApprovalTile extends StatelessWidget {
                           TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                 ),
               ),
+              ],
             ],
           ),
         ),
@@ -381,7 +415,7 @@ class _ApprovalTile extends StatelessWidget {
 class _Meta extends StatelessWidget {
   final IconData icon;
   final String text;
-  const _Meta({required this.icon, required this.text});
+  const _Meta({super.key, required this.icon, required this.text});
 
   @override
   Widget build(BuildContext context) => Row(

@@ -47,10 +47,12 @@ bool userHasAnyPermission(UserEntity? user, Iterable<String> codenames) =>
 /// each of those returns.
 const Map<String, List<String>> kRoutePermissions = {
   '/dashboard/interview-list': ['recruitment.view'],
-  '/interview-list/bulk-import': ['recruitment.view'],
+  // Web: the Bulk Import entry needs recruitment.create (canCreate).
+  '/interview-list/bulk-import': ['recruitment.create'],
   '/dashboard/candidate-review': ['recruitment.view'],
   '/dashboard/email-logs': ['recruitment.view'],
-  '/dashboard/assessments': ['assessments.view'],
+  // Web isAdminView: any assessments.* codename opens the management view.
+  '/dashboard/assessments': ['assessments.view', 'assessments.create', 'assessments.edit', 'assessments.delete'],
   '/dashboard/face-id-registrations': ['facial_recognition.approve'],
   '/dashboard/employees': ['employees.view'],
   // Bulk import creates employees: employees.create (EmployeeBulkImportView).

@@ -314,8 +314,7 @@ class _PromoteEmployeeSheetState extends ConsumerState<_PromoteEmployeeSheet> {
     _designation = widget.employee.designation;
     _roleSlug = widget.employee.role;
     final now = DateTime.now();
-    _effectiveDate =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    _effectiveDate = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -427,8 +426,7 @@ class _PromoteEmployeeSheetState extends ConsumerState<_PromoteEmployeeSheet> {
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text('Promote Employee',
-                          style: AppTextStyles.h4.copyWith(fontWeight: FontWeight.w800)),
+                      child: Text('Promote Employee', style: AppTextStyles.h4.copyWith(fontWeight: FontWeight.w800)),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close),
@@ -528,7 +526,8 @@ class _PromoteEmployeeSheetState extends ConsumerState<_PromoteEmployeeSheet> {
                       ],
                       if (_error != null) ...[
                         const SizedBox(height: 10),
-                        Text(_error!, style: TextStyle(color: AppColors.error, fontSize: 12, fontWeight: FontWeight.w500)),
+                        Text(_error!,
+                            style: TextStyle(color: AppColors.error, fontSize: 12, fontWeight: FontWeight.w500)),
                       ],
                       const SizedBox(height: 8),
                     ],
@@ -563,9 +562,8 @@ class _DesignationField extends ConsumerWidget {
     final depts = ref.watch(employeeFormDepartmentsProvider).valueOrNull ?? [];
     final deptId = depts.where((d) => d.name == employee.department).firstOrNull?.id;
 
-    final names = deptId == null
-        ? const <String>[]
-        : ref.watch(employeeDesignationsByDeptProvider(deptId)).valueOrNull ?? [];
+    final names =
+        deptId == null ? const <String>[] : ref.watch(employeeDesignationsByDeptProvider(deptId)).valueOrNull ?? [];
     // The employee's current designation might not be in the department's
     // active designation list (e.g. a since-renamed/deactivated one) —
     // always include it so the field doesn't silently drop the selection.
@@ -587,9 +585,8 @@ class _DesignationField extends ConsumerWidget {
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           ),
           hint: Text('— Select Designation —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
-          items: options
-              .map((d) => DropdownMenuItem(value: d, child: Text(d, overflow: TextOverflow.ellipsis)))
-              .toList(),
+          items:
+              options.map((d) => DropdownMenuItem(value: d, child: Text(d, overflow: TextOverflow.ellipsis))).toList(),
           onChanged: onChanged,
         ),
       ],
@@ -607,9 +604,8 @@ class _RoleField extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // system_admin is never assignable via employee edit — the backend
     // rejects it outright, and web excludes it from this dropdown too.
-    final roles = (ref.watch(employeeFormRolesProvider).valueOrNull ?? [])
-        .where((r) => r.name != 'system_admin')
-        .toList();
+    final roles =
+        (ref.watch(employeeFormRolesProvider).valueOrNull ?? []).where((r) => r.name != 'system_admin').toList();
     final selectedRole = roles.where((r) => r.name == selected).firstOrNull;
 
     return Column(
