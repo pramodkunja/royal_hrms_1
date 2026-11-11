@@ -3,14 +3,26 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../../data/models/smtp_model.dart';
+import '../../../data/models/smtp_providers.dart';
 import '../../providers/settings_providers.dart';
+
+/// Result of the form when "Change provider" was tapped (web: reopens the
+/// provider picker; the form starts again from the new provider's preset).
+const kSmtpChangeProvider = 'change-provider';
 
 class SmtpFormSheet extends StatefulWidget {
   final SmtpModel? editing;
   final WidgetRef ref;
 
-  const SmtpFormSheet({super.key, this.editing, required this.ref});
+  /// Add mode: the provider chosen in the picker (web SmtpModal `provider`).
+  /// Drives the prefilled / locked Host, Port and TLS and the hints. Not used
+  /// on edit (web passes none): the saved provider is kept as it is.
+  final String? provider;
+
+  const SmtpFormSheet({super.key, this.editing, required this.ref, this.provider});
 
   @override
   State<SmtpFormSheet> createState() => _SmtpFormSheetState();
@@ -20,16 +32,25 @@ class _SmtpFormSheetState extends State<SmtpFormSheet> {
   late final SmtpFormData _form;
   final Map<String, String?> _errors = {};
   bool _saving = false;
+  // Server refusal from the last save, shown inside the form (a snackbar would
+  // sit behind this full-height dialog, unseen). Values are kept for a retry.
+  String? _saveError;
   bool _obscurePass = true;
 
   bool get _isAdd => widget.editing == null;
+
+  SmtpProviderPreset? get _preset =>
+      _isAdd && widget.provider != null ? kSmtpProviderPresets[widget.provider!] : null;
+  bool get _locked => _preset?.hostLocked ?? false;
 
   @override
   void initState() {
     super.initState();
     _form = widget.editing != null
         ? SmtpFormData.fromModel(widget.editing!)
-        : SmtpFormData();
+        : widget.provider != null
+            ? SmtpFormData.forProvider(widget.provider!)
+            : SmtpFormData();
   }
 
   @override
@@ -54,31 +75,40 @@ class _SmtpFormSheetState extends State<SmtpFormSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _smtpTypeSection(),
+                    if (_preset != null) _providerHeader(),
                     _sectionLabel('Configuration'),
                     _field(
+                      key: const Key('smtp-field-name'),
                       label: 'Configuration Name *',
                       initial: _form.name,
                       error: _errors['name'],
-                      hint: 'e.g. Gmail SMTP, Corporate Mail',
+                      // Web placeholder by type.
+                      hint: _form.isLocal ? 'e.g. Gmail SMTP, Zoho Mail' : 'e.g. Corporate Mail Server',
                       onChanged: (v) { _form.name = v; _clearErr('name'); },
                     ),
-                    _sectionLabel('Server Details'),
-                    Row(children: [
-                      Expanded(
-                        flex: 3,
-                        child: _field(
-                          label: 'SMTP Host *',
-                          initial: _form.host,
-                          error: _errors['host'],
-                          hint: 'smtp.gmail.com',
-                          onChanged: (v) { _form.host = v; _clearErr('host'); },
+                    // Web SmtpModal: Host / Port / TLS / Username / Password
+                    // only for a 'local' type (hidden for a Dedicated Mail Server).
+                    if (_form.isLocal) ...[
+                      _sectionLabel('Server Details'),
+                      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Expanded(
+                          flex: 3,
+                          child: _field(
+                            key: const Key('smtp-field-host'),
+                            label: 'SMTP Host *',
+                            initial: _form.host,
+                            error: _errors['host'],
+                            hint: 'smtp.gmail.com',
+                            enabled: !_locked,
+                            onChanged: (v) { _form.host = v; _clearErr('host'); },
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(flex: 2, child: _portField()),
-                    ]),
-                    _tlsToggle(),
+                        const SizedBox(width: 10),
+                        Expanded(flex: 2, child: _portField()),
+                      ]),
+                      if (_preset?.hostHint != null) _hostHint(_preset!),
+                      _tlsToggle(),
+                    ],
                     _sectionLabel('Identity'),
                     Row(children: [
                       Expanded(
@@ -101,20 +131,24 @@ class _SmtpFormSheetState extends State<SmtpFormSheet> {
                         ),
                       ),
                     ]),
-                    _sectionLabel('Credentials'),
-                    Row(children: [
-                      Expanded(
-                        child: _field(
-                          label: 'Username *',
-                          initial: _form.username,
-                          error: _errors['username'],
-                          hint: 'login username / email',
-                          onChanged: (v) { _form.username = v; _clearErr('username'); },
+                    if (_form.isLocal) ...[
+                      _sectionLabel('Credentials'),
+                      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Expanded(
+                          child: _field(
+                            key: const Key('smtp-field-username'),
+                            label: 'Username *',
+                            initial: _form.username,
+                            error: _errors['username'],
+                            hint: 'login username / email',
+                            onChanged: (v) { _form.username = v; _clearErr('username'); },
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(child: _passwordField()),
-                    ]),
+                        const SizedBox(width: 10),
+                        Expanded(child: _passwordField()),
+                      ]),
+                      if (_preset?.usernameHint != null) _hint(_preset!.usernameHint!, const Key('smtp-username-hint')),
+                    ],
                     _sectionLabel('Additional Settings'),
                     Row(children: [
                       Expanded(
@@ -132,6 +166,19 @@ class _SmtpFormSheetState extends State<SmtpFormSheet> {
                     ]),
                     _receiverTypeSection(),
                     const SizedBox(height: 8),
+                    if (_saveError != null)
+                      Container(
+                        key: const Key('smtp-form-error'),
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(_saveError!, style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+                      ),
                     _submitButton(),
                   ],
                 ),
@@ -145,32 +192,57 @@ class _SmtpFormSheetState extends State<SmtpFormSheet> {
 
   void _clearErr(String key) => setState(() => _errors.remove(key));
 
-  // ── SMTP Type ──────────────────────────────────────────────────────────────
+  // ── Provider (add mode) ────────────────────────────────────────────────────
 
-  Widget _smtpTypeSection() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _sectionLabel('SMTP Type *'),
-      Row(children: [
-        Expanded(child: _TypeCard(
-          icon: Icons.home_outlined,
-          title: 'Local',
-          subtitle: 'Gmail / Custom SMTP',
-          selected: _form.smtpType == 'local',
-          onTap: () => setState(() => _form.smtpType = 'local'),
-        )),
-        const SizedBox(width: 10),
-        Expanded(child: _TypeCard(
-          icon: Icons.dns_outlined,
-          title: 'Server',
-          subtitle: 'Dedicated mail server',
-          selected: _form.smtpType == 'server',
-          onTap: () => setState(() => _form.smtpType = 'server'),
-        )),
+  /// Web: the chosen provider's name and "Change provider".
+  Widget _providerHeader() {
+    final meta = kSmtpProviderMeta[widget.provider!]!;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(children: [
+        Icon(smtpProviderIcon(meta.value), size: 20, color: AppColors.primary),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(meta.label,
+              key: const Key('smtp-provider-label'),
+              style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, fontSize: 14)),
+        ),
+        TextButton.icon(
+          key: const Key('smtp-change-provider'),
+          onPressed: _saving ? null : () => Navigator.pop(context, kSmtpChangeProvider),
+          icon: const Icon(Icons.arrow_back, size: 16),
+          label: const Text('Change provider'),
+        ),
       ]),
-      const SizedBox(height: 16),
-    ],
-  );
+    );
+  }
+
+  Widget _hint(String text, Key key) => Padding(
+        key: key,
+        padding: const EdgeInsets.only(top: 0, bottom: 10),
+        child: Text(text, style: AppTextStyles.caption.copyWith(fontSize: 11.5, color: AppColors.textSecondary)),
+      );
+
+  Widget _hostHint(SmtpProviderPreset p) {
+    if (!p.appPasswordLink) return _hint(p.hostHint!, const Key('smtp-host-hint'));
+    return Padding(
+      key: const Key('smtp-host-hint'),
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
+        Text('Fixed for Gmail — not editable. Requires a Google ',
+            style: AppTextStyles.caption.copyWith(fontSize: 11.5, color: AppColors.textSecondary)),
+        InkWell(
+          key: const Key('smtp-app-password-link'),
+          onTap: () => launchUrl(Uri.parse(kGoogleAppPasswordsUrl), mode: LaunchMode.externalApplication),
+          child: Text('App Password',
+              style: AppTextStyles.caption.copyWith(
+                  fontSize: 11.5, color: AppColors.primary, decoration: TextDecoration.underline)),
+        ),
+        Text(', not your regular password.',
+            style: AppTextStyles.caption.copyWith(fontSize: 11.5, color: AppColors.textSecondary)),
+      ]),
+    );
+  }
 
   // ── Receiver type ──────────────────────────────────────────────────────────
 
@@ -213,13 +285,17 @@ class _SmtpFormSheetState extends State<SmtpFormSheet> {
   Widget _field({
     required String label,
     required ValueChanged<String> onChanged,
+    Key? key,
     String? initial,
     String? error,
     String? hint,
     TextInputType? keyboardType,
+    bool enabled = true,
   }) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
     child: TextFormField(
+      key: key,
+      enabled: enabled,
       initialValue: initial,
       keyboardType: keyboardType,
       style: AppTextStyles.body,
@@ -231,6 +307,8 @@ class _SmtpFormSheetState extends State<SmtpFormSheet> {
   Widget _portField() => Padding(
     padding: const EdgeInsets.only(bottom: 12),
     child: TextFormField(
+      key: const Key('smtp-field-port'),
+      enabled: !_locked,
       initialValue: _form.port.toString(),
       keyboardType: TextInputType.number,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -243,6 +321,7 @@ class _SmtpFormSheetState extends State<SmtpFormSheet> {
   Widget _passwordField() => Padding(
     padding: const EdgeInsets.only(bottom: 12),
     child: TextFormField(
+      key: const Key('smtp-field-password'),
       obscureText: _obscurePass,
       style: AppTextStyles.body,
       onChanged: (v) { _form.password = v; _clearErr('password'); },
@@ -266,7 +345,9 @@ class _SmtpFormSheetState extends State<SmtpFormSheet> {
   Widget _tlsToggle() => Padding(
     padding: const EdgeInsets.only(bottom: 16),
     child: GestureDetector(
-      onTap: () => setState(() => _form.useTls = !_form.useTls),
+      key: const Key('smtp-tls-toggle'),
+      // Locked with Host for the fixed providers (web: checkbox disabled).
+      onTap: _locked ? null : () => setState(() => _form.useTls = !_form.useTls),
       child: Row(children: [
         AnimatedContainer(
           duration: const Duration(milliseconds: 160),
@@ -352,23 +433,20 @@ class _SmtpFormSheetState extends State<SmtpFormSheet> {
       setState(() => _errors.addAll(validationErrors));
       return;
     }
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
     final notifier = widget.ref.read(smtpListProvider.notifier);
     final error = _isAdd
         ? await notifier.create(_form)
         : await notifier.edit(widget.editing!.id, _form);
     if (!mounted) return;
-    setState(() => _saving = false);
-    if (error == null) {
-      Navigator.pop(context);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(error),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ));
-    }
+    setState(() {
+      _saving = false;
+      _saveError = error;
+    });
+    if (error == null) Navigator.pop(context);
   }
 }
 
@@ -448,80 +526,6 @@ class _DialogHeader extends StatelessWidget {
   }
 }
 
-// ── Type card ─────────────────────────────────────────────────────────────────
-
-class _TypeCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _TypeCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.primary.withValues(alpha: 0.06) : AppColors.surface,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: selected ? AppColors.primary : AppColors.border,
-            width: selected ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                color: selected
-                    ? AppColors.primary.withValues(alpha: 0.12)
-                    : AppColors.background,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, size: 18, color: selected ? AppColors.primary : AppColors.textHint),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: AppTextStyles.label.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: selected ? AppColors.primary : AppColors.textPrimary,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textHint, fontSize: 10,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ── Radio option ──────────────────────────────────────────────────────────────
 
 class _RadioOption extends StatelessWidget {
@@ -578,3 +582,56 @@ class _RadioOption extends StatelessWidget {
     );
   }
 }
+
+/// An icon per provider (web uses brand Tabler icons; closest Material ones).
+IconData smtpProviderIcon(String provider) => switch (provider) {
+      'gmail' => Icons.mail_outline,
+      'amazon_ses' => Icons.cloud_outlined,
+      'zoho_mail' => Icons.alternate_email,
+      'brevo' => Icons.send_outlined,
+      'resend' => Icons.rocket_launch_outlined,
+      'outlook365' => Icons.forward_to_inbox_outlined,
+      'custom_smtp' => Icons.tune,
+      'dedicated_server' => Icons.dns_outlined,
+      _ => Icons.mail_outline,
+    };
+
+/// Web ProviderSelectModal: "Add SMTP Configuration" — one card per provider
+/// (label + description, web order) and Cancel. Returns the chosen value.
+Future<String?> showSmtpProviderPicker(BuildContext context) => showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const Key('smtp-provider-picker'),
+        title: const Text('Add SMTP Configuration'),
+        contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(shrinkWrap: true, children: [
+            Text('Choose a mail provider — the fields you need will be filled in for you where possible.',
+                style: AppTextStyles.caption.copyWith(fontSize: 13, color: AppColors.textSecondary)),
+            const SizedBox(height: 12),
+            for (final value in kSmtpProviderOrder)
+              Card(
+                key: Key('smtp-provider-$value'),
+                margin: const EdgeInsets.only(bottom: 10),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12), side: BorderSide(color: AppColors.border, width: 1.5)),
+                child: ListTile(
+                  leading: Icon(smtpProviderIcon(value), color: AppColors.primary),
+                  title: Text(kSmtpProviderMeta[value]!.label,
+                      style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
+                  subtitle: Text(kSmtpProviderMeta[value]!.description, style: AppTextStyles.caption),
+                  onTap: () => Navigator.of(ctx).pop(value),
+                ),
+              ),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              key: const Key('smtp-provider-cancel'),
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel')),
+        ],
+      ),
+    );

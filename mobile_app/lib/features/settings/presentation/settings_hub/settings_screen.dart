@@ -80,7 +80,7 @@ const _kTiles = <_Tile>[
     iconColor: Color(0xFF0E7C86),
     iconBg: Color(0xFFE5F4F5),
     label: 'Employee ID Format',
-    desc: 'Prefix, padding and starting sequence',
+    desc: 'Prefix, padding, and starting number for employee codes',
     route: AppRoutes.settingsEmployeeCode,
   ),
   _Tile(

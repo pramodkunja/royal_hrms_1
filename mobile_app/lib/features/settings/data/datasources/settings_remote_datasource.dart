@@ -75,19 +75,16 @@ class SettingsRemoteDataSource {
 
   // ── Employee Code ──────────────────────────────────────────────────────────
 
-  Future<EmployeeCodeModel> fetchEmployeeCode() async {
+  /// GET /settings/employee-code/ (settings.edit).
+  Future<EmployeeCodeSettings> fetchEmployeeCode() async {
     final res = await _dio.get(ApiConstants.settingsEmployeeCode);
-    final data = _unwrap(res.data);
-    return EmployeeCodeModel.fromJson(data as Map<String, dynamic>);
+    return EmployeeCodeSettings.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
-  Future<EmployeeCodeModel> saveEmployeeCode(EmployeeCodeModel model) async {
-    final res = await _dio.put(
-      ApiConstants.settingsEmployeeCode,
-      data: model.toJson(),
-    );
-    return EmployeeCodeModel.fromJson(
-        _unwrap(res.data) as Map<String, dynamic>);
+  /// PUT /settings/employee-code/ with web's payload; returns what was saved.
+  Future<EmployeeCodeSettings> saveEmployeeCode(Map<String, dynamic> payload) async {
+    final res = await _dio.put(ApiConstants.settingsEmployeeCode, data: payload);
+    return EmployeeCodeSettings.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
   // ── SMTP ───────────────────────────────────────────────────────────────────

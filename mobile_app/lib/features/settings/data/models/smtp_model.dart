@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../../shared/validators/form_validators.dart';
+import 'smtp_providers.dart';
 
 enum SmtpPriority { high, normal, low, none }
 enum ReceiverEmailType { emailId, personalEmailId }
@@ -11,6 +12,10 @@ class SmtpModel {
   final String name;
   final String smtpType;        // 'local' | 'server'
   final String smtpTypeDisplay; // 'Gmail / Custom SMTP' | 'Dedicated Mail Server'
+  /// SMTPSettings.provider: one of kSmtpProviderOrder, '' (unspecified /
+  /// pre-dates the picker) or — never from this app — something unknown.
+  final String provider;
+  final String providerDisplay;
   final String host;
   final int port;
   final String username;
@@ -29,6 +34,8 @@ class SmtpModel {
     required this.name,
     required this.smtpType,
     required this.smtpTypeDisplay,
+    this.provider = '',
+    this.providerDisplay = '',
     required this.host,
     required this.port,
     required this.username,
@@ -48,6 +55,8 @@ class SmtpModel {
     name:              json['name'] as String? ?? '',
     smtpType:          json['smtp_type'] as String? ?? 'local',
     smtpTypeDisplay:   json['smtp_type_display'] as String? ?? '',
+    provider:          json['provider'] is String ? json['provider'] as String : '',
+    providerDisplay:   json['provider_display'] as String? ?? '',
     host:              json['host'] as String? ?? '',
     port:              json['port'] as int? ?? 587,
     username:          json['username'] as String? ?? '',
@@ -79,6 +88,9 @@ class SmtpModel {
 
 class SmtpFormData {
   String smtpType;
+
+  /// SMTPSettings.provider — set by the Add picker; kept as loaded on edit.
+  String provider;
   String name;
   String host;
   int port;
@@ -93,6 +105,7 @@ class SmtpFormData {
 
   SmtpFormData({
     this.smtpType = 'local',
+    this.provider = '',
     this.name = '',
     this.host = '',
     this.port = 587,
@@ -106,8 +119,16 @@ class SmtpFormData {
     this.receiverEmailType = ReceiverEmailType.emailId,
   });
 
+  /// Web SmtpModal add mode: EMPTY_SMTP_FORM with the chosen provider's
+  /// preset type / host / port / TLS.
+  factory SmtpFormData.forProvider(String provider) {
+    final p = kSmtpProviderPresets[provider]!;
+    return SmtpFormData(provider: provider, smtpType: p.smtpType, host: p.host, port: p.port, useTls: p.useTls);
+  }
+
   factory SmtpFormData.fromModel(SmtpModel model) => SmtpFormData(
     smtpType:          model.smtpType,
+    provider:          model.provider,
     name:              model.name,
     host:              model.host,
     port:              model.port,
@@ -121,13 +142,27 @@ class SmtpFormData {
     receiverEmailType: model.receiverEmailType,
   );
 
+  bool get isLocal => smtpType == 'local';
+
+  /// Web formToPayload. `provider` is always sent as web does — except a
+  /// value this app doesn't know (the backend would refuse it as an invalid
+  /// choice): it is left out, so the stored value is kept, never overwritten.
+  /// A Dedicated Mail Server (smtp_type 'server') hides host/username; the
+  /// backend still requires both, so web's placeholders are sent.
   Map<String, dynamic> toJson({required bool isAdd}) => {
     'smtp_type':           smtpType,
+    if (isKnownSmtpProvider(provider)) 'provider': provider,
     'name':                name,
-    'host':                host,
-    'port':                port,
-    'username':            username,
-    if (isAdd || password.isNotEmpty) 'password': password,
+    if (isLocal) ...{
+      'host':              host,
+      'port':              port,
+      'username':          username,
+      if (isAdd || password.isNotEmpty) 'password': password,
+    } else ...{
+      'host':              host.isNotEmpty ? host : 'localhost',
+      'port':              port,
+      'username':          username.isNotEmpty ? username : (fromEmail.isNotEmpty ? fromEmail : 'server'),
+    },
     'use_tls':             useTls,
     'sender_name':         senderName,
     'from_email':          fromEmail,
@@ -151,7 +186,8 @@ class SmtpFormData {
   Map<String, String?> validate({required bool isAdd}) {
     final errors = <String, String?>{};
     if (name.trim().isEmpty)      errors['name']      = 'Configuration name is required';
-    if (host.trim().isEmpty)      errors['host']      = 'Host is required';
+    // Web validateSmtpForm: host / username / password only for 'local'.
+    if (isLocal && host.trim().isEmpty) errors['host'] = 'Host is required';
     // Backend declares both as EmailField (from_email required, bcc_email
     // optional) — SMTPSettingsSerializer/SMTPTestSerializer, so a malformed
     // value 400s even though `username` next to it deliberately accepts
@@ -166,8 +202,8 @@ class SmtpFormData {
       final err = FormValidators.email(bccEmail);
       if (err != null) errors['bccEmail'] = err;
     }
-    if (username.trim().isEmpty)  errors['username']  = 'Username is required';
-    if (isAdd && password.trim().isEmpty) errors['password'] = 'Password is required';
+    if (isLocal && username.trim().isEmpty) errors['username'] = 'Username is required';
+    if (isLocal && isAdd && password.trim().isEmpty) errors['password'] = 'Password is required';
     return errors;
   }
 }

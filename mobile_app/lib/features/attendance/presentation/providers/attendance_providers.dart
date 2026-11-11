@@ -8,6 +8,7 @@ import '../../data/datasources/attendance_remote_datasource.dart';
 import '../../data/repositories/attendance_repository_impl.dart';
 import '../../domain/entities/attendance_entity.dart';
 import '../../domain/repositories/attendance_repository.dart';
+import '../clock/face_lockout.dart';
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
 
@@ -93,6 +94,10 @@ class TodayAttendanceNotifier
     // the backend would reject any punch, so don't send one. Only the
     // server's own day_completed decides this, never local time.
     if (state.valueOrNull?.dayCompleted ?? false) return kDayCompletedMessage;
+    // Web punch(): during a face-verification lockout nothing is sent.
+    final lockout = ref.read(faceLockoutProvider.notifier);
+    final locked = lockout.remainingSeconds();
+    if (locked > 0) return faceLockoutMessage(locked);
     try {
       final updated = await _repo.punch(
         punchType: isCurrentlyClockedIn ? 'OUT' : 'IN',
@@ -114,6 +119,10 @@ class TodayAttendanceNotifier
       ref.invalidate(attendanceCalendarProvider);
       return null;
     } catch (e) {
+      // Web: a blocked refusal with retry_after_seconds starts the countdown;
+      // the server's own message is still what the user sees now.
+      final retryAfter = faceLockoutRetryAfter(e);
+      if (retryAfter != null) lockout.lockFor(retryAfter);
       return friendlyAttendanceError(e);
     }
   }

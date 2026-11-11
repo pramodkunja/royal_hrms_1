@@ -1,7 +1,7 @@
 name: mobile_app
 description: "Royal HRMS - Enterprise HR Management System Mobile Application"
 publish_to: "none"
-version: 1.0.0+6
+version: 1.0.1+7
 
 environment:
   sdk: ">=3.5.0 <4.0.0"

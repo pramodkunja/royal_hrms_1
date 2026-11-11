@@ -175,6 +175,7 @@ const _sectionTitles = {
   EmployeeProfileSection.education: 'Education & Experience',
   EmployeeProfileSection.bank: 'Bank Details',
   EmployeeProfileSection.emergency: 'Emergency Contact',
+  EmployeeProfileSection.statutory: 'EPF / Statutory',
 };
 
 Future<void> openSection(WidgetTester tester, EmployeeProfileSection s) async {
@@ -508,7 +509,7 @@ void main() {
       expect(server.puts, isEmpty);
     });
 
-    testWidgets('an editor gets Edit on all three', (tester) async {
+    testWidgets('an editor gets Edit on every section', (tester) async {
       await pumpProfile(tester);
       for (final sct in EmployeeProfileSection.values) {
         await openSection(tester, sct);

@@ -141,7 +141,12 @@ class BranchAdminCandidate {
     required this.employeeId,
     required this.branch,
     required this.role,
+    this.uuid = '',
   });
+
+  /// The user's primary key (employee list `uuid`) — what the
+  /// reporting_manager_id / hr_id list filters take.
+  final String uuid;
 
   final String code;
   final String fullName;
@@ -160,6 +165,7 @@ class BranchAdminCandidate {
       employeeId: employeeId,
       branch: s('branch'),
       role: s('role'),
+      uuid: s('uuid'),
     );
   }
 

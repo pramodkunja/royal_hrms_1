@@ -81,6 +81,18 @@ class EmployeeModel {
   final String emergencyPhone;
   final String emergencyEmail;
 
+  // Profile: EPF / Statutory (web PROFILE_SECTIONS "epf"). EmployeeProfile
+  // uan_number / name_as_per_aadhar / esi_number. Production's employee
+  // detail (accounts _employee_dict) does not return these keys today, so
+  // they read '' and [statutoryReturned] is false; they are parsed if a
+  // server ever includes them. Sensitive — never logged.
+  final String uanNumber;
+  final String nameAsPerAadhar;
+  final String esiNumber;
+
+  /// Whether the server sent any of the statutory keys at all.
+  final bool statutoryReturned;
+
   // HR-created custom fields (Settings → Onboarding Fields): text-type values
   // by field_key from profile.custom_field_values — every saved key is kept,
   // including ones whose field is hidden or no longer configured — and the
@@ -139,6 +151,10 @@ class EmployeeModel {
     this.emergencyRelationship = '',
     this.emergencyPhone = '',
     this.emergencyEmail = '',
+    this.uanNumber = '',
+    this.nameAsPerAadhar = '',
+    this.esiNumber = '',
+    this.statutoryReturned = false,
     this.customFieldValues = const {},
     this.customFileFields = const [],
   });
@@ -208,6 +224,10 @@ class EmployeeModel {
       emergencyRelationship: profile['emergency_relationship'] as String? ?? '',
       emergencyPhone: profile['emergency_phone'] as String? ?? '',
       emergencyEmail: profile['emergency_email'] as String? ?? '',
+      uanNumber: profile['uan_number'] as String? ?? '',
+      nameAsPerAadhar: profile['name_as_per_aadhar'] as String? ?? '',
+      esiNumber: profile['esi_number'] as String? ?? '',
+      statutoryReturned: const ['uan_number', 'name_as_per_aadhar', 'esi_number'].any(profile.containsKey),
       customFieldValues: _customValues(profile['custom_field_values']),
       customFileFields: [
         for (final f in (json['custom_file_fields'] as List<dynamic>? ?? const []))
@@ -299,6 +319,10 @@ class EmployeeModel {
       emergencyRelationship: emergencyRelationship,
       emergencyPhone: emergencyPhone,
       emergencyEmail: emergencyEmail,
+      uanNumber: uanNumber,
+      nameAsPerAadhar: nameAsPerAadhar,
+      esiNumber: esiNumber,
+      statutoryReturned: statutoryReturned,
       customFieldValues: customFieldValues,
       customFileFields: customFileFields,
     );

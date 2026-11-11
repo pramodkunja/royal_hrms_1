@@ -68,17 +68,28 @@ class SmtpScreen extends ConsumerWidget {
     );
   }
 
+  /// Web: Add opens the provider picker first, then the form prefilled for
+  /// that provider ("Change provider" goes back to the picker; the form starts
+  /// again from the new preset). Edit opens the form directly.
   Future<void> _openForm(BuildContext context, WidgetRef ref, SmtpModel? editing) async {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        child: SmtpFormSheet(editing: editing, ref: ref),
-      ),
-    );
+    String? provider;
+    while (true) {
+      if (editing == null) {
+        provider = await showSmtpProviderPicker(context);
+        if (provider == null || !context.mounted) return;
+      }
+      final result = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: SmtpFormSheet(editing: editing, ref: ref, provider: provider),
+        ),
+      );
+      if (editing != null || result != kSmtpChangeProvider || !context.mounted) return;
+    }
   }
 
   Future<void> _activate(BuildContext context, WidgetRef ref, int id) async {

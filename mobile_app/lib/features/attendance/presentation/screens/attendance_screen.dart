@@ -23,6 +23,7 @@ import '../../../separation/presentation/widgets/employee_picker_field.dart';
 import '../providers/attendance_export.dart' show kAttendanceExportPermission;
 import '../providers/attendance_providers.dart';
 import '../widgets/attendance_export_sheet.dart';
+import '../widgets/ot_approver_field.dart';
 import '../widgets/punch_location_section.dart';
 import '../widgets/shift_assignment_tab.dart';
 import '../widgets/weekly_off_assignment_tab.dart';
@@ -2595,7 +2596,10 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
   DateTime _date = DateTime.now();
   TimeOfDay? _otStart;
   TimeOfDay? _otEnd;
-  final _approvedByCtrl = TextEditingController();
+  // "Approved By": the chosen HR approver's employee_id (web OtEntryTab
+  // approved_by), from GET /employees/hrs/?branch=<the employee's branch>.
+  String? _approverId;
+  String _employeeBranch = '';
   final _reasonCtrl = TextEditingController();
   bool _submitting = false;
   String? _error;
@@ -2608,7 +2612,6 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
 
   @override
   void dispose() {
-    _approvedByCtrl.dispose();
     _reasonCtrl.dispose();
     super.dispose();
   }
@@ -2654,6 +2657,19 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
       return;
     }
 
+    // Only an approver currently listed for this employee's branch is sent.
+    final approver = otApproverForSubmit(
+      _approverId,
+      _employeeBranch.isEmpty ? null : ref.read(employeeHrOptionsProvider(_employeeBranch)).valueOrNull,
+    );
+    if (approver.error != null) {
+      setState(() {
+        _approverId = null;
+        _error = approver.error;
+      });
+      return;
+    }
+
     setState(() {
       _submitting = true;
       _error = null;
@@ -2665,9 +2681,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
           otType: _otType,
           otStart: _fmtTime(_otStart!),
           otEnd: _fmtTime(_otEnd!),
-          approvedBy: _approvedByCtrl.text.trim().isEmpty
-              ? null
-              : _approvedByCtrl.text.trim(),
+          approvedBy: approver.approvedBy,
           reason:
               _reasonCtrl.text.trim().isEmpty ? null : _reasonCtrl.text.trim(),
         );
@@ -2683,7 +2697,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
     setState(() {
       _otStart = null;
       _otEnd = null;
-      _approvedByCtrl.clear();
+      _approverId = null;
       _reasonCtrl.clear();
     });
     ScaffoldMessenger.of(context).showSnackBar(
@@ -2742,7 +2756,12 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                                   overflow: TextOverflow.ellipsis),
                             ))
                         .toList(),
-                    onChanged: (v) => setState(() => _employeeId = v),
+                    onChanged: (v) => setState(() {
+                      _employeeId = v;
+                      _employeeBranch = employees.where((e) => e.employeeId == v).firstOrNull?.branch ?? '';
+                      // Approvers are per branch: a new employee starts with none.
+                      _approverId = null;
+                    }),
                   ),
                   loading: () => const LinearProgressIndicator(),
                   error: (e, _) => Text(friendlyAttendanceError(e),
@@ -2818,19 +2837,15 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                       ])),
                 ]),
                 const SizedBox(height: 12),
-                const _FormLabel(
-                    'Approved By (optional — employee ID or name)'),
-                TextField(
-                  controller: _approvedByCtrl,
-                  decoration: InputDecoration(
-                    hintText: 'e.g. E001 or Jane Doe',
-                    hintStyle: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.textHint),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    contentPadding: const EdgeInsets.all(10),
-                  ),
-                  style: AppTextStyles.bodySmall,
+                const _FormLabel('Approved By'),
+                OtApproverField(
+                  employeeSelected: _employeeId != null,
+                  branch: _employeeBranch,
+                  value: _approverId,
+                  onChanged: (v) => setState(() {
+                    _approverId = v;
+                    _error = null;
+                  }),
                 ),
                 const SizedBox(height: 12),
                 const _FormLabel('Reason / Work Done'),

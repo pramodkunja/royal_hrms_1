@@ -13,6 +13,7 @@ import '../../../facial_recognition/presentation/widgets/face_capture_bottom_she
 import '../../domain/entities/attendance_entity.dart';
 import '../providers/attendance_mode_provider.dart';
 import '../providers/attendance_providers.dart';
+import 'face_lockout.dart';
 
 /// Opens the face check and returns the capture, or null if it was
 /// cancelled. A provider so tests can stand in for the camera sheet.
@@ -76,6 +77,10 @@ bool _punchInFlight = false;
 Future<String?> runClockPunch(
     WidgetRef ref, BuildContext context, TodayAttendanceEntity today) async {
   if (today.dayCompleted) return kDayCompletedMessage;
+  // Web: while the server's face-verification lockout lasts, nothing starts —
+  // no GPS, no face capture, no punch.
+  final locked = ref.read(faceLockoutProvider.notifier).remainingSeconds();
+  if (locked > 0) return faceLockoutMessage(locked);
   if (_punchInFlight) return null;
   _punchInFlight = true;
   try {

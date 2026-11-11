@@ -8,7 +8,15 @@ import '../data/models/employee_model.dart';
 /// PUT /employees/<code>/ (EmployeeDetailView → EmployeeProfileSerializer,
 /// partial): only the keys sent change. Web sends every section at once; this
 /// sends one section's keys, so the other sections are never touched.
-enum EmployeeProfileSection { education, bank, emergency }
+///
+/// EPF / Statutory (web "epf": uan_number, name_as_per_aadhar, esi_number)
+/// follows the same path, with two differences forced by production: the
+/// employee detail never returns these keys (so the form can't show what is
+/// stored), and web's every-field save would therefore blank them. Only the
+/// statutory fields actually changed are sent (agreed for Task 43), so a
+/// value nobody retyped is never wiped. Web has no Onboarding Fields step for
+/// this section: no visibility config, no custom fields.
+enum EmployeeProfileSection { education, bank, emergency, statutory }
 
 enum ProfileFieldKind { text, textarea, select, phone, email }
 
@@ -47,7 +55,9 @@ List<ProfileFieldOption> _opt(List<String> values) => [for (final v in values) P
 
 const _accountTypes = [ProfileFieldOption('savings', 'Savings'), ProfileFieldOption('current', 'Current')];
 
-final Map<EmployeeProfileSection, ({String title, int step, List<ProfileFieldDef> fields})> kEmployeeProfileSections = {
+/// [step] is web SECTION_TO_STEP (Settings → Onboarding Fields); null for a
+/// section web doesn't map (EPF / Statutory).
+final Map<EmployeeProfileSection, ({String title, int? step, List<ProfileFieldDef> fields})> kEmployeeProfileSections = {
   EmployeeProfileSection.education: (
     title: 'Education & Experience',
     step: 1,
@@ -111,6 +121,19 @@ final Map<EmployeeProfileSection, ({String title, int step, List<ProfileFieldDef
           key: 'emergency_email', label: 'Email', kind: ProfileFieldKind.email, placeholder: 'optional@email.com'),
     ],
   ),
+  // Web employees/_data.ts "epf": labels and placeholders as web. Web does no
+  // client-side check and the PUT validates none (EmployeeProfileSerializer:
+  // plain strings, max 255) — the placeholders' digit counts are hints only.
+  EmployeeProfileSection.statutory: (
+    title: 'EPF / Statutory',
+    step: null,
+    fields: const [
+      ProfileFieldDef(key: 'uan_number', label: 'UAN Number', placeholder: '12-digit Universal Account Number'),
+      ProfileFieldDef(
+          key: 'name_as_per_aadhar', label: 'Name as per Aadhar', placeholder: 'Exactly as printed on Aadhaar card'),
+      ProfileFieldDef(key: 'esi_number', label: 'ESI Number', placeholder: '10-digit ESI Insurance Number (IP Number)'),
+    ],
+  ),
 };
 
 /// The employee's current value for each field of [section], as web
@@ -140,17 +163,30 @@ Map<String, String> profileSectionValues(EmployeeProfileSection section, Employe
           'emergency_phone': e.emergencyPhone,
           'emergency_email': e.emergencyEmail,
         },
+      EmployeeProfileSection.statutory => {
+          'uan_number': e.uanNumber,
+          'name_as_per_aadhar': e.nameAsPerAadhar,
+          'esi_number': e.esiNumber,
+        },
     };
 
 /// Web onSave's encoding for these keys: blank → "" (the columns are
 /// blank=True, not null=True, so the serializer rejects null), except
 /// year_of_passing / total_experience_years (nullable columns) → null.
 /// Values are sent as typed — the server's validators trim and check them.
-Map<String, dynamic> profileSectionPayload(EmployeeProfileSection section, Map<String, String> values) {
+///
+/// EPF / Statutory sends only the keys whose value differs from [initial]
+/// (what the form opened with): a blank field nobody touched is not sent, so
+/// a stored value the server never showed is not erased. A value changed to
+/// blank is sent as "" (clears it), as web.
+Map<String, dynamic> profileSectionPayload(EmployeeProfileSection section, Map<String, String> values,
+    {Map<String, String> initial = const {}}) {
   const nullable = {'year_of_passing', 'total_experience_years'};
+  final changedOnly = section == EmployeeProfileSection.statutory;
   return {
     for (final f in kEmployeeProfileSections[section]!.fields)
-      f.key: (values[f.key] ?? '').isEmpty ? (nullable.contains(f.key) ? null : '') : values[f.key],
+      if (!changedOnly || (values[f.key] ?? '') != (initial[f.key] ?? ''))
+        f.key: (values[f.key] ?? '').isEmpty ? (nullable.contains(f.key) ? null : '') : values[f.key],
   };
 }
 
@@ -160,6 +196,7 @@ Map<String, dynamic> profileSectionPayload(EmployeeProfileSection section, Map<S
 bool isProfileFieldVisible(
     EmployeeProfileSection section, String key, Map<int, List<OnboardingFieldConfigModel>>? config) {
   final step = kEmployeeProfileSections[section]!.step;
+  if (step == null) return true;
   final entry = (config?[step] ?? const <OnboardingFieldConfigModel>[]).where((c) => c.fieldKey == key).firstOrNull;
   return entry?.visible ?? true;
 }

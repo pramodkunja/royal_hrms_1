@@ -738,6 +738,7 @@ class _ProfileTabState extends State<_ProfileTab> {
     'Education & Experience',
     'Bank Details',
     'Emergency Contact',
+    'EPF / Statutory',
     'Documents',
   ];
 
@@ -746,6 +747,7 @@ class _ProfileTabState extends State<_ProfileTab> {
     Icons.school_outlined,
     Icons.account_balance_outlined,
     Icons.local_phone_outlined,
+    Icons.account_balance_wallet_outlined,
     Icons.folder_outlined,
   ];
 
@@ -852,7 +854,7 @@ class _ProfileTabState extends State<_ProfileTab> {
                       ),
                       const Spacer(),
                       if ((_sub == 0 && widget.onEdit != null) ||
-                          (_sub >= 1 && _sub <= 3 && widget.onEditSection != null))
+                          (_sub >= 1 && _sub <= 4 && widget.onEditSection != null))
                         InkWell(
                           key: Key(
                               'profile-edit-${_sub == 0 ? 'personal' : EmployeeProfileSection.values[_sub - 1].name}'),
@@ -886,6 +888,8 @@ class _ProfileTabState extends State<_ProfileTab> {
                     _EducationContent(emp: emp, canEdit: widget.onEdit != null),
                     _BankContent(emp: emp, canEdit: widget.onEdit != null),
                     _EmergencyContent(emp: emp, canEdit: widget.onEdit != null),
+                    _ProfileSectionView(
+                        emp: emp, section: EmployeeProfileSection.statutory, canEdit: widget.onEdit != null),
                     _DocumentsContent(emp: emp),
                   ][_sub],
                 ),
@@ -1083,7 +1087,17 @@ class _ProfileSectionView extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ...rows,
-        _EmployeeCustomFields(emp: emp, step: def.step, canEdit: canEdit),
+        // Web maps no Onboarding Fields step to EPF / Statutory: no custom fields.
+        if (def.step != null) _EmployeeCustomFields(emp: emp, step: def.step!, canEdit: canEdit),
+        if (section == EmployeeProfileSection.statutory && !emp.statutoryReturned)
+          Padding(
+            key: const Key('profile-statutory-not-returned'),
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              "Stored UAN, Aadhaar name and ESI values aren't returned by the server, so they can't be shown here.",
+              style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+            ),
+          ),
       ],
     );
   }

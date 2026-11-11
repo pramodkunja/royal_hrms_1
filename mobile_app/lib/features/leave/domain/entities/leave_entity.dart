@@ -1,3 +1,5 @@
+import '../../../dashboard/data/models/employee_leave_breakdown.dart' show LeaveStatement;
+
 class LeaveTypeEntity {
   final int id;
   final String name;
@@ -412,12 +414,23 @@ class BalanceSummaryEntity {
   final double usedDays;
   final double available;
 
+  /// The policy's credit schedule: 'annual' | 'monthly', null when the leave
+  /// type has no policy (backend LeaveStatsView; never guessed).
+  final String? creditSchedule;
+
+  /// Monthly-credited types only: the month-by-month statement
+  /// (services_monthly_statement.statement_payload). Null for annual types,
+  /// and for a viewer the backend doesn't allow to see it.
+  final LeaveStatement? statement;
+
   const BalanceSummaryEntity({
     required this.leaveTypeCode,
     required this.leaveTypeDisplay,
     required this.totalDays,
     required this.usedDays,
     required this.available,
+    this.creditSchedule,
+    this.statement,
   });
 
   double get pct =>

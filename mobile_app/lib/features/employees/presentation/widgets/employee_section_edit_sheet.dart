@@ -51,7 +51,7 @@ class _EmployeeSectionEditSheetState extends ConsumerState<EmployeeSectionEditSh
   String? _error;
   bool _saving = false;
 
-  ({String title, int step, List<ProfileFieldDef> fields}) get _def => kEmployeeProfileSections[widget.section]!;
+  ({String title, int? step, List<ProfileFieldDef> fields}) get _def => kEmployeeProfileSections[widget.section]!;
 
   @override
   void dispose() {
@@ -68,13 +68,19 @@ class _EmployeeSectionEditSheetState extends ConsumerState<EmployeeSectionEditSh
 
   Future<void> _save() async {
     if (_saving) return;
+    final payload = profileSectionPayload(widget.section, _values, initial: _initial);
+    // EPF / Statutory sends only changed fields — nothing changed, nothing to
+    // send (the server would answer "No updatable fields provided.").
+    if (payload.isEmpty) {
+      setState(() => _error = 'No changes to save.');
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
       _fieldErrors = const {};
     });
-    final result = await saveEmployeeProfileSection(
-        ref, widget.employee.employeeId, profileSectionPayload(widget.section, _values));
+    final result = await saveEmployeeProfileSection(ref, widget.employee.employeeId, payload);
     if (!mounted) return;
     if (result == null) {
       Navigator.of(context).pop(true);
@@ -126,6 +132,16 @@ class _EmployeeSectionEditSheetState extends ConsumerState<EmployeeSectionEditSh
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(_error!, style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+                    ),
+                  if (widget.section == EmployeeProfileSection.statutory && !widget.employee.statutoryReturned)
+                    Padding(
+                      key: const Key('section-edit-statutory-hint'),
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        "Stored values aren't returned by the server, so they can't be shown here. Only the fields you "
+                        'fill in are saved; fields left blank keep whatever is stored.',
+                        style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                      ),
                     ),
                   for (final f in fields) ...[
                     _field(f),

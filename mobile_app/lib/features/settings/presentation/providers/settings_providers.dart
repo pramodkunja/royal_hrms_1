@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/router/access_control.dart' show userHasPermission;
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../auth/domain/entities/user_entity.dart';
 import '../../data/datasources/settings_remote_datasource.dart';
 import '../../data/models/assessment_config_model.dart';
 import '../../data/models/attendance_settings_model.dart';
@@ -103,34 +104,58 @@ class FinancialYearNotifier
 
 // ── Employee Code ─────────────────────────────────────────────────────────────
 
+/// Employee ID Format needs settings.edit (the API's CanManageRoles).
+bool canManageEmployeeCode(UserEntity? user) => userHasPermission(user, 'settings.edit');
+
+/// The stored settings. A load failure stays an error (with Retry on the
+/// screen) — never replaced by defaults that a save would then write.
 final employeeCodeProvider =
-    AsyncNotifierProvider.autoDispose<EmployeeCodeNotifier, EmployeeCodeModel>(
+    AsyncNotifierProvider.autoDispose<EmployeeCodeNotifier, EmployeeCodeSettings>(
   EmployeeCodeNotifier.new,
 );
 
-class EmployeeCodeNotifier extends AutoDisposeAsyncNotifier<EmployeeCodeModel> {
+class EmployeeCodeNotifier extends AutoDisposeAsyncNotifier<EmployeeCodeSettings> {
   SettingsRemoteDataSource get _ds => ref.read(settingsDataSourceProvider);
 
   @override
-  Future<EmployeeCodeModel> build() async {
-    try {
-      return await _ds.fetchEmployeeCode();
-    } catch (_) {
-      return EmployeeCodeModel.empty();
-    }
-  }
+  Future<EmployeeCodeSettings> build() => _ds.fetchEmployeeCode();
 
-  Future<String?> save(EmployeeCodeModel model) async {
-    state = const AsyncLoading();
+  /// Saves the typed prefix with the loaded padding / next_sequence. Returns
+  /// null on success (state becomes what the server saved), else the error.
+  Future<EmployeeCodeSaveError?> save(String prefixInput) async {
+    if (!canManageEmployeeCode(ref.read(authStateProvider).valueOrNull?.user)) {
+      return const EmployeeCodeSaveError(message: kEmployeeCodeDenied);
+    }
+    final current = state.valueOrNull;
+    if (current == null) return const EmployeeCodeSaveError(message: 'Settings are not loaded yet.');
     try {
-      final updated = await _ds.saveEmployeeCode(model);
-      state = AsyncData(updated);
+      state = AsyncData(await _ds.saveEmployeeCode(current.toPayload(prefixInput)));
       return null;
     } catch (e) {
-      state = AsyncError(e, StackTrace.current);
-      return _friendly(e);
+      return employeeCodeSaveError(e);
     }
   }
+}
+
+/// The API's own refusal text (CanManageRoles.message).
+const kEmployeeCodeDenied = 'You do not have permission to perform this action.';
+
+/// A refused PUT: `{message: "Please fix the errors below.", data: {field:
+/// [msg]}}` → per-field messages; otherwise the general message.
+EmployeeCodeSaveError employeeCodeSaveError(Object e) {
+  if (e is DioException) {
+    final body = e.response?.data;
+    final data = body is Map ? body['data'] : null;
+    if (data is Map && data.isNotEmpty) {
+      final fields = <String, String>{};
+      data.forEach((k, v) {
+        final msg = v is List && v.isNotEmpty ? '${v.first}' : (v is String ? v : null);
+        if (msg != null) fields['$k'] = msg;
+      });
+      if (fields.isNotEmpty) return EmployeeCodeSaveError(fieldErrors: fields);
+    }
+  }
+  return EmployeeCodeSaveError(message: _friendly(e));
 }
 
 // ── SMTP ──────────────────────────────────────────────────────────────────────

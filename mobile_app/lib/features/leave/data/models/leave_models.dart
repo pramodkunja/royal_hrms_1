@@ -1,3 +1,4 @@
+import '../../../dashboard/data/models/employee_leave_breakdown.dart' show LeaveStatement;
 import '../../domain/entities/leave_entity.dart';
 
 // Several backend leave fields (annual_days, total_days, used_days,
@@ -351,15 +352,22 @@ class BalanceSummaryModel extends BalanceSummaryEntity {
     required super.totalDays,
     required super.usedDays,
     required super.available,
+    super.creditSchedule,
+    super.statement,
   });
 
+  // Plus, per backend LeaveStatsView: credit_schedule ('annual' | 'monthly' |
+  // null) and statement (null, or the monthly statement payload).
   factory BalanceSummaryModel.fromJson(Map<String, dynamic> json) {
+    final schedule = json['credit_schedule'];
     return BalanceSummaryModel(
       leaveTypeCode: json['leave_type'] as String? ?? '',
       leaveTypeDisplay: json['leave_type_display'] as String? ?? '',
       totalDays: _toDouble(json['total_days']),
       usedDays: _toDouble(json['used_days']),
       available: _toDouble(json['available']),
+      creditSchedule: schedule is String ? schedule : null,
+      statement: LeaveStatement.fromJson(json['statement']),
     );
   }
 }

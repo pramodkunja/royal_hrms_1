@@ -7,6 +7,7 @@ import '../../../../shared/widgets/stat_card.dart';
 import '../../../dashboard/presentation/widgets/dashboard_section.dart';
 import '../../domain/entities/attendance_entity.dart';
 import '../clock/clock_punch_flow.dart';
+import '../clock/face_lockout.dart';
 import '../providers/attendance_mode_provider.dart';
 import '../providers/attendance_providers.dart';
 import '../widgets/attendance_ring.dart';
@@ -820,12 +821,16 @@ class _ClockPanelState extends ConsumerState<_ClockPanel>
                     const SizedBox(height: 6),
                     const _AttendanceModeLabel(),
                     const SizedBox(height: 10),
+                    // Web ClockInButton: a face-verification lockout
+                    // disables Clock In/Out with "Try again in …".
+                    FaceLockoutBuilder(
+                      builder: (context, lockedFor) =>
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
                         // Matches web's ClockWidget: a completed day disables
                         // the button and shows "Attendance Completed".
-                        onPressed: (_punching || today.dayCompleted)
+                        onPressed: (lockedFor != null || _punching || today.dayCompleted)
                             ? null
                             : () => _toggleClock(today),
                         style: ElevatedButton.styleFrom(
@@ -844,7 +849,19 @@ class _ClockPanelState extends ConsumerState<_ClockPanel>
                               borderRadius: BorderRadius.circular(10)),
                           elevation: 0,
                         ),
-                        child: _punching
+                        child: lockedFor != null
+                            ? Row(
+                                key: const Key('clock-lockout-button'),
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.lock_outline, size: 16, color: Colors.white),
+                                  const SizedBox(width: 6),
+                                  Text(faceLockoutButtonLabel(lockedFor),
+                                      style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
+                                ],
+                              )
+                            : _punching
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
@@ -877,6 +894,7 @@ class _ClockPanelState extends ConsumerState<_ClockPanel>
                                 ],
                               ),
                       ),
+                    ),
                     ),
                   ],
                 ),

@@ -1,4 +1,6 @@
 import '../../domain/branch_geofence.dart';
+import '../../domain/branch_admin_leader.dart';
+import '../../../settings/data/models/roles_model.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
@@ -87,6 +89,59 @@ final branchAdminCandidatesProvider =
     FutureProvider.autoDispose.family<List<BranchAdminCandidate>, String?>(
   (ref, excludeEmail) => ref.read(branchDataSourceProvider).fetchAdminCandidates(excludeEmail: excludeEmail),
 );
+
+/// Add Branch → Assign Branch Admin options, loaded when the form opens (web
+/// Promise.allSettled: each list falls back to empty on its own failure —
+/// no roles means the assignment later fails with [kNoBranchAdminRole]; no
+/// employees hides "Assign an existing employee instead").
+final branchLeaderOptionsProvider =
+    FutureProvider.autoDispose<({List<RoleModel> roles, List<BranchAdminCandidate> employees})>((ref) async {
+  final ds = ref.read(branchDataSourceProvider);
+  Future<T> orElse<T>(Future<T> f, T fallback) => f.then((v) => v, onError: (_) => fallback);
+  final roles = orElse(ds.fetchRolesForBranchAdmin(), const <RoleModel>[]);
+  final employees = orElse(ds.fetchBranchLeaderCandidates(), const <BranchAdminCandidate>[]);
+  return (roles: await roles, employees: await employees);
+});
+
+/// Web transfer check: how many active employees report to / have as HR the
+/// person being moved. A failed check never blocks the move (0, 0).
+Future<({int reports, int hrFor})> branchLeaderTransferCounts(BranchRemoteDataSource ds, String uuid) async {
+  try {
+    final r = await Future.wait([ds.countEmployeesBy('reporting_manager_id', uuid), ds.countEmployeesBy('hr_id', uuid)]);
+    return (reports: r[0], hrFor: r[1]);
+  } catch (_) {
+    return (reports: 0, hrFor: 0);
+  }
+}
+
+/// Web applyLeaderRole, after the branch exists. Returns null on success or
+/// the reason it failed (server message when there is one).
+Future<String?> applyBranchLeader(
+  BranchRemoteDataSource ds,
+  BranchLeaderForm form,
+  List<RoleModel> roles,
+  String branchName, {
+  DateTime? today,
+}) async {
+  final role = branchAdminRole(roles);
+  if (role == null) return kNoBranchAdminRole;
+  try {
+    if (form.mode == BranchLeaderMode.existing) {
+      await ds.assignExistingBranchAdmin(form.employeeCode, existingBranchAdminPayload(role, branchName));
+    } else {
+      await ds.inviteBranchAdmin(newBranchAdminPayload(form, role, branchName, today ?? DateTime.now()));
+    }
+    return null;
+  } catch (e) {
+    if (e is DioException) {
+      final body = e.response?.data;
+      if (body is Map && body['message'] is String && (body['message'] as String).trim().isNotEmpty) {
+        return (body['message'] as String).trim();
+      }
+    }
+    return 'unknown error';
+  }
+}
 
 final branchListProvider = AsyncNotifierProvider.autoDispose<
     BranchListNotifier, List<BranchEntity>>(BranchListNotifier.new);

@@ -9,6 +9,7 @@ import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
 import 'package:mobile_app/features/attendance/domain/entities/attendance_entity.dart';
 import 'package:mobile_app/features/attendance/presentation/clock/clock_punch_flow.dart';
+import 'package:mobile_app/features/attendance/presentation/clock/face_lockout.dart';
 import 'package:mobile_app/features/attendance/presentation/providers/attendance_providers.dart';
 import 'package:mobile_app/features/attendance/presentation/widgets/attendance_ring.dart';
 import 'package:mobile_app/features/auth/presentation/providers/auth_providers.dart';
@@ -155,20 +156,32 @@ class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard>
                       children: [
                         // Matches web's ClockInButton: a completed day shows a
                         // disabled "Attendance Completed" instead of Clock In.
-                        today.dayCompleted
-                            ? _ActionButton(
-                                icon: Icons.check_circle_outline,
-                                label: 'Attendance Completed',
-                                color: AppColors.textHint,
-                                onTap: null,
-                              )
-                            : _ActionButton(
-                                icon: today.isClockedIn ? Icons.logout : Icons.login,
-                                label: today.isClockedIn ? 'Clock Out' : 'Clock In',
-                                color: today.isClockedIn ? AppColors.error : AppColors.success,
-                                loading: _punching,
-                                onTap: () => _toggleClock(today),
-                              ),
+                        // Web ClockInButton: a face-verification lockout
+                        // disables it with "Try again in …" (checked first).
+                        FaceLockoutBuilder(
+                          builder: (context, lockedFor) => lockedFor != null
+                              ? _ActionButton(
+                                  key: const Key('clock-lockout-button'),
+                                  icon: Icons.lock_outline,
+                                  label: faceLockoutButtonLabel(lockedFor),
+                                  color: today.isClockedIn ? AppColors.error : AppColors.success,
+                                  onTap: null,
+                                )
+                              : today.dayCompleted
+                                  ? _ActionButton(
+                                      icon: Icons.check_circle_outline,
+                                      label: 'Attendance Completed',
+                                      color: AppColors.textHint,
+                                      onTap: null,
+                                    )
+                                  : _ActionButton(
+                                      icon: today.isClockedIn ? Icons.logout : Icons.login,
+                                      label: today.isClockedIn ? 'Clock Out' : 'Clock In',
+                                      color: today.isClockedIn ? AppColors.error : AppColors.success,
+                                      loading: _punching,
+                                      onTap: () => _toggleClock(today),
+                                    ),
+                        ),
                         const SizedBox(height: 8),
                         _ActionButton(
                           icon: Icons.event_note_outlined,
@@ -247,6 +260,7 @@ class _ActionButton extends StatelessWidget {
   final bool loading;
 
   const _ActionButton({
+    super.key,
     required this.icon,
     required this.label,
     required this.color,
