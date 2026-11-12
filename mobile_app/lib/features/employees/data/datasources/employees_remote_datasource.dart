@@ -12,15 +12,19 @@ import '../models/promotion_record_model.dart';
 // here rather than in employee_model.dart since that file is considered
 // finished/frozen for this feature slice.
 
+/// Web ApprovalMatrixTab ACTIVE_WORKFLOWS (= backend _WORKFLOW_ORDER).
+const kActiveApprovalWorkflows = {'leave', 'expense', 'attendance_correction'};
+
 class EmployeeApprovalMatrixRow {
   final String workflowType;
   final String workflowLabel;
-  final String l1ApproverRole;
+  /// Role ids from the global rule (backend sends integers or null).
+  final int? l1ApproverRole;
   final String l1ApproverLabel;
   final String? l1ApproverId;
   final String? l1ApproverName;
   final bool l1IsOverride;
-  final String? l2ApproverRole; // null/empty => single-level workflow
+  final int? l2ApproverRole; // null => single-level workflow (web: `row.l2_approver_role &&`)
   final String? l2ApproverLabel;
   final String? l2ApproverId;
   final String? l2ApproverName;
@@ -29,7 +33,7 @@ class EmployeeApprovalMatrixRow {
   const EmployeeApprovalMatrixRow({
     required this.workflowType,
     required this.workflowLabel,
-    required this.l1ApproverRole,
+    this.l1ApproverRole,
     required this.l1ApproverLabel,
     this.l1ApproverId,
     this.l1ApproverName,
@@ -41,22 +45,28 @@ class EmployeeApprovalMatrixRow {
     this.l2IsOverride = false,
   });
 
-  bool get isSingleLevel => l2ApproverRole == null || l2ApproverRole!.isEmpty;
+  bool get isSingleLevel => l2ApproverRole == null || l2ApproverRole == 0;
 
+  // Backend _build_matrix_row: l1/l2_approver_role are Role primary keys
+  // (int) or null — reading them `as String?` threw on every real response,
+  // which is why the tab never loaded. Ids are UUID strings or null.
   factory EmployeeApprovalMatrixRow.fromJson(Map<String, dynamic> json) => EmployeeApprovalMatrixRow(
-        workflowType: json['workflow_type'] as String? ?? '',
-        workflowLabel: json['workflow_label'] as String? ?? '',
-        l1ApproverRole: json['l1_approver_role'] as String? ?? '',
-        l1ApproverLabel: json['l1_approver_label'] as String? ?? '',
-        l1ApproverId: json['l1_approver_id'] as String?,
-        l1ApproverName: json['l1_approver_name'] as String?,
-        l1IsOverride: json['l1_is_override'] as bool? ?? false,
-        l2ApproverRole: json['l2_approver_role'] as String?,
-        l2ApproverLabel: json['l2_approver_label'] as String?,
-        l2ApproverId: json['l2_approver_id'] as String?,
-        l2ApproverName: json['l2_approver_name'] as String?,
-        l2IsOverride: json['l2_is_override'] as bool? ?? false,
+        workflowType: _str(json['workflow_type']) ?? '',
+        workflowLabel: _str(json['workflow_label']) ?? '',
+        l1ApproverRole: _int(json['l1_approver_role']),
+        l1ApproverLabel: _str(json['l1_approver_label']) ?? '',
+        l1ApproverId: _str(json['l1_approver_id']),
+        l1ApproverName: _str(json['l1_approver_name']),
+        l1IsOverride: json['l1_is_override'] == true,
+        l2ApproverRole: _int(json['l2_approver_role']),
+        l2ApproverLabel: _str(json['l2_approver_label']),
+        l2ApproverId: _str(json['l2_approver_id']),
+        l2ApproverName: _str(json['l2_approver_name']),
+        l2IsOverride: json['l2_is_override'] == true,
       );
+
+  static String? _str(Object? v) => v == null ? null : (v is String ? v : '$v');
+  static int? _int(Object? v) => v is int ? v : (v is num ? v.toInt() : (v is String ? int.tryParse(v) : null));
 }
 
 // One page of the `/employees/` list endpoint's own pagination — mirrors
@@ -333,11 +343,14 @@ class EmployeesRemoteDataSource {
   ) async {
     final res = await _dio.get(ApiConstants.employeeApprovalMatrix(employeeId));
     final raw = _unwrap(res.data);
-    final list = raw is List ? raw : <dynamic>[];
-    return list
-        .whereType<Map<String, dynamic>>()
-        .map(EmployeeApprovalMatrixRow.fromJson)
-        .where((r) => r.workflowType != 'loan')
+    // A malformed answer is an error, never silently shown as "no workflows".
+    if (raw is! List || raw.any((e) => e is! Map)) {
+      throw const FormatException('Unexpected approval matrix response.');
+    }
+    return raw
+        .map((e) => EmployeeApprovalMatrixRow.fromJson(Map<String, dynamic>.from(e as Map)))
+        // Web ApprovalMatrixTab ACTIVE_WORKFLOWS.
+        .where((r) => kActiveApprovalWorkflows.contains(r.workflowType))
         .toList();
   }
 

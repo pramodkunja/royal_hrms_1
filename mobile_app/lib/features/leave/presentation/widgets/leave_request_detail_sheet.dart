@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
+import 'leave_cancellation_panel.dart';
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -569,6 +570,10 @@ class _LeaveRequestDetailSheetState
                           ),
                         ),
                       ],
+
+                      // Web LeaveRequestDetailModal → LeaveCancellationPanel:
+                      // request / decide the cancellation of an approved leave.
+                      LeaveCancellationPanel(request: r),
                     ],
                   ),
                 ),

@@ -10,8 +10,9 @@ import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
 
 /// Settings → Employee ID Format — web app/dashboard/settings/employee-code/
-/// page.tsx: one editable field (Prefix: letters only, max 10, saved
-/// uppercase), the "prefix + DDMM + initials" example preview, and Save
+/// page.tsx: Prefix (letters only, max 10, saved uppercase), Format (where
+/// the date of joining sits relative to the initials — applies to employees
+/// created afterwards), the example preview for the chosen format, and Save
 /// Changes / Cancel (both only once something changed). Needs settings.edit,
 /// as the API (CanManageRoles); without it nothing is requested.
 class EmployeeCodeScreen extends ConsumerWidget {
@@ -65,12 +66,14 @@ class _EmployeeCodeForm extends ConsumerStatefulWidget {
 class _EmployeeCodeFormState extends ConsumerState<_EmployeeCodeForm> {
   late final _prefix = TextEditingController(text: widget.settings.prefix);
   late String _base = widget.settings.prefix;
+  late String _format = widget.settings.idFormat;
+  late String _baseFormat = widget.settings.idFormat;
   String? _prefixError;
   String? _apiError;
   bool _saved = false;
   bool _saving = false;
 
-  bool get _dirty => _prefix.text != _base;
+  bool get _dirty => _prefix.text != _base || _format != _baseFormat;
 
   @override
   void dispose() {
@@ -84,8 +87,19 @@ class _EmployeeCodeFormState extends ConsumerState<_EmployeeCodeForm> {
         _prefixError = null;
       });
 
+  // Web onFormatChange: clears the saved / error banners, keeps field errors.
+  void _onFormat(String? value) {
+    if (value == null) return;
+    setState(() {
+      _format = value;
+      _saved = false;
+      _apiError = null;
+    });
+  }
+
   void _cancel() => setState(() {
         _prefix.text = _base;
+        _format = _baseFormat;
         _prefixError = null;
         _saved = false;
         _apiError = null;
@@ -101,15 +115,17 @@ class _EmployeeCodeFormState extends ConsumerState<_EmployeeCodeForm> {
       _saving = true;
       _apiError = null;
     });
-    final result = await ref.read(employeeCodeProvider.notifier).save(_prefix.text);
+    final result = await ref.read(employeeCodeProvider.notifier).save(_prefix.text, _format);
     if (!mounted) return;
     setState(() {
       _saving = false;
       if (result == null) {
         // Web: the form shows exactly what the server saved.
-        final saved = ref.read(employeeCodeProvider).valueOrNull?.prefix ?? _prefix.text;
+        final stored = ref.read(employeeCodeProvider).valueOrNull;
+        final saved = stored?.prefix ?? _prefix.text;
         _base = saved;
         _prefix.text = saved;
+        _format = _baseFormat = stored?.idFormat ?? _format;
         _saved = true;
       } else {
         _prefixError = result.fieldErrors['prefix'];
@@ -126,12 +142,18 @@ class _EmployeeCodeFormState extends ConsumerState<_EmployeeCodeForm> {
   static String _label(String key) => switch (key) {
         'padding' => 'Padding',
         'next_sequence' => 'Starting number',
+        'id_format' => 'Format',
         _ => key,
       };
 
   @override
   Widget build(BuildContext context) {
-    final preview = employeeCodePreview(_prefix.text);
+    final preview = employeeCodePreview(_prefix.text, _format);
+    // A stored format this app doesn't know stays selectable, unchanged.
+    final formats = [
+      for (final f in kEmployeeIdFormats) (f.$1, f.$2),
+      if (!kEmployeeIdFormats.any((f) => f.$1 == _format)) (_format, _format),
+    ];
     final canAct = _dirty && !_saving;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
@@ -153,28 +175,51 @@ class _EmployeeCodeFormState extends ConsumerState<_EmployeeCodeForm> {
         _Card(
           icon: Icons.badge_outlined,
           title: 'Configuration',
-          child: TextField(
-            key: const Key('employee-code-prefix'),
-            controller: _prefix,
-            enabled: !_saving,
-            onChanged: _onChanged,
-            inputFormatters: [LengthLimitingTextInputFormatter(kEmployeeCodePrefixMaxLength)],
-            decoration: InputDecoration(
-              labelText: 'Prefix *',
-              hintText: 'e.g. RSS',
-              errorText: _prefixError,
-              helperText: 'Letters only, max 10 characters. Saved as uppercase.',
-              helperMaxLines: 2,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            TextField(
+              key: const Key('employee-code-prefix'),
+              controller: _prefix,
+              enabled: !_saving,
+              onChanged: _onChanged,
+              inputFormatters: [LengthLimitingTextInputFormatter(kEmployeeCodePrefixMaxLength)],
+              decoration: InputDecoration(
+                labelText: 'Prefix *',
+                // Web shows "e.g. RSS" in an empty field, label above it.
+                floatingLabelBehavior: FloatingLabelBehavior.always,
+                hintText: 'e.g. RSS',
+                errorText: _prefixError,
+                helperText: 'Letters only, max 10 characters. Saved as uppercase.',
+                helperMaxLines: 2,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
             ),
-          ),
+            const SizedBox(height: 18),
+            DropdownButtonFormField<String>(
+              key: ValueKey('employee-code-format-$_format'),
+              initialValue: _format,
+              isExpanded: true,
+              onChanged: _saving ? null : _onFormat,
+              decoration: InputDecoration(
+                labelText: 'Format',
+                floatingLabelBehavior: FloatingLabelBehavior.always,
+                helperText: 'Applies to employees created from now on. Existing employee IDs are not changed.',
+                helperMaxLines: 3,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              items: [
+                for (final (value, label) in formats)
+                  DropdownMenuItem(value: value, child: Text(label, overflow: TextOverflow.ellipsis)),
+              ],
+            ),
+          ]),
         ),
         const SizedBox(height: 14),
         _Card(
           icon: Icons.visibility_outlined,
           title: 'Preview',
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text('Format: prefix + date of joining (DDMM) + name initials. Example IDs:',
+            Text('Format: ${employeeIdFormatDescription(_format)}. Example IDs:',
+                key: const Key('employee-code-format-description'),
                 style: AppTextStyles.caption.copyWith(fontSize: 12, color: AppColors.textSecondary)),
             const SizedBox(height: 10),
             for (final (i, row) in preview.indexed)

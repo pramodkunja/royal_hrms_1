@@ -65,6 +65,10 @@ class AdminDashboardView extends ConsumerWidget {
           children: [
             const _SystemConsoleHeader(),
             const SizedBox(height: 20),
+            // Latest announcement above Attendance (requested order; web
+            // AdminDashboard also renders AnnouncementCard right after the console).
+            const _AnnouncementCard(),
+            const SizedBox(height: 20),
             const AttendanceRingCard(),
             const SizedBox(height: 20),
             QuickAccessCard(items: kQuickItemsAdmin),
@@ -72,8 +76,6 @@ class AdminDashboardView extends ConsumerWidget {
             const _PendingApprovalsCard(),
             const SizedBox(height: 20),
             const _DepartmentHeadcountCard(),
-            const SizedBox(height: 20),
-            const _AnnouncementCard(),
             const SizedBox(height: 20),
             const _EmployeeLifecycleCard(),
             const SizedBox(height: 20),

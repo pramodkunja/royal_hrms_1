@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/network/api_client.dart';
@@ -10,6 +9,7 @@ import '../../../onboarding/data/models/onboarding_config_models.dart';
 import '../../../onboarding/presentation/widgets/onboarding_custom_file_field.dart';
 import '../../../onboarding/presentation/widgets/onboarding_dynamic_field.dart';
 import '../../../settings/data/models/onboarding_field_config_model.dart';
+import 'employee_file_viewer.dart';
 
 // HR-created custom fields (Settings → Onboarding Fields) on employee
 // profiles — web employees/[id]/page.tsx (applyFieldConfig/customFieldKeys)
@@ -91,6 +91,7 @@ class CustomFieldsBlock extends ConsumerWidget {
     this.canEditFiles = false,
     this.onUpload,
     this.onDelete,
+    this.freshFileUrl,
   });
 
   final int step;
@@ -104,6 +105,26 @@ class CustomFieldsBlock extends ConsumerWidget {
   final bool canEditFiles;
   final Future<String?> Function(String fieldKey, String fileName, List<int> bytes)? onUpload;
   final Future<String?> Function(int id)? onDelete;
+
+  /// A new link for file [id] when the file host refused an expired signed
+  /// one (HR employee profile); null → no refresh (e.g. My Profile's links
+  /// are on the API's own server and don't expire).
+  final Future<String?> Function(int id)? freshFileUrl;
+
+  Widget _fileTile(OnboardingFieldConfigModel c, CustomFileValue f, {Widget? trailing}) {
+    final fresh = freshFileUrl;
+    return EmployeeFileTile(
+      key: ValueKey('custom-file-tile-${f.id}'),
+      id: f.id,
+      url: f.fileUrl ?? '',
+      fileName: f.fileName,
+      // As before: the editable list shows name · size, the read-only one the name.
+      fileSize: trailing == null ? 0 : f.fileSize,
+      title: c.label,
+      freshUrl: fresh == null ? null : () => fresh(f.id),
+      trailing: trailing,
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -169,8 +190,14 @@ class CustomFieldsBlock extends ConsumerWidget {
                         files: files.where((f) => f.fieldKey == c.fieldKey).toList(),
                         onUpload: onUpload!,
                         onDelete: onDelete!,
+                        // Each file viewable in the app; Remove unchanged.
+                        fileRowBuilder: (f, remove) => _fileTile(c, f, trailing: remove),
                       )
-                    : _ReadOnlyFiles(config: c, files: files.where((f) => f.fieldKey == c.fieldKey).toList()),
+                    : _ReadOnlyFiles(
+                        config: c,
+                        files: files.where((f) => f.fieldKey == c.fieldKey).toList(),
+                        tile: (f) => _fileTile(c, f),
+                      ),
               ),
           ]),
         );
@@ -180,9 +207,10 @@ class CustomFieldsBlock extends ConsumerWidget {
 }
 
 class _ReadOnlyFiles extends StatelessWidget {
-  const _ReadOnlyFiles({required this.config, required this.files});
+  const _ReadOnlyFiles({required this.config, required this.files, required this.tile});
   final OnboardingFieldConfigModel config;
   final List<CustomFileValue> files;
+  final Widget Function(CustomFileValue f) tile;
 
   @override
   Widget build(BuildContext context) {
@@ -192,19 +220,7 @@ class _ReadOnlyFiles extends StatelessWidget {
       children: [
         Text(config.required ? '${config.label} *' : config.label,
             style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
-        if (files.isEmpty)
-          Text('—', style: AppTextStyles.body)
-        else
-          for (final f in files)
-            InkWell(
-              onTap: f.fileUrl == null
-                  ? null
-                  : () => launchUrl(Uri.parse(f.fileUrl!), mode: LaunchMode.externalApplication),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Text(f.fileName, style: AppTextStyles.body.copyWith(color: AppColors.primary)),
-              ),
-            ),
+        if (files.isEmpty) Text('—', style: AppTextStyles.body) else for (final f in files) tile(f),
       ],
     );
   }

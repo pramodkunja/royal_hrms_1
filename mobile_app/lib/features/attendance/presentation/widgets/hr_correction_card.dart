@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/attendance_entity.dart';
+import 'late_justification.dart' show lateStatusBadge;
+import 'late_justification_review.dart' show showLateJustificationReview;
 
 // Shared between the Attendance screen's own "Correction Requests" inbox and
 // the Approvals screen's "Team Approvals" > Attendance Correction type — both
@@ -56,9 +58,24 @@ class _HrCorrectionCardState extends State<HrCorrectionCard> {
     );
   }
 
+  /// A late-arrival justification in the same queue: decided in its own
+  /// review sheet (remarks, resubmission, proof), never by the punch
+  /// Approve / Reject — which would skip the required reason.
+  Future<void> _openLate() async {
+    if (_reviewing) return;
+    setState(() => _reviewing = true);
+    final msg = await showLateJustificationReview(context, widget.record);
+    if (!mounted) return;
+    setState(() => _reviewing = false);
+    if (msg != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: AppColors.success));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final record = widget.record;
+    final isLate = record.isLateJustification;
     final showAwaiting = !record.canAction && (record.status == 'pending' || record.status == 'l2_pending');
     final showFlow = record.l1Status != null || record.l2Status != null;
 
@@ -102,27 +119,46 @@ class _HrCorrectionCardState extends State<HrCorrectionCard> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: _statusColor(record.status).withValues(alpha: 0.12),
+                    color: (isLate ? lateStatusBadge(record.status).$2 : _statusColor(record.status))
+                        .withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Text(_statusLabel(record.status),
-                      style: AppTextStyles.labelSmall
-                          .copyWith(color: _statusColor(record.status), fontWeight: FontWeight.w600)),
+                  child: Text(isLate ? lateStatusBadge(record.status).$1 : _statusLabel(record.status),
+                      style: AppTextStyles.labelSmall.copyWith(
+                          color: isLate ? lateStatusBadge(record.status).$2 : _statusColor(record.status),
+                          fontWeight: FontWeight.w600)),
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            Row(children: [
-              Expanded(child: _KV(k: 'Date', v: record.date)),
-              Expanded(child: _KV(k: 'Punch Type', v: record.punchType)),
-            ]),
-            const SizedBox(height: 8),
-            Row(children: [
-              Expanded(child: _KV(k: 'Requested In', v: record.requestedInTime ?? '—')),
-              Expanded(child: _KV(k: 'Requested Out', v: record.requestedOutTime ?? '—')),
-            ]),
-            const SizedBox(height: 8),
-            _KV(k: 'Reason', v: record.reason),
+            if (isLate) ...[
+              Row(children: [
+                Expanded(child: _KV(k: 'Date', v: record.date)),
+                const Expanded(child: _KV(k: 'Request', v: 'Late Arrival Justification')),
+              ]),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: _KV(k: 'Clocked In', v: record.originalIn ?? '—')),
+                Expanded(
+                    child: _KV(
+                        k: 'Proof',
+                        v: record.hasDocument ? 'Attached' : (record.proofRequired ? 'Missing' : 'None'))),
+              ]),
+              const SizedBox(height: 8),
+              _KV(k: 'Reason', v: record.reasonLabel.isEmpty ? record.reason : record.reasonLabel),
+            ] else ...[
+              Row(children: [
+                Expanded(child: _KV(k: 'Date', v: record.date)),
+                Expanded(child: _KV(k: 'Punch Type', v: record.punchType)),
+              ]),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: _KV(k: 'Requested In', v: record.requestedInTime ?? '—')),
+                Expanded(child: _KV(k: 'Requested Out', v: record.requestedOutTime ?? '—')),
+              ]),
+              const SizedBox(height: 8),
+              _KV(k: 'Reason', v: record.reason),
+            ],
             if (showAwaiting) ...[
               const SizedBox(height: 8),
               Text(
@@ -157,7 +193,17 @@ class _HrCorrectionCardState extends State<HrCorrectionCard> {
                 ),
               ],
             ],
-            if (record.canAction) ...[
+            if (isLate) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  key: Key('hr-correction-late-open-${record.id}'),
+                  onPressed: _reviewing ? null : _openLate,
+                  child: Text(record.canAction ? 'Review' : 'View'),
+                ),
+              ),
+            ] else if (record.canAction) ...[
               const SizedBox(height: 10),
               if (_reviewing)
                 const Padding(

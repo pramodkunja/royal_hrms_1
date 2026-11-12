@@ -37,6 +37,10 @@ class AddEmployeeSheet extends ConsumerStatefulWidget {
 class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
   EmployeeFormData? _createForm;
   EmployeeUpdateFormData? _editForm;
+
+  /// Web auto-assigns the branch's sole HR when the employee has none, once,
+  /// on load. Allowed until the HR or branch is touched.
+  bool _hrAutoAssignAllowed = true;
   final _errors = <String, String>{};
   bool _submitting = false;
   bool _branchPrefilled = false;
@@ -506,10 +510,12 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
               error: _errors['branch'],
               onSelected: (v) => setState(() {
                 form.branch = v ?? '';
-                // HR/manager pickers are filtered by branch — a previous
-                // selection may no longer be valid for the new branch.
-                form.hrId = null;
-                form.hrName = null;
+                // Web keeps the Branch HR when the branch changes (its
+                // onFieldChange never touches hr) — clearing it here sent
+                // hr_id: null, which REMOVES the HR on save. The list below
+                // reloads for the new branch; the current HR stays shown.
+                _hrAutoAssignAllowed = false;
+                // Reporting manager: unchanged behaviour.
                 form.reportingManagerId = null;
                 form.reportingManagerName = null;
               }),
@@ -535,9 +541,12 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
       _HrDropdown(
         branch: form.branch,
         selectedId: form.hrId,
+        selectedName: form.hrName,
+        autoAssignSoleHr: _hrAutoAssignAllowed && (form.hrId ?? '').isEmpty,
         onSelected: (opt) => setState(() {
-          form.hrId = opt?.id;
-          form.hrName = opt?.fullName;
+          _hrAutoAssignAllowed = false;
+          form.hrId = opt.id;
+          form.hrName = opt.fullName;
         }),
       ),
       const SizedBox(height: 14),
@@ -1125,52 +1134,132 @@ class _BranchDropdown extends ConsumerWidget {
   }
 }
 
-// ── HR contact dropdown (edit-only) ────────────────────────────────────────────
+// ── Branch HR picker (edit-only) ─────────────────────────────────────────────
+//
+// Web employees/[id] "Branch HR" (EmployeePickerInline): the current HR's
+// name is shown from the employee record (hr.name) whatever the list holds;
+// options come from GET /employees/hrs/?branch=<the form's branch>
+// (HRListView: active onboarding.approve holders, minus org-wide
+// settings.edit roles, in that branch or managing it; needs employees.view);
+// picking one sets hr_id = that user's UUID. There is no "clear" option.
+// With no branch nothing is requested (the API requires one). Each branch is
+// its own request, so a slow answer for a branch no longer selected can't
+// replace the current branch's list.
 
 class _HrDropdown extends ConsumerWidget {
   final String branch;
   final String? selectedId;
-  final ValueChanged<EmployeePickerOption?> onSelected;
+  final String? selectedName;
+
+  /// Web: when the employee has no HR and the branch has exactly one, it is
+  /// filled in (once, on load).
+  final bool autoAssignSoleHr;
+  final ValueChanged<EmployeePickerOption> onSelected;
 
   const _HrDropdown({
     required this.branch,
     this.selectedId,
+    this.selectedName,
+    this.autoAssignSoleHr = false,
     required this.onSelected,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(employeeHrOptionsProvider(branch));
-    final options = async.valueOrNull ?? [];
-    final selected = options.where((o) => o.id == selectedId).firstOrNull;
+    final hasBranch = branch.trim().isNotEmpty;
+    final current = (selectedId ?? '').isEmpty ? null : selectedId;
+    final currentLabel = (selectedName ?? '').isNotEmpty ? selectedName! : null;
+
+    if (hasBranch && autoAssignSoleHr) {
+      ref.listen(employeeHrOptionsProvider(branch), (_, next) {
+        final list = next.valueOrNull;
+        if (list != null && list.length == 1) onSelected(list.first);
+      });
+    }
+
+    Widget body;
+    if (!hasBranch) {
+      body = _note('Select a branch to choose its HR.', const Key('edit-hr-no-branch'));
+    } else {
+      final async = ref.watch(employeeHrOptionsProvider(branch));
+      body = async.when(
+        skipLoadingOnRefresh: false,
+        loading: () => const Padding(
+          key: Key('edit-hr-loading'),
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: LinearProgressIndicator(minHeight: 2),
+        ),
+        error: (e, _) => Row(
+          key: const Key('edit-hr-error'),
+          children: [
+            Expanded(
+              child: Text(employeeErrorMessage(e),
+                  style: AppTextStyles.caption.copyWith(color: AppColors.error, fontSize: 12)),
+            ),
+            TextButton(
+              key: const Key('edit-hr-retry'),
+              onPressed: () => ref.invalidate(employeeHrOptionsProvider(branch)),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+        data: (options) {
+          final listed = options.any((o) => o.id == current);
+          // The current HR is always offered (by id), even when this
+          // branch's list doesn't contain them — so it stays shown, and
+          // saving without touching it keeps it.
+          final items = <DropdownMenuItem<String>>[
+            if (current != null && !listed)
+              DropdownMenuItem(
+                value: current,
+                child: Text(currentLabel ?? 'Current HR', style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+              ),
+            for (final o in options)
+              DropdownMenuItem(
+                value: o.id,
+                child: Text('${o.fullName} (${o.department})', style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+              ),
+          ];
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            DropdownButtonFormField<String>(
+              // Rebuilt whenever the branch, the selection or the list
+              // changes, so the shown value is never a stale initial one.
+              key: ValueKey('edit-hr-$branch-$current-${options.length}'),
+              initialValue: current,
+              style: AppTextStyles.body,
+              isExpanded: true,
+              decoration: _inputDec('— Select HR —'),
+              hint: Text('— Select HR —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
+              items: items,
+              onChanged: (id) {
+                final opt = options.where((o) => o.id == id).firstOrNull;
+                if (opt != null) onSelected(opt);
+              },
+            ),
+            if (options.isEmpty)
+              _note('No options available.', const Key('edit-hr-empty')),
+          ]);
+        },
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _Label(text: 'HR Contact'),
+        const _Label(text: 'Branch HR'),
         const SizedBox(height: 5),
-        DropdownButtonFormField<EmployeePickerOption?>(
-          initialValue: selected,
-          style: AppTextStyles.body,
-          isExpanded: true,
-          decoration: _inputDec('— None —'),
-          hint: Text('— None —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
-          items: [
-            DropdownMenuItem<EmployeePickerOption?>(
-              value: null,
-              child: Text('— None —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
-            ),
-            ...options.map((o) => DropdownMenuItem<EmployeePickerOption?>(
-                  value: o,
-                  child: Text('${o.fullName} (${o.department})',
-                      style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
-                )),
-          ],
-          onChanged: onSelected,
-        ),
+        if (!hasBranch && currentLabel != null)
+          Text(currentLabel, key: const Key('edit-hr-current'), style: AppTextStyles.body),
+        body,
       ],
     );
   }
+
+  Widget _note(String text, Key key) => Padding(
+        key: key,
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(text, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontSize: 12)),
+      );
 }
 
 // ── Assign HR + Reporting Manager (create-only) ───────────────────────────────

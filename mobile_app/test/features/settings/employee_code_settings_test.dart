@@ -159,9 +159,12 @@ void main() {
 
     test('payload: web onSave (trim + uppercase); padding / next_sequence carried, left out when unknown', () {
       const s = EmployeeCodeSettings(prefix: 'RSS', padding: 9, nextSequence: 0);
-      expect(s.toPayload('  abc '), {'prefix': 'ABC', 'padding': 9, 'next_sequence': 0},
+      // Task 63: id_format is always sent (web onSave).
+      expect(s.toPayload('  abc ', 'date_initials'),
+          {'prefix': 'ABC', 'id_format': 'date_initials', 'padding': 9, 'next_sequence': 0},
           reason: 'carried unchanged even out of range — never "fixed" silently');
-      expect(const EmployeeCodeSettings(prefix: 'X').toPayload('xy'), {'prefix': 'XY'});
+      expect(const EmployeeCodeSettings(prefix: 'X').toPayload('xy', 'first_date_last'),
+          {'prefix': 'XY', 'id_format': 'first_date_last'});
     });
 
     test('validation: required, ASCII letters only (trimmed); 1 and 10 letters fine', () {
@@ -202,7 +205,9 @@ void main() {
       expect(prefixText(tester), 'RSS');
       expect(previewCodes(tester), ['RSS0308TG', 'RSS1509RK', 'RSS1509RK2']);
       expect(find.text('Letters only, max 10 characters. Saved as uppercase.'), findsOneWidget);
-      expect(find.text('Format: prefix + date of joining (DDMM) + name initials. Example IDs:'), findsOneWidget);
+      // Task 63: web's per-format description (date_initials when unset).
+      expect(find.text('Format: prefix + date of joining (DDMM) + first and last name initials. Example IDs:'),
+          findsOneWidget);
       expect(enabled(tester, 'employee-code-save'), isFalse);
       expect(enabled(tester, 'employee-code-cancel'), isFalse);
       expect(find.textContaining('5-digit sequence'), findsNothing, reason: 'stale format_description not shown');
@@ -229,7 +234,7 @@ void main() {
       await pump(tester);
       await typePrefix(tester, ' abc ');
       await save(tester);
-      expect(server.puts.single, {'prefix': 'ABC', 'padding': 5, 'next_sequence': 1});
+      expect(server.puts.single, {'prefix': 'ABC', 'id_format': 'date_initials', 'padding': 5, 'next_sequence': 1});
       expect(byKey('employee-code-saved'), findsOneWidget);
       expect(find.text('Employee ID format saved successfully.'), findsOneWidget);
       expect(prefixText(tester), 'ABC');
@@ -325,7 +330,7 @@ void main() {
       expect(s.puts, isEmpty);
       await typePrefix(tester, 'rs');
       await save(tester);
-      expect(s.puts.single, {'prefix': 'RS'});
+      expect(s.puts.single, {'prefix': 'RS', 'id_format': 'date_initials'});
     });
   });
 }

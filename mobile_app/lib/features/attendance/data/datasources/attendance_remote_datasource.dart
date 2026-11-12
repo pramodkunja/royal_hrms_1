@@ -311,11 +311,15 @@ class AttendanceRemoteDataSource {
     String? branch,
     String? department,
     String? status,
+    String? kind,
+    bool missingProof = false,
   }) async {
     final res = await _dio.get(ApiConstants.attendanceHrCorrections, queryParameters: {
       if (branch != null && branch.isNotEmpty) 'branch': branch,
       if (department != null && department.isNotEmpty) 'department': department,
       if (status != null && status.isNotEmpty) 'status': status,
+      if (kind != null && kind.isNotEmpty) 'kind': kind,
+      if (missingProof) 'missing_proof': 'true',
       'page_size': 100,
     });
     return _unwrapList(res.data).map(HrCorrectionRowModel.fromJson).toList();
@@ -329,6 +333,47 @@ class AttendanceRemoteDataSource {
       'page_size': 100,
     });
     return _unwrapList(res.data).map(MyCorrectionModel.fromJson).toList();
+  }
+
+  /// PATCH /attendance/corrections/<id>/review/ for a late-arrival
+  /// justification: {action: approve | reject | resubmit, remarks} (remarks
+  /// required to reject or send back). Returns the server's message.
+  Future<String> reviewLateJustification(String id, {required String action, String remarks = ''}) async {
+    final res = await _dio.patch(ApiConstants.attendanceHrCorrectionReview(id),
+        data: {'action': action, 'remarks': remarks.trim()});
+    final body = res.data;
+    final msg = body is Map ? body['message'] : null;
+    return msg is String && msg.isNotEmpty ? msg : 'Saved.';
+  }
+
+  /// POST /attendance/late-justification/ (new: with `date`) or
+  /// /attendance/late-justification/<id>/resubmit/ — multipart like web:
+  /// reason, explanation (trimmed), date (new only), document (when chosen).
+  /// Returns the server's message.
+  Future<String> sendLateJustification({
+    String? date,
+    String? resubmitId,
+    required String reason,
+    required String explanation,
+    List<int>? proofBytes,
+    String? proofName,
+  }) async {
+    final form = FormData.fromMap({
+      'reason': reason,
+      'explanation': explanation.trim(),
+      if (resubmitId == null && date != null) 'date': date,
+      if (proofBytes != null) 'document': MultipartFile.fromBytes(proofBytes, filename: proofName ?? 'proof'),
+    });
+    final res = await _dio.post(
+      resubmitId == null
+          ? ApiConstants.attendanceLateJustification
+          : ApiConstants.attendanceLateJustificationResubmit(resubmitId),
+      data: form,
+      options: Options(contentType: 'multipart/form-data'),
+    );
+    final body = res.data;
+    final msg = body is Map ? body['message'] : null;
+    return msg is String && msg.isNotEmpty ? msg : 'Submitted.';
   }
 
   /// PATCH /attendance/corrections/<id>/review/ {action, remarks}. Returns the

@@ -9,6 +9,7 @@ import '../../../../leave/domain/entities/leave_entity.dart';
 import '../../../../leave/presentation/widgets/leave_type_icons.dart';
 import '../../../data/models/leave_policy_model.dart';
 import '../../providers/settings_providers.dart';
+import 'late_arrival_limit_card.dart';
 import 'monthly_credit_settings_section.dart';
 
 // Matches web's EligibilitySection.tsx: "No employment-type concept exists
@@ -295,21 +296,33 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
   Widget build(BuildContext context) {
     final policiesAsync = ref.watch(leavePoliciesProvider);
     final canEdit = canEditLeavePolicies(ref.watch(authStateProvider).valueOrNull?.user);
+    // Web LeavePoliciesTab shows the late-arrival limit card whatever state
+    // the per-leave-type policies are in.
+    Widget withLimitCard(Widget child) => ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+          children: [const LateArrivalLimitCard(), child],
+        );
     return policiesAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
+      loading: () => withLimitCard(const Padding(
+        padding: EdgeInsets.all(32),
+        child: Center(child: CircularProgressIndicator()),
+      )),
+      error: (e, _) => withLimitCard(Padding(
+        padding: const EdgeInsets.all(32),
+        child: Center(
           child: Text(friendlySettingsError(e),
               style: AppTextStyles.bodySecondary),
         ),
-      ),
+      )),
       data: (policies) {
         if (policies.isEmpty) {
-          return Center(
-            child: Text('No leave policies found',
-                style: AppTextStyles.bodySecondary),
-          );
+          return withLimitCard(Padding(
+            padding: const EdgeInsets.all(32),
+            child: Center(
+              child: Text('No leave policies found',
+                  style: AppTextStyles.bodySecondary),
+            ),
+          ));
         }
         if (!_initialized ||
             !policies.any((p) => p.leaveType == _selectedType)) {
@@ -337,6 +350,10 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
                   style: AppTextStyles.bodySecondary,
                 ),
                 const SizedBox(height: 14),
+
+                // ── Web LeavePoliciesTab: the company-wide late-arrival limit
+                // (tracking only) sits above the per-leave-type rules ──
+                const LateArrivalLimitCard(),
 
                 // ── Leave type selector card ──
                 Container(

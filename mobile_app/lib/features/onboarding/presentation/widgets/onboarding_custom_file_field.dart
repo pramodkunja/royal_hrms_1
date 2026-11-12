@@ -31,6 +31,11 @@ class OnboardingCustomFileField extends ConsumerStatefulWidget {
   final Future<String?> Function(String fieldKey, String fileName, List<int> bytes) onUpload;
   final Future<String?> Function(int id) onDelete;
 
+  /// Builds an uploaded file's row around its Remove button (e.g. to add an
+  /// in-app View on the employee profile). Null → the plain name row, as in
+  /// the onboarding wizard.
+  final Widget Function(CustomFileValue file, Widget removeButton)? fileRowBuilder;
+
   /// Shown when a required field has no file at save time.
   final String? errorText;
 
@@ -40,6 +45,7 @@ class OnboardingCustomFileField extends ConsumerStatefulWidget {
     required this.files,
     required this.onUpload,
     required this.onDelete,
+    this.fileRowBuilder,
     this.errorText,
   });
 
@@ -89,6 +95,25 @@ class _OnboardingCustomFileFieldState extends ConsumerState<OnboardingCustomFile
     });
   }
 
+  Widget _fileRow(CustomFileValue f) {
+    final remove = IconButton(
+      key: Key('custom-file-remove-${f.id}'),
+      tooltip: 'Remove',
+      icon: Icon(Icons.delete_outline, size: 18, color: AppColors.error),
+      onPressed: _busy ? null : () => _remove(f.id),
+    );
+    final builder = widget.fileRowBuilder;
+    if (builder != null) return builder(f, remove);
+    return Row(children: [
+      Icon(Icons.insert_drive_file_outlined, size: 18, color: AppColors.success),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text('${f.fileName} · ${_size(f.fileSize)}', style: AppTextStyles.bodySmall, overflow: TextOverflow.ellipsis),
+      ),
+      remove,
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = widget.config;
@@ -110,19 +135,7 @@ class _OnboardingCustomFileFieldState extends ConsumerState<OnboardingCustomFile
         for (final f in files)
           Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Row(children: [
-              Icon(Icons.insert_drive_file_outlined, size: 18, color: AppColors.success),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text('${f.fileName} · ${_size(f.fileSize)}',
-                    style: AppTextStyles.bodySmall, overflow: TextOverflow.ellipsis),
-              ),
-              IconButton(
-                tooltip: 'Remove',
-                icon: Icon(Icons.delete_outline, size: 18, color: AppColors.error),
-                onPressed: _busy ? null : () => _remove(f.id),
-              ),
-            ]),
+            child: _fileRow(f),
           ),
         if (error != null)
           Padding(

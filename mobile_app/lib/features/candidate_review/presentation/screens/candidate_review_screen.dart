@@ -497,8 +497,6 @@ class _ReviewSheetState extends State<_ReviewSheet> {
   late final _uanCtrl = TextEditingController(text: widget.user.profile?.uanNumber ?? '');
   late final _aadharNameCtrl = TextEditingController(text: widget.user.profile?.nameAsPerAadhar ?? '');
   late final _panCtrl = TextEditingController(text: (widget.user.profile?.panNumber ?? '').toUpperCase());
-  String? _uanErr;
-  String? _panErr;
 
   // Optional assessment (only for applicants with a linked candidate, as web).
   bool get _offersAssessment => widget.user.candidateId != null;
@@ -594,23 +592,19 @@ class _ReviewSheetState extends State<_ReviewSheet> {
 
   Future<void> _handleConfirm() async {
     if (_acting) return; // one request at a time
-    final uanErr = validateUan(_uanCtrl.text);
-    final panErr = validatePan(_panCtrl.text);
-    final missingRole = _selDept.isEmpty || _selDesig.isEmpty;
-    if (missingRole || uanErr != null || panErr != null) {
-      setState(() {
-        _assignErr = missingRole ? 'Please select both Department and Designation.' : null;
-        _uanErr = uanErr;
-        _panErr = panErr;
-      });
+    // Web OnboardingDrawer handleConfirm: one message in the Assign Role
+    // banner, checked in order — Department/Designation, then UAN, then PAN.
+    final problem = (_selDept.isEmpty || _selDesig.isEmpty)
+        ? 'Please select both Department and Designation before confirming.'
+        : validateUan(_uanCtrl.text) ?? validatePan(_panCtrl.text);
+    if (problem != null) {
+      setState(() => _assignErr = problem);
       return;
     }
     setState(() {
       _acting = true;
       _actionErr = null;
       _assignErr = null;
-      _uanErr = null;
-      _panErr = null;
     });
     // Everything entered stays in the form if the server refuses.
     final err = await widget.onAction(
@@ -845,16 +839,6 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                       aadharNameCtrl: _aadharNameCtrl,
                       panCtrl: _panCtrl,
                       enabled: !_acting,
-                      uanError: _uanErr,
-                      panError: _panErr,
-                      onChanged: () {
-                        if (_uanErr != null || _panErr != null) {
-                          setState(() {
-                            _uanErr = null;
-                            _panErr = null;
-                          });
-                        }
-                      },
                     ),
                     if (_offersAssessment)
                       ApprovalAssessmentPicker(

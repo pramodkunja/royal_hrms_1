@@ -28,6 +28,7 @@ import '../widgets/punch_location_section.dart';
 import '../widgets/shift_assignment_tab.dart';
 import '../widgets/weekly_off_assignment_tab.dart';
 import '../widgets/hr_correction_card.dart';
+import '../widgets/late_justification_review.dart' show LateJustificationsReviewTab;
 import '../widgets/record_corrections_section.dart';
 
 // ─── Colour helpers ───────────────────────────────────────────────────────────
@@ -156,7 +157,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 6, vsync: this);
+    _tab = TabController(length: 7, vsync: this);
   }
 
   @override
@@ -194,6 +195,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
                 const Tab(text: 'OT Entry'),
                 _BadgeTab(label: 'Invalid Punches', count: invalidCount),
                 _BadgeTab(label: 'Un-punches', count: unpunchCount),
+                const Tab(text: 'Late Justifications'),
                 const Tab(text: 'Weekly Off Assignment'),
                 const Tab(text: 'Shift Assignment'),
               ],
@@ -208,6 +210,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
           _OtEntryTab(),
           _InvalidPunchesTab(),
           _UnpunchesTab(),
+          LateJustificationsReviewTab(),
           WeeklyOffAssignmentTab(),
           ShiftAssignmentTab(),
         ],

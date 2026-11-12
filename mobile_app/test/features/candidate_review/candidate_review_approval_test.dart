@@ -298,14 +298,21 @@ void main() {
           {'decision': 'approve', 'remarks': '', 'department': 'Engineering', 'designation': 'Engineer'});
     });
 
-    testWidgets('invalid UAN / PAN are shown beside the fields; nothing is sent', (tester) async {
+    testWidgets('invalid UAN / PAN: one message at a time in the Assign Role banner (web order); nothing is sent',
+        (tester) async {
       await pumpScreen(tester, [applicant('u1', 'Test One')]);
       await openReview(tester, 'Test One');
       await startApprove(tester);
       await enter(tester, 'approval-uan', '12345');
       await enter(tester, 'approval-pan', 'ABC123');
       await confirm(tester);
+      // Task 61 (web OnboardingDrawer handleConfirm): UAN is reported first.
       expect(find.text('UAN must be exactly 12 digits, or leave it blank.'), findsOneWidget);
+      expect(find.text('Enter a valid PAN (e.g. ABCDE1234F), or leave it blank.'), findsNothing);
+      expect(server.posts, isEmpty);
+      await enter(tester, 'approval-uan', '100000000012');
+      await confirm(tester);
+      expect(find.text('UAN must be exactly 12 digits, or leave it blank.'), findsNothing);
       expect(find.text('Enter a valid PAN (e.g. ABCDE1234F), or leave it blank.'), findsOneWidget);
       expect(server.posts, isEmpty);
       // The UAN input only takes digits.
@@ -319,7 +326,7 @@ void main() {
       await openReview(tester, 'Test One');
       await startApprove(tester);
       await confirm(tester);
-      expect(find.text('Please select both Department and Designation.'), findsOneWidget);
+      expect(find.text('Please select both Department and Designation before confirming.'), findsOneWidget);
       expect(server.posts, isEmpty);
     });
 

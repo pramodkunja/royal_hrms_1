@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/router/access_control.dart' show userHasPermission;
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../auth/domain/entities/user_entity.dart';
 import '../../../settings/data/models/departments_model.dart';
 import '../../../settings/data/models/roles_model.dart';
 import '../../../settings/presentation/providers/settings_providers.dart';
 import '../../data/datasources/employees_remote_datasource.dart';
+import '../../data/services/employee_document_download.dart';
 import '../../data/models/employee_id_card_model.dart';
 import '../../data/models/employee_model.dart';
 import '../../data/models/promotion_record_model.dart';
@@ -296,6 +298,23 @@ final employeeDetailProvider = FutureProvider.autoDispose.family<EmployeeModel, 
   return ref.read(employeesDataSourceProvider).fetchEmployee(employeeId);
 });
 
+/// A plain client for the file host's signed document links: no login, no
+/// interceptors, so the app's token never leaves for another host.
+final employeeDocumentExternalDioProvider = Provider<Dio>((ref) => Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 20),
+      receiveTimeout: const Duration(seconds: 60),
+    )));
+
+/// Downloads HR Employee Profile documents (see EmployeeDocumentDownloader).
+final employeeDocumentDownloaderProvider = Provider<EmployeeDocumentDownloader>((ref) {
+  final api = ref.watch(dioProvider);
+  return EmployeeDocumentDownloader(
+    api: api,
+    external: ref.watch(employeeDocumentExternalDioProvider),
+    apiBaseUrl: api.options.baseUrl,
+  );
+});
+
 /// The employee's ID card data (web /dashboard/employees/<id>/id-card).
 final employeeIdCardProvider = FutureProvider.autoDispose.family<IdCardData, String>(
   (ref, employeeId) => ref.read(employeesDataSourceProvider).fetchIdCard(employeeId),
@@ -502,6 +521,39 @@ Future<String?> sendEmployeeWishEmail(
 }
 
 // ── Error helper ───────────────────────────────────────────────────────────────
+
+enum ApprovalMatrixLoadErrorKind { forbidden, notFound, malformed, other }
+
+/// A failed Approval Matrix load, kept distinct for the tab: no permission
+/// (403, employees.view), employee not found / outside your branch scope
+/// (404), an unexpected response, or any other server / network failure —
+/// with the server's own message where there is one (web shows it as-is).
+({ApprovalMatrixLoadErrorKind kind, String message}) approvalMatrixLoadError(Object e) {
+  if (e is FormatException) {
+    return (kind: ApprovalMatrixLoadErrorKind.malformed, message: 'Unexpected response from the server.');
+  }
+  final code = e is DioException ? e.response?.statusCode : null;
+  final kind = switch (code) {
+    403 => ApprovalMatrixLoadErrorKind.forbidden,
+    404 => ApprovalMatrixLoadErrorKind.notFound,
+    _ => ApprovalMatrixLoadErrorKind.other,
+  };
+  return (kind: kind, message: _friendlyError(e));
+}
+
+/// Web ApprovalMatrixTab canEditEmployeeScoped (Reporting Relationships and
+/// Approval Matrix overrides): employees.edit AND the employee is in the
+/// viewer's own branch — unless the viewer is org-wide (superuser /
+/// settings.edit). The server applies the same check (branch scope) anyway.
+bool canEditEmployeeApprovals(UserEntity? user, String employeeBranch) {
+  if (!userHasPermission(user, 'employees.edit')) return false;
+  final unrestricted = user!.isSuperuser || user.permissions.contains('settings.edit');
+  return unrestricted || (user.branch ?? '') == employeeBranch;
+}
+
+/// A user-facing message for a failed employee request (server message where
+/// there is one; never a raw exception dump).
+String employeeErrorMessage(Object e) => _friendlyError(e);
 
 String _friendlyError(Object e) {
   // Dio errors carry a real backend `message` (see parseDioException) — use

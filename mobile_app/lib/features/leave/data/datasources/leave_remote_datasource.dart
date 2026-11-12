@@ -138,6 +138,31 @@ class LeaveRemoteDataSource {
     await _dio.patch(ApiConstants.leaveDetail(id));
   }
 
+  /// Employee: ask to cancel their own approved leave (reason ≥ 5 chars).
+  Future<LeaveRequestModel> requestCancellation(String id, String reason) async {
+    final res = await _dio.post(ApiConstants.leaveCancellationRequest(id), data: {'reason': reason});
+    return LeaveRequestModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  /// Approver: approve | reject a waiting cancellation (web sends remarks
+  /// only when rejecting; they are required then).
+  Future<LeaveRequestModel> decideCancellation(String id, {required bool approve, String remarks = ''}) async {
+    final res = await _dio.post(ApiConstants.leaveCancellationDecision(id),
+        data: {'action': approve ? 'approve' : 'reject', 'remarks': approve ? '' : remarks});
+    return LeaveRequestModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  /// Approver: the cancellation requests this user may decide (the server
+  /// filters by authority; [] without leave.approve).
+  Future<List<LeaveRequestModel>> fetchCancellations() async {
+    final res = await _dio.get(ApiConstants.leaveCancellations);
+    final data = _unwrap(res.data);
+    return [
+      for (final r in (data is List ? data : const []))
+        if (r is Map<String, dynamic>) LeaveRequestModel.fromJson(r),
+    ];
+  }
+
   Future<void> approveLeave(String id) async {
     await _dio.post(
       ApiConstants.leaveAction(id),

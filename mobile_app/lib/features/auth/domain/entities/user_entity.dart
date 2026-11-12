@@ -29,6 +29,12 @@ class UserEntity {
   // last login won't see it until they log out and back in.
   final bool isSuperuser;
 
+  /// The company's subscription modules (login response `enabled_modules`;
+  /// web reads the same list from its token's `modules` claim). Null =
+  /// unknown (an older cached session or server) → everything is shown, as
+  /// web does. Hiding is a convenience only: the API enforces modules itself.
+  final List<String>? enabledModules;
+
   const UserEntity({
     required this.id,
     required this.email,
@@ -50,7 +56,12 @@ class UserEntity {
     this.companyLogoUrl,
     this.companyBrandColor,
     this.isSuperuser = false,
+    this.enabledModules,
   });
+
+  /// Web lib/modules.ts hasModule: true when the company has [key], or when
+  /// the module list is unknown.
+  bool hasModule(String key) => enabledModules == null || enabledModules!.contains(key);
 
   // Mirrors web's gate (frontend/proxy.ts, login/page.tsx): superusers are
   // exempt from onboarding regardless of onboarding_status.
@@ -96,6 +107,7 @@ class UserEntity {
         companyLogoUrl: companyLogoUrl,
         companyBrandColor: companyBrandColor,
         isSuperuser: isSuperuser,
+        enabledModules: enabledModules,
       );
 
   @override

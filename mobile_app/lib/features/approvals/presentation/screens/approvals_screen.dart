@@ -5,6 +5,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/blue_hero_banner.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../leave/presentation/widgets/leave_cancellation_panel.dart'
+    show LeaveCancellationsTab, canReviewLeaveCancellations;
 import '../widgets/attendance_approval_tab.dart';
 import '../widgets/face_registration_approvals_tab.dart';
 import '../widgets/team_approvals_tab.dart';
@@ -40,6 +42,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
   String _tabLabel(String key) => switch (key) {
         'team' => 'Team Approvals',
         'face_id' => 'Face ID Approvals',
+        'leave_cancellations' => 'Leave Cancellations',
         _ => 'Attendance Approval',
       };
 
@@ -89,11 +92,15 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
         (user?.isSuperuser ?? false) ||
         (user?.hasPermission('payroll.view') ?? false);
     final canApproveFaceId = user?.hasPermission('facial_recognition.approve') ?? false;
+    // Web approvals/page.tsx: usePermission("leave.approve") — superuser flag
+    // or the permission (not settings.edit alone); also needs the leave module.
+    final canReviewCancellations = canReviewLeaveCancellations(user);
 
     final keys = <String>[
       if (canApproveTeam) 'team',
       if (canApproveAttendance) 'attendance',
       if (canApproveFaceId) 'face_id',
+      if (canReviewCancellations) 'leave_cancellations',
     ];
     _syncTabs(keys);
     final tabCtrl = _tabCtrl;
@@ -144,6 +151,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
                                 canApproveSeparation: canApproveSeparation,
                               ),
                             'face_id' => const FaceRegistrationApprovalsTab(),
+                            'leave_cancellations' => const LeaveCancellationsTab(),
                             _ => const AttendanceApprovalTab(),
                           })
                       .toList(),

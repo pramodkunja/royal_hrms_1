@@ -94,6 +94,13 @@ class ApiConstants {
   static const String employeeBulkImport = '/employees/bulk-import/';
   static String employeeDetail(String employeeId) => '/employees/$employeeId/';
   static String employeeCustomFileFields(String employeeId) => '/employees/$employeeId/custom-file-fields/';
+
+  // Assets (backend apps/assets, mounted at /api/assets/). Employee ids here
+  // are the user UUID, not the employee code.
+  static const String assets = '/assets/';
+  static String employeeAssets(String employeeUuid) => '/assets/employees/$employeeUuid/';
+  static String employeeAssetAssign(String employeeUuid) => '/assets/employees/$employeeUuid/assign/';
+  static String assetReturn(String assignmentId) => '/assets/assignments/$assignmentId/return/';
   static String employeePromotions(String employeeId) => '/employees/$employeeId/promotions/';
   // Web API.employees.idCard (EmployeeIdCardView: employees.view + branch scope).
   static String employeeIdCard(String employeeId) => '/employees/$employeeId/id-card/';
@@ -281,6 +288,10 @@ class ApiConstants {
   static const String leaveCalendar = '/leave/calendar/';
   static String leaveDetail(dynamic id) => '/leave/requests/$id/';
   static String leaveAction(dynamic id) => '/leave/requests/$id/approve/';
+  // Cancelling an approved leave (hrms views/leave_cancellation.py).
+  static String leaveCancellationRequest(String id) => '/leave/requests/$id/cancellation/';
+  static String leaveCancellationDecision(String id) => '/leave/requests/$id/cancellation/decision/';
+  static const String leaveCancellations = '/leave/cancellations/';
   static String leavePolicyDetail(String leaveType) =>
       '/leave/policy/$leaveType/';
   static const String leaveBalanceCredit = '/leave/balance/credit/';
@@ -406,6 +417,13 @@ class ApiConstants {
   // Attendance — employee's own correction-request history (status +
   // L1/L2 approver breakdown), distinct from the HR inbox above.
   static const String attendanceMyCorrections = '/attendance/corrections/my/';
+  // Late-arrival justification (attendance views/late_justification.py).
+  static const String attendanceLateJustification = '/attendance/late-justification/';
+  static String attendanceLateJustificationResubmit(String id) => '/attendance/late-justification/$id/resubmit/';
+  static String attendanceCorrectionDocument(String id) => '/attendance/corrections/$id/document/';
+  // Maximum Late Arrivals Per Month (Settings → Leave Policy) — tracking only.
+  static const String attendanceLateArrivalLimit = '/attendance/late-arrival-limit/';
+  static const String attendanceLateArrivalLimitEmployees = '/attendance/late-arrival-limit/employees/';
 
   // Attendance — Invalid Punch actions (assign/discard/convert)
   static String attendanceInvalidPunchAssign(String id) =>

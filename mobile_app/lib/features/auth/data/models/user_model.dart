@@ -22,6 +22,7 @@ class UserModel extends UserEntity {
     super.companyLogoUrl,
     super.companyBrandColor,
     super.isSuperuser,
+    super.enabledModules,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -49,6 +50,9 @@ class UserModel extends UserEntity {
       companyLogoUrl: json['company_logo_url'] as String?,
       companyBrandColor: json['company_brand_color'] as String?,
       isSuperuser: json['is_superuser'] as bool? ?? false,
+      enabledModules: json['enabled_modules'] is List
+          ? [for (final m in json['enabled_modules'] as List) if (m is String) m]
+          : null,
     );
   }
 
@@ -73,5 +77,6 @@ class UserModel extends UserEntity {
         'company_logo_url': companyLogoUrl,
         'company_brand_color': companyBrandColor,
         'is_superuser': isSuperuser,
+        'enabled_modules': enabledModules,
       };
 }

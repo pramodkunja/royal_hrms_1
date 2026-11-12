@@ -30,6 +30,7 @@ String _statusLabel(String s) => switch (s) {
       'l2_pending' => 'Pending (HR)',
       'approved' => 'Approved',
       'rejected' => 'Rejected',
+      'resubmit' => 'Resubmission Required',
       _ => s,
     };
 
@@ -69,7 +70,8 @@ class MyCorrectionDetailSheet extends StatelessWidget {
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text('Attendance Correction', style: AppTextStyles.h4.copyWith(fontSize: 15)),
+                      child: Text(c.isLateJustification ? 'Late Arrival Justification' : 'Attendance Correction',
+                          style: AppTextStyles.h4.copyWith(fontSize: 15)),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close, size: 20),
@@ -107,26 +109,45 @@ class MyCorrectionDetailSheet extends StatelessWidget {
                       const SizedBox(height: 14),
                       Divider(height: 1, color: AppColors.border),
                       const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(child: _Field(label: 'Punch Type', value: c.punchType)),
-                          Expanded(child: _Field(label: 'Original In', value: c.originalInTime ?? '—')),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(child: _Field(label: 'Requested In', value: c.requestedInTime ?? '—')),
-                          Expanded(child: _Field(label: 'Requested Out', value: c.requestedOutTime ?? '—')),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      Divider(height: 1, color: AppColors.border),
-                      const SizedBox(height: 12),
-                      _Field(label: 'Reason', value: c.reason),
-                      if (c.notes != null && c.notes!.isNotEmpty) ...[
+                      // Web MyCorrectionDetailModal: a late-arrival
+                      // justification has no requested punch times.
+                      if (c.isLateJustification) ...[
+                        Row(
+                          children: [
+                            Expanded(child: _Field(label: 'Clock-in', value: c.originalInTime ?? '—')),
+                            Expanded(
+                                child: _Field(
+                                    label: 'Reason', value: c.reasonLabel.isNotEmpty ? c.reasonLabel : c.reason)),
+                          ],
+                        ),
                         const SizedBox(height: 10),
-                        _Field(label: 'Notes', value: c.notes!),
+                        _Field(label: 'Explanation', value: c.explanation),
+                        if (c.rejectionReason.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          _Field(label: "Reviewer's note", value: c.rejectionReason),
+                        ],
+                      ] else ...[
+                        Row(
+                          children: [
+                            Expanded(child: _Field(label: 'Punch Type', value: c.punchType)),
+                            Expanded(child: _Field(label: 'Original In', value: c.originalInTime ?? '—')),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(child: _Field(label: 'Requested In', value: c.requestedInTime ?? '—')),
+                            Expanded(child: _Field(label: 'Requested Out', value: c.requestedOutTime ?? '—')),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Divider(height: 1, color: AppColors.border),
+                        const SizedBox(height: 12),
+                        _Field(label: 'Reason', value: c.reason),
+                        if (c.notes != null && c.notes!.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          _Field(label: 'Notes', value: c.notes!),
+                        ],
                       ],
                       const SizedBox(height: 14),
                       Divider(height: 1, color: AppColors.border),
@@ -154,10 +175,7 @@ class MyCorrectionDetailSheet extends StatelessWidget {
                   ),
                 ),
               ),
-              SizedBox(
-                  height: MediaQuery.of(context).padding.bottom > 0
-                      ? MediaQuery.of(context).padding.bottom
-                      : 8),
+              SizedBox(height: MediaQuery.of(context).padding.bottom > 0 ? MediaQuery.of(context).padding.bottom : 8),
             ],
           ),
         ),
@@ -177,8 +195,7 @@ class _Field extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label.toUpperCase(),
-            style: AppTextStyles.caption
-                .copyWith(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+            style: AppTextStyles.caption.copyWith(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
         const SizedBox(height: 3),
         Text(value.isNotEmpty ? value : '—', style: AppTextStyles.body.copyWith(fontSize: 13)),
       ],
@@ -222,10 +239,8 @@ class _StageRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('$level Approval',
-                  style: AppTextStyles.label.copyWith(fontSize: 12)),
-              Text(
-                  (approverName?.isNotEmpty ?? false) ? approverName! : 'Not yet assigned',
+              Text('$level Approval', style: AppTextStyles.label.copyWith(fontSize: 12)),
+              Text((approverName?.isNotEmpty ?? false) ? approverName! : 'Not yet assigned',
                   style: AppTextStyles.caption.copyWith(fontSize: 11)),
               if (remarks.isNotEmpty)
                 Container(
@@ -236,8 +251,7 @@ class _StageRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text('"$remarks"',
-                      style: AppTextStyles.caption
-                          .copyWith(fontSize: 11, color: AppColors.textSecondary)),
+                      style: AppTextStyles.caption.copyWith(fontSize: 11, color: AppColors.textSecondary)),
                 ),
             ],
           ),

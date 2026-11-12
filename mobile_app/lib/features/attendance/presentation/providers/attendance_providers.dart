@@ -582,6 +582,10 @@ class UnpunchesNotifier extends AutoDisposeAsyncNotifier<List<UnpunchRowEntity>>
 // while the Approvals feature passes an explicit empty/'all' filter so a
 // branch or department filter left set on the unrelated Attendance screen
 // can never silently hide rows from the Team Approvals inbox.
+/// Shown when a late-arrival justification reaches a punch-correction
+/// Approve / Reject path.
+const kLateJustificationNeedsReview = 'Open the late-arrival justification to review it.';
+
 final hrCorrectionsStatusFilterProvider = StateProvider.autoDispose<String>((ref) => 'pending');
 
 typedef HrCorrectionsFilter = ({String? status, String? branch, String? department});
@@ -615,6 +619,11 @@ class HrCorrectionsNotifier extends AutoDisposeFamilyAsyncNotifier<List<HrCorrec
 
   /// Returns null on success, or a user-facing error message on failure.
   Future<String?> reviewCorrection(String correctionId, {required bool approve, String? remarks}) async {
+    // Late-arrival justifications are decided in their own review (a reason
+    // is required to reject; resubmission; the L1 → L2 chain), never by the
+    // punch Approve / Reject.
+    final row = state.valueOrNull?.where((r) => r.id == correctionId).firstOrNull;
+    if (row != null && row.isLateJustification) return kLateJustificationNeedsReview;
     try {
       await _repo.reviewCorrection(correctionId, approve: approve, remarks: remarks);
       // Every filter-keyed instance of this family may be showing the row

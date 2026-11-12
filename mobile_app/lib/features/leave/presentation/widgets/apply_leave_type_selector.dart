@@ -3,6 +3,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/leave_entity.dart';
 import 'leave_type_icons.dart';
+import 'leave_type_presentation.dart' show isBuiltinLeaveType, kCustomLeaveTypeColor, kCustomLeaveTypeIcon;
 
 // ── Leave type option ─────────────────────────────────────────────────────────
 
@@ -13,8 +14,13 @@ class LeaveTypeOption {
   final int balance; // available days (rounded)
   final int total; // total entitlement days
   final bool isPaid;
+
+  /// The server's rule only: the type's Leave Policy `attachment_required`
+  /// (backend _validate_policy_rules refuses a request without a document
+  /// exactly then — for built-in and custom types alike).
   final bool docRequired;
   final Color color;
+  final IconData icon;
   final String policy;
 
   const LeaveTypeOption({
@@ -26,6 +32,7 @@ class LeaveTypeOption {
     required this.isPaid,
     required this.docRequired,
     required this.color,
+    this.icon = Icons.beach_access_outlined,
     required this.policy,
   });
 
@@ -34,23 +41,30 @@ class LeaveTypeOption {
     LeaveTypeEntity type,
     LeaveBalanceEntity? balance,
   ) {
+    final builtin = isBuiltinLeaveType(type.code.toLowerCase());
     return LeaveTypeOption(
       key: type.code,
       code: type.code,
-      label: type.name,
+      // Built-ins: their fixed label (web LEAVE_TYPE_CONFIG); a custom type:
+      // the policy's leave_type_display (web configForPolicy).
+      label: type.name.isNotEmpty ? type.name : LeaveTypeColors.labelForCode(type.code),
       balance: balance?.available.round() ?? 0,
       total: balance?.total.round() ?? type.maxDays,
       isPaid: type.isPaid,
       docRequired: type.docRequired,
-      color: _colorForCode(type.code),
+      // A custom type (e.g. Pink Leave) gets web's neutral custom styling.
+      color: builtin ? _colorForCode(type.code) : kCustomLeaveTypeColor,
+      icon: builtin ? leaveTypeIconForCode(type.code) : kCustomLeaveTypeIcon,
       policy: LeaveTypeColors.policyNoteForCode(type.code, type.policy),
     );
   }
 
-  // Mirrors web's ApplyLeaveForm — the type grid always shows all 6 canonical
-  // leave types (LeaveTypeColors.allCodes), regardless of whether the backend
-  // has a LeavePolicy record for each yet. Backend data (maxDays/docRequired/
-  // policy note) is used when present; otherwise sensible defaults apply.
+  // Mirrors web's ApplyLeaveForm (buildLeaveTypesList): the 6 canonical leave
+  // types (LeaveTypeColors.allCodes) always, then every ACTIVE custom Leave
+  // Policy the server returns (e.g. "Pink Leave"), in server order — the
+  // backend accepts any active policy (LeaveRequestCreateSerializer
+  // .validate_leave_type). Inactive custom policies are left out, as on web.
+  // Backend data (maxDays/docRequired/policy note) is used when present.
   static List<LeaveTypeOption> listFromEntities(
     List<LeaveTypeEntity> types,
     List<LeaveBalanceEntity> balances,
@@ -65,7 +79,8 @@ class LeaveTypeOption {
             maxDays: 0,
             isPaid: !LeaveTypeColors.isLwp(code),
             carryForward: false,
-            docRequired: LeaveTypeColors.docRequiredForCode(code),
+            // No policy for it → the backend has no attachment rule to apply.
+            docRequired: false,
             genderEligibility: 'All',
             isActive: true,
             description: '',
@@ -74,7 +89,13 @@ class LeaveTypeOption {
       final bal =
           balances.where((b) => b.typeCode.toLowerCase() == code).firstOrNull;
       return LeaveTypeOption.fromEntities(entity, bal);
-    }).toList();
+    }).toList()
+      ..addAll([
+        for (final t in types)
+          if (t.isActive && !isBuiltinLeaveType(t.code.toLowerCase()))
+            LeaveTypeOption.fromEntities(
+                t, balances.where((b) => b.typeCode.toLowerCase() == t.code.toLowerCase()).firstOrNull),
+      ]);
   }
 }
 
@@ -157,8 +178,7 @@ class LeaveTypeSelector extends StatelessWidget {
                             borderRadius: BorderRadius.circular(7),
                           ),
                           child: Center(
-                            child: Icon(leaveTypeIconForCode(lt.code),
-                                size: 15, color: lt.color),
+                            child: Icon(lt.icon, size: 15, color: lt.color),
                           ),
                         ),
                         if (isSelected)

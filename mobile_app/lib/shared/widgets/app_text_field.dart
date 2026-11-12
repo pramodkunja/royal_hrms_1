@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
 
@@ -18,6 +19,9 @@ class AppTextField extends StatelessWidget {
   final void Function(String)? onFieldSubmitted;
   final FocusNode? focusNode;
   final bool autofocus;
+  final List<TextInputFormatter>? inputFormatters;
+  final TextCapitalization textCapitalization;
+  final bool autocorrect;
 
   const AppTextField({
     super.key,
@@ -36,6 +40,9 @@ class AppTextField extends StatelessWidget {
     this.onFieldSubmitted,
     this.focusNode,
     this.autofocus = false,
+    this.inputFormatters,
+    this.textCapitalization = TextCapitalization.none,
+    this.autocorrect = true,
   });
 
   @override
@@ -57,6 +64,9 @@ class AppTextField extends StatelessWidget {
           onFieldSubmitted: onFieldSubmitted,
           focusNode: focusNode,
           autofocus: autofocus,
+          inputFormatters: inputFormatters,
+          textCapitalization: textCapitalization,
+          autocorrect: autocorrect,
           style: AppTextStyles.body.copyWith(color: AppColors.textPrimary),
           decoration: InputDecoration(
             hintText: hint,

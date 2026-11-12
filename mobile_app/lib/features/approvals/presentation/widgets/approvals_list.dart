@@ -6,6 +6,7 @@ import '../../../../core/router/app_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../attendance/presentation/widgets/late_justification_review.dart' show showLateJustificationReview;
 import '../providers/approvals_providers.dart';
 import 'approval_detail_sheet.dart';
 import 'approve_reject_dialog.dart';
@@ -35,6 +36,19 @@ Future<void> openApprovalItem(BuildContext context, WidgetRef ref, UnifiedApprov
   if (item.opensDetailScreen) {
     await context.push(AppRoutes.separationDetailPath(item.sourceId));
     await ref.read(unifiedTeamApprovalsProvider.notifier).refresh();
+    return;
+  }
+  if (item.isLateJustification) {
+    // Web: a late justification opens LateJustificationReviewModal.
+    final msg = await showLateJustificationReview(context, item.correction!);
+    if (msg == null) return;
+    await ref.read(unifiedTeamApprovalsProvider.notifier).refresh();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: AppColors.success,
+      behavior: SnackBarBehavior.floating,
+    ));
     return;
   }
   showApprovalDetailSheet(context, item);
@@ -323,7 +337,7 @@ class _ApprovalCardState extends ConsumerState<_ApprovalCard> {
     final sc = _statusColorFor(item.status);
     final showActions = item.canAction && item.isPending && item.selectable;
     // Separation: decided stage by stage on its detail screen.
-    final showReview = item.canAction && item.isPending && item.opensDetailScreen;
+    final showReview = item.canAction && item.isPending && (item.opensDetailScreen || item.isLateJustification);
     // Payslip query: one action — resolve with a note (payroll.edit).
     final showResolve = item.canAction && item.isPending && item.isPayslipQuery;
     final secondary = item.department.isNotEmpty ? item.department : item.secondaryText;

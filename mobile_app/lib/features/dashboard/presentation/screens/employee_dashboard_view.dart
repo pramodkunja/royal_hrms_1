@@ -75,6 +75,9 @@ class EmployeeDashboardView extends ConsumerWidget {
             const EmpNoticePeriodCard(),
             // Company Policy etc. still to acknowledge — nothing when none.
             const PendingAcknowledgementsBanner(),
+            // Latest announcement above Attendance (requested order; web's
+            // EmpUpdatesCard also sits above the rest). Nothing when empty.
+            const _EmpAnnouncementBanner(),
             const AttendanceRingCard(),
             const SizedBox(height: 20),
             QuickAccessCard(items: kQuickItemsEmployee),
@@ -90,7 +93,6 @@ class EmployeeDashboardView extends ConsumerWidget {
             const SizedBox(height: 20),
             const _EmpRecentRequestsCard(),
             const SizedBox(height: 20),
-            const _EmpAnnouncementBanner(),
             // Today's birthdays for everyone, as web EmpBirthdayAnnouncement
             // (/dashboard/employee/birthdays/today/ needs no employees.view;
             // /birthdays/ does, so the old gated cards could never show here).
@@ -1070,6 +1072,9 @@ class _EmpAnnouncementBannerState extends ConsumerState<_EmpAnnouncementBanner> 
         ].join(' · ');
 
         return Container(
+          key: const Key('emp-announcement-banner'),
+          // Its own gap below, so an empty announcement leaves none.
+          margin: const EdgeInsets.only(bottom: 20),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
           decoration: BoxDecoration(
             color: AppColors.primary.withValues(alpha: 0.07),

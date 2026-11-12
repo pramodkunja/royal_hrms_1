@@ -475,7 +475,9 @@ void main() {
       final body = lastPut();
       expect(body['branch'], 'Mumbai');
       expect(body['reporting_approver_id'], apprUuid);
-      expect(body['hr_id'], isNull, reason: 'existing rule: HR is per branch and cleared');
+      // Task 51: web keeps the Branch HR on a branch change (sending null
+      // removed the HR on save).
+      expect(body['hr_id'], hrUuid);
     });
 
     testWidgets('server refuses (e.g. email in use): message shown, sheet stays, retry after a fix succeeds',

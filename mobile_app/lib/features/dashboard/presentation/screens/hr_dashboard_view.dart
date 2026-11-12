@@ -59,6 +59,10 @@ class HrDashboardView extends ConsumerWidget {
           children: [
             const _HrConsoleHeader(),
             const SizedBox(height: 20),
+            // Latest announcement above Attendance (requested order; web
+            // HRDashboard also renders AnnouncementCard right after the console).
+            const _AnnouncementCard(),
+            const SizedBox(height: 20),
             const AttendanceRingCard(),
             const SizedBox(height: 20),
             QuickAccessCard(items: kQuickItemsHr),
@@ -68,8 +72,6 @@ class HrDashboardView extends ConsumerWidget {
             const _ActionQueueCard(),
             const SizedBox(height: 20),
             const _RecruitmentFunnelCard(),
-            const SizedBox(height: 20),
-            const _AnnouncementCard(),
             const SizedBox(height: 20),
             const _EmployeeLifecycleCard(),
             const SizedBox(height: 20),

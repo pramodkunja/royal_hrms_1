@@ -6,6 +6,7 @@ import 'package:mobile_app/core/network/api_client.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
+import 'package:mobile_app/shared/formatters/company_code_formatter.dart';
 import 'package:mobile_app/shared/validators/form_validators.dart';
 import 'package:mobile_app/shared/widgets/app_button.dart';
 import 'package:mobile_app/shared/widgets/app_text_field.dart';
@@ -32,7 +33,8 @@ class _LoginFormState extends ConsumerState<LoginForm> {
     super.initState();
     final prefill = ref.read(loginPrefillProvider);
     if (prefill != null) {
-      _companyCodeCtrl.text = prefill.companyCode ?? '';
+      // Programmatic text skips input formatters: normalize it here.
+      _companyCodeCtrl.text = normalizeCompanyCode(prefill.companyCode ?? '');
       _emailCtrl.text = prefill.email ?? '';
       _notice = prefill.notice;
       // One-shot: clear it after this frame (writing a provider while the
@@ -55,7 +57,7 @@ class _LoginFormState extends ConsumerState<LoginForm> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     await ref.read(authStateProvider.notifier).login(
-          _companyCodeCtrl.text.trim(),
+          normalizeCompanyCode(_companyCodeCtrl.text),
           _emailCtrl.text.trim(),
           _passwordCtrl.text,
         );
@@ -121,6 +123,10 @@ class _LoginFormState extends ConsumerState<LoginForm> {
             hint: 'e.g. ROYAL01',
             controller: _companyCodeCtrl,
             textInputAction: TextInputAction.next,
+            // Typed and pasted letters become upper case (cursor kept).
+            inputFormatters: const [UpperCaseAsciiFormatter()],
+            textCapitalization: TextCapitalization.characters,
+            autocorrect: false,
             validator: (value) => FormValidators.required(value, fieldName: 'Company code'),
             enabled: !isLoading,
           ),
@@ -161,7 +167,7 @@ class _LoginFormState extends ConsumerState<LoginForm> {
                   ? null
                   : () => context.push(
                         AppRoutes.forgotPassword,
-                        extra: _companyCodeCtrl.text.trim(),
+                        extra: normalizeCompanyCode(_companyCodeCtrl.text),
                       ),
               style: TextButton.styleFrom(
                 foregroundColor: AppColors.primary,

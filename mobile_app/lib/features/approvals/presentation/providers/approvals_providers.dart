@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../attendance/domain/entities/attendance_entity.dart';
 import '../../../attendance/presentation/providers/attendance_providers.dart'
-    show attendanceRepositoryProvider, hrCorrectionsProvider;
+    show attendanceRepositoryProvider, hrCorrectionsProvider, kLateJustificationNeedsReview;
 import '../../../../core/router/access_control.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../expenses/data/models/expense_model.dart';
@@ -95,7 +95,14 @@ class UnifiedApprovalItem {
 
   /// Web UNSELECTABLE_KINDS: separation and payslip queries are never bulk
   /// actioned.
-  bool get selectable => !opensDetailScreen && !isPayslipQuery;
+  bool get selectable => !opensDetailScreen && !isPayslipQuery && !isLateJustification;
+
+  /// A late-arrival justification (an attendance correction of kind
+  /// late_justification) is decided in its own review — a reason is required
+  /// to reject or send back, which a quick or bulk action can't give (web
+  /// opens LateJustificationReviewModal for it). Mobile also keeps it out of
+  /// bulk selection, where web would send no reason and the server refuse.
+  bool get isLateJustification => correction?.isLateJustification ?? false;
 
   /// Web payslipToItem: the HR queue row for a payslip query. [canResolve]
   /// is the viewer's payroll.edit; the server returns only open queries,
@@ -197,6 +204,27 @@ class UnifiedApprovalItem {
   }
 
   factory UnifiedApprovalItem.fromCorrection(HrCorrectionRowEntity c) {
+    if (c.isLateJustification) {
+      // Web TeamApprovalsSection detailPrimary / detailSecondary for kind late.
+      final reason = c.reasonLabel.isNotEmpty ? c.reasonLabel : c.reason;
+      return UnifiedApprovalItem(
+        kind: UnifiedApprovalKind.attendanceCorrection,
+        sourceId: c.id,
+        employeeName: c.name,
+        employeeCode: c.employeeId,
+        department: c.department,
+        secondaryText: c.department,
+        typeLabel: 'Attendance Correction',
+        primaryLine: 'Late Arrival Justification',
+        secondaryLine: '$reason${c.hasDocument ? ' · proof attached' : ''} · clocked in ${c.originalIn ?? '—'}',
+        tertiaryLine: c.date,
+        reason: c.explanation.isNotEmpty ? c.explanation : reason,
+        status: c.status,
+        submittedAt: _parseDate(c.createdAt),
+        canAction: c.canAction,
+        correction: c,
+      );
+    }
     return UnifiedApprovalItem(
       kind: UnifiedApprovalKind.attendanceCorrection,
       sourceId: c.id,
@@ -366,6 +394,7 @@ class UnifiedTeamApprovalsNotifier
             .updateExpenseStatus(int.parse(item.sourceId), 'approved');
         break;
       case UnifiedApprovalKind.attendanceCorrection:
+        if (item.isLateJustification) throw StateError(kLateJustificationNeedsReview);
         await ref.read(attendanceRepositoryProvider).reviewCorrection(
               item.sourceId,
               approve: true,
@@ -396,6 +425,7 @@ class UnifiedTeamApprovalsNotifier
             .updateExpenseStatus(int.parse(item.sourceId), 'rejected');
         break;
       case UnifiedApprovalKind.attendanceCorrection:
+        if (item.isLateJustification) throw StateError(kLateJustificationNeedsReview);
         await ref.read(attendanceRepositoryProvider).reviewCorrection(
               item.sourceId,
               approve: false,
@@ -617,6 +647,7 @@ const kResolutionNoteRequired = 'Please enter a resolution note.';
 // ── Error helper ──────────────────────────────────────────────────────────────
 
 String friendlyApprovalsError(Object e) {
+  if (e is StateError) return e.message;
   if (e is DioException) {
     final body = e.response?.data;
     if (body is Map) {

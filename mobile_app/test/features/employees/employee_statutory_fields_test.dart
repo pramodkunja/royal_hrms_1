@@ -122,9 +122,10 @@ final viewer = hrUser(['employees.view']);
 late Server server;
 Finder byKey(String k) => find.byKey(Key(k));
 
-Future<void> pumpProfile(WidgetTester tester, {UserEntity? as, Server? with_}) async {
-  tester.view.physicalSize = const Size(1080, 4000);
-  tester.view.devicePixelRatio = 1;
+Future<void> pumpProfile(WidgetTester tester,
+    {UserEntity? as, Server? with_, Size size = const Size(1080, 4000), double dpr = 1}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = dpr;
   addTearDown(tester.view.reset);
   server = with_ ?? Server();
   await tester.pumpWidget(ProviderScope(
@@ -168,6 +169,23 @@ Future<void> save(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// Opacity of [hint] inside field [key]: InputDecorator keeps the hint Text in
+/// the tree and fades it, so "visible" means opacity 1, not just present.
+double hintOpacity(WidgetTester tester, String key, String hint) {
+  final text = find.descendant(of: byKey('section-field-$key'), matching: find.text(hint));
+  expect(text, findsOneWidget, reason: 'hint "$hint" rendered in $key');
+  return tester
+      .widgetList<AnimatedOpacity>(find.ancestor(of: text, matching: find.byType(AnimatedOpacity)))
+      .first
+      .opacity;
+}
+
+const hints = {
+  'uan_number': ('UAN Number', '12-digit Universal Account Number'),
+  'name_as_per_aadhar': ('Name as per Aadhar', 'Exactly as printed on Aadhaar card'),
+  'esi_number': ('ESI Number', '10-digit ESI Insurance Number (IP Number)'),
+};
+
 Map<String, dynamic> detail({Map<String, dynamic>? profile}) => {
       'id': 'u43',
       'employee_id': code,
@@ -181,12 +199,13 @@ void main() {
 
   group('model', () {
     test('profile keys parsed when present; statutoryReturned tells whether the server sent them', () {
-      final e = EmployeeModel.fromJson(detail(
-          profile: {'uan_number': fakeUan, 'name_as_per_aadhar': fakeAadharName, 'esi_number': fakeEsi}));
-      expect((e.uanNumber, e.nameAsPerAadhar, e.esiNumber, e.statutoryReturned),
-          (fakeUan, fakeAadharName, fakeEsi, true));
+      final e = EmployeeModel.fromJson(
+          detail(profile: {'uan_number': fakeUan, 'name_as_per_aadhar': fakeAadharName, 'esi_number': fakeEsi}));
+      expect(
+          (e.uanNumber, e.nameAsPerAadhar, e.esiNumber, e.statutoryReturned), (fakeUan, fakeAadharName, fakeEsi, true));
       final absent = EmployeeModel.fromJson(detail(profile: {'bank_name': 'Test Bank'}));
-      expect((absent.uanNumber, absent.nameAsPerAadhar, absent.esiNumber, absent.statutoryReturned), ('', '', '', false));
+      expect(
+          (absent.uanNumber, absent.nameAsPerAadhar, absent.esiNumber, absent.statutoryReturned), ('', '', '', false));
       final nulls = EmployeeModel.fromJson(detail(profile: {'uan_number': null, 'esi_number': ''}));
       expect((nulls.uanNumber, nulls.esiNumber, nulls.statutoryReturned), ('', '', true));
       final noProfile = EmployeeModel.fromJson(const {'employee_id': code, 'full_name': 'X'});
@@ -343,6 +362,64 @@ void main() {
       for (final v in [fakeUan, fakeAadharName, fakeEsi, '100000000077']) {
         expect(all.contains(v), isFalse);
       }
+    });
+
+    testWidgets('10. Task 53: empty fields show web\'s placeholder (visible, unfocused) under the floating label',
+        (tester) async {
+      await pumpProfile(tester);
+      await openEditor(tester);
+      for (final MapEntry(key: k, value: (label, hint)) in hints.entries) {
+        expect(find.descendant(of: byKey('section-field-$k'), matching: find.text(label)), findsOneWidget);
+        expect(hintOpacity(tester, k, hint), 1.0, reason: '$k hint readable before tapping');
+        final dec = tester.widget<InputDecorator>(
+            find.descendant(of: byKey('section-field-$k'), matching: find.byType(InputDecorator)));
+        expect(dec.decoration.floatingLabelBehavior, FloatingLabelBehavior.always);
+      }
+      // Typing hides that field's hint (as a web placeholder); clearing brings it back.
+      await type(tester, 'uan_number', '1');
+      await tester.pumpAndSettle();
+      expect(hintOpacity(tester, 'uan_number', hints['uan_number']!.$2), 0.0);
+      expect(hintOpacity(tester, 'esi_number', hints['esi_number']!.$2), 1.0);
+      await type(tester, 'uan_number', '');
+      await tester.pumpAndSettle();
+      expect(hintOpacity(tester, 'uan_number', hints['uan_number']!.$2), 1.0);
+    });
+
+    testWidgets('11. Task 53: populated fields show the stored values, not the hints', (tester) async {
+      await pumpProfile(tester, with_: Server()..returnStatutory = true);
+      await openEditor(tester);
+      for (final MapEntry(key: k, value: (_, hint)) in hints.entries) {
+        expect(hintOpacity(tester, k, hint), 0.0, reason: k);
+      }
+      expect(fieldText(tester, 'esi_number'), fakeEsi);
+    });
+
+    testWidgets('12. Task 53: phone screen with the keyboard open: hints readable, fields reachable, saves',
+        (tester) async {
+      await pumpProfile(tester, size: const Size(1080, 2400), dpr: 2.625);
+      // The profile AppBar (title + ID Card + Reset Password + bell) overflows
+      // at 411 dp only with the test font's square glyphs; on the Pixel_8 it
+      // fits (title ellipsised). Not this form — clear it before checking.
+      final appBar = tester.takeException();
+      expect(appBar == null || '$appBar'.contains('overflowed'), isTrue);
+      await openEditor(tester);
+      expect(tester.takeException(), isNull, reason: 'editor opens without layout errors');
+      tester.view.viewInsets = const FakeViewPadding(bottom: 900); // ~343 dp keyboard
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'no overflow with the keyboard open');
+      const keyboardTop = (2400 - 900) / 2.625;
+      for (final MapEntry(key: k, value: (_, hint)) in hints.entries) {
+        await tester.ensureVisible(byKey('section-field-$k'));
+        await tester.pumpAndSettle();
+        expect(tester.getRect(byKey('section-field-$k')).bottom, lessThanOrEqualTo(keyboardTop), reason: k);
+        expect(hintOpacity(tester, k, hint), 1.0, reason: k);
+      }
+      expect(tester.getRect(byKey('section-edit-save')).bottom, lessThanOrEqualTo(keyboardTop),
+          reason: 'Save stays above the keyboard');
+      await type(tester, 'esi_number', '9000000004');
+      await save(tester);
+      expect(server.puts.single, {'esi_number': '9000000004'});
     });
   });
 }

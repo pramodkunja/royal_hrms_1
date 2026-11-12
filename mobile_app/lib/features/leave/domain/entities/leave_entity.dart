@@ -159,6 +159,18 @@ class LeaveRequestEntity {
       approvedBy; // approved_by — name of whoever gave the FINAL approval/rejection
   final String? approvedAt; // approved_at — timestamp of that final action
 
+  // Cancelling an APPROVED leave (backend views/leave_cancellation.py,
+  // LeaveRequestSerializer): '' | requested | approved | rejected, the
+  // employee's reason, the decision note, and the server's own verdicts on
+  // whether the viewer may request (own approved leave not started yet, none
+  // waiting) or decide (the leave's final approver) a cancellation.
+  final String cancellationStatus; // cancellation_status
+  final String cancellationReason; // cancellation_reason
+  final String? cancellationRequestedAt; // cancellation_requested_at
+  final String cancellationRemarks; // cancellation_remarks
+  final bool canRequestCancellation; // can_request_cancellation
+  final bool canDecideCancellation; // can_decide_cancellation
+
   const LeaveRequestEntity({
     required this.id,
     required this.employee,
@@ -192,6 +204,12 @@ class LeaveRequestEntity {
     this.canCancel = false,
     this.approvedBy = '',
     this.approvedAt,
+    this.cancellationStatus = '',
+    this.cancellationReason = '',
+    this.cancellationRequestedAt,
+    this.cancellationRemarks = '',
+    this.canRequestCancellation = false,
+    this.canDecideCancellation = false,
   });
 
   bool get isPending => status == 'pending' || status == 'l2_pending';

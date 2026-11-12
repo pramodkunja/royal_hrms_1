@@ -49,6 +49,10 @@ class AttendanceStatsEntity {
   final double attendancePercentage;
   final int workingDays;
 
+  /// Maximum Late Arrivals Per Month (stats `late_limit`; null on servers
+  /// without it). Tracking only — never changes LOP.
+  final LateLimitSummaryEntity? lateLimit;
+
   const AttendanceStatsEntity({
     required this.daysPresent,
     required this.lateArrivals,
@@ -56,6 +60,28 @@ class AttendanceStatsEntity {
     required this.avgHoursPerDay,
     required this.attendancePercentage,
     required this.workingDays,
+    this.lateLimit,
+  });
+}
+
+/// Backend services_late_limit summary: `{enabled, maximum, late_arrivals,
+/// remaining, status, status_label, year, month}` — shown as sent, never
+/// recomputed here.
+class LateLimitSummaryEntity {
+  final bool enabled;
+  final int maximum;
+  final int lateArrivals;
+  final int? remaining;
+  final String? status; // within | reached | exceeded
+  final String? statusLabel;
+
+  const LateLimitSummaryEntity({
+    required this.enabled,
+    required this.maximum,
+    required this.lateArrivals,
+    this.remaining,
+    this.status,
+    this.statusLabel,
   });
 }
 
@@ -86,6 +112,13 @@ class CalendarDayEntity {
   final String? holidayName;
   final bool canRegularize;
 
+  /// Server verdict: a late day inside the 3-day window with no open or
+  /// approved justification (services_late_justification.can_explain).
+  final bool canExplainLate;
+
+  /// pending | l2_pending | resubmit | rejected | approved, or null.
+  final String? lateJustificationStatus;
+
   const CalendarDayEntity({
     required this.status,
     this.clockIn,
@@ -94,6 +127,8 @@ class CalendarDayEntity {
     this.note,
     this.holidayName,
     required this.canRegularize,
+    this.canExplainLate = false,
+    this.lateJustificationStatus,
   });
 }
 
@@ -105,6 +140,9 @@ class AttendanceHistoryRowEntity {
   final String? hours;
   final String status;
   final bool canRegularize;
+  final String? isoDate; // YYYY-MM-DD (newer servers)
+  final bool canExplainLate;
+  final String? lateJustificationStatus;
 
   const AttendanceHistoryRowEntity({
     required this.date,
@@ -114,6 +152,9 @@ class AttendanceHistoryRowEntity {
     this.hours,
     required this.status,
     required this.canRegularize,
+    this.isoDate,
+    this.canExplainLate = false,
+    this.lateJustificationStatus,
   });
 }
 
@@ -413,6 +454,24 @@ class HrCorrectionRowEntity {
   final String? reviewedAt;
   final String createdAt;
 
+  // Late-arrival justification rows share this queue (backend `kind`
+  // "late_justification"; '' / "punch" for a punch correction) and carry
+  // services_hr_corrections._late_fields.
+  final String kind;
+  final String reasonLabel;
+  final String explanation;
+  final String? originalIn;
+  final String? originalOut;
+  final bool hasDocument;
+  final bool canViewDocument; // medical-proof access, decided by the server
+  final String documentName;
+  final bool proofRequired;
+  final String rejectionReason;
+  final int resubmissionCount;
+  final String? attendanceStatus;
+
+  bool get isLateJustification => kind == 'late_justification';
+
   const HrCorrectionRowEntity({
     required this.id,
     required this.employeeId,
@@ -436,6 +495,18 @@ class HrCorrectionRowEntity {
     this.reviewedBy,
     this.reviewedAt,
     required this.createdAt,
+    this.kind = '',
+    this.reasonLabel = '',
+    this.explanation = '',
+    this.originalIn,
+    this.originalOut,
+    this.hasDocument = false,
+    this.canViewDocument = false,
+    this.documentName = '',
+    this.proofRequired = false,
+    this.rejectionReason = '',
+    this.resubmissionCount = 0,
+    this.attendanceStatus,
   });
 }
 
@@ -467,6 +538,21 @@ class MyCorrectionEntity {
   final String? reviewedAt;
   final String createdAt;
 
+  // Late-arrival justification rows (kind "late_justification"; '' / punch
+  // otherwise) — backend services_hr_corrections._build_row.
+  final String kind;
+  final String reasonLabel;
+  final String statusLabel;
+  final String explanation;
+  final bool hasDocument;
+  final bool canViewDocument;
+  final String documentName;
+  final String rejectionReason;
+  final String? resubmitBy;
+  final bool canResubmit;
+
+  bool get isLateJustification => kind == 'late_justification';
+
   const MyCorrectionEntity({
     required this.id,
     required this.date,
@@ -487,6 +573,16 @@ class MyCorrectionEntity {
     this.reviewedBy,
     this.reviewedAt,
     required this.createdAt,
+    this.kind = '',
+    this.reasonLabel = '',
+    this.statusLabel = '',
+    this.explanation = '',
+    this.hasDocument = false,
+    this.canViewDocument = false,
+    this.documentName = '',
+    this.rejectionReason = '',
+    this.resubmitBy,
+    this.canResubmit = false,
   });
 }
 

@@ -10,7 +10,6 @@ import '../../../../shared/widgets/app_button.dart';
 import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
 import 'apply_leave_type_selector.dart';
-import 'leave_type_icons.dart';
 
 // ── Duration options ───────────────────────────────────────────────────────────
 
@@ -691,6 +690,10 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
                       selectedKey: _selectedType,
                       onSelect: (k) => setState(() {
                         _selectedType = k;
+                        // The requirement may differ for the new type: drop a
+                        // stale "document required" error (submit re-checks).
+                        // An attached file is kept, as on web.
+                        _docError = null;
                         // If the newly selected leave type disallows half-day
                         // leave, fall back to Full Day (mirrors backend's
                         // `allow_half_day` gate in `_validate_leave_policy`).
@@ -1792,8 +1795,7 @@ class _LeaveBalanceSideCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: Center(
-                  child: Icon(leaveTypeIconForCode(lt!.code),
-                      size: 16, color: lt!.color),
+                  child: Icon(lt!.icon, size: 16, color: lt!.color),
                 ),
               ),
               const SizedBox(width: 10),

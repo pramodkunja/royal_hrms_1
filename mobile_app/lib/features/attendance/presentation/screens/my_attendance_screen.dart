@@ -12,6 +12,7 @@ import '../providers/attendance_mode_provider.dart';
 import '../providers/attendance_providers.dart';
 import '../widgets/attendance_ring.dart';
 import '../widgets/hr_correction_card.dart';
+import '../widgets/late_justification.dart';
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
@@ -42,6 +43,8 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen>
   static Map<String, Color> get _dayStatusColors => {
         'Present': AppColors.success,
         'Late': AppColors.warning,
+        // Web badge-info: a late day whose justification was approved.
+        'Late (Excused)': AppColors.info,
         'Absent': AppColors.error,
         'On Leave': AppColors.info,
         'Half Day': AppColors.primary,
@@ -189,6 +192,8 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen>
             // navigation below) can't touch this widget either.
             const _ClockPanel(),
             const SizedBox(height: 14),
+            // Web AttendanceTab: Maximum Late Arrivals Per Month, when on.
+            ..._buildLateLimit(),
             _buildMonthlySummary(),
             const SizedBox(height: 14),
             _buildCalendar(),
@@ -205,7 +210,12 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen>
       child: const SingleChildScrollView(
         physics: AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.all(16),
-        child: _MyCorrectionsSection(),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _MyCorrectionsSection(),
+          SizedBox(height: 16),
+          // Web AttendanceCorrectionsTab: late justifications get their own card.
+          MyLateJustificationsCard(),
+        ]),
       ),
     );
   }
@@ -260,6 +270,30 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen>
         ),
       ),
     );
+  }
+
+  // ── Monthly Late Arrivals (company limit; tracking only) ────────────────────
+
+  List<Widget> _buildLateLimit() {
+    final limit = ref.watch(attendanceStatsProvider(_calKey)).valueOrNull?.lateLimit;
+    if (limit == null || !limit.enabled) return const [];
+    return [MonthlyLateArrivalsCard(limit: limit), const SizedBox(height: 14)];
+  }
+
+  // ── Late-arrival justification ─────────────────────────────────────────────
+
+  String _isoDay(int day) =>
+      '${_calMonth.year.toString().padLeft(4, '0')}-${_calMonth.month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
+
+  Future<void> _explainLate(String isoDate, String? clockIn) async {
+    final msg = await showLateJustificationSheet(context,
+        date: isoDate, clockIn: (clockIn == null || clockIn == '—') ? null : clockIn);
+    if (msg == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: AppColors.success,
+      behavior: SnackBarBehavior.floating,
+    ));
   }
 
   // ── Monthly Summary ────────────────────────────────────────────────────────
@@ -392,6 +426,7 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen>
                 children: [
                   _LegendDot('Present', _dayStatusColors['Present']!),
                   _LegendDot('Late', _dayStatusColors['Late']!),
+                  _LegendDot('Late (Excused)', _dayStatusColors['Late (Excused)']!),
                   _LegendDot('Absent', _dayStatusColors['Absent']!),
                   _LegendDot('On Leave', _dayStatusColors['On Leave']!),
                   _LegendDot('Half Day', _dayStatusColors['Half Day']!),
@@ -598,6 +633,14 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen>
                 _showCorrectionDialog(
                     context, DateTime(_calMonth.year, _calMonth.month, day));
               },
+              onExplainLate: () {
+                final iso = history[i].isoDate ??
+                    (int.tryParse(history[i].date.split(' ').first) == null
+                        ? null
+                        : _isoDay(int.parse(history[i].date.split(' ').first)));
+                if (iso == null) return;
+                _explainLate(iso, history[i].clockIn);
+              },
             ),
           ],
         ],
@@ -630,9 +673,27 @@ class _MyAttendanceScreenState extends ConsumerState<MyAttendanceScreen>
             if (record.hours != null) _DetailRow('Hours', record.hours!),
             if (record.note != null && record.note!.isNotEmpty)
               _DetailRow('Note', record.note!),
+            if (lateStatusHint(record.lateJustificationStatus) != null)
+              Padding(
+                key: const Key('day-late-hint'),
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(lateStatusHint(record.lateJustificationStatus)!,
+                    style: AppTextStyles.caption.copyWith(fontSize: 12)),
+              ),
           ],
         ),
         actions: [
+          // Web calendar "Explain": the server says the day still can be.
+          if (record.canExplainLate)
+            TextButton.icon(
+              key: const Key('day-explain-late'),
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                _explainLate(_isoDay(day), record.clockIn);
+              },
+              icon: const Icon(Icons.help_outline, size: 16),
+              label: const Text('Explain late arrival'),
+            ),
           if (record.canRegularize)
             TextButton.icon(
               onPressed: () {
@@ -1100,7 +1161,9 @@ class _MyCorrectionsSection extends ConsumerWidget {
     final correctionsAsync = ref.watch(myCorrectionsProvider);
 
     return correctionsAsync.when(
-      data: (records) => _MyCorrectionsBody(records: records),
+      // Punch corrections only (web ?kind=punch); late-arrival
+      // justifications are listed in their own card below.
+      data: (records) => _MyCorrectionsBody(records: records.where((r) => !r.isLateJustification).toList()),
       loading: () => const Padding(
         padding: EdgeInsets.symmetric(vertical: 60),
         child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
@@ -1702,11 +1765,13 @@ class _HistoryRow extends StatelessWidget {
   final AttendanceHistoryRowEntity row;
   final Color? statusColor;
   final VoidCallback onRegularize;
+  final VoidCallback onExplainLate;
 
   const _HistoryRow({
     required this.row,
     required this.statusColor,
     required this.onRegularize,
+    required this.onExplainLate,
   });
 
   bool get _isLateArrival =>
@@ -1800,6 +1865,22 @@ class _HistoryRow extends StatelessWidget {
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               child: const Text('Regularize',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+            ),
+          ],
+          // Web AttendanceHistoryTable "Explain late arrival".
+          if (row.canExplainLate) ...[
+            const SizedBox(width: 4),
+            TextButton(
+              key: Key('history-explain-late-${row.isoDate ?? row.date}'),
+              onPressed: onExplainLate,
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.info,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Explain late arrival',
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
             ),
           ],

@@ -185,9 +185,15 @@ class _EmployeeSectionEditSheetState extends ConsumerState<EmployeeSectionEditSh
     );
   }
 
+  // Web shows each label above its input and the placeholder inside it while
+  // empty. A Material label that sits inside an empty, unfocused field hides
+  // the hint until the field is tapped, so the label always floats here and
+  // web's placeholder stays readable in every empty field.
   InputDecoration _dec(ProfileFieldDef f) => InputDecoration(
         labelText: f.required ? '${f.label} *' : f.label,
+        floatingLabelBehavior: FloatingLabelBehavior.always,
         hintText: f.placeholder,
+        hintMaxLines: 2,
         errorText: _fieldErrors[f.key],
         errorMaxLines: 3,
         isDense: true,

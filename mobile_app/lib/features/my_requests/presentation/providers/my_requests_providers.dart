@@ -34,7 +34,8 @@ enum MyRequestKind { leave, wfh, expense, attendanceCorrection }
 enum MyRequestDisplayStatus { pending, approved, rejected, cancelled }
 
 MyRequestDisplayStatus _displayStatus(String raw) => switch (raw) {
-      'pending' || 'l2_pending' => MyRequestDisplayStatus.pending,
+      // Web toDisplayStatus: a request sent back for resubmission is still open.
+      'pending' || 'l2_pending' || 'resubmit' => MyRequestDisplayStatus.pending,
       'approved' => MyRequestDisplayStatus.approved,
       'rejected' => MyRequestDisplayStatus.rejected,
       _ => MyRequestDisplayStatus.cancelled,
@@ -136,6 +137,29 @@ class MyRequestItem {
   }
 
   factory MyRequestItem.fromCorrection(MyCorrectionEntity c) {
+    // Web correctionToMyItem: late-arrival justifications have their own
+    // title, code and summary (no punch times).
+    if (c.isLateJustification) {
+      final d = DateTime.tryParse(c.date);
+      const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      final day = d == null ? c.date : '${d.day.toString().padLeft(2, '0')} ${m[d.month - 1]} ${d.year}';
+      return MyRequestItem(
+        kind: MyRequestKind.attendanceCorrection,
+        sourceId: c.id,
+        requestCode: 'LJ-${(c.id.length >= 6 ? c.id.substring(0, 6) : c.id).toUpperCase()}',
+        title: c.status == 'resubmit'
+            ? 'Late Arrival Justification — Resubmission Required'
+            : 'Late Arrival Justification',
+        detailSecondary: '$day · ${c.reasonLabel.isNotEmpty ? c.reasonLabel : c.reason}',
+        submittedAt: _parseDate(c.createdAt),
+        status: c.status,
+        displayStatus: _displayStatus(c.status),
+        approver: (c.l2ApproverName?.isNotEmpty ?? false) ? c.l2ApproverName! : (c.l1ApproverName ?? ''),
+        lastUpdated: _parseDate(c.reviewedAt ?? c.createdAt),
+        canCancel: false,
+        correction: c,
+      );
+    }
     final label = switch (c.punchType) {
       'IN' => 'Check-in Correction',
       'OUT' => 'Check-out Correction',

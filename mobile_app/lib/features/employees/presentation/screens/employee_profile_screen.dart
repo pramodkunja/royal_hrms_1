@@ -2,7 +2,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -18,7 +17,9 @@ import '../providers/employee_providers.dart';
 import '../widgets/add_employee_sheet.dart';
 import '../widgets/approval_override_sheet.dart';
 import '../widgets/custom_fields_block.dart';
+import '../widgets/employee_assets_tab.dart';
 import '../widgets/employee_attendance_tab.dart';
+import '../widgets/employee_file_viewer.dart';
 import '../widgets/employee_leave_tab.dart';
 import '../widgets/employee_section_edit_sheet.dart';
 import '../widgets/promotion_tab.dart';
@@ -78,6 +79,11 @@ class _ProfileShell extends ConsumerStatefulWidget {
 
 class _ProfileShellState extends ConsumerState<_ProfileShell> with SingleTickerProviderStateMixin {
   late final TabController _tabCtrl;
+  // Web ProfileTabBar: the Assets tab only when the company's subscription
+  // includes the "assets" module (unknown list → shown). Fixed for this
+  // screen: the module list only changes at sign-in.
+  late final bool _showAssets =
+      ref.read(authStateProvider).valueOrNull?.user?.hasModule('assets') ?? true;
   bool? _isActiveOverride;
   bool _toggling = false;
   bool _confirmingStatus = false;
@@ -85,7 +91,7 @@ class _ProfileShellState extends ConsumerState<_ProfileShell> with SingleTickerP
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 7, vsync: this);
+    _tabCtrl = TabController(length: _showAssets ? 7 : 6, vsync: this);
     _tabCtrl.addListener(_onTabChange);
   }
 
@@ -287,14 +293,17 @@ class _ProfileShellState extends ConsumerState<_ProfileShell> with SingleTickerP
                       indicatorWeight: 2.5,
                       dividerColor: AppColors.border,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
-                      tabs: const [
-                        Tab(text: 'Profile'),
-                        Tab(text: 'Leave'),
-                        Tab(text: 'Attendance'),
-                        Tab(text: 'Approval Matrix'),
-                        Tab(text: 'Promotion'),
-                        Tab(text: 'Benefit'),
-                        Tab(text: 'Send Wishes'),
+                      // Web PROFILE_TABS order (Salary and Payroll stay
+                      // web-only); Assets replaces the old Benefit
+                      // placeholder — web has no Benefits feature.
+                      tabs: [
+                        const Tab(text: 'Profile'),
+                        const Tab(text: 'Leave'),
+                        const Tab(text: 'Attendance'),
+                        const Tab(text: 'Approval Matrix'),
+                        const Tab(text: 'Promotion'),
+                        if (_showAssets) const Tab(key: Key('employee-tab-assets'), text: 'Assets'),
+                        const Tab(text: 'Send Wishes'),
                       ],
                     ),
                   ),
@@ -312,10 +321,7 @@ class _ProfileShellState extends ConsumerState<_ProfileShell> with SingleTickerP
                   EmployeeAttendanceTab(employee: emp),
                   _ApprovalMatrixTab(employee: emp),
                   PromotionTab(employee: emp),
-                  const _ComingSoon(
-                    label: 'Benefit',
-                    icon: Icons.card_giftcard_outlined,
-                  ),
+                  if (_showAssets) EmployeeAssetsTab(employee: emp),
                   WishesTab(employee: emp),
                 ],
               ),
@@ -924,6 +930,11 @@ class _EmployeeCustomFields extends ConsumerWidget {
               ref, emp.employeeId, employeeCustomFieldsPayload(config, emp.customFieldValues, edits))
           : null,
       canEditFiles: canEdit,
+      // Signed links expire (~1 hour): a fresh employee detail has a new one.
+      freshFileUrl: (id) async {
+        final fresh = await ref.read(employeesDataSourceProvider).fetchEmployee(emp.employeeId);
+        return fresh.customFileFields.where((f) => f.id == id).firstOrNull?.fileUrl;
+      },
       onUpload: (key, name, bytes) => uploadEmployeeCustomFile(ref, emp.employeeId, key, name, bytes),
       onDelete: (id) => deleteEmployeeCustomFile(ref, emp.employeeId, id),
     );
@@ -1241,6 +1252,8 @@ class _DocumentsContentState extends ConsumerState<_DocumentsContent> {
           )
         else
           ...emp.documents.map((doc) => _DocCard(
+                key: ValueKey('doc-${doc.id}'),
+                employeeId: emp.employeeId,
                 doc: doc,
                 onReplace: _uploading ? null : () => _pickAndUpload(doc.documentType),
               )),
@@ -1258,31 +1271,70 @@ String _fmtFileSize(int bytes) {
   return '$bytes B';
 }
 
-class _DocCard extends StatelessWidget {
+class _DocCard extends ConsumerStatefulWidget {
+  final String employeeId;
   final EmployeeDocumentEntity doc;
   // Null while an upload/replace is already in flight elsewhere on this
   // screen — disables the button rather than leaving it silently ignoring
   // taps, so the user sees the same "can't act right now" feedback the
   // top-level Upload Document button already gives.
   final VoidCallback? onReplace;
-  const _DocCard({required this.doc, required this.onReplace});
+  const _DocCard({super.key, required this.employeeId, required this.doc, required this.onReplace});
 
+  @override
+  ConsumerState<_DocCard> createState() => _DocCardState();
+}
+
+class _DocCardState extends ConsumerState<_DocCard> {
+  bool _opening = false;
+  String? _error;
+
+  // Web DocPreviewModal: the file is fetched (no app login for the file
+  // host's signed link) and shown inside the app — PDF, JPG or PNG — with a
+  // visible error when it can't be. Previously the raw link was handed to an
+  // external browser via canLaunchUrl, which is false on Android 11+ for
+  // https without a manifest <queries> entry, so View silently did nothing.
+  // See EmployeeDocumentDownloader and ProfileDocumentViewer.
   Future<void> _open() async {
-    final uri = Uri.tryParse(doc.fileUrl);
-    if (uri == null) return;
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+    if (_opening) return;
+    final doc = widget.doc;
+    final dataSource = ref.read(employeesDataSourceProvider);
+    final employeeId = widget.employeeId;
+    setState(() {
+      _opening = true;
+      _error = null;
+    });
+    final message = await openEmployeeFileInApp(
+      context,
+      ref,
+      id: doc.id,
+      url: doc.fileUrl,
+      fileName: doc.fileName,
+      title: doc.documentTypeDisplay.isEmpty ? doc.fileName : doc.documentTypeDisplay,
+      // The signed link expires (~1 hour); a fresh employee detail carries
+      // a new one for the same document, or none when it was removed.
+      freshUrl: () async {
+        final fresh = await dataSource.fetchEmployee(employeeId);
+        return fresh.documents.where((d) => d.id == doc.id).firstOrNull?.fileUrl;
+      },
+    );
+    if (!mounted) return;
+    setState(() {
+      _opening = false;
+      _error = message;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final doc = widget.doc;
     final meta = [
       if (doc.uploadedAt.isNotEmpty) _fmtDate(doc.uploadedAt),
       if (doc.fileSize > 0) _fmtFileSize(doc.fileSize),
     ].join(' · ');
 
     return Container(
+      key: Key('employee-doc-${doc.id}'),
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
@@ -1290,44 +1342,76 @@ class _DocCard extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(Icons.insert_drive_file_outlined, size: 18, color: AppColors.primary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  doc.documentTypeDisplay.isEmpty ? doc.fileName : doc.documentTypeDisplay,
-                  style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600),
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                const SizedBox(height: 2),
-                Text(meta.isEmpty ? doc.fileName : meta,
-                    style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
-              ],
+                child: Icon(Icons.insert_drive_file_outlined, size: 18, color: AppColors.primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      doc.documentTypeDisplay.isEmpty ? doc.fileName : doc.documentTypeDisplay,
+                      style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(meta.isEmpty ? doc.fileName : meta,
+                        style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.refresh_outlined, size: 18, color: AppColors.textSecondary),
+                tooltip: 'Replace',
+                onPressed: widget.onReplace,
+                visualDensity: VisualDensity.compact,
+              ),
+              if (_opening)
+                const Padding(
+                  key: Key('employee-doc-opening'),
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                )
+              else
+                IconButton(
+                  key: Key('employee-doc-view-${doc.id}'),
+                  icon: Icon(Icons.visibility_outlined, size: 18, color: AppColors.primary),
+                  tooltip: doc.fileUrl.isEmpty ? 'No file to view' : 'View',
+                  onPressed: doc.fileUrl.isEmpty ? null : _open,
+                  visualDensity: VisualDensity.compact,
+                ),
+            ],
+          ),
+          if (_error != null)
+            Padding(
+              key: Key('employee-doc-error-${doc.id}'),
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, size: 16, color: AppColors.error),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(_error!, style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+                  ),
+                  TextButton(
+                    key: Key('employee-doc-retry-${doc.id}'),
+                    onPressed: _opening ? null : _open,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
             ),
-          ),
-          IconButton(
-            icon: Icon(Icons.refresh_outlined, size: 18, color: AppColors.textSecondary),
-            tooltip: 'Replace',
-            onPressed: onReplace,
-            visualDensity: VisualDensity.compact,
-          ),
-          IconButton(
-            icon: Icon(Icons.visibility_outlined, size: 18, color: AppColors.primary),
-            tooltip: 'View',
-            onPressed: doc.fileUrl.isEmpty ? null : _open,
-            visualDensity: VisualDensity.compact,
-          ),
         ],
       ),
     );
@@ -1493,53 +1577,6 @@ class _BottomBar extends StatelessWidget {
   }
 }
 
-// ── Coming soon ───────────────────────────────────────────────────────────────
-
-class _ComingSoon extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  const _ComingSoon({required this.label, this.icon = Icons.construction_outlined});
-
-  @override
-  Widget build(BuildContext context) {
-    // LayoutBuilder + a min-height constraint (rather than a bare Center)
-    // so this still centers normally when there's room, but scrolls instead
-    // of overflowing when the tab view is squeezed short (e.g. a small
-    // browser window, or a device in landscape with little vertical space).
-    return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        // See _ProfileTab's identical primary: false comment above — same
-        // shared-PrimaryScrollController hazard applies to every tab here.
-        primary: false,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.07),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Icon(icon, size: 30, color: AppColors.primary),
-                ),
-                const SizedBox(height: 14),
-                Text('$label coming soon', style: AppTextStyles.h4),
-                const SizedBox(height: 6),
-                Text('This section is under development.',
-                    style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ── Approval Matrix tab ────────────────────────────────────────────────────────
 
@@ -1550,13 +1587,9 @@ class _ApprovalMatrixTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final matrixAsync = ref.watch(employeeApprovalMatrixProvider(employee.employeeId));
-    // Matches web's ApprovalMatrixTab exactly — it gates the Override action
-    // on usePermission("settings.edit"), not a hardcoded role list (role
-    // slugs like 'hr_admin' vs the current 'hr' aren't stable across
-    // deployments, but permission grants are). Everyone who can reach this
-    // screen at all can already VIEW the matrix (gated server-side by the
-    // same `employees.view` permission as the profile itself).
-    final canEdit = ref.watch(authStateProvider).valueOrNull?.user?.hasPermission('settings.edit') ?? false;
+    // Web ApprovalMatrixTab canEditEmployeeScoped: employees.edit + the
+    // employee in the viewer's own branch (org-wide viewers: any branch).
+    final canEdit = canEditEmployeeApprovals(ref.watch(authStateProvider).valueOrNull?.user, employee.branch);
 
     return ListView(
       primary: false,
@@ -1565,9 +1598,11 @@ class _ApprovalMatrixTab extends ConsumerWidget {
         _ReportingRelationshipsCard(employee: employee, canEdit: canEdit),
         const SizedBox(height: 12),
         matrixAsync.when(
+          skipLoadingOnRefresh: false,
           data: (rows) {
             if (rows.isEmpty) {
               return Padding(
+                key: const Key('approval-matrix-empty'),
                 padding: const EdgeInsets.symmetric(vertical: 24),
                 child: Center(
                   child: Text('No approval workflows configured.', style: AppTextStyles.bodySecondary),
@@ -1587,18 +1622,48 @@ class _ApprovalMatrixTab extends ConsumerWidget {
                   .toList(),
             );
           },
-          loading: () => const Padding(
-            padding: EdgeInsets.symmetric(vertical: 40),
-            child: Center(child: CircularProgressIndicator()),
+          loading: () => Padding(
+            key: const Key('approval-matrix-loading'),
+            padding: const EdgeInsets.symmetric(vertical: 40),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+              const SizedBox(width: 10),
+              Text('Loading approval matrix…', style: AppTextStyles.bodySecondary),
+            ]),
           ),
-          error: (e, _) => Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(
-              'Failed to load approval matrix.',
-              style: AppTextStyles.bodySecondary,
-              textAlign: TextAlign.center,
-            ),
-          ),
+          error: (e, _) {
+            final err = approvalMatrixLoadError(e);
+            final denied = err.kind == ApprovalMatrixLoadErrorKind.forbidden;
+            return Container(
+              key: Key('approval-matrix-error-${err.kind.name}'),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+              ),
+              child: Column(children: [
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Icon(denied ? Icons.lock_outline : Icons.error_outline, size: 18, color: AppColors.error),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(err.message, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+                  ),
+                ]),
+                // A permission refusal won't change on retry; anything else may.
+                if (!denied)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      key: const Key('approval-matrix-retry'),
+                      onPressed: () => ref.invalidate(employeeApprovalMatrixProvider(employee.employeeId)),
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text('Retry'),
+                    ),
+                  ),
+              ]),
+            );
+          },
         ),
       ],
     );

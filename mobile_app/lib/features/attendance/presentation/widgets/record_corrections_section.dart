@@ -6,6 +6,8 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/attendance_entity.dart';
 import '../providers/attendance_providers.dart';
+import 'late_justification.dart' show lateStatusBadge;
+import 'late_justification_review.dart' show showLateJustificationReview;
 
 const _kPunchTypeLabel = {'IN': 'Clock In', 'OUT': 'Clock Out', 'BOTH': 'Both IN & OUT'};
 
@@ -72,6 +74,55 @@ class _RecordCorrectionsSectionState extends ConsumerState<RecordCorrectionsSect
     }
   }
 
+  /// Late-arrival justifications share this queue but aren't punch
+  /// corrections: they're decided in the review sheet (with remarks and the
+  /// two-level chain), never with the punch Approve / Reject.
+  Future<void> _openLate(HrCorrectionRowEntity c) async {
+    if (_reviewingId != null) return;
+    setState(() => _result = null);
+    final msg = await showLateJustificationReview(context, c);
+    if (msg == null || !mounted) return;
+    if (widget.detailKey != null) ref.invalidate(attendanceRecordDetailProvider(widget.detailKey!));
+    if (widget.recordId != null) ref.invalidate(attendanceRecordAuditProvider(widget.recordId!));
+    setState(() => _result = (text: msg, ok: true));
+  }
+
+  Widget _lateRow(HrCorrectionRowEntity c) {
+    final badge = lateStatusBadge(c.status);
+    return Container(
+      key: Key('record-correction-${c.id}'),
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(
+            child: Text('Late Arrival Justification',
+                style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
+          ),
+          Text(badge.$1,
+              key: Key('record-correction-status-${c.id}'),
+              style: AppTextStyles.labelSmall.copyWith(color: badge.$2, fontWeight: FontWeight.w600)),
+        ]),
+        const SizedBox(height: 4),
+        Text('Clocked in ${c.originalIn ?? '—'} · ${c.reasonLabel.isEmpty ? c.reason : c.reasonLabel}',
+            style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            key: Key('record-correction-late-open-${c.id}'),
+            onPressed: _reviewingId != null ? null : () => _openLate(c),
+            child: Text(c.canAction ? 'Review' : 'View'),
+          ),
+        ),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull?.user;
@@ -92,7 +143,10 @@ class _RecordCorrectionsSectionState extends ConsumerState<RecordCorrectionsSect
                   style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary))
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [for (final c in rows) _row(c, canReviewRecordCorrection(user, c))],
+                  children: [
+                    for (final c in rows)
+                      c.isLateJustification ? _lateRow(c) : _row(c, canReviewRecordCorrection(user, c)),
+                  ],
                 ),
           loading: () => const SizedBox(height: 20, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
           error: (e, _) => Text(friendlyAttendanceError(e),

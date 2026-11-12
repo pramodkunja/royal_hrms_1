@@ -120,16 +120,17 @@ class EmployeeCodeNotifier extends AutoDisposeAsyncNotifier<EmployeeCodeSettings
   @override
   Future<EmployeeCodeSettings> build() => _ds.fetchEmployeeCode();
 
-  /// Saves the typed prefix with the loaded padding / next_sequence. Returns
-  /// null on success (state becomes what the server saved), else the error.
-  Future<EmployeeCodeSaveError?> save(String prefixInput) async {
+  /// Saves the typed prefix and chosen format with the loaded padding /
+  /// next_sequence. Returns null on success (state becomes what the server
+  /// saved), else the error.
+  Future<EmployeeCodeSaveError?> save(String prefixInput, String idFormat) async {
     if (!canManageEmployeeCode(ref.read(authStateProvider).valueOrNull?.user)) {
       return const EmployeeCodeSaveError(message: kEmployeeCodeDenied);
     }
     final current = state.valueOrNull;
     if (current == null) return const EmployeeCodeSaveError(message: 'Settings are not loaded yet.');
     try {
-      state = AsyncData(await _ds.saveEmployeeCode(current.toPayload(prefixInput)));
+      state = AsyncData(await _ds.saveEmployeeCode(current.toPayload(prefixInput, idFormat)));
       return null;
     } catch (e) {
       return employeeCodeSaveError(e);

@@ -49,9 +49,10 @@ class ManagerDashboardView extends ConsumerWidget {
           children: [
             _ManagerConsoleHeader(overview: dataAsync.valueOrNull?.overview),
             const SizedBox(height: 20),
-            const AttendanceRingCard(),
-            const SizedBox(height: 20),
+            // Latest announcement above Attendance (requested order).
             const _AnnouncementCard(),
+            const SizedBox(height: 20),
+            const AttendanceRingCard(),
             const SizedBox(height: 20),
             ...dataAsync.when(
               skipLoadingOnRefresh: true,

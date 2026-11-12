@@ -70,8 +70,9 @@ class LeaveTypeModel extends LeaveTypeEntity {
   // legacy hardcoded set only if the key is ever absent).
   factory LeaveTypeModel.fromJson(Map<String, dynamic> json) {
     final code = json['leave_type'] as String? ?? '';
-    final attachmentRequired = json['attachment_required'] as bool? ??
-        LeaveTypeColors.docRequiredForCode(code);
+    // The backend's only document rule (views/leave.py
+    // _validate_policy_rules). Absent → no rule, never a guessed one.
+    final attachmentRequired = json['attachment_required'] as bool? ?? false;
     return LeaveTypeModel(
       id: (json['id'] as num? ?? 0).toInt(),
       name: json['leave_type_display'] as String? ?? code,
@@ -184,6 +185,12 @@ class LeaveRequestModel extends LeaveRequestEntity {
     super.canCancel,
     super.approvedBy,
     super.approvedAt,
+    super.cancellationStatus,
+    super.cancellationReason,
+    super.cancellationRequestedAt,
+    super.cancellationRemarks,
+    super.canRequestCancellation,
+    super.canDecideCancellation,
   });
 
   // Backend returns: start_date, end_date, total_days, lop_days, employee_name,
@@ -232,6 +239,12 @@ class LeaveRequestModel extends LeaveRequestEntity {
       canCancel: json['can_cancel'] as bool? ?? false,
       approvedBy: json['approved_by'] as String? ?? '',
       approvedAt: json['approved_at'] as String?,
+      cancellationStatus: json['cancellation_status'] as String? ?? '',
+      cancellationReason: json['cancellation_reason'] as String? ?? '',
+      cancellationRequestedAt: json['cancellation_requested_at'] as String?,
+      cancellationRemarks: json['cancellation_remarks'] as String? ?? '',
+      canRequestCancellation: json['can_request_cancellation'] as bool? ?? false,
+      canDecideCancellation: json['can_decide_cancellation'] as bool? ?? false,
     );
   }
 }

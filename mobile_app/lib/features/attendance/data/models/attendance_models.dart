@@ -81,9 +81,11 @@ class AttendanceStatsModel extends AttendanceStatsEntity {
     required super.avgHoursPerDay,
     required super.attendancePercentage,
     required super.workingDays,
+    super.lateLimit,
   });
 
   factory AttendanceStatsModel.fromJson(Map<String, dynamic> json) {
+    final ll = json['late_limit'];
     return AttendanceStatsModel(
       daysPresent: _toInt(json['days_present']),
       lateArrivals: _toInt(json['late_arrivals']),
@@ -91,6 +93,16 @@ class AttendanceStatsModel extends AttendanceStatsEntity {
       avgHoursPerDay: _toDouble(json['avg_hours_per_day']),
       attendancePercentage: _toDouble(json['attendance_percentage']),
       workingDays: _toInt(json['working_days']),
+      lateLimit: ll is Map
+          ? LateLimitSummaryEntity(
+              enabled: _toBool(ll['enabled']),
+              maximum: _toInt(ll['maximum']),
+              lateArrivals: _toInt(ll['late_arrivals']),
+              remaining: ll['remaining'] == null ? null : _toInt(ll['remaining']),
+              status: ll['status'] as String?,
+              statusLabel: ll['status_label'] as String?,
+            )
+          : null,
     );
   }
 }
@@ -126,6 +138,8 @@ class CalendarDayModel extends CalendarDayEntity {
     super.note,
     super.holidayName,
     required super.canRegularize,
+    super.canExplainLate,
+    super.lateJustificationStatus,
   });
 
   factory CalendarDayModel.fromJson(Map<String, dynamic> json) {
@@ -137,6 +151,8 @@ class CalendarDayModel extends CalendarDayEntity {
       note: json['note'] as String?,
       holidayName: json['holiday_name'] as String?,
       canRegularize: _toBool(json['canRegularize']),
+      canExplainLate: _toBool(json['canExplainLate']),
+      lateJustificationStatus: json['lateJustificationStatus'] as String?,
     );
   }
 }
@@ -150,6 +166,9 @@ class AttendanceHistoryRowModel extends AttendanceHistoryRowEntity {
     super.hours,
     required super.status,
     required super.canRegularize,
+    super.isoDate,
+    super.canExplainLate,
+    super.lateJustificationStatus,
   });
 
   factory AttendanceHistoryRowModel.fromJson(Map<String, dynamic> json) {
@@ -161,6 +180,9 @@ class AttendanceHistoryRowModel extends AttendanceHistoryRowEntity {
       hours: json['hours'] as String?,
       status: json['status'] as String? ?? '',
       canRegularize: _toBool(json['canRegularize']),
+      isoDate: json['isoDate'] as String?,
+      canExplainLate: _toBool(json['canExplainLate']),
+      lateJustificationStatus: json['lateJustificationStatus'] as String?,
     );
   }
 }
@@ -625,6 +647,18 @@ class HrCorrectionRowModel extends HrCorrectionRowEntity {
     super.reviewedBy,
     super.reviewedAt,
     required super.createdAt,
+    super.kind,
+    super.reasonLabel,
+    super.explanation,
+    super.originalIn,
+    super.originalOut,
+    super.hasDocument,
+    super.canViewDocument,
+    super.documentName,
+    super.proofRequired,
+    super.rejectionReason,
+    super.resubmissionCount,
+    super.attendanceStatus,
   });
 
   factory HrCorrectionRowModel.fromJson(Map<String, dynamic> json) {
@@ -652,6 +686,18 @@ class HrCorrectionRowModel extends HrCorrectionRowEntity {
       reviewedBy: json['reviewed_by'] as String?,
       reviewedAt: json['reviewed_at'] as String?,
       createdAt: json['created_at'] as String? ?? '',
+      kind: json['kind'] as String? ?? '',
+      reasonLabel: json['reason_label'] as String? ?? '',
+      explanation: json['explanation'] as String? ?? '',
+      originalIn: json['original_in'] as String?,
+      originalOut: json['original_out'] as String?,
+      hasDocument: _toBool(json['has_document']),
+      canViewDocument: _toBool(json['can_view_document']),
+      documentName: json['document_name'] as String? ?? '',
+      proofRequired: _toBool(json['proof_required']),
+      rejectionReason: json['rejection_reason'] as String? ?? '',
+      resubmissionCount: _toInt(json['resubmission_count']),
+      attendanceStatus: json['attendance_status'] as String?,
     );
   }
 }
@@ -677,6 +723,16 @@ class MyCorrectionModel extends MyCorrectionEntity {
     super.reviewedBy,
     super.reviewedAt,
     required super.createdAt,
+    super.kind,
+    super.reasonLabel,
+    super.statusLabel,
+    super.explanation,
+    super.hasDocument,
+    super.canViewDocument,
+    super.documentName,
+    super.rejectionReason,
+    super.resubmitBy,
+    super.canResubmit,
   });
 
   factory MyCorrectionModel.fromJson(Map<String, dynamic> json) {
@@ -700,6 +756,16 @@ class MyCorrectionModel extends MyCorrectionEntity {
       reviewedBy: json['reviewed_by'] as String?,
       reviewedAt: json['reviewed_at'] as String?,
       createdAt: json['created_at'] as String? ?? '',
+      kind: json['kind'] as String? ?? '',
+      reasonLabel: json['reason_label'] as String? ?? '',
+      statusLabel: json['status_label'] as String? ?? '',
+      explanation: json['explanation'] as String? ?? '',
+      hasDocument: _toBool(json['has_document']),
+      canViewDocument: _toBool(json['can_view_document']),
+      documentName: json['document_name'] as String? ?? '',
+      rejectionReason: json['rejection_reason'] as String? ?? '',
+      resubmitBy: json['resubmit_by'] as String?,
+      canResubmit: _toBool(json['can_resubmit']),
     );
   }
 }
