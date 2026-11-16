@@ -231,7 +231,8 @@ final kQuickItemsAdmin = <QuickItem>[
       icon: Icons.access_time_outlined,
       color: AppColors.info,
       path: '/dashboard/attendance',
-      permission: 'attendance.view'),
+      // Same as the HR Attendance route (web: attendance.edit or settings.edit).
+      anyOfPermissions: ['attendance.edit', 'settings.edit']),
   QuickItem(
       label: 'Branches',
       icon: Icons.business_outlined,
@@ -255,10 +256,15 @@ final kQuickItemsByRole = <String, List<QuickItem>>{
 
 /// The tiles of [items] that [user] may use (see QuickItem.permission). No
 /// user (signed out / still loading) → only the tiles open to everyone.
+/// Web dashboards also leave out tiles whose module (by path) the company
+/// doesn't have (QUICK_ACTIONS filtered by moduleForHref).
 List<QuickItem> visibleQuickItems(List<QuickItem> items, UserEntity? user) => items
-    .where((item) => item.anyOfPermissions != null
-        ? userHasAnyPermission(user, item.anyOfPermissions!)
-        : (item.permission == null || userHasPermission(user, item.permission!)))
+    .where((item) => userHasModule(user, moduleForPath(item.path)))
+    .where((item) =>
+        (item.anyOfPermissions != null
+            ? userHasAnyPermission(user, item.anyOfPermissions!)
+            : (item.permission == null || userHasPermission(user, item.permission!))) ||
+        alternativeRouteAccess(user, item.path)) // same rule as the route
     .toList();
 
 // Wraps the grid in the same highlighted-header card chrome as the other

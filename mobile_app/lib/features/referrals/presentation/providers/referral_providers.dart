@@ -2,6 +2,11 @@ import 'package:dio/dio.dart' show DioException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/router/access_control.dart';
+import '../../../auth/domain/entities/user_entity.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../branches/domain/entities/branch_entity.dart';
+import '../../../branches/presentation/providers/branch_providers.dart' show branchDataSourceProvider;
 import '../../data/datasources/referral_remote_datasource.dart';
 import '../../domain/entities/referral_entity.dart';
 
@@ -92,8 +97,36 @@ final referralRulesProvider =
 final referralRulesAdminProvider = AsyncNotifierProvider.autoDispose<
     ReferralRulesAdminNotifier, List<ReferralRuleEntity>>(ReferralRulesAdminNotifier.new);
 
+/// Whether the Refer-a-Candidate dialog offers a branch picker (Task 76).
+/// Web referrals/page.tsx shows it for usePermission("recruitment.view") and
+/// fills it from GET /branch/branches/?status=active&page_size=100 — which
+/// the backend (BranchListCreateView) allows only with has_perm
+/// branches.view. So here the picker needs both, through the superuser /
+/// settings.edit-aware helper: a recruitment.view user without branches.view
+/// keeps the read-only branch label and no request is sent (on web they get
+/// an empty, required dropdown after a 403 — reported, not bypassed).
+bool canPickReferralBranch(UserEntity? user) =>
+    userHasPermission(user, 'recruitment.view') && userHasPermission(user, 'branches.view');
+
+/// Active branches for the Refer-a-Candidate picker — web's exact request
+/// (`?status=active&page_size=100`). The server scopes the list (a user
+/// without settings.edit sees only their own branch). Only read when
+/// canPickReferralBranch.
+final referralBranchOptionsProvider = FutureProvider.autoDispose<List<BranchEntity>>(
+    (ref) => ref.read(branchDataSourceProvider).fetchBranches(pageSize: 100, status: 'active'));
+
+/// Whether [user] may add, edit or delete referral rules: the backend's
+/// has_perm(settings.edit) on ReferralRuleListCreateView.post and
+/// ReferralRuleDetailView.patch/delete — a superuser or settings.edit.
+/// settings.view alone only reads them.
+bool canManageReferralRules(UserEntity? user) => userHasPermission(user, 'settings.edit');
+
+const kReferralRulesNoPermission = 'You do not have permission to manage referral rules.';
+
 class ReferralRulesAdminNotifier
     extends AutoDisposeAsyncNotifier<List<ReferralRuleEntity>> {
+  bool get _canManage => canManageReferralRules(ref.read(authStateProvider).valueOrNull?.user);
+
   @override
   Future<List<ReferralRuleEntity>> build() async {
     final rules = await ref.read(referralDataSourceProvider).fetchReferralRules();
@@ -112,6 +145,7 @@ class ReferralRulesAdminNotifier
     required int order,
     required bool isActive,
   }) async {
+    if (!_canManage) return kReferralRulesNoPermission;
     try {
       final created = await ref.read(referralDataSourceProvider).createReferralRule(
             icon: icon,
@@ -136,6 +170,7 @@ class ReferralRulesAdminNotifier
     required int order,
     required bool isActive,
   }) async {
+    if (!_canManage) return kReferralRulesNoPermission;
     try {
       final updated = await ref.read(referralDataSourceProvider).updateReferralRule(
             id,
@@ -157,6 +192,7 @@ class ReferralRulesAdminNotifier
   }
 
   Future<String?> remove(int id) async {
+    if (!_canManage) return kReferralRulesNoPermission;
     try {
       await ref.read(referralDataSourceProvider).deleteReferralRule(id);
       state = AsyncData((state.valueOrNull ?? []).where((r) => r.id != id).toList());

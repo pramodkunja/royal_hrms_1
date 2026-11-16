@@ -25,6 +25,7 @@ import '../../features/settings/presentation/leave_policy/leave_policy_screen.da
 import '../../features/settings/presentation/holiday_calendar/holiday_calendar_screen.dart';
 import '../../features/settings/presentation/attendance_rules/attendance_rules_screen.dart';
 import '../../features/settings/presentation/approval_rules/approval_rules_screen.dart';
+import '../../features/settings/presentation/assets/assets_settings_screen.dart';
 import '../../features/settings/presentation/leave_policy/leave_balance_import_screen.dart';
 import '../../features/settings/presentation/referral_rules/referral_rules_settings_screen.dart';
 import '../../features/settings/presentation/notice_period/notice_period_screen.dart';
@@ -143,6 +144,7 @@ class AppRoutes {
   static const String settingsNoticePeriod = '/settings/notice-period';
   static const String settingsAssessmentConfig = '/settings/assessment-config';
   static const String settingsApprovalRules = '/settings/approval-rules';
+  static const String settingsAssets = '/settings/assets';
   static const String settingsNotifications = '/settings/notifications';
   static const String settingsOnboardingFields = '/settings/onboarding-fields';
   static const String settingsLeaveBalanceImport =
@@ -476,6 +478,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.settingsApprovalRules,
         builder: (_, __) => const ApprovalRulesScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.settingsAssets,
+        builder: (_, __) => const AssetsSettingsScreen(),
       ),
       GoRoute(
         path: AppRoutes.settingsLeaveBalanceImport,

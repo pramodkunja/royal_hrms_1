@@ -440,8 +440,12 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
         _submitted = true;
         _submittedTypeName = lt.label;
       });
-      ref.invalidate(leaveBalancesProvider);
       ref.invalidate(leaveStatsProvider);
+      ref.invalidate(myLeaveStatsProvider);
+      // Re-read the year first, so a submission after New Year reloads the
+      // new year's balances.
+      ref.invalidate(leaveDashboardYearProvider);
+      ref.invalidate(myLeaveBalancesProvider);
     }
   }
 
@@ -589,7 +593,10 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
   @override
   Widget build(BuildContext context) {
     final typesAsync = ref.watch(leaveTypesProvider);
-    final balancesAsync = ref.watch(leaveBalancesProvider);
+    // Web ApplyLeaveForm.tsx: API.leave.balance?year=getLeaveYear() — the
+    // calendar year, whatever dates are picked (Task 72.2). Same request as
+    // the Leave Dashboard's, so the two share it.
+    final balancesAsync = ref.watch(myLeaveBalancesProvider);
     final authAsync = ref.watch(authStateProvider);
 
     // auto-select first type once data loads

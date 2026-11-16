@@ -228,6 +228,14 @@ class SeparationDocumentEntity {
   final String uploadedByName;
   final String createdAt;
 
+  /// The uploader's user id, when the server sends one (`uploaded_by`). The
+  /// current backend (SeparationDocumentSerializer) sends only the name, so
+  /// this is null today — never matched by name.
+  final String? uploadedById;
+
+  /// The server's own verdict (`can_delete`), when it sends one.
+  final bool? canDelete;
+
   const SeparationDocumentEntity({
     required this.id,
     required this.documentType,
@@ -235,6 +243,8 @@ class SeparationDocumentEntity {
     this.fileUrl,
     required this.uploadedByName,
     required this.createdAt,
+    this.uploadedById,
+    this.canDelete,
   });
 }
 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../../../shared/documents/document_links.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -56,13 +56,13 @@ class ApprovalDetailSheet extends ConsumerStatefulWidget {
 class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
   bool _loading = false;
 
-  Future<void> _openUrl(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
+  /// The map link (web: a plain link opening in a new tab).
+  Future<void> _openUrl(String url) => openDocumentLinkExternally(context, ref, url,
+      failureMessage: "Couldn't open the map. Please try again.");
+
+  /// An attachment: web RequestDetailDrawer shows it in DocPreviewModal —
+  /// the app's document viewer here.
+  Future<void> _preview(String label, String url) => previewDocumentInApp(context, ref, url: url, title: label);
 
   void _showSnack(String message, {bool isError = false}) {
     if (!mounted) return;
@@ -472,6 +472,10 @@ class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
     if (item.kind == UnifiedApprovalKind.leave) {
       return (item.leave?.documentUrl ?? '').isNotEmpty;
     }
+    // Web RequestDetailDrawer: a medical WFH request's proof ("Medical Proof").
+    if (item.kind == UnifiedApprovalKind.wfh) {
+      return (item.wfh?.supportingDocumentUrl ?? '').isNotEmpty;
+    }
     if (item.kind == UnifiedApprovalKind.expense) {
       return (item.expense?.receipts ?? []).any((r) => (r.url ?? '').isNotEmpty);
     }
@@ -483,6 +487,11 @@ class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
       final url = item.leave?.documentUrl;
       if (url == null || url.isEmpty) return [];
       return [_attachmentRow('Supporting document', url)];
+    }
+    if (item.kind == UnifiedApprovalKind.wfh) {
+      final url = item.wfh?.supportingDocumentUrl;
+      if (url == null || url.isEmpty) return [];
+      return [_attachmentRow('Medical Proof', url)];
     }
     if (item.kind == UnifiedApprovalKind.expense) {
       final receipts = item.expense?.receipts ?? [];
@@ -501,7 +510,8 @@ class _ApprovalDetailSheetState extends ConsumerState<ApprovalDetailSheet> {
   }
 
   Widget _attachmentRow(String label, String url) => InkWell(
-        onTap: () => _openUrl(url),
+        key: Key('approval-attachment-$label'),
+        onTap: () => _preview(label, url),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

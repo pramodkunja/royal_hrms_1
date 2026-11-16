@@ -154,8 +154,14 @@ class UnifiedApprovalItem {
         separation: r,
       );
 
-  bool get isPending =>
-      status != 'approved' && status != 'rejected' && status != 'cancelled';
+  /// Web approvals/_data.ts toDisplayStatus: the status the inbox filters,
+  /// counts and gates actions on. Both approval levels read as pending.
+  String get displayStatus => approvalDisplayStatus(status);
+
+  /// Web: actions only while the display status is pending (and the server
+  /// says canAction). `resubmit` (late justification sent back to the
+  /// employee) is not pending, as on web.
+  bool get isPending => displayStatus == 'pending';
 
   factory UnifiedApprovalItem.fromLeave(LeaveRequestEntity r) {
     final tertiary = StringBuffer('${r.days}d');
@@ -290,31 +296,36 @@ class UnifiedTeamApprovalsNotifier
   @override
   Future<List<UnifiedApprovalItem>> build() async {
     final user = ref.watch(authStateProvider).valueOrNull?.user;
-    final canLeave = user?.hasPermission('leave.approve') ?? false;
-    final canExpense = user?.hasPermission('expenses.approve') ?? false;
+    // Web TeamApprovalsSection: a kind is fetched only when its module is on
+    // (KIND_MODULES); unknown module list → all. Each kind also needs its
+    // approve permission by the backend's has_perm rule (superuser /
+    // settings.edit or the permission — userHasPermission), so an admin gets
+    // the same team queue the server gives them (Task 71 H1).
+    final canLeave = userHasPermission(user, 'leave.approve') && userHasModule(user, AppModules.leave);
+    final canExpense = userHasPermission(user, 'expenses.approve') && userHasModule(user, AppModules.expenses);
     // attendance.create — matches the same permission web/mobile now use to
     // gate the Team Approvals tab itself (see approvals_screen.dart); an
     // approver without it shouldn't get a 403 from the corrections fetch.
-    final canCorrection = user?.hasPermission('attendance.create') ?? false;
+    final canCorrection = userHasPermission(user, 'attendance.create') && userHasModule(user, AppModules.attendance);
     // wfh.approve — mirrors leave.approve/expenses.approve exactly (backend
     // migration 0088 grants wfh.approve to the same roles that hold
-    // leave.approve, so this is never a real-world mismatch). Deliberately
-    // NOT OR'd with canManageTeam/isSuperuser here — passing scope=team
-    // without the real wfh.approve permission makes the backend silently
-    // fall back to the caller's OWN requests (see
+    // leave.approve, so this is never a real-world mismatch). Not OR'd with
+    // canManageTeam: passing scope=team without wfh.approve (by the backend's
+    // has_perm, which superuser / settings.edit pass) makes the backend
+    // silently fall back to the caller's OWN requests (see
     // WorkFromHomeRequestListCreateView.get), which would leak the viewer's
     // own rows into this "team" inbox instead of erroring.
-    final canWfh = user?.hasPermission('wfh.approve') ?? false;
+    final canWfh = userHasPermission(user, 'wfh.approve') && userHasModule(user, AppModules.wfh);
     // separation.approve — the backend's team queue (_approval_scope_filter:
     // direct reports for a team manager, the branch for HR/Branch Admin,
     // everyone for settings.edit). Without it, scope=team silently returns
     // the caller's OWN requests, so it is not asked for at all.
-    final canSeparation = userHasPermission(user, 'separation.approve');
+    final canSeparation = userHasPermission(user, 'separation.approve') && userHasModule(user, AppModules.separation);
     // payroll.view — web TeamApprovalsSection fetches the HR payslip-query
     // queue only for it: without it, GET /payroll/queries/ returns the
     // caller's OWN queries, which must never appear in a team inbox.
     // payroll.edit decides whether a query can be resolved.
-    final canPayslipQueries = userHasPermission(user, 'payroll.view');
+    final canPayslipQueries = userHasPermission(user, 'payroll.view') && userHasModule(user, AppModules.payroll);
     final canResolvePayslip = userHasPermission(user, 'payroll.edit');
 
     final results = await Future.wait<dynamic>([
@@ -386,7 +397,9 @@ class UnifiedTeamApprovalsNotifier
   Future<void> _dispatchApprove(UnifiedApprovalItem item, {String? remarks}) async {
     switch (item.kind) {
       case UnifiedApprovalKind.leave:
-        await ref.read(leaveRepositoryProvider).approveLeave(item.sourceId);
+        // Task 81 (APR-08): the approver's remarks reach the backend
+        // (l1_remarks / l2_remarks), as web sends them — they were dropped.
+        await ref.read(leaveRepositoryProvider).approveLeave(item.sourceId, remarks: remarks ?? '');
         break;
       case UnifiedApprovalKind.expense:
         await ref
@@ -510,6 +523,17 @@ class UnifiedTeamApprovalsNotifier
 
 enum ApprovalsTypeTab { all, leave, expense, attendanceCorrection, wfh, separation, payslip }
 
+/// Web KIND_MODULES: the module a type tab belongs to (All → none).
+String? moduleForApprovalsTab(ApprovalsTypeTab tab) => switch (tab) {
+      ApprovalsTypeTab.all => null,
+      ApprovalsTypeTab.leave => AppModules.leave,
+      ApprovalsTypeTab.expense => AppModules.expenses,
+      ApprovalsTypeTab.attendanceCorrection => AppModules.attendance,
+      ApprovalsTypeTab.wfh => AppModules.wfh,
+      ApprovalsTypeTab.separation => AppModules.separation,
+      ApprovalsTypeTab.payslip => AppModules.payroll,
+    };
+
 UnifiedApprovalKind? _kindForTab(ApprovalsTypeTab tab) => switch (tab) {
       ApprovalsTypeTab.all => null,
       ApprovalsTypeTab.leave => UnifiedApprovalKind.leave,
@@ -549,6 +573,19 @@ final approvalsSelectedIdsProvider = StateProvider.autoDispose<Set<String>>((ref
 /// qualified by kind so ids can't collide across the three source tables.
 String approvalsItemKey(UnifiedApprovalItem item) => '${item.kind.name}:${item.sourceId}';
 
+/// Task 80: web approvals/_data.ts toDisplayStatus. The inbox's Pending
+/// filter, counts and action gating use this, not the raw backend status:
+/// `pending` (level 1), `l2_pending` (level 2 — leave, WFH, attendance
+/// correction) and `stage2_pending` (separation) are all "pending";
+/// `approved` and `rejected` as they are; anything else (cancelled,
+/// resubmit, …) is "cancelled" and appears only under All.
+String approvalDisplayStatus(String status) => switch (status) {
+      'pending' || 'l2_pending' || 'stage2_pending' => 'pending',
+      'approved' => 'approved',
+      'rejected' => 'rejected',
+      _ => 'cancelled',
+    };
+
 // ── Derived: filtered list the UI watches ───────────────────────────────────────
 
 final filteredApprovalItemsProvider =
@@ -569,7 +606,9 @@ final filteredApprovalItemsProvider =
 
     final filtered = items.where((item) {
       if (kindFilter != null && item.kind != kindFilter) return false;
-      if (status != 'all' && item.status != status) return false;
+      // Display status, as web — the raw status hid every level-2 row
+      // (`l2_pending`) under the default Pending filter (Task 80).
+      if (status != 'all' && item.displayStatus != status) return false;
       if (query.isNotEmpty) {
         final haystack = '${item.employeeName} ${item.employeeCode}'.toLowerCase();
         if (!haystack.contains(query)) return false;

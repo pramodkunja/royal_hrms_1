@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +15,7 @@ import '../../domain/entities/separation_entity.dart';
 import '../providers/separation_providers.dart';
 import '../widgets/separation_form_sheet.dart';
 import '../widgets/separation_status.dart';
+import '../../../../core/router/access_control.dart';
 
 // Status filter chips shown above the list. 'pending' bundles both
 // pending/stage2_pending — the two-stage chain's in-progress statuses —
@@ -36,6 +39,13 @@ class SeparationScreen extends ConsumerStatefulWidget {
 class _SeparationScreenState extends ConsumerState<SeparationScreen> {
   String _scope = ''; // '' = my requests, 'team' = approval queue
   String _status = '';
+  // Web's "Filter by employee code…": the typed text, and the trimmed value
+  // actually sent (employee_id) once typing pauses — web sends one request
+  // per keystroke; here a short pause, Enter or Clear sends it.
+  final _employeeCtrl = TextEditingController();
+  String _employeeId = '';
+  Timer? _employeeDebounce;
+  static const _kEmployeeDebounce = Duration(milliseconds: 400);
   final _scrollController = ScrollController();
 
   @override
@@ -46,14 +56,47 @@ class _SeparationScreenState extends ConsumerState<SeparationScreen> {
 
   @override
   void dispose() {
+    _employeeDebounce?.cancel();
+    _employeeCtrl.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
+  /// Applies a filter change from page 1 (a new list), as web's setPage(1).
+  void _applyFilter(VoidCallback change) {
+    setState(change);
+    if (_scrollController.hasClients) _scrollController.jumpTo(0);
+  }
+
+  void _setEmployeeId(String raw) {
+    _employeeDebounce?.cancel();
+    final v = raw.trim();
+    if (v != _employeeId) _applyFilter(() => _employeeId = v);
+  }
+
+  void _onEmployeeChanged(String raw) {
+    setState(() {}); // clear button
+    _employeeDebounce?.cancel();
+    _employeeDebounce = Timer(_kEmployeeDebounce, () {
+      if (mounted) _setEmployeeId(raw);
+    });
+  }
+
+  /// Web shows the filter to canPickEmployee || canApprove; the backend
+  /// accepts employee_id with employees.view or separation.approve (has_perm,
+  /// so settings.edit and superusers too).
+  bool _canFilterByEmployee(bool canApprove, bool canPickEmployee) => canApprove || canPickEmployee;
+
+  SeparationListFilter _filterFor(bool canFilter) =>
+      (scope: _scope, status: _status, employeeId: canFilter ? _employeeId : '');
+
   void _onScroll() {
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 200) {
-      final filter = (scope: _scope, status: _status);
+      final user = ref.read(authStateProvider).valueOrNull?.user;
+      final filter = _filterFor(_canFilterByEmployee(
+          userHasAnyPermission(user, const ['separation.approve', 'settings.edit']),
+          userHasAnyPermission(user, const ['employees.view', 'settings.edit'])));
       ref.read(separationListProvider(filter).notifier).loadMore();
     }
   }
@@ -61,12 +104,14 @@ class _SeparationScreenState extends ConsumerState<SeparationScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull?.user;
-    final canApprove = (user?.hasPermission('separation.approve') ?? false) ||
-        (user?.hasPermission('settings.edit') ?? false);
-    final canPickEmployee = (user?.hasPermission('employees.view') ?? false) ||
-        (user?.hasPermission('settings.edit') ?? false);
+    // Web separation/_access.ts useAnyPermission (superuser flag or any code).
+    final canApprove = userHasAnyPermission(user, const ['separation.approve', 'settings.edit']);
+    final canPickEmployee = userHasAnyPermission(user, const ['employees.view', 'settings.edit']);
 
-    final filter = (scope: _scope, status: _status);
+    final canFilter = _canFilterByEmployee(canApprove, canPickEmployee);
+    // Never sent without the permission, whatever the field held.
+    final filter = _filterFor(canFilter);
+    final filteringEmployee = filter.employeeId.isNotEmpty;
     final listAsync = ref.watch(separationListProvider(filter));
 
     return Scaffold(
@@ -102,7 +147,7 @@ class _SeparationScreenState extends ConsumerState<SeparationScreen> {
                       child: _ScopeTab(
                         label: 'My Requests',
                         selected: _scope == '',
-                        onTap: () => setState(() => _scope = ''),
+                        onTap: () => _applyFilter(() => _scope = ''),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -110,10 +155,39 @@ class _SeparationScreenState extends ConsumerState<SeparationScreen> {
                       child: _ScopeTab(
                         label: 'Team Requests',
                         selected: _scope == 'team',
-                        onTap: () => setState(() => _scope = 'team'),
+                        onTap: () => _applyFilter(() => _scope = 'team'),
                       ),
                     ),
                   ],
+                ),
+              ),
+            if (canFilter)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: TextField(
+                  key: const Key('separation-employee-filter'),
+                  controller: _employeeCtrl,
+                  onChanged: _onEmployeeChanged,
+                  onSubmitted: _setEmployeeId,
+                  textInputAction: TextInputAction.search,
+                  autocorrect: false,
+                  style: AppTextStyles.body,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: 'Filter by employee code…',
+                    prefixIcon: const Icon(Icons.badge_outlined, size: 18),
+                    suffixIcon: _employeeCtrl.text.isEmpty
+                        ? null
+                        : IconButton(
+                            key: const Key('separation-employee-filter-clear'),
+                            tooltip: 'Clear',
+                            icon: const Icon(Icons.close, size: 18),
+                            onPressed: () {
+                              _employeeCtrl.clear();
+                              _setEmployeeId('');
+                            },
+                          ),
+                  ),
                 ),
               ),
             SizedBox(
@@ -128,7 +202,7 @@ class _SeparationScreenState extends ConsumerState<SeparationScreen> {
                   return _StatusFilterChip(
                     label: label,
                     selected: _status == value,
-                    onTap: () => setState(() => _status = value),
+                    onTap: () => _applyFilter(() => _status = value),
                   );
                 },
               ),
@@ -146,12 +220,16 @@ class _SeparationScreenState extends ConsumerState<SeparationScreen> {
                               height: MediaQuery.of(context).size.height * 0.5,
                               child: AppEmptyState(
                                 icon: Icons.logout_outlined,
-                                title: _scope == 'team'
-                                    ? 'No requests to act on'
-                                    : 'No separation requests',
-                                message: _scope == 'team'
-                                    ? 'Nothing needs your attention right now.'
-                                    : 'You have not filed a separation request.',
+                                title: filteringEmployee
+                                    ? 'No separation requests'
+                                    : _scope == 'team'
+                                        ? 'No requests to act on'
+                                        : 'No separation requests',
+                                message: filteringEmployee
+                                    ? 'No requests for employee ${filter.employeeId}${_status.isEmpty ? '' : ' with this status'}.'
+                                    : _scope == 'team'
+                                        ? 'Nothing needs your attention right now.'
+                                        : 'You have not filed a separation request.',
                               ),
                             ),
                           ],
@@ -176,7 +254,9 @@ class _SeparationScreenState extends ConsumerState<SeparationScreen> {
                             }
                             return _RequestCard(
                               request: state.items[i],
-                              showEmployee: _scope == 'team',
+                              // Another employee's requests: name them, as
+                              // web's table always does.
+                              showEmployee: _scope == 'team' || filteringEmployee,
                             );
                           },
                         ),
@@ -303,12 +383,17 @@ class _RequestCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Row(
+                      // Wrap, not Row: at large text sizes the "Action
+                      // needed" tag moves to its own line instead of
+                      // overflowing the card (Task 73 layout check).
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 2,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(request.requestRef,
                               style: AppTextStyles.label.copyWith(fontSize: 13)),
                           if (request.canApprove) ...[
-                            const SizedBox(width: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 6, vertical: 2),

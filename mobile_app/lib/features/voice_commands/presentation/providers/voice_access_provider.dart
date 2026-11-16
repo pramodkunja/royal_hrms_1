@@ -23,6 +23,9 @@ import 'package:mobile_app/features/auth/presentation/states/auth_state.dart';
 bool isVoiceAssistantAllowed(AuthState? authState) {
   final user = authState?.user;
   if (!(authState?.isAuthenticated ?? false) || user == null) return false;
+  // Web app/layout.tsx: hidden when the company's subscription has no Voice
+  // Commands module (unknown module list → shown). The API enforces it too.
+  if (!user.hasModule('voice_commands')) return false;
   return !user.mustChangePassword &&
       !user.needsOnboarding &&
       !user.awaitingApproval &&

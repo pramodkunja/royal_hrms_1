@@ -23,8 +23,8 @@ final _kBalanceDisplay = [
   (code: 'sick', icon: Icons.medical_services_outlined, color: AppColors.info),
 ];
 
-// ── Date formatter (ISO → 'D MMM') — mirrors leave_dashboard_tab.dart/
-// leave_approvals_tab.dart's private helper of the same name. ────────────────
+// ── Date formatter (ISO → 'D MMM') — mirrors leave_dashboard_tab.dart's
+// private helper of the same name. ───────────────────────────────────────────
 
 String _fmtIso(String iso) {
   if (iso.isEmpty) return '—';
@@ -811,7 +811,7 @@ class _MiniStatCard extends StatelessWidget {
   }
 }
 
-// ── Leave request row (mirrors leave_approvals_tab.dart's _ApprovalCard
+// ── Leave request row (mirrors the former Leave Approvals tab's _ApprovalCard
 // visual style, adapted with LOP badge + approver/actioned-date footer) ─────
 
 class _LeaveRequestRow extends StatelessWidget {

@@ -101,7 +101,10 @@ UserEntity user(List<String> perms, {bool superuser = false}) => UserEntity(
       assessmentStatus: 'complete',
     );
 
-const _base = ['recruitment.view', 'employees.view', 'leave.view', 'leave.approve', 'expenses.view'];
+// attendance.create: since Task 71g the Attendance Corrections row needs the
+// corrections queue's own permission; kept here so these totals still cover
+// every row (this file is about the separation count).
+const _base = ['recruitment.view', 'employees.view', 'leave.view', 'leave.approve', 'expenses.view', 'attendance.create'];
 final approver = user(const [..._base, 'separation.approve']);
 final nonApprover = user(_base);
 

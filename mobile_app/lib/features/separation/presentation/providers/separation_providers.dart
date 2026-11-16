@@ -35,8 +35,12 @@ final separationReasonsProvider =
 // approval queue, only effective when the viewer holds separation.approve
 // (see SeparationRemoteDataSource.fetchRequests doc comment). status: '' =
 // no filter, or a comma-joined list (e.g. 'approved,rejected,cancelled' for
-// a history view).
-typedef SeparationListFilter = ({String scope, String status});
+// a history view). employeeId: '' = none; otherwise web's "Filter by
+// employee code…" value, sent as employee_id — the backend matches it
+// exactly (User.employee_id), needs employees.view or separation.approve,
+// answers 404 "Employee not found." for an unknown or out-of-branch code,
+// and ignores scope while it is set (separation.py list view).
+typedef SeparationListFilter = ({String scope, String status, String employeeId});
 
 final separationListProvider = AsyncNotifierProvider.autoDispose
     .family<SeparationListNotifier, SeparationLoadMoreState, SeparationListFilter>(
@@ -48,6 +52,7 @@ class SeparationListNotifier extends AutoDisposeFamilyAsyncNotifier<
     final result = await ref.read(separationRepositoryProvider).getRequests(
           scope: arg.scope.isEmpty ? null : arg.scope,
           status: arg.status.isEmpty ? null : arg.status,
+          employeeId: arg.employeeId.isEmpty ? null : arg.employeeId,
           page: page,
         );
     return SeparationLoadMoreState(

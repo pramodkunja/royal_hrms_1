@@ -34,7 +34,9 @@ class NotificationBellButton extends ConsumerWidget {
           Positioned(
             top: 6,
             right: 4,
-            child: Container(
+            // IgnorePointer: at large text sizes the badge grows over the
+            // bell; taps on it must still open the panel (Task 75).
+            child: IgnorePointer(child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
               decoration: BoxDecoration(
@@ -52,7 +54,7 @@ class NotificationBellButton extends ConsumerWidget {
                   height: 1.3,
                 ),
               ),
-            ),
+            )),
           ),
       ],
     );

@@ -27,6 +27,12 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       logout();
     });
 
+    // A refreshed access token carries the company's current modules (web
+    // reads the same claim) — menus, tabs and the route guard follow it.
+    ref.listen<List<String>?>(sessionModulesProvider, (_, modules) {
+      if (modules != null) updateEnabledModules(modules);
+    });
+
     try {
       final cachedUser = await _repository.getCachedUser();
       return AuthState(user: cachedUser);
@@ -65,5 +71,14 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     final user = state.value?.user;
     if (user == null || user.assessmentStatus == status) return;
     state = AsyncData(AuthState(user: user.copyWith(assessmentStatus: status)));
+  }
+
+  /// The company's module list changed (see sessionModulesProvider).
+  void updateEnabledModules(List<String> modules) {
+    final user = state.value?.user;
+    if (user == null) return;
+    final next = user.withEnabledModules(modules);
+    if (next.sameModulesAs(user)) return;
+    state = AsyncData(AuthState(user: next));
   }
 }

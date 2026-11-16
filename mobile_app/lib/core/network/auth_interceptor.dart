@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../constants/api_constants.dart';
@@ -165,6 +167,7 @@ class AuthInterceptor extends Interceptor {
       final newAccessToken = _extractToken(refreshResp.data, 'access');
       if (newAccessToken != null) {
         await _storage.write(AppConstants.keyAccessToken, newAccessToken);
+        await _applyModules(modulesFromAccessToken(newAccessToken));
       }
       final newRefreshToken = _extractToken(refreshResp.data, 'refresh');
       if (newRefreshToken != null) {
@@ -218,6 +221,30 @@ class AuthInterceptor extends Interceptor {
           as Map<String, dynamic>)[key] as String?;
     } catch (_) {
       return null;
+    }
+  }
+
+  /// A refreshed token's `modules` claim: kept with the cached user (so it
+  /// survives a restart) and handed to AuthNotifier. An absent claim changes
+  /// nothing. Never fails the refresh.
+  Future<void> _applyModules(List<String>? modules) async {
+    if (modules == null) return;
+    try {
+      final raw = await _storage.read(AppConstants.keyUserData);
+      if (raw != null) {
+        final map = jsonDecode(raw);
+        if (map is Map<String, dynamic>) {
+          map['enabled_modules'] = modules;
+          await _storage.write(AppConstants.keyUserData, jsonEncode(map));
+        }
+      }
+    } catch (_) {
+      // A storage problem must not fail the refresh; the in-memory update below still applies.
+    }
+    try {
+      _ref.read(sessionModulesProvider.notifier).state = modules;
+    } catch (_) {
+      // Provider may already be disposed during hot-restart — ignore.
     }
   }
 

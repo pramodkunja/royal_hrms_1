@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../../../shared/documents/document_links.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -109,13 +109,8 @@ class _LeaveRequestDetailSheetState
     );
   }
 
-  Future<void> _openDocument(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
+  // Web LeaveRequestDetailModal: "View attached document" opens in a new tab.
+  Future<void> _openDocument(String url) => openDocumentLinkExternally(context, ref, url);
 
   Future<void> _approve(String id) async {
     setState(() => _actionLoading = true);

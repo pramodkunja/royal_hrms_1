@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../shared/widgets/module_gate.dart';
 import 'package:mobile_app/core/router/access_control.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
@@ -61,18 +62,28 @@ class HrDashboardView extends ConsumerWidget {
             const SizedBox(height: 20),
             // Latest announcement above Attendance (requested order; web
             // HRDashboard also renders AnnouncementCard right after the console).
-            const _AnnouncementCard(),
-            const SizedBox(height: 20),
-            const AttendanceRingCard(),
-            const SizedBox(height: 20),
+            // Web HRDashboard: announcements, attendance and recruitment cards
+            // only with their modules.
+            const ModuleGate(
+              module: AppModules.announcements,
+              child: Column(children: [_AnnouncementCard(), SizedBox(height: 20)]),
+            ),
+            const ModuleGate(
+              module: AppModules.attendance,
+              child: Column(children: [AttendanceRingCard(), SizedBox(height: 20)]),
+            ),
             QuickAccessCard(items: kQuickItemsHr),
             const SizedBox(height: 20),
-            const _AttendanceSummaryCard(),
-            const SizedBox(height: 20),
+            const ModuleGate(
+              module: AppModules.attendance,
+              child: Column(children: [_AttendanceSummaryCard(), SizedBox(height: 20)]),
+            ),
             const _ActionQueueCard(),
             const SizedBox(height: 20),
-            const _RecruitmentFunnelCard(),
-            const SizedBox(height: 20),
+            const ModuleGate(
+              module: AppModules.recruitment,
+              child: Column(children: [_RecruitmentFunnelCard(), SizedBox(height: 20)]),
+            ),
             const _EmployeeLifecycleCard(),
             const SizedBox(height: 20),
             const _DepartmentHeadcountCard(),
@@ -102,7 +113,12 @@ class _HrConsoleHeader extends ConsumerWidget {
     // Same provider AttendanceRingCard (rendered right below this) reads for
     // its own clocked-in state — one canonical source, so the two never
     // disagree about whether this person is currently clocked in.
-    final clockedIn = ref.watch(todayAttendanceProvider).valueOrNull?.isClockedIn ?? false;
+    // Web HrConsole: attendance status / corrections only with the attendance
+    // module, active interviews only with recruitment.
+    final attendanceOn = userHasModule(user, AppModules.attendance);
+    final recruitmentOn = userHasModule(user, AppModules.recruitment);
+    final clockedIn =
+        attendanceOn && (ref.watch(todayAttendanceProvider).valueOrNull?.isClockedIn ?? false);
 
     return ConsoleHeaderShell(
       heroContent: Column(
@@ -136,20 +152,22 @@ class _HrConsoleHeader extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 16),
-          ConsoleInfoBar(clockedIn: clockedIn),
+          if (attendanceOn) ConsoleInfoBar(clockedIn: clockedIn),
         ],
       ),
       statsContent: kpisAsync.when(
         data: (kpis) => ConsoleStatsRow(stats: [
           (icon: Icons.groups_outlined, value: '${kpis.totalWorkforce}', label: 'Workforce', color: AppColors.primary),
           (icon: Icons.pending_actions_outlined, value: '${kpis.pendingActions}', label: 'Pending', color: AppColors.warning),
-          (icon: Icons.person_search_outlined, value: '${kpis.activeInterviews}', label: 'Interviews', color: AppColors.info),
-          (
-            icon: Icons.edit_calendar_outlined,
-            value: '${kpis.attendanceCorrectionPending}',
-            label: 'Corrections',
-            color: AppColors.error,
-          ),
+          if (recruitmentOn)
+            (icon: Icons.person_search_outlined, value: '${kpis.activeInterviews}', label: 'Interviews', color: AppColors.info),
+          if (attendanceOn)
+            (
+              icon: Icons.edit_calendar_outlined,
+              value: '${kpis.attendanceCorrectionPending}',
+              label: 'Corrections',
+              color: AppColors.error,
+            ),
         ]),
         loading: () => const Padding(
           padding: EdgeInsets.symmetric(vertical: 16),
@@ -345,7 +363,11 @@ class _ActionQueueCard extends ConsumerWidget {
     // Web HrActionQueue: the separation figure comes from the separation API
     // (team scope count) and is added to the pending total; the dashboard
     // endpoint's own separation_requests is a hard-coded 0 and is ignored.
-    final separationAsync = ref.watch(hrSeparationQueueCountProvider);
+    // Web ROW_MODULES: rows whose module the company lacks are left out (and
+    // the separation count isn't fetched without the separation module).
+    final separationOn = userHasModule(user, AppModules.separation);
+    final separationAsync =
+        separationOn ? ref.watch(hrSeparationQueueCountProvider) : const AsyncValue<int?>.data(null);
     final separationCount = separationAsync.valueOrNull;
 
     return SectionCard(
@@ -359,35 +381,37 @@ class _ActionQueueCard extends ConsumerWidget {
           // `counted` rows are the ones the backend sums into total_pending
           // (HRActionQueueView), so the total shown matches the visible rows.
           final rows = [
-            (path: AppRoutes.candidateReview, counted: true, row: ActionRow(
+            (path: AppRoutes.candidateReview, module: null, perm: null, counted: true, row: ActionRow(
               icon: Icons.how_to_reg_outlined,
               iconColor: AppColors.info,
               title: 'Candidate Reviews',
               count: queue.candidateReviews,
               onTap: () => goToDashboardSection(context, AppRoutes.candidateReview),
             )),
-            (path: AppRoutes.leave, counted: true, row: ActionRow(
+            // Web HrActionQueue: Leave Approvals opens the Approvals screen
+            // (the Leave page has no approval queue); leave module only.
+            (path: AppRoutes.approvals, module: AppModules.leave, perm: 'leave.approve', counted: true, row: ActionRow(
               icon: Icons.beach_access_outlined,
               iconColor: AppColors.success,
               title: 'Leave Approvals',
               count: queue.leaveApprovals,
-              onTap: () => goToDashboardSection(context, AppRoutes.leave),
+              onTap: () => goToDashboardSection(context, AppRoutes.approvals),
             )),
-            (path: AppRoutes.approvals, counted: true, row: ActionRow(
+            (path: AppRoutes.approvals, module: AppModules.attendance, perm: 'attendance.create', counted: true, row: ActionRow(
               icon: Icons.edit_calendar_outlined,
               iconColor: AppColors.error,
               title: 'Attendance Corrections',
               count: queue.attendanceCorrections,
               onTap: () => goToDashboardSection(context, AppRoutes.approvals),
             )),
-            (path: AppRoutes.expenses, counted: true, row: ActionRow(
+            (path: AppRoutes.expenses, module: null, perm: null, counted: true, row: ActionRow(
               icon: Icons.account_balance_wallet_outlined,
               iconColor: AppColors.warning,
               title: 'Expense Claims',
               count: queue.expenseClaims,
               onTap: () => goToDashboardSection(context, AppRoutes.expenses),
             )),
-            (path: AppRoutes.employees, counted: true, row: ActionRow(
+            (path: AppRoutes.employees, module: null, perm: null, counted: true, row: ActionRow(
               icon: Icons.person_add_alt_outlined,
               iconColor: AppColors.primary,
               title: 'Onboarding Reviews',
@@ -402,7 +426,7 @@ class _ActionQueueCard extends ConsumerWidget {
                 goToDashboardSection(context, AppRoutes.employees);
               },
             )),
-            (path: AppRoutes.separation, counted: true, row: ActionRow(
+            (path: AppRoutes.separation, module: null, perm: null, counted: true, row: ActionRow(
               key: const Key('hr-queue-separation'),
               icon: Icons.logout_outlined,
               iconColor: AppColors.secondary,
@@ -417,7 +441,14 @@ class _ActionQueueCard extends ConsumerWidget {
                       : '…',
               onTap: () => goToDashboardSection(context, AppRoutes.separation),
             )),
-          ].where((r) => canAccessPath(user, r.path)).toList();
+          ]
+              // Opening Approvals is not permission for every queue on it
+              // (Task 71g): the two Approvals rows also need the queue's own
+              // permission — leave.approve / attendance.create, the same
+              // checks the Team Approvals tab uses for those queues.
+              .where((r) => canAccessPath(user, r.path) && userHasModule(user, r.module))
+              .where((r) => r.perm == null || userHasPermission(user, r.perm!))
+              .toList();
           final total = rows.where((r) => r.counted).fold<int>(0, (sum, r) => sum + r.row.count);
 
           return Column(

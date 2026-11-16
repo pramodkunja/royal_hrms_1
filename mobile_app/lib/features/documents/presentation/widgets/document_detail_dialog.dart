@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../../../shared/documents/document_links.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/document_entity.dart';
@@ -198,7 +198,10 @@ class _DocumentDetailDialogState
         SizedBox(
           height: 42,
           child: OutlinedButton.icon(
-            onPressed: () => _openUrl(fileUrl),
+            key: const Key('document-preview'),
+            // Web documents/page.tsx: Preview shows the file inside the app.
+            onPressed: () => previewDocumentInApp(context, ref,
+                url: fileUrl, title: _doc.title, fileName: _doc.fileName),
             icon: const Icon(Icons.visibility_outlined, size: 16),
             label: const Text('Preview'),
             style: OutlinedButton.styleFrom(
@@ -212,7 +215,9 @@ class _DocumentDetailDialogState
         SizedBox(
           height: 42,
           child: FilledButton.icon(
-            onPressed: () => _openUrl(fileUrl),
+            key: const Key('document-download'),
+            // Web: Download hands the file link to the browser.
+            onPressed: () => openDocumentLinkExternally(context, ref, fileUrl),
             icon: const Icon(Icons.download_outlined, size: 16),
             label: const Text('Download'),
             style: FilledButton.styleFrom(
@@ -269,14 +274,6 @@ class _DocumentDetailDialogState
     ));
   }
 
-  Future<void> _openUrl(String url) async {
-    if (url.isEmpty) return;
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
 
 }
 

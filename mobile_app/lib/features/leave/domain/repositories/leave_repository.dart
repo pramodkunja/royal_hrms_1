@@ -3,8 +3,8 @@ import '../entities/leave_entity.dart';
 
 abstract class LeaveRepository {
   Future<List<LeaveTypeEntity>> getLeaveTypes();
-  Future<List<LeaveBalanceEntity>> getLeaveBalances();
-  Future<LeaveStatsEntity> getLeaveStats();
+  Future<List<LeaveBalanceEntity>> getLeaveBalances({int? year});
+  Future<LeaveStatsEntity> getLeaveStats({String? scope, int? year});
   Future<List<LeaveRequestEntity>> getLeaveRequests(
       {String? status, String? scope, int? pageSize});
   Future<LeaveRequestPageEntity> getLeaveRequestsPaginated({
@@ -36,7 +36,7 @@ abstract class LeaveRepository {
     MultipartFile? document,
   });
   Future<void> cancelLeave(String id);
-  Future<void> approveLeave(String id);
+  Future<void> approveLeave(String id, {String? remarks});
   Future<void> rejectLeave(String id, String rejectReason);
   Future<List<LeaveCalendarEventEntity>> getLeaveCalendar({
     int? year,

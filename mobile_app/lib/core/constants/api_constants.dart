@@ -101,6 +101,16 @@ class ApiConstants {
   static String employeeAssets(String employeeUuid) => '/assets/employees/$employeeUuid/';
   static String employeeAssetAssign(String employeeUuid) => '/assets/employees/$employeeUuid/assign/';
   static String assetReturn(String assignmentId) => '/assets/assignments/$assignmentId/return/';
+  // Settings → Assets (catalogue).
+  static String assetDetail(String id) => '/assets/$id/';
+  static const String assetCategories = '/assets/categories/';
+  static const String assetTypes = '/assets/types/';
+  static String assetSendToMaintenance(String id) => '/assets/$id/send-to-maintenance/';
+  static String assetCompleteMaintenance(String recordId) => '/assets/maintenance/$recordId/complete/';
+  static const String assetImport = '/assets/import/';
+  static const String assetImportSample = '/assets/import/sample/';
+  static const String assetAssignImport = '/assets/assignments/import/';
+  static const String assetAssignImportSample = '/assets/assignments/import/sample/';
   static String employeePromotions(String employeeId) => '/employees/$employeeId/promotions/';
   // Web API.employees.idCard (EmployeeIdCardView: employees.view + branch scope).
   static String employeeIdCard(String employeeId) => '/employees/$employeeId/id-card/';
@@ -181,9 +191,9 @@ class ApiConstants {
   static const String referralsAll =
       '/recruitment/referrals/all/'; // GET, requires recruitment.view
   static const String referralRules =
-      '/recruitment/referral-rules/'; // GET (any user) / POST (requires settings.view)
+      '/recruitment/referral-rules/'; // GET (settings.view for the admin list) / POST (settings.edit)
   static String referralRuleDetail(int id) =>
-      '/recruitment/referral-rules/$id/'; // PATCH / DELETE, requires settings.view
+      '/recruitment/referral-rules/$id/'; // PATCH / DELETE, require settings.edit
 
   // Assessments (HR admin management) — matches backend /api/assessments/...
   static const String assessments = '/assessments/';
@@ -241,6 +251,12 @@ class ApiConstants {
   // anywhere in apps/payroll — EmployeePayslip.payslip_pdf is a FileField
   // nothing ever populates, on web or here, so there's no "download" call to
   // wire up; don't add one without new backend work first.
+  // Employee Profile → Salary / Payroll tabs (payroll.view; Assign / Revise
+  // CTC: payroll.edit).
+  static const String payrollEmployeeSalary = '/payroll/employee-salary/';
+  static String payrollEmployeeSalaryHistory(String employeeId) => '/payroll/employee-salary/history/$employeeId/';
+  static String payrollEmployeePayslips(String employeeId) => '/payroll/employees/$employeeId/payslips/';
+  static const String payrollStructures = '/payroll/structures/';
   static const String myPayslips = '/payroll/my-payslips/';
   static String acknowledgePayslip(String id) => '/payroll/my-payslips/$id/acknowledge/';
   static String payslipDetail(String id) => '/payroll/payslips/$id/';
@@ -421,6 +437,12 @@ class ApiConstants {
   static const String attendanceLateJustification = '/attendance/late-justification/';
   static String attendanceLateJustificationResubmit(String id) => '/attendance/late-justification/$id/resubmit/';
   static String attendanceCorrectionDocument(String id) => '/attendance/corrections/$id/document/';
+  // Approval delegation & automatic escalation (backend apps/approvals).
+  static const String approvalsEscalationSettings = '/approvals/escalation-settings/';
+  static const String approvalsEscalationHeadCandidates = '/approvals/escalation-settings/head-candidates/';
+  static const String approvalsDelegations = '/approvals/delegations/';
+  static const String approvalsDelegationsEligible = '/approvals/delegations/eligible/';
+  static String approvalsDelegationRevoke(String id) => '/approvals/delegations/$id/revoke/';
   // Maximum Late Arrivals Per Month (Settings → Leave Policy) — tracking only.
   static const String attendanceLateArrivalLimit = '/attendance/late-arrival-limit/';
   static const String attendanceLateArrivalLimitEmployees = '/attendance/late-arrival-limit/employees/';

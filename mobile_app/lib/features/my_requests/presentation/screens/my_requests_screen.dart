@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
+import '../../../../core/router/access_control.dart' show userHasModule;
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
@@ -11,6 +12,7 @@ import '../../../../shared/widgets/blue_hero_banner.dart';
 import '../../../expenses/presentation/widgets/expense_detail_dialog.dart';
 import '../../../leave/presentation/widgets/leave_request_detail_sheet.dart';
 import '../../../wfh/presentation/widgets/wfh_request_detail_sheet.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../providers/my_requests_providers.dart';
 import '../widgets/my_correction_detail_sheet.dart';
 
@@ -94,6 +96,15 @@ class _MyRequestsTypeTabsRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final active = ref.watch(myRequestsTypeTabProvider);
     final counts = ref.watch(myRequestsTypeTabCountsProvider);
+    // Web: tabs only for the company's modules (unknown list → all).
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
+    final tabs =
+        MyRequestsTypeTab.values.where((t) => userHasModule(user, moduleForMyRequestsTab(t))).toList();
+    if (!tabs.contains(active)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(myRequestsTypeTabProvider.notifier).state = MyRequestsTypeTab.all;
+      });
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 0, 8),
@@ -101,7 +112,7 @@ class _MyRequestsTypeTabsRow extends ConsumerWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.only(right: 16),
         child: Row(
-          children: MyRequestsTypeTab.values
+          children: tabs
               .map((t) => Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: _TypeTabChip(

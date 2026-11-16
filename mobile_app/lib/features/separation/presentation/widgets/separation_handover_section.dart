@@ -58,6 +58,7 @@ class _SeparationHandoverSectionState
   }
 
   Future<void> _addTask() async {
+    if (!_canManageTasks) return; // the form is only shown then, too
     final task = _taskCtrl.text.trim();
     if (task.isEmpty) {
       _showError('Task name is required.');
@@ -88,7 +89,13 @@ class _SeparationHandoverSectionState
     }
   }
 
+  /// Web KtHandoverSection: canManage = canApprove && !is_own — an approver
+  /// never toggles or deletes tasks on their OWN separation (the backend
+  /// would allow it: approver or owner may toggle, an approver may delete).
+  bool get _canManageTasks => widget.canManage && !widget.isOwn;
+
   Future<void> _toggle(SeparationHandoverTaskEntity t) async {
+    if (!_canManageTasks) return;
     final err = await ref.read(separationActionsProvider).setTaskCompletion(
           requestId: widget.requestId,
           taskId: t.id,
@@ -98,6 +105,7 @@ class _SeparationHandoverSectionState
   }
 
   Future<void> _delete(SeparationHandoverTaskEntity t) async {
+    if (!_canManageTasks) return;
     final err = await ref
         .read(separationActionsProvider)
         .deleteTask(requestId: widget.requestId, taskId: t.id);
@@ -202,7 +210,7 @@ class _SeparationHandoverSectionState
                           Divider(height: 20, color: AppColors.border),
                         _TaskRow(
                           task: tasks[i],
-                          canManage: widget.canManage,
+                          canManage: _canManageTasks,
                           onToggle: () => _toggle(tasks[i]),
                           onDelete: () => _delete(tasks[i]),
                         ),

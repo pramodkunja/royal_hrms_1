@@ -61,13 +61,16 @@ class BranchRemoteDataSource {
 
   // ── Branches ────────────────────────────────────────────────────────────────
 
+  /// [status] ('active' / 'inactive') is optional; without it the request
+  /// is unchanged.
   Future<List<BranchModel>> fetchBranches({
     int page = 1,
     int pageSize = 50,
+    String? status,
   }) async {
     final res = await _dio.get(
       ApiConstants.branches,
-      queryParameters: {'page': page, 'page_size': pageSize},
+      queryParameters: {'page': page, 'page_size': pageSize, if (status != null) 'status': status},
     );
     final data = _unwrap(res.data);
     if (data is Map<String, dynamic>) {

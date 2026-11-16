@@ -9,6 +9,7 @@ import '../../data/models/assessment_config_model.dart';
 import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
 import '../widgets/settings_page_header.dart';
+import '../../../../core/router/access_control.dart';
 
 enum _FieldKey { passPercentage, maxAttempts, timeLimit }
 
@@ -18,8 +19,9 @@ class AssessmentConfigScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(assessmentConfigProvider);
-    final permissions = ref.watch(authStateProvider).valueOrNull?.user?.permissions ?? const [];
-    final canEdit = permissions.contains('assessments.edit');
+    // Backend AssessmentSettingsView.put: has_perm(assessments.edit)
+    // (superuser / settings.edit / the codename).
+    final canEdit = userHasPermission(ref.watch(authStateProvider).valueOrNull?.user, 'assessments.edit');
 
     return Scaffold(
       backgroundColor: AppColors.background,

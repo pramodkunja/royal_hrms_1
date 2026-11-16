@@ -9,6 +9,7 @@ import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
 import '../widgets/settings_page_header.dart';
 import '../../../attendance/presentation/widgets/weekly_off_patterns_card.dart';
+import '../../../../core/router/access_control.dart';
 
 class AttendanceRulesScreen extends ConsumerStatefulWidget {
   const AttendanceRulesScreen({super.key});
@@ -82,8 +83,8 @@ class _AttendanceRulesScreenState extends ConsumerState<AttendanceRulesScreen> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(attendanceSettingsProvider);
-    final permissions = ref.watch(authStateProvider).valueOrNull?.user?.permissions ?? const [];
-    final canEdit = permissions.contains('settings.edit');
+    // Backend AttendanceSettingsAPIView: HasSettingsPermission (superuser or settings.edit to write).
+    final canEdit = userHasPermission(ref.watch(authStateProvider).valueOrNull?.user, 'settings.edit');
     final busy = _savingAll || _savingSection != null;
 
     return Scaffold(

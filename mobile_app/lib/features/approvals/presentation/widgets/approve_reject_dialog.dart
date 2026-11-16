@@ -19,12 +19,14 @@ Future<String?> showRemarksDialog(
   final ctrl = TextEditingController();
   final color = forReject ? AppColors.error : AppColors.success;
   final dialogTitle = title ?? (forReject ? 'Reject Request' : 'Approve Request');
+  // Outside the builder (Task 81): declared inside, it was reset on every
+  // rebuild, so "Please provide a reason." never appeared.
+  String? error;
 
   return showDialog<String>(
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setState) {
-        String? error;
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(

@@ -14,6 +14,7 @@ import '../widgets/face_capture_bottom_sheet.dart';
 import '../widgets/face_consent_text.dart';
 import '../widgets/face_status_badge.dart';
 import 'package:mobile_app/shared/widgets/app_error_state.dart';
+import '../../../../core/router/access_control.dart';
 
 /// HR-assisted registration — HR captures an employee's face in person and
 /// it's approved immediately (mirrors web's app/dashboard/face-id-registrations/page.tsx).
@@ -39,10 +40,16 @@ class _FaceIdRegistrationsScreenState extends ConsumerState<FaceIdRegistrationsS
   bool _loadingStatus = false;
   bool _registering = false;
 
+  /// Same rule as the build gate (web usePermission, backend has_perm on
+  /// every face_registration_hr endpoint) — re-checked before each request
+  /// so a locked screen never asks the server for employees or statuses.
+  bool get _canRegister =>
+      userHasPermission(ref.read(authStateProvider).valueOrNull?.user, 'facial_recognition.approve');
+
   @override
   void initState() {
     super.initState();
-    _search('');
+    if (_canRegister) _search('');
   }
 
   @override
@@ -58,6 +65,7 @@ class _FaceIdRegistrationsScreenState extends ConsumerState<FaceIdRegistrationsS
   }
 
   Future<void> _search(String query) async {
+    if (!_canRegister) return;
     setState(() {
       _loadingEmployees = true;
       _employeesError = null;
@@ -78,6 +86,7 @@ class _FaceIdRegistrationsScreenState extends ConsumerState<FaceIdRegistrationsS
   }
 
   Future<void> _selectEmployee(FaceEmployeeEntity employee) async {
+    if (!_canRegister) return;
     setState(() {
       _selected = employee;
       _status = null;
@@ -116,7 +125,7 @@ class _FaceIdRegistrationsScreenState extends ConsumerState<FaceIdRegistrationsS
 
   Future<void> _openCapture() async {
     final employee = _selected;
-    if (employee == null || !mounted) return;
+    if (employee == null || !mounted || !_canRegister) return;
 
     final result = await showFaceCaptureSheet(
       context,
@@ -155,7 +164,9 @@ class _FaceIdRegistrationsScreenState extends ConsumerState<FaceIdRegistrationsS
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull?.user;
-    final canRegister = user?.hasPermission('facial_recognition.approve') ?? false;
+    // Web usePermission("facial_recognition.approve"); backend
+    // face_registration_hr.py: has_perm(facial_recognition.approve).
+    final canRegister = userHasPermission(user, 'facial_recognition.approve');
 
     if (!canRegister) {
       return Scaffold(

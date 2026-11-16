@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/router/access_control.dart' show moduleForPath, userHasModule;
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -167,6 +170,16 @@ const _kTiles = <_Tile>[
     desc: 'Who approves leave, expenses, resignation and loans',
     route: AppRoutes.settingsApprovalRules,
   ),
+  // Web settings/page.tsx "assets" (Modules; shown with the assets module).
+  _Tile(
+    cat: _Tab.modules,
+    icon: Icons.inventory_2_outlined,
+    iconColor: Color(0xFF5D4037),
+    iconBg: Color(0xFFEFEBE9),
+    label: 'Assets',
+    desc: 'Track company equipment and assign it to employees',
+    route: AppRoutes.settingsAssets,
+  ),
   // _Tile(
   //   cat: _Tab.modules,
   //   icon: Icons.people_outline, iconColor: Color(0xFF37474F), iconBg: Color(0xFFECEFF1),
@@ -270,19 +283,26 @@ List<_Section> _grouped(List<_Tile> tiles) {
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   _Tab _active = _Tab.all;
 
+  /// Web settings/page.tsx: only items whose module (by route) the
+  /// company's subscription includes; unknown module list → all.
+  List<_Tile> get _available {
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
+    return _kTiles.where((t) => userHasModule(user, moduleForPath(t.route ?? ''))).toList();
+  }
+
   List<_Tile> get _filtered => _active == _Tab.all
-      ? _kTiles
-      : _kTiles.where((t) => t.cat == _active).toList();
+      ? _available
+      : _available.where((t) => t.cat == _active).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -306,7 +326,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icons.settings_outlined,
             title: 'Settings',
             subtitle: 'Configure all Royal HRMS modules',
-            trailing: _HeaderStat(count: _kTiles.length, label: 'Options'),
+            trailing: _HeaderStat(count: _available.length, label: 'Options'),
           ),
         ),
         const SizedBox(height: 4),

@@ -10,6 +10,7 @@ import '../providers/referral_providers.dart';
 import '../widgets/refer_candidate_dialog.dart';
 import '../widgets/referral_card.dart';
 import '../widgets/referral_rule_card.dart';
+import '../../../../core/router/access_control.dart';
 
 class ReferralsScreen extends ConsumerStatefulWidget {
   const ReferralsScreen({super.key});
@@ -31,9 +32,9 @@ class _ReferralsScreenState extends ConsumerState<ReferralsScreen>
   @override
   void initState() {
     super.initState();
-    final permissions =
-        ref.read(authStateProvider).valueOrNull?.user?.permissions ?? const [];
-    _showAllTab = permissions.contains('recruitment.view');
+    // Web referrals/page.tsx isAdmin = usePermission("recruitment.view");
+    // backend ReferralAllView: has_perm(recruitment.view).
+    _showAllTab = userHasPermission(ref.read(authStateProvider).valueOrNull?.user, 'recruitment.view');
     _tabController = TabController(length: _showAllTab ? 3 : 2, vsync: this);
   }
 

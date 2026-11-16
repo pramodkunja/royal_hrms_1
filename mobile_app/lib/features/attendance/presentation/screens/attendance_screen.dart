@@ -2644,7 +2644,12 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
       setState(() => isStart ? _otStart = picked : _otEnd = picked);
   }
 
+  /// Web OtEntryTab: "Add OT Entry" only for usePermission("attendance.create")
+  /// (superuser flag or the permission — userHasPermission). The form and the
+  /// OT records stay visible. The server also needs attendance staff
+  /// (hr_attendance.py HROvertimeCreateView → can_manage_attendance).
   Future<void> _submit() async {
+    if (!ref.read(permissionProvider('attendance.create'))) return;
     if (_employeeId == null) {
       setState(() => _error = 'Please select an employee.');
       return;
@@ -2873,7 +2878,9 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                           .copyWith(color: AppColors.error)),
                 ],
                 const SizedBox(height: 14),
+                if (ref.watch(permissionProvider('attendance.create')))
                 SizedBox(
+                  key: const Key('ot-add-entry'),
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: _submitting ? null : _submit,
@@ -3071,6 +3078,12 @@ class _InvalidPunchCard extends ConsumerStatefulWidget {
 class _InvalidPunchCardState extends ConsumerState<_InvalidPunchCard> {
   bool _busy = false;
 
+  /// Web InvalidPunchesTab: Assign, Convert and Discard all need
+  /// usePermission("attendance.edit") (superuser flag or the permission —
+  /// userHasPermission). The server also checks attendance staff +
+  /// attendance.create (apps/attendance/views/hr_audit_actions.py).
+  bool get _canEdit => ref.read(permissionProvider('attendance.edit'));
+
   Future<void> _run(Future<String?> Function() action) async {
     setState(() => _busy = true);
     final error = await action();
@@ -3085,6 +3098,7 @@ class _InvalidPunchCardState extends ConsumerState<_InvalidPunchCard> {
   }
 
   Future<void> _assign() async {
+    if (!_canEdit) return;
     final assignedTo = await showDialog<String>(
       context: context,
       builder: (_) => const _AssignPunchDialog(),
@@ -3096,6 +3110,7 @@ class _InvalidPunchCardState extends ConsumerState<_InvalidPunchCard> {
   }
 
   Future<void> _convert() async {
+    if (!_canEdit) return;
     final result = await showDialog<({String punchType, String time})>(
       context: context,
       builder: (_) => const _ConvertPunchDialog(),
@@ -3109,6 +3124,7 @@ class _InvalidPunchCardState extends ConsumerState<_InvalidPunchCard> {
   }
 
   Future<void> _discard() async {
+    if (!_canEdit) return;
     final remarks = await showDialog<String>(
       context: context,
       builder: (_) => const _DiscardPunchDialog(),
@@ -3122,6 +3138,7 @@ class _InvalidPunchCardState extends ConsumerState<_InvalidPunchCard> {
   @override
   Widget build(BuildContext context) {
     final punch = widget.punch;
+    final canEdit = ref.watch(permissionProvider('attendance.edit'));
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
@@ -3174,7 +3191,9 @@ class _InvalidPunchCardState extends ConsumerState<_InvalidPunchCard> {
             Expanded(child: _KV(k: 'Branch', v: punch.branch)),
           ]),
           const SizedBox(height: 10),
-          if (_busy)
+          if (!canEdit)
+            const SizedBox.shrink(key: Key('invalid-punch-no-actions'))
+          else if (_busy)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 6),
               child: Center(

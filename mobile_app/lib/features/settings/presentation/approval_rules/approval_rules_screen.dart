@@ -11,6 +11,8 @@ import '../providers/approval_rules_providers.dart';
 import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
 import '../widgets/settings_page_header.dart';
+import 'escalation_settings_card.dart';
+import '../../../../core/router/access_control.dart';
 
 // Dart port of web's WORKFLOW_ICONS map
 // (frontend/app/dashboard/settings/approval-rules/page.tsx).
@@ -28,8 +30,8 @@ class ApprovalRulesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(approvalRulesProvider);
-    final permissions = ref.watch(authStateProvider).valueOrNull?.user?.permissions ?? const [];
-    final canEdit = permissions.contains('settings.edit');
+    // Backend ApprovalWorkflowRuleView: CanManageRoles = has_perm(settings.edit).
+    final canEdit = userHasPermission(ref.watch(authStateProvider).valueOrNull?.user, 'settings.edit');
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -69,6 +71,8 @@ class ApprovalRulesScreen extends ConsumerWidget {
                     onEdit: () => _openEditor(context, ref, rules[i]),
                   ),
                 ],
+                // Web approval-rules/page.tsx: below the workflow rules.
+                const EscalationSettingsCard(),
               ],
             ),
           );

@@ -10,6 +10,7 @@ import '../widgets/settings_app_bar.dart';
 import '../widgets/settings_page_header.dart';
 import 'widgets/document_type_form_sheet.dart';
 import 'widgets/onboarding_field_form_sheet.dart';
+import '../../../../core/router/access_control.dart';
 
 // Steps 0-3 are OnboardingFieldConfig; this sentinel is a UI-only 5th tab
 // backed by the separate DocumentTypeConfig model — mirrors web's
@@ -114,8 +115,8 @@ class _OnboardingFieldsScreenState extends ConsumerState<OnboardingFieldsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final permissions = ref.watch(authStateProvider).valueOrNull?.user?.permissions ?? const [];
-    final canEdit = permissions.contains('settings.edit');
+    // Web usePermission("settings.edit"); backend HasSettingsPermission (superuser or settings.edit to write).
+    final canEdit = userHasPermission(ref.watch(authStateProvider).valueOrNull?.user, 'settings.edit');
 
     return Scaffold(
       backgroundColor: AppColors.background,

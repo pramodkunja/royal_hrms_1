@@ -301,10 +301,11 @@ void main() {
       expect((old.cancellationStatus, old.canRequestCancellation, old.canDecideCancellation), ('', false, false));
     });
 
-    test('6/11. reviewer tab: superuser flag or leave.approve, with the leave module; not settings.edit alone', () {
+    test('6/11. reviewer tab: superuser flag, leave.approve or settings.edit (backend has_perm), with the leave module', () {
       expect(canReviewLeaveCancellations(approver), isTrue);
       expect(canReviewLeaveCancellations(user('s', const [], superuser: true)), isTrue);
-      expect(canReviewLeaveCancellations(user('h', ['settings.edit'])), isFalse);
+      // Task 77: settings.edit passes the backend's has_perm (older session, no flag).
+      expect(canReviewLeaveCancellations(user('h', ['settings.edit'])), isTrue);
       expect(canReviewLeaveCancellations(employee), isFalse);
       expect(canReviewLeaveCancellations(user(mgrId, ['leave.approve'], modules: ['attendance'])), isFalse);
       expect(canReviewLeaveCancellations(user(mgrId, ['leave.approve'], modules: ['leave'])), isTrue);
@@ -569,8 +570,9 @@ void main() {
           await tabsFor(tester, user(mgrId, ['leave.approve', 'expenses.approve'])), contains('Leave Cancellations'));
       expect(await tabsFor(tester, user(mgrId, ['leave.approve', 'expenses.approve'], modules: ['expenses'])),
           isNot(contains('Leave Cancellations')));
-      expect(await tabsFor(tester, user('h', ['settings.edit', 'expenses.approve'])),
-          isNot(contains('Leave Cancellations')));
+      // Task 77: settings.edit passes the backend's has_perm('leave.approve')
+      // (LeaveCancellationListView), also for a session without the flag.
+      expect(await tabsFor(tester, user('h', ['settings.edit', 'expenses.approve'])), contains('Leave Cancellations'));
     });
   });
 }

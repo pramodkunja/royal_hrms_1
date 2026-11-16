@@ -220,9 +220,12 @@ class SeparationDocumentModel extends SeparationDocumentEntity {
     super.fileUrl,
     required super.uploadedByName,
     required super.createdAt,
+    super.uploadedById,
+    super.canDelete,
   });
 
   factory SeparationDocumentModel.fromJson(Map<String, dynamic> json) {
+    final uploader = json['uploaded_by'];
     return SeparationDocumentModel(
       id: json['id']?.toString() ?? '',
       documentType: json['document_type'] as String? ?? 'other',
@@ -230,6 +233,8 @@ class SeparationDocumentModel extends SeparationDocumentEntity {
       fileUrl: json['file_url'] as String?,
       uploadedByName: json['uploaded_by_name'] as String? ?? '',
       createdAt: json['created_at'] as String? ?? '',
+      uploadedById: (uploader is String || uploader is int) && '$uploader'.isNotEmpty ? '$uploader' : null,
+      canDelete: json['can_delete'] is bool ? json['can_delete'] as bool : null,
     );
   }
 }

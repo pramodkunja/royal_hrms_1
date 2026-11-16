@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../shared/widgets/module_gate.dart';
 import 'package:mobile_app/core/router/access_control.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
@@ -74,21 +75,36 @@ class EmployeeDashboardView extends ConsumerWidget {
             // the employee's separation is fully approved.
             const EmpNoticePeriodCard(),
             // Company Policy etc. still to acknowledge — nothing when none.
-            const PendingAcknowledgementsBanner(),
+            // Web: only with the documents module.
+            const ModuleGate(module: AppModules.documents, child: PendingAcknowledgementsBanner()),
             // Latest announcement above Attendance (requested order; web's
             // EmpUpdatesCard also sits above the rest). Nothing when empty.
             const _EmpAnnouncementBanner(),
-            const AttendanceRingCard(),
-            const SizedBox(height: 20),
+            // Clock-in and today's attendance: web shows ClockInButton only
+            // with the attendance module.
+            const ModuleGate(
+              module: AppModules.attendance,
+              child: Column(children: [AttendanceRingCard(), SizedBox(height: 20)]),
+            ),
             QuickAccessCard(items: kQuickItemsEmployee),
             const SizedBox(height: 20),
-            const _EmpLeaveBalancesCard(),
-            const SizedBox(height: 20),
-            // Web row 3 pairs Leave Balances with Upcoming Holidays.
-            const EmpUpcomingHolidaysCard(),
-            const SizedBox(height: 20),
-            const _EmpAttendanceSummaryCard(),
-            const SizedBox(height: 20),
+            // Web row 3 pairs Leave Balances with Upcoming Holidays — both
+            // only with the leave module.
+            const ModuleGate(
+              module: AppModules.leave,
+              child: Column(children: [
+                _EmpLeaveBalancesCard(),
+                SizedBox(height: 20),
+                EmpUpcomingHolidaysCard(),
+                SizedBox(height: 20),
+              ]),
+            ),
+            // Monthly attendance (web shows attendance figures only with the
+            // attendance module).
+            const ModuleGate(
+              module: AppModules.attendance,
+              child: Column(children: [_EmpAttendanceSummaryCard(), SizedBox(height: 20)]),
+            ),
             const _EmpActionItemsCard(),
             const SizedBox(height: 20),
             const _EmpRecentRequestsCard(),
@@ -126,7 +142,12 @@ class _EmpConsoleCard extends ConsumerWidget {
     // Same provider AttendanceRingCard (rendered right below this) reads for
     // its own clocked-in state — one canonical source, so the two never
     // disagree about whether this person is currently clocked in.
-    final clockedIn = ref.watch(todayAttendanceProvider).valueOrNull?.isClockedIn ?? false;
+    // Web EmpConsole: attendance status and stats only with the attendance
+    // module (not fetched otherwise); the expense stat only with expenses.
+    final attendanceOn = userHasModule(user, AppModules.attendance);
+    final expensesOn = userHasModule(user, AppModules.expenses);
+    final clockedIn =
+        attendanceOn && (ref.watch(todayAttendanceProvider).valueOrNull?.isClockedIn ?? false);
 
     return ConsoleHeaderShell(
       heroContent: Column(
@@ -160,30 +181,33 @@ class _EmpConsoleCard extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 16),
-          ConsoleInfoBar(clockedIn: clockedIn),
+          if (attendanceOn) ConsoleInfoBar(clockedIn: clockedIn),
         ],
       ),
       statsContent: kpisAsync.when(
         data: (kpis) => ConsoleStatsRow(stats: [
-          (
-            icon: Icons.fingerprint,
-            value: '${kpis.daysPresent}/${kpis.workingDays}',
-            label: 'Days Present',
-            color: AppColors.success,
-          ),
-          (icon: Icons.event_busy_outlined, value: '${kpis.absentDays}', label: 'Absent Days', color: AppColors.error),
+          if (attendanceOn) ...[
+            (
+              icon: Icons.fingerprint,
+              value: '${kpis.daysPresent}/${kpis.workingDays}',
+              label: 'Days Present',
+              color: AppColors.success,
+            ),
+            (icon: Icons.event_busy_outlined, value: '${kpis.absentDays}', label: 'Absent Days', color: AppColors.error),
+          ],
           (
             icon: Icons.checklist_outlined,
             value: '${kpis.pendingActionItems}',
             label: 'Action Items',
             color: AppColors.warning,
           ),
-          (
-            icon: Icons.receipt_long_outlined,
-            value: '${kpis.pendingExpenseClaims}',
-            label: 'Expenses',
-            color: AppColors.info,
-          ),
+          if (expensesOn)
+            (
+              icon: Icons.receipt_long_outlined,
+              value: '${kpis.pendingExpenseClaims}',
+              label: 'Expenses',
+              color: AppColors.info,
+            ),
         ]),
         loading: () => const Padding(
           padding: EdgeInsets.symmetric(vertical: 16),

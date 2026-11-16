@@ -196,19 +196,36 @@ void main() {
       await _pumpHome(tester, _user(const ['employees.view', 'leave.view', 'expenses.view']));
       expect(find.byType(HrDashboardView), findsOneWidget);
       final titles = tester.widgetList<ActionRow>(_queueRows()).map((r) => r.title).toList();
-      expect(titles, ['Leave Approvals', 'Expense Claims', 'Onboarding Reviews', 'Separation Requests']);
-      // Leave 2 + Expenses 4 + Onboarding 5 (separation is not part of the server's total).
-      expect(_queueTotal(tester), '11');
+      // Leave Approvals opens the Approvals screen, as web (Task 71d) — hidden
+      // without an approve permission.
+      expect(titles, ['Expense Claims', 'Onboarding Reviews', 'Separation Requests']);
+      // Expenses 4 + Onboarding 5 (separation is not part of the server's total).
+      expect(_queueTotal(tester), '9');
       await _unmount(tester);
     });
 
-    testWidgets('without the approve permissions only Attendance Corrections (→ Approvals) is hidden', (tester) async {
+    testWidgets('without the approve permissions the rows that open Approvals are hidden', (tester) async {
       await _pumpHome(tester,
           _user(roles.hr.permissions.where((p) => !p.endsWith('.approve')).toList(), role: 'hr_custom'));
       final titles = tester.widgetList<ActionRow>(_queueRows()).map((r) => r.title);
-      expect(titles, isNot(contains('Attendance Corrections')));
+      // Task 71g: HR keeps attendance.create + attendance.edit — attendance
+      // staff, so the backend lets them approve corrections and delegate
+      // (can_manage_attendance); Approvals is reachable and that row shows.
+      // Leave Approvals still needs leave.approve.
+      expect(titles, contains('Attendance Corrections'));
+      expect(titles, isNot(contains('Leave Approvals'))); // → Approvals since Task 71d
       expect(titles, contains('Candidate Reviews'));
-      expect(_queueTotal(tester), '12');
+      expect(_queueTotal(tester), '13'); // 1 + 3 + 4 + 5
+      await _unmount(tester);
+    });
+
+    testWidgets('Task 71g: each Approvals row needs its own queue permission', (tester) async {
+      await _pumpHome(tester, _user(const ['employees.view', 'leave.view', 'leave.approve', 'expenses.view']));
+      final titles = tester.widgetList<ActionRow>(_queueRows()).map((r) => r.title);
+      expect(titles, contains('Leave Approvals'));
+      // Approvals is reachable, but without attendance.create there is no
+      // corrections queue there (approvals_providers canCorrection).
+      expect(titles, isNot(contains('Attendance Corrections')));
       await _unmount(tester);
     });
 

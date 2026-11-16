@@ -71,6 +71,32 @@ class LeaveStatsNotifier extends AutoDisposeAsyncNotifier<LeaveStatsEntity> {
   }
 }
 
+/// The clock the Leave Dashboard reads its year from. Overridable in tests.
+final leaveDashboardClockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
+
+/// The year web's Leave Dashboard and Apply Leave form ask for: web lib/fiscalYear.ts
+/// getLeaveYear() = `new Date().getFullYear()` — the plain calendar year,
+/// because the backend keys LeaveBalance.year by calendar year (its own
+/// default when no year is sent is the financial-year start year, which
+/// differs from January to March). Re-read whenever the dashboard is
+/// rebuilt or refreshed, so a new year is picked up.
+final leaveDashboardYearProvider = Provider.autoDispose<int>((ref) => ref.watch(leaveDashboardClockProvider)().year);
+
+/// The signed-in user's own balances for the calendar year — web
+/// LeaveDashboard.tsx and ApplyLeaveForm.tsx both send
+/// `API.leave.balance?year=<getLeaveYear()>`. Used by the Leave Dashboard and
+/// Apply Leave (Task 72.2); leaveBalancesProvider keeps its original
+/// year-less request for anything else.
+final myLeaveBalancesProvider = FutureProvider.autoDispose<List<LeaveBalanceEntity>>((ref) =>
+    ref.read(leaveRepositoryProvider).getLeaveBalances(year: ref.watch(leaveDashboardYearProvider)));
+
+/// The signed-in user's own leave stats for the Leave Dashboard — web
+/// LeaveDashboard.tsx `API.leave.stats?year=<year>&scope=own`. scope=own
+/// matters: without it the backend returns an approver's team figures.
+/// Used for the Loss of Pay card (lop_days).
+final myLeaveStatsProvider = FutureProvider.autoDispose<LeaveStatsEntity>((ref) =>
+    ref.read(leaveRepositoryProvider).getLeaveStats(scope: 'own', year: ref.watch(leaveDashboardYearProvider)));
+
 // ── Leave Requests ────────────────────────────────────────────────────────────
 
 final leaveRequestsProvider = AsyncNotifierProvider.autoDispose<
@@ -111,7 +137,9 @@ class LeaveRequestsNotifier
           );
       state = AsyncData([created, ...state.valueOrNull ?? []]);
       ref.invalidate(leaveStatsProvider);
-      ref.invalidate(leaveBalancesProvider);
+      // No leaveBalancesProvider refresh (Task 78): no screen shows the
+      // year-less list any more, and invalidating it only sent an unused
+      // request. Apply Leave refreshes the calendar-year balances itself.
       return null;
     } catch (e) {
       return _friendly(e);

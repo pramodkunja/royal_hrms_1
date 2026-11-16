@@ -912,11 +912,17 @@ final auditFiltersProvider =
     StateProvider.autoDispose<AuditLogFilters>((ref) => const AuditLogFilters());
 
 /// Audit Log modules the backend actually writes (`AuditLog.module`, matched
-/// exactly by GET /settings/audit/?module=). Web's select offers a subset
-/// (accounts, settings, company, branch, announcements, birthday).
+/// exactly by GET /settings/audit/?module= and by the admin dashboard's
+/// /dashboard/system-admin/audit-logs/?module=), verified against every
+/// AuditLog create call (Task 74). Web's Settings select offers a subset
+/// (accounts, settings, company, branch, announcements, birthday). Attendance
+/// events are written to the separate AttendanceAuditLog, so there is no
+/// 'attendance' value here.
 const kAuditLogModules = <({String value, String label})>[
   (value: 'accounts', label: 'Accounts'),
   (value: 'announcements', label: 'Announcements'),
+  // apps/approvals/services.py: delegation created / revoked (Task 74).
+  (value: 'approvals', label: 'Approvals'),
   (value: 'assets', label: 'Assets'),
   (value: 'birthday', label: 'Birthday'),
   (value: 'branch', label: 'Branch'),

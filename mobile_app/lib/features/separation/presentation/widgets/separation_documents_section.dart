@@ -1,7 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../../../shared/documents/document_links.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/app_button.dart';
@@ -23,17 +23,40 @@ const _kDocumentTypes = [
   ('other', 'Other'),
 ];
 
+/// Whether [doc] may be deleted, by the backend's rule
+/// (SeparationDocumentDetailView.delete): a separation approver (within the
+/// request's visibility, checked by the server), or the person who uploaded
+/// it. The server's own `can_delete` wins when it sends one; the uploader is
+/// recognised only by user id (`uploaded_by`) — never by name. Owning the
+/// separation request alone is not enough.
+bool canDeleteSeparationDocument(
+  SeparationDocumentEntity doc, {
+  required bool isApprover,
+  required String? currentUserId,
+}) {
+  if (doc.canDelete != null) return doc.canDelete!;
+  if (isApprover) return true;
+  return doc.uploadedById != null && currentUserId != null && doc.uploadedById == currentUserId;
+}
+
 /// Document list + upload — separate from the one optional document
 /// attached at request-creation time (shown in the Separation Details
-/// section instead). Gated on canUpload (owner or an approver) — mirrors
-/// web's DocumentsSection.tsx (canPickEmployee || canApprove).
+/// section instead). Upload is for the owner or an approver (backend
+/// SeparationDocumentListCreateView.post); Delete follows
+/// [canDeleteSeparationDocument].
 class SeparationDocumentsSection extends ConsumerStatefulWidget {
   final String requestId;
   final bool canUpload;
+
+  /// separation.approve by the backend's has_perm (superuser / settings.edit pass).
+  final bool isApprover;
+  final String? currentUserId;
   const SeparationDocumentsSection({
     super.key,
     required this.requestId,
     required this.canUpload,
+    this.isApprover = false,
+    this.currentUserId,
   });
 
   @override
@@ -103,7 +126,11 @@ class _SeparationDocumentsSectionState
     if (err != null) _showError(err);
   }
 
+  bool _canDelete(SeparationDocumentEntity doc) =>
+      canDeleteSeparationDocument(doc, isApprover: widget.isApprover, currentUserId: widget.currentUserId);
+
   Future<void> _delete(SeparationDocumentEntity doc) async {
+    if (!_canDelete(doc)) return;
     final err = await ref.read(separationActionsProvider).deleteDocument(
           requestId: widget.requestId,
           documentId: doc.id,
@@ -111,13 +138,8 @@ class _SeparationDocumentsSectionState
     if (err != null) _showError(err);
   }
 
-  Future<void> _open(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
+  // Web DocumentsSection: a plain link opening in a new tab.
+  Future<void> _open(String url) => openDocumentLinkExternally(context, ref, url);
 
   @override
   Widget build(BuildContext context) {
@@ -149,7 +171,7 @@ class _SeparationDocumentsSectionState
                         if (i > 0) Divider(height: 16, color: AppColors.border),
                         _DocRow(
                           doc: docs[i],
-                          canDelete: widget.canUpload,
+                          canDelete: _canDelete(docs[i]),
                           onOpen: docs[i].fileUrl == null
                               ? null
                               : () => _open(docs[i].fileUrl!),

@@ -17,10 +17,12 @@ class ReferralRulesSettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(referralRulesAdminProvider);
-    final permissions = ref.watch(authStateProvider).valueOrNull?.user?.permissions ?? const [];
-    // Backend (ReferralRuleListCreateView/ReferralRuleDetailView) actually
-    // authorizes create/update/delete on 'settings.view', not 'settings.edit'.
-    final canEdit = permissions.contains('settings.view');
+    // Backend ReferralRuleListCreateView / ReferralRuleDetailView: GET needs
+    // settings.view; POST, PATCH and DELETE need has_perm(settings.edit)
+    // (superuser or settings.edit). Web shows the controls to every viewer
+    // and relies on the 403; here a settings.view-only viewer gets the list
+    // read-only.
+    final canEdit = canManageReferralRules(ref.watch(authStateProvider).valueOrNull?.user);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -79,6 +81,7 @@ class ReferralRulesSettingsScreen extends ConsumerWidget {
   }
 
   Future<void> _openEditor(BuildContext context, WidgetRef ref, ReferralRuleEntity? rule) async {
+    if (!canManageReferralRules(ref.read(authStateProvider).valueOrNull?.user)) return;
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -92,6 +95,7 @@ class ReferralRulesSettingsScreen extends ConsumerWidget {
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref, ReferralRuleEntity rule) async {
+    if (!canManageReferralRules(ref.read(authStateProvider).valueOrNull?.user)) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -373,11 +377,16 @@ class _RuleEditorDialogState extends State<_RuleEditorDialog> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Show this rule to employees'),
-                      value: _isActive,
-                      onChanged: (v) => setState(() => _isActive = v),
+                    // Own Material: a ListTile directly on the coloured
+                    // Container trips Flutter's ink assertion.
+                    Material(
+                      type: MaterialType.transparency,
+                      child: SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Show this rule to employees'),
+                        value: _isActive,
+                        onChanged: (v) => setState(() => _isActive = v),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     SizedBox(

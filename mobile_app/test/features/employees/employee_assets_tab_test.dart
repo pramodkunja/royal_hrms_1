@@ -297,8 +297,10 @@ void main() {
     testWidgets('1/13. Assets sits between Promotion and Send Wishes; Benefit is gone; other tabs kept',
         (tester) async {
       await pumpProfile(tester, editor, openTab: false);
-      expect(tabLabels(tester),
-          ['Profile', 'Leave', 'Attendance', 'Approval Matrix', 'Promotion', 'Assets', 'Send Wishes']);
+      // Web PROFILE_TABS order (Salary / Payroll since Task 70).
+      expect(tabLabels(tester), [
+        'Profile', 'Salary', 'Payroll', 'Leave', 'Attendance', 'Approval Matrix', 'Promotion', 'Assets', 'Send Wishes', //
+      ]);
       expect(find.text('Benefit'), findsNothing);
       expect(find.textContaining('coming soon'), findsNothing);
       expect(api.listGets, 0, reason: 'nothing fetched until the tab is opened');

@@ -21,8 +21,12 @@ class LeaveRemoteDataSource {
         .toList();
   }
 
-  Future<List<LeaveBalanceModel>> fetchLeaveBalances() async {
-    final res = await _dio.get(ApiConstants.leaveBalances);
+  /// [year] as web's Leave Dashboard sends it (`?year=<calendar year>`);
+  /// omitted keeps the original request (the backend's default year).
+  Future<List<LeaveBalanceModel>> fetchLeaveBalances({int? year}) async {
+    final res = await _dio.get(ApiConstants.leaveBalances, queryParameters: {
+      if (year != null) 'year': year,
+    });
     final data = _unwrap(res.data);
     final List<dynamic> list = data is List ? data : [];
     return list
@@ -31,8 +35,13 @@ class LeaveRemoteDataSource {
         .toList();
   }
 
-  Future<LeaveStatsModel> fetchLeaveStats() async {
-    final res = await _dio.get(ApiConstants.leaveStats);
+  /// [scope] 'own' and [year] as web's Leave Dashboard sends them
+  /// (`?year=…&scope=own`); both omitted keeps the original request.
+  Future<LeaveStatsModel> fetchLeaveStats({String? scope, int? year}) async {
+    final res = await _dio.get(ApiConstants.leaveStats, queryParameters: {
+      if (year != null) 'year': year,
+      if (scope != null) 'scope': scope,
+    });
     return LeaveStatsModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
@@ -163,10 +172,15 @@ class LeaveRemoteDataSource {
     ];
   }
 
-  Future<void> approveLeave(String id) async {
+  /// POST /leave/requests/<id>/approve/ — web TeamApprovalsSection sends
+  /// `{action, remarks}`; the backend (LeaveApprovalView) strips `remarks`
+  /// and stores it as l1_remarks or l2_remarks for whichever stage is open.
+  /// [remarks] is sent whenever given (also as '' — web always sends it from
+  /// the Approvals inbox); callers that pass none keep the old payload.
+  Future<void> approveLeave(String id, {String? remarks}) async {
     await _dio.post(
       ApiConstants.leaveAction(id),
-      data: {'action': 'approve'},
+      data: {'action': 'approve', if (remarks != null) 'remarks': remarks},
     );
   }
 

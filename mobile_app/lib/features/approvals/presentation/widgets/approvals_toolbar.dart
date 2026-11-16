@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/router/access_control.dart' show userHasModule;
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../providers/approvals_providers.dart';
 
 // ── Type tabs row (All / Leave / Expense / Attendance Correction) ──────────────
@@ -17,7 +19,15 @@ class ApprovalsTypeTabsRow extends ConsumerWidget {
     final active = ref.watch(approvalsTypeTabProvider);
     final counts = ref.watch(approvalsTypeTabCountsProvider);
 
-    const tabs = ApprovalsTypeTab.values;
+    // Web: type tabs only for the company's modules (unknown list → all).
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
+    final tabs = ApprovalsTypeTab.values.where((t) => userHasModule(user, moduleForApprovalsTab(t))).toList();
+    if (!tabs.contains(active)) {
+      // The selected type's module went away — back to All.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(approvalsTypeTabProvider.notifier).state = ApprovalsTypeTab.all;
+      });
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 0, 8),
       child: SingleChildScrollView(
@@ -253,10 +263,11 @@ class _RefreshButton extends ConsumerWidget {
 class _StatusDropdown extends ConsumerWidget {
   const _StatusDropdown();
 
+  // Web STATUS_FILTERS (approvals/_data.ts). "Pending" covers both
+  // approval levels; the row badge still names the stage ("Pending HR").
   static const _options = [
     MapEntry('all', 'All Status'),
     MapEntry('pending', 'Pending'),
-    MapEntry('l2_pending', 'Pending HR'),
     MapEntry('approved', 'Approved'),
     MapEntry('rejected', 'Rejected'),
   ];

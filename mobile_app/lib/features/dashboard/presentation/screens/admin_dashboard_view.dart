@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_app/core/router/access_control.dart' show AppModules, userHasModule;
+import 'package:mobile_app/features/settings/presentation/providers/settings_providers.dart' show kAuditLogModules;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../shared/widgets/module_gate.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:mobile_app/core/router/app_router.dart';
@@ -7,8 +10,7 @@ import 'package:mobile_app/core/theme/app_colors.dart';
 import 'package:mobile_app/core/theme/app_text_styles.dart';
 import 'package:mobile_app/features/attendance/presentation/providers/attendance_providers.dart';
 import 'package:mobile_app/features/auth/presentation/providers/auth_providers.dart';
-import 'package:mobile_app/features/employees/data/models/employee_model.dart'
-    show EmployeeFilters, EmployeeModel;
+import 'package:mobile_app/features/employees/data/models/employee_model.dart' show EmployeeFilters, EmployeeModel;
 import 'package:mobile_app/features/employees/presentation/widgets/send_wish_sheet.dart';
 import 'package:mobile_app/features/employees/presentation/providers/employee_providers.dart'
     show employeeFiltersProvider;
@@ -67,10 +69,16 @@ class AdminDashboardView extends ConsumerWidget {
             const SizedBox(height: 20),
             // Latest announcement above Attendance (requested order; web
             // AdminDashboard also renders AnnouncementCard right after the console).
-            const _AnnouncementCard(),
-            const SizedBox(height: 20),
-            const AttendanceRingCard(),
-            const SizedBox(height: 20),
+            // Web AdminDashboard: announcement and attendance cards only with
+            // their modules.
+            const ModuleGate(
+              module: AppModules.announcements,
+              child: Column(children: [_AnnouncementCard(), SizedBox(height: 20)]),
+            ),
+            const ModuleGate(
+              module: AppModules.attendance,
+              child: Column(children: [AttendanceRingCard(), SizedBox(height: 20)]),
+            ),
             QuickAccessCard(items: kQuickItemsAdmin),
             const SizedBox(height: 20),
             const _PendingApprovalsCard(),
@@ -83,7 +91,7 @@ class AdminDashboardView extends ConsumerWidget {
             const SizedBox(height: 20),
             const _UpcomingBirthdaysCard(),
             const SizedBox(height: 20),
-            const _AuditLogsCard(),
+            const AdminAuditLogsCard(),
           ],
         ),
       ),
@@ -106,7 +114,10 @@ class _SystemConsoleHeader extends ConsumerWidget {
     // Same provider AttendanceRingCard (rendered right below this) reads for
     // its own clocked-in state — one canonical source, so the two never
     // disagree about whether this person is currently clocked in.
-    final clockedIn = ref.watch(todayAttendanceProvider).valueOrNull?.isClockedIn ?? false;
+    // Web AdminDashboard: clock-in / attendance status only with the
+    // attendance module (not fetched otherwise).
+    final attendanceOn = userHasModule(user, AppModules.attendance);
+    final clockedIn = attendanceOn && (ref.watch(todayAttendanceProvider).valueOrNull?.isClockedIn ?? false);
 
     return ConsoleHeaderShell(
       heroContent: Column(
@@ -158,7 +169,7 @@ class _SystemConsoleHeader extends ConsumerWidget {
             orElse: () => const SizedBox.shrink(),
           ),
           const SizedBox(height: 16),
-          ConsoleInfoBar(clockedIn: clockedIn),
+          if (attendanceOn) ConsoleInfoBar(clockedIn: clockedIn),
         ],
       ),
       statsContent: kpisAsync.when(
@@ -219,8 +230,7 @@ class _HealthDot extends StatelessWidget {
         const SizedBox(width: 6),
         Text(
           label,
-          style: AppTextStyles.caption
-              .copyWith(color: Colors.white.withValues(alpha: 0.85)),
+          style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.85)),
         ),
       ],
     );
@@ -235,6 +245,12 @@ class _PendingApprovalsCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final approvalsAsync = ref.watch(pendingApprovalsProvider);
+    // Web PendingApprovalsWidget ROW_MODULES: leave / expense / separation
+    // rows only with their modules.
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
+    final leaveOn = userHasModule(user, AppModules.leave);
+    final expensesOn = userHasModule(user, AppModules.expenses);
+    final separationOn = userHasModule(user, AppModules.separation);
 
     // Built as a bespoke shell (not the shared SectionCard) so the "View
     // all" footer can sit in its own full-bleed, light-tinted band with
@@ -274,22 +290,27 @@ class _PendingApprovalsCard extends ConsumerWidget {
               data: (approvals) => Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ActionRow(
-                    icon: Icons.beach_access_outlined,
-                    iconColor: AppColors.success,
-                    title: 'Leave Requests',
-                    count: approvals.leaveRequests,
-                    onTap: () => goToDashboardSection(context, AppRoutes.leave),
-                  ),
-                  const Divider(height: 24),
-                  ActionRow(
-                    icon: Icons.account_balance_wallet_outlined,
-                    iconColor: AppColors.warning,
-                    title: 'Expense Claims',
-                    count: approvals.expenseClaims,
-                    onTap: () => goToDashboardSection(context, AppRoutes.expenses),
-                  ),
-                  const Divider(height: 24),
+                  if (leaveOn) ...[
+                    ActionRow(
+                      icon: Icons.beach_access_outlined,
+                      iconColor: AppColors.success,
+                      title: 'Leave Requests',
+                      count: approvals.leaveRequests,
+                      // Web PendingApprovalsWidget: Leave Requests → /dashboard/approvals.
+                      onTap: () => goToDashboardSection(context, AppRoutes.approvals),
+                    ),
+                    const Divider(height: 24),
+                  ],
+                  if (expensesOn) ...[
+                    ActionRow(
+                      icon: Icons.account_balance_wallet_outlined,
+                      iconColor: AppColors.warning,
+                      title: 'Expense Claims',
+                      count: approvals.expenseClaims,
+                      onTap: () => goToDashboardSection(context, AppRoutes.expenses),
+                    ),
+                    const Divider(height: 24),
+                  ],
                   ActionRow(
                     icon: Icons.how_to_reg_outlined,
                     iconColor: AppColors.primary,
@@ -301,19 +322,20 @@ class _PendingApprovalsCard extends ConsumerWidget {
                     // already supports) — the closest genuine destination
                     // instead of a fake/dead link.
                     onTap: () {
-                      ref.read(employeeFiltersProvider.notifier).state =
-                          const EmployeeFilters(status: 'onboarding');
+                      ref.read(employeeFiltersProvider.notifier).state = const EmployeeFilters(status: 'onboarding');
                       goToDashboardSection(context, AppRoutes.employees);
                     },
                   ),
-                  const Divider(height: 24),
-                  ActionRow(
-                    icon: Icons.logout_outlined,
-                    iconColor: AppColors.error,
-                    title: 'Separation Requests',
-                    count: approvals.separationRequests,
-                    onTap: () => goToDashboardSection(context, AppRoutes.separation),
-                  ),
+                  if (separationOn) ...[
+                    const Divider(height: 24),
+                    ActionRow(
+                      icon: Icons.logout_outlined,
+                      iconColor: AppColors.error,
+                      title: 'Separation Requests',
+                      count: approvals.separationRequests,
+                      onTap: () => goToDashboardSection(context, AppRoutes.separation),
+                    ),
+                  ],
                 ],
               ),
               loading: () => const SectionMessage(
@@ -334,17 +356,19 @@ class _PendingApprovalsCard extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
                   color: AppColors.backgroundLow,
-                  borderRadius:
-                      const BorderRadius.vertical(bottom: Radius.circular(12)),
+                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
+                    // Flexible: wraps on a narrow screen / large text
+                    // instead of overflowing (found by Task 74's layout check).
+                    Flexible(
+                        child: Text(
                       'View all pending approvals',
-                      style: AppTextStyles.labelLarge.copyWith(
-                          color: AppColors.primary, fontWeight: FontWeight.w700),
-                    ),
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.labelLarge.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700),
+                    )),
                     const SizedBox(width: 4),
                     Icon(Icons.arrow_forward, size: 16, color: AppColors.primary),
                   ],
@@ -373,8 +397,7 @@ class _PendingBadge extends StatelessWidget {
       ),
       child: Text(
         '$count pending',
-        style: AppTextStyles.labelSmall
-            .copyWith(color: AppColors.warning, fontWeight: FontWeight.w700),
+        style: AppTextStyles.labelSmall.copyWith(color: AppColors.warning, fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -401,9 +424,7 @@ class _DepartmentHeadcountCard extends ConsumerWidget {
               label: 'No department data available',
             );
           }
-          final maxValue = list
-              .map((d) => d.count)
-              .fold<int>(0, (a, b) => a > b ? a : b);
+          final maxValue = list.map((d) => d.count).fold<int>(0, (a, b) => a > b ? a : b);
           return Column(
             children: [
               for (var i = 0; i < list.length; i++) ...[
@@ -459,9 +480,7 @@ class _AnnouncementCard extends ConsumerWidget {
           }
           final metaParts = [
             announcement.category,
-            if (announcement.postedBy != null &&
-                announcement.postedBy!.isNotEmpty)
-              announcement.postedBy!,
+            if (announcement.postedBy != null && announcement.postedBy!.isNotEmpty) announcement.postedBy!,
             _formatDateTime(announcement.createdAt),
           ].where((s) => s.isNotEmpty).join(' · ');
 
@@ -509,8 +528,18 @@ String _formatDateTime(String iso) {
   if (dt == null) return iso;
   final local = dt.toLocal();
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   var hour = local.hour % 12;
   if (hour == 0) hour = 12;
@@ -526,8 +555,7 @@ class _EmployeeLifecycleCard extends ConsumerStatefulWidget {
   const _EmployeeLifecycleCard();
 
   @override
-  ConsumerState<_EmployeeLifecycleCard> createState() =>
-      _EmployeeLifecycleCardState();
+  ConsumerState<_EmployeeLifecycleCard> createState() => _EmployeeLifecycleCardState();
 }
 
 class _EmployeeLifecycleCardState extends ConsumerState<_EmployeeLifecycleCard> {
@@ -598,7 +626,6 @@ class _EmployeeLifecycleCardState extends ConsumerState<_EmployeeLifecycleCard> 
   }
 }
 
-
 class _LifecycleList extends StatelessWidget {
   final AdminLifecycleGroup group;
   // 0 = New Joiners, 1 = Notice Period, 2 = Anniversaries.
@@ -646,9 +673,8 @@ class _AdminNoticeRow extends StatelessWidget {
     return GestureDetector(
       key: Key('admin-notice-row-${e.requestId ?? e.employeeId}'),
       behavior: HitTestBehavior.opaque, // the whole row, not just its text
-      onTap: e.employeeId.isEmpty
-          ? null
-          : () => goToDashboardSection(context, '${AppRoutes.employees}/${e.employeeId}'),
+      onTap:
+          e.employeeId.isEmpty ? null : () => goToDashboardSection(context, '${AppRoutes.employees}/${e.employeeId}'),
       child: HrNoticePeriodRow(
         employee: HrLifecycleEmployee(
           employeeId: e.employeeId,
@@ -678,17 +704,13 @@ class _LifecycleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final secondary =
-        '— · ${employee.department.isNotEmpty ? employee.department : "—"}';
-    final trailingText = showYears
-        ? (employee.years != null ? '${employee.years} yrs' : null)
-        : employee.dateOfJoining;
+    final secondary = '— · ${employee.department.isNotEmpty ? employee.department : "—"}';
+    final trailingText = showYears ? (employee.years != null ? '${employee.years} yrs' : null) : employee.dateOfJoining;
 
     return GestureDetector(
       onTap: employee.employeeId.isEmpty
           ? null
-          : () => goToDashboardSection(
-              context, '${AppRoutes.employees}/${employee.employeeId}'),
+          : () => goToDashboardSection(context, '${AppRoutes.employees}/${employee.employeeId}'),
       child: Row(
         children: [
           InitialsAvatar(name: employee.fullName),
@@ -726,8 +748,7 @@ class _LifecycleRow extends StatelessWidget {
               color: AppColors.success.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.event_available_outlined,
-                size: 16, color: AppColors.success),
+            child: Icon(Icons.event_available_outlined, size: 16, color: AppColors.success),
           ),
         ],
       ),
@@ -872,9 +893,7 @@ class _BirthdayRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final alreadySent = ref.watch(adminBirthdayWishesSentProvider).contains(entry.employeeId);
-    final sub = [entry.department, entry.branch]
-        .where((s) => s.isNotEmpty)
-        .join(' · ');
+    final sub = [entry.department, entry.branch].where((s) => s.isNotEmpty).join(' · ');
 
     return Row(
       children: [
@@ -925,23 +944,38 @@ class _BirthdayRow extends ConsumerWidget {
 
 // ── Audit Logs (module filter + Load more pagination) ───────────────────────
 
-const _kAuditModules = <String>[
-  'accounts',
-  'attendance',
-  'hrms',
-  'recruitment',
-  'branch',
-  'announcements',
-];
+/// Options: the module names the backend actually writes to AuditLog.module
+/// (kAuditLogModules — the same list as Settings → Audit Log), sent as-is:
+/// GET /dashboard/system-admin/audit-logs/?module= matches exactly
+/// (SystemAdminAuditLogsView). Task 74 (audit L9): the old 'attendance' and
+/// 'hrms' options matched no audit row — attendance events go to the separate
+/// AttendanceAuditLog — so they always showed nothing. Web's widget sends
+/// display labels ("Employee", "Auth", …), which match nothing either.
+///
+/// An option is hidden when the backend hides its rows: the same view drops
+/// rows whose subscription module is off (apps/tenants/access.py
+/// AUDIT_MODULES). Keyed by the stored names; AUDIT_MODULES spells
+/// announcements' key 'announcement', which no audit row uses, so the
+/// server never hides Announcements rows and the option stays.
+const _kAuditHiddenWith = <String, String>{
+  'leave': AppModules.leave,
+  'payroll': AppModules.payroll,
+  'recruitment': AppModules.recruitment,
+  'assets': AppModules.assets,
+  'documents': AppModules.documents,
+  'wfh': AppModules.wfh,
+};
 
-class _AuditLogsCard extends ConsumerStatefulWidget {
-  const _AuditLogsCard();
+/// The admin dashboard's Audit Logs card (public so its layout can be
+/// tested on its own).
+class AdminAuditLogsCard extends ConsumerStatefulWidget {
+  const AdminAuditLogsCard({super.key});
 
   @override
-  ConsumerState<_AuditLogsCard> createState() => _AuditLogsCardState();
+  ConsumerState<AdminAuditLogsCard> createState() => _AuditLogsCardState();
 }
 
-class _AuditLogsCardState extends ConsumerState<_AuditLogsCard> {
+class _AuditLogsCardState extends ConsumerState<AdminAuditLogsCard> {
   String _module = ''; // '' = All
   final List<AuditLogEntry> _entries = [];
   int _total = 0;
@@ -990,39 +1024,52 @@ class _AuditLogsCardState extends ConsumerState<_AuditLogsCard> {
       title: 'Audit Logs',
       icon: Icons.history_outlined,
       accentColor: AppColors.textSecondary,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _ModuleFilterDropdown(
-            value: _module,
-            onChanged: (m) => setState(() {
-              _module = m;
-              _loadedOnce = false;
-              _entries.clear();
-            }),
-          ),
-          const SizedBox(width: 8),
-          // Full audit trail (search, date range, pagination) already
-          // exists at Settings → Audit Log — this card is just a
-          // summary widget, so "View all" opens that real screen rather
-          // than duplicating its filters here.
-          GestureDetector(
-            onTap: () => context.push(AppRoutes.settingsAuditLog),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'View all',
-                  style: AppTextStyles.labelSmall
-                      .copyWith(color: AppColors.primary, fontWeight: FontWeight.w700),
+      // Bounded (and its parts Flexible) so the filter and "View all" never
+      // push past the card at large text sizes; the title wraps instead.
+      trailing: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.55),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                  child: _ModuleFilterDropdown(
+                options: [
+                  for (final m in kAuditLogModules)
+                    if (userHasModule(ref.watch(authStateProvider).valueOrNull?.user, _kAuditHiddenWith[m.value])) m,
+                ],
+                value: _module,
+                onChanged: (m) => setState(() {
+                  _module = m;
+                  _loadedOnce = false;
+                  _entries.clear();
+                }),
+              )),
+              const SizedBox(width: 8),
+              // Full audit trail (search, date range, pagination) already
+              // exists at Settings → Audit Log — this card is just a
+              // summary widget, so "View all" opens that real screen rather
+              // than duplicating its filters here.
+              Flexible(
+                  child: GestureDetector(
+                onTap: () => context.push(AppRoutes.settingsAuditLog),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        'View all',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.labelSmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(Icons.arrow_forward, size: 13, color: AppColors.primary),
+                  ],
                 ),
-                const SizedBox(width: 2),
-                Icon(Icons.arrow_forward, size: 13, color: AppColors.primary),
-              ],
-            ),
-          ),
-        ],
-      ),
+              )),
+            ],
+          )),
       child: firstPageAsync.when(
         data: (page) {
           if (!_loadedOnce) _applyFirstPage(page);
@@ -1045,9 +1092,12 @@ class _AuditLogsCardState extends ConsumerState<_AuditLogsCard> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    '${_entries.length} of $_total entries',
-                    style: AppTextStyles.caption,
+                  Flexible(
+                    child: Text(
+                      '${_entries.length} of $_total entries',
+                      style: AppTextStyles.caption,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   if (_entries.length < _total)
                     TextButton.icon(
@@ -1085,10 +1135,13 @@ class _AuditLogsCardState extends ConsumerState<_AuditLogsCard> {
 }
 
 class _ModuleFilterDropdown extends StatelessWidget {
-  final String value; // '' = All
+  final String value; // '' = All; otherwise a backend module name
   final ValueChanged<String> onChanged;
 
-  const _ModuleFilterDropdown({required this.value, required this.onChanged});
+  /// Backend value (sent) and readable label (shown).
+  final List<({String value, String label})> options;
+
+  const _ModuleFilterDropdown({required this.options, required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -1096,8 +1149,8 @@ class _ModuleFilterDropdown extends StatelessWidget {
       initialValue: value,
       onSelected: onChanged,
       itemBuilder: (context) => [
-        const PopupMenuItem(value: '', child: Text('All')),
-        for (final m in _kAuditModules) PopupMenuItem(value: m, child: Text(m)),
+        const PopupMenuItem(value: '', child: Text('All modules')),
+        for (final m in options) PopupMenuItem(value: m.value, child: Text(m.label)),
       ],
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1108,7 +1161,20 @@ class _ModuleFilterDropdown extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(value.isEmpty ? 'All' : value, style: AppTextStyles.labelSmall),
+            // Flexible + ellipsis: the header bounds this button, so a long
+            // label ("Financial Year") or large text shrinks instead of
+            // pushing past the screen edge.
+            Flexible(
+              child: Text(
+                value.isEmpty
+                    ? 'All modules'
+                    : options.where((m) => m.value == value).map((m) => m.label).firstOrNull ?? value,
+                key: const Key('dashboard-audit-module'),
+                style: AppTextStyles.labelSmall,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
             const SizedBox(width: 2),
             Icon(Icons.arrow_drop_down, size: 16, color: AppColors.textSecondary),
           ],
@@ -1139,17 +1205,21 @@ class _AuditLogRow extends StatelessWidget {
                 ),
                 child: Text(
                   entry.action.toUpperCase(),
-                  style: AppTextStyles.labelSmall
-                      .copyWith(color: AppColors.info, fontWeight: FontWeight.w700),
+                  style: AppTextStyles.labelSmall.copyWith(color: AppColors.info, fontWeight: FontWeight.w700),
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            Text(
-              _formatDateTime(entry.createdAt),
-              style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+            // Flexible too: at large text sizes badge and date share the row.
+            Flexible(
+              child: Text(
+                _formatDateTime(entry.createdAt),
+                style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
@@ -1169,17 +1239,29 @@ class _AuditLogRow extends StatelessWidget {
             const SizedBox(width: 10),
             Icon(Icons.public, size: 14, color: AppColors.textHint),
             const SizedBox(width: 4),
-            Text(entry.ipAddress ?? '—', style: AppTextStyles.caption),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppColors.backgroundMid,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                entry.module,
-                style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary),
+            Flexible(
+              child: Text(entry.ipAddress ?? '—',
+                  style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+            const SizedBox(width: 8),
+            // Long stored names (e.g. company_financial_year) or large text
+            // shrink with an ellipsis instead of overflowing the row.
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundMid,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    entry.module,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary),
+                  ),
+                ),
               ),
             ),
           ],

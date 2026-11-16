@@ -52,32 +52,55 @@ class StatCard extends StatelessWidget {
             child: Icon(icon, size: 20, color: color),
           ),
           const SizedBox(width: 10),
+          // Large-text safe (Task 78): the value is never truncated — it
+          // shrinks only if it can't fit the width; the label may take two
+          // lines; and when the card is given less height than its content
+          // (a fixed-ratio grid tile, a fixed-height row) the whole block
+          // scales down instead of overflowing. At normal text sizes nothing
+          // changes.
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  valueText ?? '$count',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                    height: 1.0,
-                    letterSpacing: -0.5,
+            child: LayoutBuilder(
+              builder: (context, constraints) => FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  width: constraints.maxWidth,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          valueText ?? '$count',
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimary,
+                            height: 1.0,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        label,
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        // One line at normal text (as before); two when
+                        // the user enlarges text.
+                        maxLines: MediaQuery.textScalerOf(context).scale(1) > 1 ? 2 : 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+              ),
             ),
           ),
         ],
@@ -103,8 +126,11 @@ class StatCardRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 88 at normal text; grows with the text scale (capped) so larger text
+    // gets room — the card scales its content down for anything beyond.
+    final height = (88 * MediaQuery.textScalerOf(context).scale(1)).clamp(88.0, 160.0);
     return SizedBox(
-      height: 88,
+      height: height,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: padding,

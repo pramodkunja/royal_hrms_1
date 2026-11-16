@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../../../shared/documents/document_links.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -95,20 +95,12 @@ class _WfhRequestDetailSheetState
   }
 
   // Same pattern as the Document Center's file links (document_detail_dialog).
-  Future<void> _openProof(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
+  // Web MyWfhRequestsList: the medical proof is a plain link opening in a new tab.
+  Future<void> _openProof(String url) => openDocumentLinkExternally(context, ref, url);
 
-  Future<void> _openMap(double lat, double lng) async {
-    final uri = Uri.parse('https://maps.google.com/?q=$lat,$lng');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
+  Future<void> _openMap(double lat, double lng) => openDocumentLinkExternally(
+      context, ref, 'https://maps.google.com/?q=$lat,$lng',
+      failureMessage: "Couldn't open the map. Please try again.");
 
   Future<void> _cancelRequest(String id) async {
     setState(() => _actionLoading = true);

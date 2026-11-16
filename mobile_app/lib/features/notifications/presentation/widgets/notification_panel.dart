@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/router/access_control.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../auth/domain/entities/user_entity.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/models/notification_model.dart';
 import '../providers/notification_providers.dart';
 
-// Dart port of web's MODULE_ROUTES (components/NotificationBell.tsx).
+// Dart port of web's MODULE_ROUTES (components/NotificationBell.tsx): the
+// destination is chosen by Notification.module only (reference_id is not
+// used, as on web). 'holiday' → HR Attendance, as on web.
 const _kModuleRoutes = <String, String>{
   'leave': AppRoutes.leave,
   'attendance': AppRoutes.myAttendance,
@@ -14,7 +19,29 @@ const _kModuleRoutes = <String, String>{
   'announcement': AppRoutes.announcements,
   'holiday': AppRoutes.attendance,
   'permission': AppRoutes.leave,
+  // Web: promotion → /dashboard/profile — the recipient's own profile (the
+  // backend notifies only the promoted employee; reference_id is the
+  // promotion record, not an employee). Self-service, so every signed-in
+  // user may open it (Task 78).
+  'promotion': AppRoutes.profile,
 };
+
+/// Where tapping [notification] takes [user] (Task 75).
+///
+/// Web routes by module and leaves access to its route guard (proxy.ts),
+/// which sends anyone who can't open the page back to /dashboard — e.g. an
+/// ordinary employee tapping a holiday notification (→ HR Attendance, which
+/// needs attendance.edit or settings.edit) lands on the dashboard, where the
+/// Upcoming Holidays card is. Here that outcome is decided up front with the
+/// same rule as the router (canAccessPath: permission and subscription
+/// module), so the app never navigates to a screen the user can't open.
+/// Unknown, missing or malformed modules go to the dashboard, as on web.
+String notificationDestination(NotificationModel notification, UserEntity? user) {
+  final route = _kModuleRoutes[notification.module];
+  // No signed-in user (still loading / signed out): home, never a screen.
+  if (route == null || user == null) return AppRoutes.dashboard;
+  return canAccessPath(user, route) ? route : AppRoutes.dashboard;
+}
 
 /// Dropdown panel anchored under [NotificationBellButton] — a fixed-width
 /// floating card, not a bottom sheet (matches web's absolutely-positioned
@@ -53,13 +80,21 @@ class NotificationPanel extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
               child: Row(
+                // Both texts may shrink (ellipsis), so a narrow panel or large
+                // text can't overflow the header.
                 children: [
-                  Text('Notifications', style: AppTextStyles.h4.copyWith(color: AppColors.textPrimary)),
-                  const Spacer(),
+                  Expanded(
+                    child: Text('Notifications',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.h4.copyWith(color: AppColors.textPrimary)),
+                  ),
                   if (async.valueOrNull?.notifications.any((n) => !n.isRead) ?? false)
-                    TextButton(
-                      onPressed: () => ref.read(notificationsProvider.notifier).markAllRead(),
-                      child: const Text('Mark all as read'),
+                    Flexible(
+                      child: TextButton(
+                        onPressed: () => ref.read(notificationsProvider.notifier).markAllRead(),
+                        child: const Text('Mark all as read', maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
                     ),
                 ],
               ),
@@ -100,8 +135,8 @@ class NotificationPanel extends ConsumerWidget {
                         onTap: () {
                           ref.read(notificationsProvider.notifier).markRead(n.id);
                           Navigator.of(context).pop();
-                          goToDashboardSection(
-                              context, _kModuleRoutes[n.module] ?? AppRoutes.dashboard);
+                          goToDashboardSection(context,
+                              notificationDestination(n, ref.read(authStateProvider).valueOrNull?.user));
                         },
                       );
                     },

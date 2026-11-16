@@ -11,11 +11,12 @@ class LeaveRepositoryImpl implements LeaveRepository {
   Future<List<LeaveTypeEntity>> getLeaveTypes() => _ds.fetchLeaveTypes();
 
   @override
-  Future<List<LeaveBalanceEntity>> getLeaveBalances() =>
-      _ds.fetchLeaveBalances();
+  Future<List<LeaveBalanceEntity>> getLeaveBalances({int? year}) =>
+      _ds.fetchLeaveBalances(year: year);
 
   @override
-  Future<LeaveStatsEntity> getLeaveStats() => _ds.fetchLeaveStats();
+  Future<LeaveStatsEntity> getLeaveStats({String? scope, int? year}) =>
+      _ds.fetchLeaveStats(scope: scope, year: year);
 
   @override
   Future<List<LeaveRequestEntity>> getLeaveRequests(
@@ -89,7 +90,7 @@ class LeaveRepositoryImpl implements LeaveRepository {
   Future<void> cancelLeave(String id) => _ds.cancelLeave(id);
 
   @override
-  Future<void> approveLeave(String id) => _ds.approveLeave(id);
+  Future<void> approveLeave(String id, {String? remarks}) => _ds.approveLeave(id, remarks: remarks);
 
   @override
   Future<void> rejectLeave(String id, String rejectReason) =>

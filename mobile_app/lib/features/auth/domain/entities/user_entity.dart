@@ -110,15 +110,56 @@ class UserEntity {
         enabledModules: enabledModules,
       );
 
+  /// This user with the company's module list replaced (a refreshed access
+  /// token's `modules` claim).
+  UserEntity withEnabledModules(List<String>? modules) => UserEntity(
+        id: id,
+        email: email,
+        fullName: fullName,
+        role: role,
+        roleDisplay: roleDisplay,
+        employeeId: employeeId,
+        department: department,
+        designation: designation,
+        branch: branch,
+        mustChangePassword: mustChangePassword,
+        permissions: permissions,
+        onboardingStatus: onboardingStatus,
+        assessmentStatus: assessmentStatus,
+        canManageTeam: canManageTeam,
+        canManageBranch: canManageBranch,
+        companyCode: companyCode,
+        companyName: companyName,
+        companyLogoUrl: companyLogoUrl,
+        companyBrandColor: companyBrandColor,
+        isSuperuser: isSuperuser,
+        enabledModules: modules == null ? null : List.unmodifiable(modules),
+      );
+
+  static bool _sameModules(List<String>? a, List<String>? b) {
+    if (a == null || b == null) return a == b;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  /// Same modules as [other] (order-sensitive, as the server sends them sorted).
+  bool sameModulesAs(UserEntity other) => _sameModules(enabledModules, other.enabledModules);
+
+  // The module list is part of equality so a module change (token refresh)
+  // re-runs everything watching the signed-in user — menus, route guard.
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is UserEntity &&
           other.id == id &&
-          other.onboardingStatus == onboardingStatus;
+          other.onboardingStatus == onboardingStatus &&
+          _sameModules(other.enabledModules, enabledModules);
 
   @override
-  int get hashCode => Object.hash(id, onboardingStatus);
+  int get hashCode => Object.hash(id, onboardingStatus, enabledModules == null ? null : Object.hashAll(enabledModules!));
 
   @override
   String toString() => 'UserEntity(id: $id, email: $email, role: $role)';

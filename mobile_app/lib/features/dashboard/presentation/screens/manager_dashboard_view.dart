@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../shared/widgets/module_gate.dart';
 import 'package:mobile_app/core/router/access_control.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/theme/app_colors.dart';
@@ -50,10 +51,16 @@ class ManagerDashboardView extends ConsumerWidget {
             _ManagerConsoleHeader(overview: dataAsync.valueOrNull?.overview),
             const SizedBox(height: 20),
             // Latest announcement above Attendance (requested order).
-            const _AnnouncementCard(),
-            const SizedBox(height: 20),
-            const AttendanceRingCard(),
-            const SizedBox(height: 20),
+            // Web ManagerDashboard: announcement and clock-in only with their
+            // modules.
+            const ModuleGate(
+              module: AppModules.announcements,
+              child: Column(children: [_AnnouncementCard(), SizedBox(height: 20)]),
+            ),
+            const ModuleGate(
+              module: AppModules.attendance,
+              child: Column(children: [AttendanceRingCard(), SizedBox(height: 20)]),
+            ),
             ...dataAsync.when(
               skipLoadingOnRefresh: true,
               loading: () => [
@@ -89,10 +96,22 @@ class ManagerDashboardView extends ConsumerWidget {
                   const SizedBox(height: 20),
                   _BirthdaysCard(today: d.todaysBirthdays, upcoming: d.upcomingBirthdays),
                 ],
-                const SizedBox(height: 20),
-                _TeamAttendanceCard(items: d.teamAttendance),
-                const SizedBox(height: 20),
-                _UpcomingLeavesCard(items: d.upcomingLeaves),
+                // Web: Team Attendance with the attendance module, Upcoming
+                // Leaves with the leave module.
+                ModuleGate(
+                  module: AppModules.attendance,
+                  child: Column(children: [
+                    const SizedBox(height: 20),
+                    _TeamAttendanceCard(items: d.teamAttendance),
+                  ]),
+                ),
+                ModuleGate(
+                  module: AppModules.leave,
+                  child: Column(children: [
+                    const SizedBox(height: 20),
+                    _UpcomingLeavesCard(items: d.upcomingLeaves),
+                  ]),
+                ),
               ],
             ),
           ],
@@ -156,7 +175,12 @@ class _ManagerConsoleHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authStateProvider).valueOrNull?.user;
-    final clockedIn = ref.watch(todayAttendanceProvider).valueOrNull?.isClockedIn ?? false;
+    // Web: attendance status and figures only with the attendance module;
+    // the pending-approvals figure with the leave module.
+    final attendanceOn = userHasModule(user, AppModules.attendance);
+    final leaveOn = userHasModule(user, AppModules.leave);
+    final clockedIn =
+        attendanceOn && (ref.watch(todayAttendanceProvider).valueOrNull?.isClockedIn ?? false);
     final ov = overview;
     final name = (ov?.managerName.isNotEmpty ?? false) ? ov!.managerName : (user?.fullName ?? '');
     final first = name.trim().isEmpty ? 'there' : name.trim().split(' ').first;
@@ -184,29 +208,32 @@ class _ManagerConsoleHeader extends ConsumerWidget {
             ),
           ]),
           const SizedBox(height: 16),
-          ConsoleInfoBar(clockedIn: clockedIn),
+          if (attendanceOn) ConsoleInfoBar(clockedIn: clockedIn),
         ],
       ),
       statsContent: ConsoleStatsRow(key: const Key('manager-stats'), stats: [
         (icon: Icons.groups_outlined, value: v((o) => '${o.teamSize}'), label: 'Team Size', color: AppColors.primary),
-        (
-          icon: Icons.checklist_outlined,
-          value: v((o) => '${o.pendingApprovals}'),
-          label: 'Pending',
-          color: AppColors.warning,
-        ),
-        (
-          icon: Icons.beach_access_outlined,
-          value: v((o) => '${o.employeesOnLeaveToday}'),
-          label: 'On Leave',
-          color: AppColors.info,
-        ),
-        (
-          icon: Icons.insights_outlined,
-          value: v((o) => '${_trimPct(o.teamAttendancePercentage)}%'),
-          label: 'Attendance',
-          color: AppColors.success,
-        ),
+        if (leaveOn)
+          (
+            icon: Icons.checklist_outlined,
+            value: v((o) => '${o.pendingApprovals}'),
+            label: 'Pending',
+            color: AppColors.warning,
+          ),
+        if (attendanceOn) ...[
+          (
+            icon: Icons.beach_access_outlined,
+            value: v((o) => '${o.employeesOnLeaveToday}'),
+            label: 'On Leave',
+            color: AppColors.info,
+          ),
+          (
+            icon: Icons.insights_outlined,
+            value: v((o) => '${_trimPct(o.teamAttendancePercentage)}%'),
+            label: 'Attendance',
+            color: AppColors.success,
+          ),
+        ],
       ]),
     );
   }

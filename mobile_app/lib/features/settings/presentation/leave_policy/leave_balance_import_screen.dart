@@ -2,7 +2,11 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/router/access_control.dart';
+import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../auth/domain/entities/user_entity.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../data/models/leave_import_model.dart';
 import '../providers/settings_providers.dart';
@@ -13,6 +17,14 @@ enum _Phase { upload, preview, result }
 const _kRequiredCols = ['Employee ID', 'Leave Type', 'Financial Year'];
 const _kBalanceCols = ['Opening Balance', 'Leave Allocated', 'Leave Availed', 'Carry Forward Days'];
 const _kHistoryCols = ['From Date', 'To Date', 'Total Days'];
+
+/// Whether [user] may use the leave balance import (Task 71e, audit L1): the
+/// same rule as its route — settings.view for Leave Policy, leave.edit for
+/// web's "Import Opening Balances" entry, and the leave module (see
+/// kRouteExtraPermissions). The backend itself checks leave.approve and has
+/// the final say; its refusal is shown as an error.
+bool canImportLeaveBalances(UserEntity? user) =>
+    user != null && canAccessPath(user, AppRoutes.settingsLeaveBalanceImport);
 
 // One-time historical migration tool — mirrors web's
 // OpeningBalanceImportModal.tsx (upload → validate/preview → import phases),
@@ -37,8 +49,20 @@ class _LeaveBalanceImportScreenState extends ConsumerState<LeaveBalanceImportScr
 
   static const _maxBytes = 5 * 1024 * 1024;
 
+  /// Re-checked before every request, so a session whose permissions or
+  /// modules changed while the screen stayed open sends nothing.
+  bool get _allowed => canImportLeaveBalances(ref.read(authStateProvider).valueOrNull?.user);
+
   @override
   Widget build(BuildContext context) {
+    final allowed = canImportLeaveBalances(ref.watch(authStateProvider).valueOrNull?.user);
+    if (!allowed) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: const SettingsAppBar(title: 'Import Leave Balances & History'),
+        body: const _NoAccess(),
+      );
+    }
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: const SettingsAppBar(title: 'Import Leave Balances & History'),
@@ -99,6 +123,7 @@ class _LeaveBalanceImportScreenState extends ConsumerState<LeaveBalanceImportScr
   }
 
   Future<void> _downloadSample(String format) async {
+    if (!_allowed) return;
     setState(() => _sampleDownloading = format);
     try {
       final bytes = await ref
@@ -123,6 +148,7 @@ class _LeaveBalanceImportScreenState extends ConsumerState<LeaveBalanceImportScr
   }
 
   Future<void> _pickFile() async {
+    if (!_allowed) return;
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv', 'xlsx'],
@@ -145,7 +171,7 @@ class _LeaveBalanceImportScreenState extends ConsumerState<LeaveBalanceImportScr
 
   Future<void> _validate() async {
     final file = _picked;
-    if (file == null || file.bytes == null) return;
+    if (file == null || file.bytes == null || !_allowed) return;
     setState(() { _validating = true; _apiError = null; });
     try {
       final preview = await ref
@@ -261,7 +287,7 @@ class _LeaveBalanceImportScreenState extends ConsumerState<LeaveBalanceImportScr
 
   Future<void> _import() async {
     final file = _picked;
-    if (file == null || file.bytes == null) return;
+    if (file == null || file.bytes == null || !_allowed) return;
     setState(() { _importing = true; _apiError = null; });
     try {
       final result = await ref
@@ -330,6 +356,31 @@ class _LeaveBalanceImportScreenState extends ConsumerState<LeaveBalanceImportScr
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ));
+  }
+}
+
+// ── No access ───────────────────────────────────────────────────────────────
+
+class _NoAccess extends StatelessWidget {
+  const _NoAccess();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      key: const Key('leave-import-no-access'),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.lock_outline, size: 40, color: AppColors.textHint),
+            const SizedBox(height: 12),
+            Text('You don\'t have permission to import leave balances.',
+                textAlign: TextAlign.center, style: AppTextStyles.label),
+          ],
+        ),
+      ),
+    );
   }
 }
 

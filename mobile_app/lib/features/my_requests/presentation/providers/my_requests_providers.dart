@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_app/core/network/api_client.dart';
+import 'package:mobile_app/core/router/access_control.dart' show AppModules;
+import 'package:mobile_app/features/auth/presentation/providers/auth_providers.dart';
 
 import '../../../attendance/domain/entities/attendance_entity.dart';
 import '../../../attendance/presentation/providers/attendance_providers.dart'
@@ -212,11 +214,17 @@ class MyRequestsNotifier extends AutoDisposeAsyncNotifier<List<MyRequestItem>> {
       }
     }
 
+    // Web my-requests: a kind is fetched only when its module is on
+    // (KIND_MODULES); unknown module list → all.
+    // Only the module list is watched, so nothing else about the session
+    // reloads this list.
+    final modules = ref.watch(authStateProvider.select((s) => s.valueOrNull?.user?.enabledModules));
+    bool on(String m) => modules == null || modules.contains(m);
     final results = await Future.wait<List<dynamic>>([
-      source(ref.watch(leaveRequestsProvider.future)),
-      source(ref.watch(wfhMyRequestsProvider.future)),
-      source(ref.watch(expenseListProvider.future)),
-      source(ref.watch(myCorrectionsProvider.future)),
+      on(AppModules.leave) ? source(ref.watch(leaveRequestsProvider.future)) : Future.value(const []),
+      on(AppModules.wfh) ? source(ref.watch(wfhMyRequestsProvider.future)) : Future.value(const []),
+      on(AppModules.expenses) ? source(ref.watch(expenseListProvider.future)) : Future.value(const []),
+      on(AppModules.attendance) ? source(ref.watch(myCorrectionsProvider.future)) : Future.value(const []),
     ]);
     ref.read(myRequestsModuleNoticesProvider.notifier).state = notices;
 
@@ -259,6 +267,15 @@ class MyRequestsNotifier extends AutoDisposeAsyncNotifier<List<MyRequestItem>> {
 // ── Screen-local filter / UI state ──────────────────────────────────────────────
 
 enum MyRequestsTypeTab { all, leave, wfh, expense, attendanceCorrection }
+
+/// Web KIND_MODULES: the module a My Requests tab belongs to (All → none).
+String? moduleForMyRequestsTab(MyRequestsTypeTab tab) => switch (tab) {
+      MyRequestsTypeTab.all => null,
+      MyRequestsTypeTab.leave => AppModules.leave,
+      MyRequestsTypeTab.wfh => AppModules.wfh,
+      MyRequestsTypeTab.expense => AppModules.expenses,
+      MyRequestsTypeTab.attendanceCorrection => AppModules.attendance,
+    };
 
 MyRequestKind? kindForMyRequestsTab(MyRequestsTypeTab tab) => switch (tab) {
       MyRequestsTypeTab.all => null,

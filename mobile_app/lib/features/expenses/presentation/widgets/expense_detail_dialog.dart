@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../../../shared/documents/document_links.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../data/models/expense_model.dart';
@@ -27,17 +27,10 @@ class ExpenseDetailDialog extends ConsumerWidget {
     );
   }
 
-  Future<void> _openReceipt(BuildContext context, String? url) async {
+  // Web ExpenseDetailModal: each receipt is a plain link opening in a new tab.
+  Future<void> _openReceipt(BuildContext context, WidgetRef ref, String? url) async {
     if (url == null || url.isEmpty) return;
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Could not open receipt.'),
-      ));
-    }
+    await openDocumentLinkExternally(context, ref, url, failureMessage: 'Could not open receipt.');
   }
 
   @override
@@ -222,7 +215,7 @@ class ExpenseDetailDialog extends ConsumerWidget {
                           padding: const EdgeInsets.only(bottom: 6),
                           child: InkWell(
                             onTap: hasUrl
-                                ? () => _openReceipt(context, receipt.url)
+                                ? () => _openReceipt(context, ref, receipt.url)
                                 : null,
                             borderRadius: BorderRadius.circular(6),
                             child: Row(

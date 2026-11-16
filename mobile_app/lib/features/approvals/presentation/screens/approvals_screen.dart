@@ -11,6 +11,7 @@ import '../widgets/attendance_approval_tab.dart';
 import '../widgets/face_registration_approvals_tab.dart';
 import '../widgets/team_approvals_tab.dart';
 import '../../../../core/router/access_control.dart';
+import '../widgets/delegations_tab.dart' show DelegationsTab;
 
 // Ports web's app/dashboard/approvals/page.tsx (2026-07-21 change) — the
 // "My Requests" tab was removed there since a standalone /dashboard/my-requests
@@ -43,6 +44,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
         'team' => 'Team Approvals',
         'face_id' => 'Face ID Approvals',
         'leave_cancellations' => 'Leave Cancellations',
+        'delegation' => 'Delegation',
         _ => 'Attendance Approval',
       };
 
@@ -63,18 +65,22 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull?.user;
-    final canApproveLeave = user?.hasPermission('leave.approve') ?? false;
-    final canApproveExpense = user?.hasPermission('expenses.approve') ?? false;
+    // Web usePermission / useAnyPermission: the superuser flag (which the
+    // login also sets for settings.edit roles) or the permission — the same
+    // rule as the backend's has_perm. userHasPermission expresses it; a plain
+    // list lookup hid these queues from admins (Task 71 H1).
+    final canApproveLeave = userHasPermission(user, 'leave.approve');
+    final canApproveExpense = userHasPermission(user, 'expenses.approve');
     // attendance.create — matches web's useAnyPermission("leave.approve",
     // "expenses.approve", "attendance.create") exactly. Previously mobile
     // used attendance.view here, which was a real mismatch (attendance.view
     // is a much broader read permission most employees have, so this tab
     // was showing up for people who couldn't actually action anything).
-    final canApproveCorrections = user?.hasPermission('attendance.create') ?? false;
+    final canApproveCorrections = userHasPermission(user, 'attendance.create');
     // wfh.approve — WFH is folded into this same Team Approvals inbox as
     // one more request kind (matches web's TeamApprovalsSection.tsx), not
     // given its own tab or screen.
-    final canApproveWfh = user?.hasPermission('wfh.approve') ?? false;
+    final canApproveWfh = userHasPermission(user, 'wfh.approve');
     // separation.approve — web's Team Approvals gate includes it
     // (approvals/page.tsx useAnyPermission); separation requests join the
     // same inbox.
@@ -84,23 +90,35 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
         canApproveCorrections ||
         canApproveWfh ||
         canApproveSeparation;
-    // Matches web exactly: user.can_manage_team === true || user.is_superuser
-    // === true || hasPermission('payroll.view') — no HR-role exclusion /
-    // payroll.approve alternative, both of which were undocumented
-    // mobile-only deviations from web's actual gate.
-    final canApproveAttendance = (user?.canManageTeam ?? false) ||
-        (user?.isSuperuser ?? false) ||
-        (user?.hasPermission('payroll.view') ?? false);
-    final canApproveFaceId = user?.hasPermission('facial_recognition.approve') ?? false;
-    // Web approvals/page.tsx: usePermission("leave.approve") — superuser flag
-    // or the permission (not settings.edit alone); also needs the leave module.
+    // Task 77: what the backend authorises for this tab's endpoints
+    // (apps/payroll/views/attendance_approval.py _can_view_approvals): a team
+    // manager (role.can_manage_team, or a superuser) or has_perm payroll.edit
+    // (superuser / settings.edit / the codename). Web shows the tab for
+    // payroll.view instead, which every one of these endpoints refuses (403)
+    // — reported, not copied. The endpoints sit under /api/payroll/, which
+    // the backend blocks when the payroll module is off (tenants
+    // feature_gate), so the payroll module is needed besides web's attendance
+    // module.
+    final canApproveAttendance = userHasModule(user, AppModules.attendance) &&
+        userHasModule(user, AppModules.payroll) &&
+        ((user?.canManageTeam ?? false) || userHasPermission(user, 'payroll.edit'));
+    // Web: facial_recognition.approve and the face_attendance module.
+    final canApproveFaceId = userHasPermission(user, 'facial_recognition.approve') &&
+        userHasModule(user, AppModules.faceAttendance);
+    // Web approvals/page.tsx: usePermission("leave.approve"); backend
+    // LeaveCancellationListView: has_perm leave.approve (settings.edit passes
+    // too); also needs the leave module.
     final canReviewCancellations = canReviewLeaveCancellations(user);
+    // Web: Delegation for leave.approve, or attendance.create held by
+    // attendance staff (canDelegateApprovals).
+    final canDelegate = canDelegateApprovals(user);
 
     final keys = <String>[
       if (canApproveTeam) 'team',
       if (canApproveAttendance) 'attendance',
       if (canApproveFaceId) 'face_id',
       if (canReviewCancellations) 'leave_cancellations',
+      if (canDelegate) 'delegation',
     ];
     _syncTabs(keys);
     final tabCtrl = _tabCtrl;
@@ -152,6 +170,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
                               ),
                             'face_id' => const FaceRegistrationApprovalsTab(),
                             'leave_cancellations' => const LeaveCancellationsTab(),
+                            'delegation' => const DelegationsTab(),
                             _ => const AttendanceApprovalTab(),
                           })
                       .toList(),

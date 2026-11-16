@@ -12,7 +12,7 @@ import 'package:mobile_app/core/network/api_client.dart';
 
 // Self-service filter — the viewer's own requests, newest first (backend
 // default ordering), matches web's ProfileClient SeparationCard.
-const _kOwnFilter = (scope: '', status: '');
+const _kOwnFilter = (scope: '', status: '', employeeId: '');
 
 /// Self-service "Separation" card on the employee's own Profile page —
 /// mirrors web's app/dashboard/profile/_components/SeparationCard.tsx. Shows

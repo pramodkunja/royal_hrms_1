@@ -8,6 +8,7 @@ import '../../../auth/domain/entities/user_entity.dart';
 import '../../../my_requests/presentation/providers/my_requests_providers.dart' show myRequestsProvider;
 import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
+import '../../../../core/router/access_control.dart' show userHasPermission;
 
 // Cancelling an APPROVED leave — web leave/_components/LeaveCancellationPanel
 // .tsx (inside the leave detail) and approvals/_components/
@@ -52,13 +53,13 @@ String cancellationApiMessage(Object e, String fallback) {
   return fallback;
 }
 
-/// Web approvals/page.tsx: Leave Cancellations for usePermission("leave.approve")
-/// (superuser flag or the permission — not settings.edit by itself), when the
-/// company has the leave module (the API refuses it otherwise).
+/// Web approvals/page.tsx: Leave Cancellations for usePermission("leave.approve"),
+/// when the company has the leave module (the API refuses it otherwise).
+/// Task 77: the backend's LeaveCancellationListView checks has_perm
+/// leave.approve, which settings.edit passes — so an admin session cached
+/// without the superuser flag gets the tab too (userHasPermission).
 bool canReviewLeaveCancellations(UserEntity? user) =>
-    user != null &&
-    (user.isSuperuser || user.permissions.contains('leave.approve')) &&
-    user.hasModule('leave');
+    user != null && userHasPermission(user, 'leave.approve') && user.hasModule('leave');
 
 /// GET /leave/cancellations/.
 final leaveCancellationsProvider = FutureProvider.autoDispose<List<LeaveRequestEntity>>(
@@ -72,6 +73,8 @@ void refreshAfterCancellationChange(WidgetRef ref, String leaveId) {
   ref.invalidate(leaveRequestsProvider);
   ref.invalidate(leaveBalancesProvider);
   ref.invalidate(leaveStatsProvider);
+  ref.invalidate(myLeaveStatsProvider);
+  ref.invalidate(myLeaveBalancesProvider);
   ref.invalidate(leaveTeamPendingProvider);
   ref.invalidate(leaveTeamHistoryProvider);
   ref.invalidate(leaveCalendarProvider);

@@ -14,6 +14,7 @@ import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
 import 'widgets/add_leave_type_dialog.dart';
 import 'widgets/leave_carry_forward_tab.dart';
+import 'leave_balance_import_screen.dart' show canImportLeaveBalances;
 import 'monthly_leave/monthly_leave_tab.dart';
 import '../../data/models/monthly_leave_models.dart' show canManageMonthlyCredits;
 import 'widgets/leave_policy_form_sheet.dart';
@@ -63,6 +64,8 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   late final bool _showCarryForward;
+  // Web: "Import Opening Balances" needs leave.edit — same rule as its route.
+  late final bool _showImport;
   // Web: "Monthly Leave Management" tab only with leave.approve.
   late final bool _showMonthly;
   final _creditRulesKey = GlobalKey<CreditRulesTabState>();
@@ -73,6 +76,7 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
     super.initState();
     // Web: Carry Forward tab and Import Opening Balances need leave.edit.
     _showCarryForward = canManageCarryForward(ref.read(authStateProvider).valueOrNull?.user);
+    _showImport = canImportLeaveBalances(ref.read(authStateProvider).valueOrNull?.user);
     _showMonthly = canManageMonthlyCredits(ref.read(authStateProvider).valueOrNull?.user);
     _tabController =
         TabController(length: 3 + (_showCarryForward ? 1 : 0) + (_showMonthly ? 1 : 0), vsync: this)
@@ -93,8 +97,9 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
       backgroundColor: AppColors.background,
       appBar: SettingsAppBar(
         title: 'Leave Policy',
-        trailing: _showCarryForward
+        trailing: _showImport
             ? IconButton(
+                key: const Key('leave-import-entry'),
                 icon: const Icon(Icons.file_upload_outlined, size: 20),
                 color: AppColors.textSecondary,
                 tooltip: 'Import Opening Balances',

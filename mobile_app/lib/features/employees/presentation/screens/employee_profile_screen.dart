@@ -2,6 +2,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/router/access_control.dart' show AppModules, userHasModule;
+import '../../../auth/domain/entities/user_entity.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -18,6 +20,7 @@ import '../widgets/add_employee_sheet.dart';
 import '../widgets/approval_override_sheet.dart';
 import '../widgets/custom_fields_block.dart';
 import '../widgets/employee_assets_tab.dart';
+import '../widgets/employee_salary_payroll_tabs.dart' show EmployeePayrollTab, EmployeeSalaryTab;
 import '../widgets/employee_attendance_tab.dart';
 import '../widgets/employee_file_viewer.dart';
 import '../widgets/employee_leave_tab.dart';
@@ -77,21 +80,50 @@ class _ProfileShell extends ConsumerStatefulWidget {
   ConsumerState<_ProfileShell> createState() => _ProfileShellState();
 }
 
-class _ProfileShellState extends ConsumerState<_ProfileShell> with SingleTickerProviderStateMixin {
-  late final TabController _tabCtrl;
-  // Web ProfileTabBar: the Assets tab only when the company's subscription
-  // includes the "assets" module (unknown list → shown). Fixed for this
-  // screen: the module list only changes at sign-in.
-  late final bool _showAssets =
-      ref.read(authStateProvider).valueOrNull?.user?.hasModule('assets') ?? true;
+class _ProfileShellState extends ConsumerState<_ProfileShell> with TickerProviderStateMixin {
+  // Web PROFILE_TABS order. Web ProfileTabBar TAB_MODULES: Salary and
+  // Payroll (payroll), Leave, Attendance and Assets only when the
+  // company's subscription includes that module (unknown list → shown). The
+  // list follows the signed-in user, so a module change (token refresh)
+  // updates the tabs; the selected tab is kept when it still exists.
+  static const _kTabModules = {
+    'salary': AppModules.payroll,
+    'payroll': AppModules.payroll,
+    'leave': AppModules.leave,
+    'attendance': AppModules.attendance,
+    'assets': AppModules.assets,
+  };
+  static const _kAllTabs = [
+    'profile', 'salary', 'payroll', 'leave', 'attendance', 'approval', 'promotion', 'assets', 'wishes', //
+  ];
+
+  late TabController _tabCtrl;
+  late List<String> _tabKeys;
   bool? _isActiveOverride;
   bool _toggling = false;
   bool _confirmingStatus = false;
 
+  List<String> _keysFor(UserEntity? user) =>
+      [for (final k in _kAllTabs) if (userHasModule(user, _kTabModules[k])) k];
+
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: _showAssets ? 7 : 6, vsync: this);
+    _tabKeys = _keysFor(ref.read(authStateProvider).valueOrNull?.user);
+    _tabCtrl = TabController(length: _tabKeys.length, vsync: this);
+    _tabCtrl.addListener(_onTabChange);
+  }
+
+  /// Rebuilds the controller when the available tabs change, keeping the
+  /// selected tab if it is still there (else Profile).
+  void _syncTabs(List<String> keys) {
+    if (keys.length == _tabKeys.length && keys.every(_tabKeys.contains)) return;
+    final selected = _tabKeys[_tabCtrl.index];
+    final index = keys.indexOf(selected);
+    _tabCtrl.removeListener(_onTabChange);
+    _tabCtrl.dispose();
+    _tabKeys = keys;
+    _tabCtrl = TabController(length: keys.length, vsync: this, initialIndex: index < 0 ? 0 : index);
     _tabCtrl.addListener(_onTabChange);
   }
 
@@ -200,6 +232,7 @@ class _ProfileShellState extends ConsumerState<_ProfileShell> with SingleTickerP
   @override
   Widget build(BuildContext context) {
     final emp = widget.employee;
+    _syncTabs(_keysFor(ref.watch(authStateProvider).valueOrNull?.user));
     final isProfileTab = _tabCtrl.index == 0;
     // Editing and activating/deactivating need employees.edit (web
     // employees/[id]/page.tsx canEdit); without it the profile is read-only.
@@ -293,17 +326,21 @@ class _ProfileShellState extends ConsumerState<_ProfileShell> with SingleTickerP
                       indicatorWeight: 2.5,
                       dividerColor: AppColors.border,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
-                      // Web PROFILE_TABS order (Salary and Payroll stay
-                      // web-only); Assets replaces the old Benefit
+                      // Web PROFILE_TABS order; Assets replaces the old Benefit
                       // placeholder — web has no Benefits feature.
                       tabs: [
-                        const Tab(text: 'Profile'),
-                        const Tab(text: 'Leave'),
-                        const Tab(text: 'Attendance'),
-                        const Tab(text: 'Approval Matrix'),
-                        const Tab(text: 'Promotion'),
-                        if (_showAssets) const Tab(key: Key('employee-tab-assets'), text: 'Assets'),
-                        const Tab(text: 'Send Wishes'),
+                        for (final k in _tabKeys)
+                          switch (k) {
+                            'profile' => const Tab(text: 'Profile'),
+                            'salary' => const Tab(key: Key('employee-tab-salary'), text: 'Salary'),
+                            'payroll' => const Tab(key: Key('employee-tab-payroll'), text: 'Payroll'),
+                            'leave' => const Tab(key: Key('employee-tab-leave'), text: 'Leave'),
+                            'attendance' => const Tab(key: Key('employee-tab-attendance'), text: 'Attendance'),
+                            'approval' => const Tab(text: 'Approval Matrix'),
+                            'promotion' => const Tab(text: 'Promotion'),
+                            'assets' => const Tab(key: Key('employee-tab-assets'), text: 'Assets'),
+                            _ => const Tab(text: 'Send Wishes'),
+                          },
                       ],
                     ),
                   ),
@@ -312,17 +349,22 @@ class _ProfileShellState extends ConsumerState<_ProfileShell> with SingleTickerP
               body: TabBarView(
                 controller: _tabCtrl,
                 children: [
-                  _ProfileTab(
-                    employee: emp,
-                    onEdit: canEdit ? _onSave : null,
-                    onEditSection: canEdit ? _onEditSection : null,
-                  ),
-                  EmployeeLeaveTab(employee: emp),
-                  EmployeeAttendanceTab(employee: emp),
-                  _ApprovalMatrixTab(employee: emp),
-                  PromotionTab(employee: emp),
-                  if (_showAssets) EmployeeAssetsTab(employee: emp),
-                  WishesTab(employee: emp),
+                  for (final k in _tabKeys)
+                    switch (k) {
+                      'profile' => _ProfileTab(
+                          employee: emp,
+                          onEdit: canEdit ? _onSave : null,
+                          onEditSection: canEdit ? _onEditSection : null,
+                        ),
+                      'salary' => EmployeeSalaryTab(employee: emp),
+                      'payroll' => EmployeePayrollTab(employee: emp),
+                      'leave' => EmployeeLeaveTab(employee: emp),
+                      'attendance' => EmployeeAttendanceTab(employee: emp),
+                      'approval' => _ApprovalMatrixTab(employee: emp),
+                      'promotion' => PromotionTab(employee: emp),
+                      'assets' => EmployeeAssetsTab(employee: emp),
+                      _ => WishesTab(employee: emp),
+                    },
                 ],
               ),
             ),
@@ -2180,7 +2222,8 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
   }
 
   @override
-  bool shouldRebuild(_TabBarDelegate old) => false;
+  // A new controller or tab list (module change) must reach the header.
+  bool shouldRebuild(_TabBarDelegate old) => old.tabBar.controller != tabBar.controller || old.tabBar.tabs.length != tabBar.tabs.length;
 }
 
 /// Web employees/page.tsx Activate/Deactivate confirm modal: title

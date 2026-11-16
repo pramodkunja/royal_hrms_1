@@ -287,7 +287,8 @@ void main() {
     test('the module list offers exactly the values the backend writes (incl. web\'s six)', () {
       final values = kAuditLogModules.map((m) => m.value).toSet();
       expect(values, {
-        'accounts', 'announcements', 'assets', 'birthday', 'branch', 'company', 'company_financial_year',
+        // approvals: delegation created / revoked (apps/approvals/services.py), added in Task 74.
+        'accounts', 'announcements', 'approvals', 'assets', 'birthday', 'branch', 'company', 'company_financial_year',
         'documents', 'employees', 'leave', 'payroll', 'recruitment', 'settings', 'voice_commands', 'wfh',
       });
       expect(values.containsAll(['accounts', 'settings', 'company', 'branch', 'announcements', 'birthday']), isTrue);

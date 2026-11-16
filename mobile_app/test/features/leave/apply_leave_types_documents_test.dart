@@ -49,8 +49,10 @@ Map<String, dynamic> policy(String code, String display, {bool attach = false, b
       'policy_note': '',
     };
 
-Map<String, dynamic> balance(String code, String display) =>
-    {'leave_type': code, 'leave_type_display': display, 'total_days': '12.0', 'used_days': '0.0'};
+/// 12 days each; for 2027 the server has 3 used — so the year asked for
+/// shows on screen (12d left vs 9d left).
+Map<String, dynamic> balance(String code, String display, {Object? year}) =>
+    {'leave_type': code, 'leave_type_display': display, 'total_days': '12.0', 'used_days': year == 2027 ? '3.0' : '0.0'};
 
 class Server implements HttpClientAdapter {
   /// Production-like config that produced the reported symptom: Casual has
@@ -66,15 +68,18 @@ class Server implements HttpClientAdapter {
     policy('old_custom', 'Retired Leave', active: false),
   ];
   final posts = <FormData>[];
+  final gets = <(String, Map<String, dynamic>)>[];
 
   @override
   Future<ResponseBody> fetch(RequestOptions o, Stream<List<int>>? _, Future<void>? __) async {
+    if (o.method == 'GET') gets.add((o.path, Map.of(o.queryParameters)));
     if (o.path == '/leave/policy/') return _json(200, {'status': 'success', 'data': policies});
     if (o.path == '/leave/balance/') {
       return _json(200, {
         'status': 'success',
         'data': [
-          for (final p in policies) balance(p['leave_type'] as String, p['leave_type_display'] as String),
+          for (final p in policies)
+            balance(p['leave_type'] as String, p['leave_type_display'] as String, year: o.queryParameters['year']),
         ]
       });
     }
@@ -144,21 +149,27 @@ class _NullStorage extends SecureStorageService {
   Future<void> write(String key, String value) async {}
 }
 
+UserEntity person(String role, List<String> perms, {bool team = false}) => UserEntity(
+      id: 'e1',
+      email: '$role@example.test',
+      fullName: 'Test Employee',
+      role: role,
+      roleDisplay: role,
+      mustChangePassword: false,
+      permissions: perms,
+      canManageTeam: team,
+      onboardingStatus: 'complete',
+      assessmentStatus: 'complete',
+    );
+
+final employeeUser = person('employee', ['leave.view', 'leave.apply']);
+
+/// Who is signed in (reset to the employee by pump()).
+UserEntity applicant = employeeUser;
+
 class _Auth extends AuthNotifier {
   @override
-  Future<AuthState> build() async => const AuthState(
-        user: UserEntity(
-          id: 'e1',
-          email: 'employee@example.test',
-          fullName: 'Test Employee',
-          role: 'employee',
-          roleDisplay: 'Employee',
-          mustChangePassword: false,
-          permissions: ['leave.view', 'leave.apply'],
-          onboardingStatus: 'complete',
-          assessmentStatus: 'complete',
-        ),
-      );
+  Future<AuthState> build() async => AuthState(user: applicant);
 }
 
 late Server server;
@@ -169,14 +180,15 @@ List<Override> overrides() => [
       secureStorageProvider.overrideWithValue(_NullStorage()),
     ];
 
-Future<void> pump(WidgetTester tester, {Server? with_}) async {
+Future<void> pump(WidgetTester tester, {Server? with_, DateTime? at, UserEntity? as}) async {
   tester.view.physicalSize = const Size(1080, 5200);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   server = with_ ?? Server();
+  applicant = as ?? employeeUser;
   await tester.pumpWidget(ProviderScope(
     key: UniqueKey(),
-    overrides: overrides(),
+    overrides: [...overrides(), if (at != null) leaveDashboardClockProvider.overrideWithValue(() => at)],
     child: const MaterialApp(home: Scaffold(body: ApplyLeaveTab())),
   ));
   await tester.pumpAndSettle();
@@ -349,6 +361,170 @@ void main() {
       await fillAndSubmit(tester);
       expect(find.text('Supporting document is required for this leave type.'), findsOneWidget);
       expect(s.posts, isEmpty);
+    });
+  });
+
+  // Task 72.1: a successful application refreshes the Leave Dashboard's own
+  // balances and LOP stats (same calendar year as web).
+  testWidgets('applying refreshes the dashboard balances and stats for the calendar year', (tester) async {
+    tester.view.physicalSize = const Size(1080, 5200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    server = Server();
+    await tester.pumpWidget(ProviderScope(
+      overrides: [...overrides(), leaveDashboardClockProvider.overrideWithValue(() => DateTime(2027, 2, 10, 9))],
+      child: MaterialApp(
+        home: Scaffold(
+          body: Column(children: [
+            // Stands in for the Leave Dashboard tab, alive in the TabBarView.
+            Consumer(builder: (context, ref, _) {
+              ref.watch(myLeaveBalancesProvider);
+              ref.watch(myLeaveStatsProvider);
+              return const SizedBox.shrink();
+            }),
+            const Expanded(child: ApplyLeaveTab()),
+          ]),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    List<Map<String, dynamic>> q(String path) => [for (final g in server.gets) if (g.$1 == path) g.$2];
+    final balancesBefore = q('/leave/balance/').where((m) => m['year'] == 2027).length;
+    final statsBefore = q('/leave/stats/').where((m) => m['scope'] == 'own').length;
+    expect(balancesBefore, 1);
+    await selectType(tester, 'Sick Leave'); // no attachment required in this fixture
+    await fillAndSubmit(tester);
+    expect(server.posts, hasLength(1));
+    expect(q('/leave/balance/').where((m) => m['year'] == 2027).length, balancesBefore + 1);
+    expect(q('/leave/stats/').where((m) => m['scope'] == 'own').length, statsBefore + 1);
+    expect(q('/leave/stats/').last, {'year': 2027, 'scope': 'own'});
+  });
+
+  // Task 72.2: web ApplyLeaveForm.tsx asks for API.leave.balance?year=
+  // getLeaveYear() — the calendar year (new Date().getFullYear()), whatever
+  // dates are picked; never the backend's financial-year default.
+  group('calendar year (web getLeaveYear)', () {
+    List<Map<String, dynamic>> balanceQueries() => [for (final g in server.gets) if (g.$1 == '/leave/balance/') g.$2];
+
+    for (final (label, at, year) in [
+      ('1 January', DateTime(2027, 1, 1, 0, 5), 2027),
+      ('mid-February (financial year still 2026)', DateTime(2027, 2, 10, 9), 2027),
+      ('31 March', DateTime(2027, 3, 31, 23), 2027),
+      ('1 April', DateTime(2026, 4, 1, 9), 2026),
+      ('31 December', DateTime(2026, 12, 31, 23), 2026),
+    ]) {
+      testWidgets('$label → year $year', (tester) async {
+        await pump(tester, at: at);
+        expect(balanceQueries(), [
+          {'year': year}
+        ]);
+      });
+    }
+
+    testWidgets('the balance shown is that year\'s (2027: 9d left; never the default year\'s 12d)', (tester) async {
+      await pump(tester, at: DateTime(2027, 2, 10, 9));
+      expect(find.text('9d left'), findsWidgets);
+      expect(find.text('12d left'), findsNothing);
+    });
+
+    testWidgets('picked leave dates do not change the year', (tester) async {
+      await pump(tester, at: DateTime(2027, 2, 10, 9));
+      await selectType(tester, 'Sick Leave');
+      await fillAndSubmit(tester); // picks a date in the date picker
+      // Load + refresh after submitting, both for 2027. Task 78: the old
+      // year-less refresh of the shared leaveBalancesProvider (no screen
+      // shows it any more) is gone — no request without a year.
+      expect(balanceQueries(), [
+        {'year': 2027},
+        {'year': 2027}
+      ]);
+      expect(server.gets.where((g) => g.$1 == '/leave/stats/' && g.$2.isEmpty), hasLength(1)); // Analytics/Home stats still refreshed
+    });
+
+    testWidgets('after New Year, a submission reloads the new year\'s balances', (tester) async {
+      var now = DateTime(2026, 12, 31, 23, 50);
+      tester.view.physicalSize = const Size(1080, 5200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      server = Server();
+      applicant = employeeUser;
+      await tester.pumpWidget(ProviderScope(
+        overrides: [...overrides(), leaveDashboardClockProvider.overrideWithValue(() => now)],
+        child: const MaterialApp(home: Scaffold(body: ApplyLeaveTab())),
+      ));
+      await tester.pumpAndSettle();
+      expect(balanceQueries(), [
+        {'year': 2026}
+      ]);
+      now = DateTime(2027, 1, 1, 0, 10);
+      await selectType(tester, 'Sick Leave');
+      await fillAndSubmit(tester);
+      expect(server.posts, hasLength(1));
+      expect(balanceQueries().where((q) => q.containsKey('year')).last, {'year': 2027});
+    });
+
+    testWidgets('reopening the tab after New Year asks for the new year', (tester) async {
+      var now = DateTime(2026, 12, 31, 23, 50);
+      final show = ValueNotifier(true);
+      tester.view.physicalSize = const Size(1080, 5200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      server = Server();
+      applicant = employeeUser;
+      await tester.pumpWidget(ProviderScope(
+        overrides: [...overrides(), leaveDashboardClockProvider.overrideWithValue(() => now)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<bool>(
+              valueListenable: show,
+              builder: (_, on, __) => on ? const ApplyLeaveTab() : const SizedBox(),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      show.value = false; // another Leave tab
+      await tester.pumpAndSettle();
+      now = DateTime(2027, 1, 1, 9);
+      show.value = true;
+      await tester.pumpAndSettle();
+      expect(balanceQueries(), [
+        {'year': 2026},
+        {'year': 2027}
+      ]);
+    });
+
+    for (final u in [
+      employeeUser,
+      person('hr_admin', ['leave.view', 'leave.apply', 'leave.approve', 'employees.view']),
+      person('manager', ['leave.view', 'leave.apply', 'leave.approve'], team: true),
+    ]) {
+      testWidgets('${u.role}: own balances for the year only — no other balance, stats or team request', (tester) async {
+        await pump(tester, as: u, at: DateTime(2026, 11, 16, 10));
+        expect(balanceQueries(), [
+          {'year': 2026}
+        ]);
+        final paths = {for (final g in server.gets) g.$1};
+        expect(paths, {'/leave/policy/', '/leave/balance/', '/leave/requests/'});
+        expect(server.gets.where((g) => g.$2['scope'] == 'team' || g.$2.containsKey('employee_id')), isEmpty);
+        expect(server.posts, isEmpty);
+        // Leave type selection and its balance unchanged.
+        await selectType(tester, 'Earned Leave');
+        expect(find.text('12d left'), findsWidgets);
+      });
+    }
+
+    test('other leave requests unchanged: shared balances and Analytics / Home stats stay year-less', () async {
+      server = Server();
+      final c = ProviderContainer(overrides: [
+        ...overrides(),
+        leaveDashboardClockProvider.overrideWithValue(() => DateTime(2027, 2, 10, 9)),
+      ]);
+      addTearDown(c.dispose);
+      await c.read(leaveBalancesProvider.future);
+      await c.read(leaveStatsProvider.future).then((_) {}, onError: (_) {});
+      expect(server.gets.where((g) => g.$1 == '/leave/balance/').single.$2, isEmpty);
+      expect(server.gets.where((g) => g.$1 == '/leave/stats/').single.$2, isEmpty);
     });
   });
 }

@@ -134,8 +134,11 @@ void main() {
     });
 
     test('the role name never decides visibility', () {
-      // Named "employee" but holding team permissions → sees Attendance.
-      expect(_navIds(_user('employee', ['attendance.create', 'attendance.view'])), contains('attendance'));
+      // Named "employee" but holding HR attendance permission → sees Attendance
+      // (web: attendance.edit or settings.edit, Task 71c).
+      expect(_navIds(_user('employee', ['attendance.edit'])), contains('attendance'));
+      // attendance.view / .create alone (My Attendance) → no HR Attendance.
+      expect(_navIds(_user('hr', ['attendance.create', 'attendance.view'])), isNot(contains('attendance')));
       // Named "hr" with an approval permission → sees Approvals.
       expect(_navIds(_user('hr', ['leave.approve'])), contains('approvals'));
       // Named like an admin, no permissions → nothing extra.

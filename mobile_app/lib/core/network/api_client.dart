@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:cookie_jar/cookie_jar.dart';
@@ -21,6 +22,28 @@ final cookieJarProvider = Provider<CookieJar>(
 // watches this and calls logout() so the user is redirected to the login screen
 // automatically instead of getting stuck with endless 401 errors.
 final sessionExpiredProvider = StateProvider<bool>((ref) => false);
+
+/// The company's modules from the `modules` claim of the latest refreshed
+/// access token (web reads the same claim: backend apps/accounts/tokens.py
+/// re-derives it on every /token/refresh/, so a plan change reaches menus and
+/// route guards within one access-token lifetime). Set by AuthInterceptor;
+/// AuthNotifier applies it to the signed-in user. Null until a refresh
+/// carries the claim.
+final sessionModulesProvider = StateProvider<List<String>?>((ref) => null);
+
+/// The `modules` claim of a JWT [token], or null when absent / unreadable
+/// (web modulesFromPayload: only a list of strings counts).
+List<String>? modulesFromAccessToken(String? token) {
+  if (token == null) return null;
+  final parts = token.split('.');
+  if (parts.length != 3) return null;
+  try {
+    final payload = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))));
+    final m = payload is Map ? payload['modules'] : null;
+    if (m is List && m.every((x) => x is String)) return m.cast<String>();
+  } catch (_) {}
+  return null;
+}
 
 final dioProvider = Provider<Dio>((ref) {
   final dio = Dio(

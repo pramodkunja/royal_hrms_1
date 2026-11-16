@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../../../shared/documents/document_links.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/app_error_state.dart';
@@ -16,6 +16,7 @@ import '../widgets/separation_documents_section.dart';
 import '../widgets/separation_form_sheet.dart';
 import '../widgets/separation_handover_section.dart';
 import '../widgets/separation_status.dart';
+import '../../../../core/router/access_control.dart';
 
 /// Full detail page for one separation request — pushed via
 /// /dashboard/separation/:id. Rich enough (approval timeline, KT/handover,
@@ -50,13 +51,8 @@ class _SeparationDetailScreenState
     );
   }
 
-  Future<void> _openDocument(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
+  // Web SeparationDetailsSection: a plain link opening in a new tab.
+  Future<void> _openDocument(String url) => openDocumentLinkExternally(context, ref, url);
 
   Future<void> _cancel(SeparationRequestEntity r) async {
     final confirmed = await showDialog<bool>(
@@ -128,8 +124,8 @@ class _SeparationDetailScreenState
     // there's a currently-pending stage actionable by them right now (false
     // once the request is fully approved, exactly when handover/document
     // management is still needed through the exit period).
-    final canManage = (user?.hasPermission('separation.approve') ?? false) ||
-        (user?.hasPermission('settings.edit') ?? false);
+    // Web separation/_access.ts canApprove = useAnyPermission(...).
+    final canManage = userHasAnyPermission(user, const ['separation.approve', 'settings.edit']);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -299,6 +295,8 @@ class _SeparationDetailScreenState
                     SeparationDocumentsSection(
                       requestId: r.id,
                       canUpload: r.isOwn || canManage,
+                      isApprover: canManage,
+                      currentUserId: user?.id,
                     ),
                     const SizedBox(height: 12),
 

@@ -8,6 +8,7 @@ import '../../../notifications/data/models/notification_settings_model.dart';
 import '../../../notifications/presentation/providers/notification_settings_provider.dart';
 import '../widgets/settings_app_bar.dart';
 import '../widgets/settings_page_header.dart';
+import '../../../../core/router/access_control.dart';
 
 class NotificationSettingsScreen extends ConsumerStatefulWidget {
   const NotificationSettingsScreen({super.key});
@@ -146,9 +147,9 @@ class _NotificationSettingsScreenState
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(notificationSettingsProvider);
-    final permissions =
-        ref.watch(authStateProvider).valueOrNull?.user?.permissions ?? const [];
-    final canEdit = permissions.contains('settings.edit');
+    // Web notifications/page.tsx: usePermission("settings.edit") (superuser
+    // or the codename). The backend lets every user PATCH their own row.
+    final canEdit = userHasPermission(ref.watch(authStateProvider).valueOrNull?.user, 'settings.edit');
 
     return Scaffold(
       backgroundColor: AppColors.background,

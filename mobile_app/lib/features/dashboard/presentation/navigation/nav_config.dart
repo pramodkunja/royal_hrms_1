@@ -63,7 +63,7 @@ const kAllNav = <NavEntry>[
   // navConfig.ts (it replaces the old role-name exclusion of 'employee'; the
   // default employee role no longer holds attendance.view/create, backend
   // migrations 0029/0042). Everyone's own attendance is 'My Attendance'.
-  NavItem(id: 'attendance',       icon: Icons.access_time_outlined,            label: 'Attendance',       path: '/dashboard/attendance',       permission: 'attendance.create'),
+  NavItem(id: 'attendance',       icon: Icons.access_time_outlined,            label: 'Attendance',       path: '/dashboard/attendance',       anyOfPermissions: ['attendance.edit', 'settings.edit']),
   NavItem(id: 'leave',            icon: Icons.beach_access_outlined,           label: 'Leave Management', path: '/dashboard/leave',            permission: 'leave.view'),
   NavItem(id: 'wfh',              icon: Icons.home_work_outlined,              label: 'Work From Home',   path: '/dashboard/wfh',              permission: 'wfh.view'),
   NavItem(id: 'expenses',         icon: Icons.account_balance_wallet_outlined, label: 'Expenses',         path: '/dashboard/expenses',         permission: 'expenses.view'),
@@ -136,9 +136,12 @@ List<NavEntry> buildNav(UserEntity? user) {
       case NavItem():
         // Not built for mobile yet (access_control.dart: kUnavailablePaths).
         if (isUnavailablePath(entry.path)) continue;
-        final visible = entry.anyOfPermissions != null
-            ? userHasAnyPermission(user, entry.anyOfPermissions!)
-            : (entry.permission == null || userHasPermission(user, entry.permission!));
+        // Web buildNav: only items whose module the company has (unknown → all).
+        if (!userHasModule(user, moduleForPath(entry.path))) continue;
+        final visible = (entry.anyOfPermissions != null
+                ? userHasAnyPermission(user, entry.anyOfPermissions!)
+                : (entry.permission == null || userHasPermission(user, entry.permission!))) ||
+            alternativeRouteAccess(user, entry.path); // e.g. Approvals for delegators
         if (visible) {
           if (pendingSection != null && !sectionHasItem) {
             result.add(pendingSection);

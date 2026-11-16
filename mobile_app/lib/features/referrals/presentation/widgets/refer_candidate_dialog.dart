@@ -6,7 +6,6 @@ import '../../../../shared/validators/form_validators.dart';
 import '../../../../shared/widgets/app_button.dart';
 import '../../../../shared/widgets/app_text_field.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
-import '../../../branches/presentation/providers/branch_providers.dart';
 import '../../../branches/presentation/widgets/branch_dlg_header.dart';
 import '../providers/referral_providers.dart';
 
@@ -50,6 +49,9 @@ class _ReferCandidateDialogState extends ConsumerState<ReferCandidateDialog> {
   final _positionCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   String? _relationship;
+  // Picker choice (branch id), when canPickReferralBranch.
+  int? _branchId;
+  bool _branchPrefilled = false;
   bool _saving = false;
   String? _submitError;
 
@@ -109,25 +111,11 @@ class _ReferCandidateDialogState extends ConsumerState<ReferCandidateDialog> {
       _submitError = null;
     });
 
+    // Web sends the picked branch id (admins) or nothing usable; the
+    // backend's ReferralSubmitSerializer doesn't take branch at all, so the
+    // value is informational either way. Only a picker user sends one.
     final user = ref.read(authStateProvider).valueOrNull?.user;
-    final userBranch = user?.branch;
-    // GET /branch/branches/ requires the 'branches.view' permission, which
-    // most referrers (including hr_admin — confirmed against the seeded role
-    // permissions) do not hold. Only attempt resolution when accessible;
-    // otherwise branch is simply omitted (it's optional server-side) rather
-    // than firing a doomed request that 403s for the overwhelming majority
-    // of users submitting a referral.
-    final canResolveBranch = user?.permissions.contains('branches.view') ?? false;
-    int? branchId;
-    if (canResolveBranch && userBranch != null && userBranch.isNotEmpty) {
-      final branches = ref.read(branchListProvider).valueOrNull ?? const [];
-      for (final b in branches) {
-        if (b.branchName.toLowerCase() == userBranch.toLowerCase()) {
-          branchId = b.id;
-          break;
-        }
-      }
-    }
+    final branchId = canPickReferralBranch(user) ? _branchId : null;
 
     final notesParts = [
       if (_relationship != null) 'Relationship: $_relationship',
@@ -158,11 +146,16 @@ class _ReferCandidateDialogState extends ConsumerState<ReferCandidateDialog> {
     final user = ref.watch(authStateProvider).valueOrNull?.user;
     final userBranch = user?.branch;
     final branchLabel = (userBranch == null || userBranch.isEmpty) ? 'Not assigned' : userBranch;
-    // Only pre-fetch the branch list (so it's ready by Submit) when the user
-    // actually holds 'branches.view' — otherwise this call would 403 for no
-    // benefit, since _submit() won't use it without that permission either.
-    if (user?.permissions.contains('branches.view') ?? false) {
-      ref.watch(branchListProvider);
+    // Branch list requested only for picker users (never a doomed 403).
+    final canPick = canPickReferralBranch(user);
+    final branchesAsync = canPick ? ref.watch(referralBranchOptionsProvider) : null;
+    final branches = branchesAsync?.valueOrNull ?? const [];
+    // Start on the user's own branch when it is in the list (web pre-fills
+    // the user's branch too).
+    if (canPick && !_branchPrefilled && branchesAsync?.hasValue == true) {
+      _branchPrefilled = true;
+      final own = (userBranch ?? '').toLowerCase();
+      _branchId = branches.where((b) => b.branchName.toLowerCase() == own).map((b) => b.id).firstOrNull;
     }
 
     return ConstrainedBox(
@@ -230,8 +223,40 @@ class _ReferCandidateDialogState extends ConsumerState<ReferCandidateDialog> {
                           textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 14),
-                        Text('Branch', style: AppTextStyles.label.copyWith(color: AppColors.textSecondary)),
+                        Text(canPick ? 'Branch *' : 'Branch',
+                            style: AppTextStyles.label.copyWith(color: AppColors.textSecondary)),
                         const SizedBox(height: 6),
+                        if (canPick)
+                          // Re-created once the list arrives so the pre-filled
+                          // branch shows (initialValue is read only once).
+                          KeyedSubtree(
+                            key: ValueKey('branch-options-${branchesAsync!.hasValue}-${branches.length}'),
+                            child: DropdownButtonFormField<int>(
+                            key: const Key('referral-branch-picker'),
+                            initialValue: branches.any((b) => b.id == _branchId) ? _branchId : null,
+                            isExpanded: true,
+                            hint: Text(
+                              branchesAsync.isLoading
+                                  ? 'Loading branches…'
+                                  : branchesAsync.hasError
+                                      ? friendlyReferralError(branchesAsync.error!)
+                                      : branches.isEmpty
+                                          ? 'No active branches'
+                                          : 'Select branch…',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            items: [
+                              for (final b in branches)
+                                DropdownMenuItem(
+                                  value: b.id,
+                                  child: Text(b.branchName, overflow: TextOverflow.ellipsis),
+                                ),
+                            ],
+                            onChanged: _saving ? null : (v) => setState(() => _branchId = v),
+                            // Required, as web's <select required>.
+                            validator: (v) => v == null ? 'Please select a branch.' : null,
+                          ))
+                        else
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
