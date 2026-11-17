@@ -438,7 +438,10 @@ void main() {
         {'year': 2027},
         {'year': 2027}
       ]);
-      expect(server.gets.where((g) => g.$1 == '/leave/stats/' && g.$2.isEmpty), hasLength(1)); // Analytics/Home stats still refreshed
+      // Analytics stats still refreshed once — for the calendar year since
+      // Task 83 (LV-18), no longer year-less.
+      expect(server.gets.where((g) => g.$1 == '/leave/stats/' && g.$2.isEmpty), isEmpty);
+      expect(server.gets.where((g) => g.$1 == '/leave/stats/' && g.$2['year'] == 2027), hasLength(1));
     });
 
     testWidgets('after New Year, a submission reloads the new year\'s balances', (tester) async {
@@ -514,7 +517,9 @@ void main() {
       });
     }
 
-    test('other leave requests unchanged: shared balances and Analytics / Home stats stay year-less', () async {
+    // Task 83 (LV-18): the shared leaveStatsProvider (Analytics) now sends the
+    // calendar year too; the unused shared leaveBalancesProvider stays year-less.
+    test('shared balances stay year-less; Analytics stats send the calendar year', () async {
       server = Server();
       final c = ProviderContainer(overrides: [
         ...overrides(),
@@ -524,7 +529,7 @@ void main() {
       await c.read(leaveBalancesProvider.future);
       await c.read(leaveStatsProvider.future).then((_) {}, onError: (_) {});
       expect(server.gets.where((g) => g.$1 == '/leave/balance/').single.$2, isEmpty);
-      expect(server.gets.where((g) => g.$1 == '/leave/stats/').single.$2, isEmpty);
+      expect(server.gets.where((g) => g.$1 == '/leave/stats/').single.$2, {'year': 2027});
     });
   });
 }

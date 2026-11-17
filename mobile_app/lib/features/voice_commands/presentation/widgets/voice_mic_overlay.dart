@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_app/features/facial_recognition/presentation/widgets/face_capture_bottom_sheet.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../../core/router/modal_route_tracker.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/expandable_fab.dart';
 import '../controllers/voice_command_controller.dart';
@@ -20,6 +22,19 @@ import 'voice_conversation_panel.dart';
 /// tuned against a real FloatingActionButton.extended on-device rather than
 /// derived analytically.
 const double _fabExclusion = 130;
+
+/// Whether the idle assistant is folded down to its slim edge handle
+/// (Task C1 / HO-03). Starts collapsed — the full robot is 96 dp and,
+/// sitting over the right side of every screen, covered values and actions
+/// (payslip amounts, leave-preview figures, Save buttons, FABs). The handle
+/// hugs the screen edge inside the page margin; tapping it brings the robot
+/// back, and the robot folds itself away again after a conversation ends,
+/// after [kVoiceBubbleAutoCollapse] untouched, or via its own hide button.
+final voiceBubbleCollapsedProvider = StateProvider<bool>((ref) => true);
+
+/// How long the expanded, untouched robot stays out before folding back
+/// into the edge handle.
+const Duration kVoiceBubbleAutoCollapse = Duration(seconds: 12);
 
 /// Global, persistent voice-command entry point. Mounted once above the
 /// entire app (see lib/app/app.dart's MaterialApp.router `builder`) so it's
@@ -66,6 +81,28 @@ class _VoiceMicOverlayState extends ConsumerState<VoiceMicOverlay> {
     final conversation = ref.watch(voiceCommandControllerProvider);
     final controller = ref.read(voiceCommandControllerProvider.notifier);
 
+    // Task C1 / HO-02: this overlay sits above the router's Navigator, so a
+    // dialog, date/time picker, bottom sheet or menu (all drawn inside the
+    // Navigator) would otherwise render underneath it and lose taps to it.
+    // Step out of the way entirely while any of them is open — the
+    // conversation (if any) lives on in the controller, it's just not drawn.
+    final modalOpen = ref.watch(modalRouteTrackerProvider.select((t) => t.isModalOpen));
+    // A modal opening mid-recording means the user has moved on: release the
+    // microphone instead of listening on, invisibly, behind it. (Face-proof
+    // capture is a different phase and keeps going.)
+    ref.listen<bool>(modalRouteTrackerProvider.select((t) => t.isModalOpen), (previous, next) {
+      final phase = ref.read(voiceCommandControllerProvider)?.phase;
+      if (next && (phase == VoicePanelPhase.listening || phase == VoicePanelPhase.retrying)) {
+        controller.close();
+      }
+    });
+    // Fold back into the edge handle whenever a conversation ends.
+    ref.listen<VoiceConversationState?>(voiceCommandControllerProvider, (previous, next) {
+      if (previous != null && next == null) {
+        ref.read(voiceBubbleCollapsedProvider.notifier).state = true;
+      }
+    });
+
     // The controller has no BuildContext of its own to open a modal bottom
     // sheet with — this is the one place in the voice-command flow that
     // needs one, so the orchestration (open the sheet, feed its result back)
@@ -87,6 +124,15 @@ class _VoiceMicOverlayState extends ConsumerState<VoiceMicOverlay> {
     // then reappears the instant it collapses.
     final anyFabExpanded = ref.watch(expandableFabOpenProvider);
     if (conversation == null && anyFabExpanded) return const SizedBox.shrink();
+
+    if (modalOpen) return const SizedBox.shrink();
+
+    // While the soft keyboard is up the idle robot would sit over the field
+    // being typed into or its submit button — hide it (a conversation's own
+    // typed-command panel needs the keyboard, so that case stays).
+    final keyboardUp = MediaQuery.viewInsetsOf(context).bottom > 0;
+    if (conversation == null && keyboardUp) return const SizedBox.shrink();
+    final collapsed = ref.watch(voiceBubbleCollapsedProvider);
 
     // Reactively read the current route so the bubble's DEFAULT position
     // (before any drag) can sit above a screen's own FAB instead of starting
@@ -146,6 +192,14 @@ class _VoiceMicOverlayState extends ConsumerState<VoiceMicOverlay> {
       );
     }
 
+    if (collapsed) {
+      return _CollapsedVoiceHandle(
+        key: const ValueKey('voice-mic-handle'),
+        top: defaultPosition.dy + (_bubbleSize - _CollapsedVoiceHandle.height) / 2,
+        onExpand: () => ref.read(voiceBubbleCollapsedProvider.notifier).state = false,
+      );
+    }
+
     return _DraggableMicBubble(
       key: const ValueKey('voice-mic-bubble'),
       defaultPosition: defaultPosition,
@@ -154,6 +208,7 @@ class _VoiceMicOverlayState extends ConsumerState<VoiceMicOverlay> {
       hasFab: hasFab,
       onTap: controller.startListening,
       onTypeTap: controller.openTypedCommand,
+      onCollapse: () => ref.read(voiceBubbleCollapsedProvider.notifier).state = true,
     );
   }
 
@@ -193,6 +248,7 @@ class _DraggableMicBubble extends StatefulWidget {
   final bool hasFab;
   final VoidCallback onTap;
   final VoidCallback onTypeTap;
+  final VoidCallback onCollapse;
 
   const _DraggableMicBubble({
     super.key,
@@ -202,6 +258,7 @@ class _DraggableMicBubble extends StatefulWidget {
     required this.hasFab,
     required this.onTap,
     required this.onTypeTap,
+    required this.onCollapse,
   });
 
   @override
@@ -230,25 +287,46 @@ class _DraggableMicBubbleState extends State<_DraggableMicBubble> {
   // True once idle long enough to recede toward the edge; false right after
   // any drag, so the character reads as fully present again immediately
   // after being touched.
-  bool _peeking = true;
+  // Starts fully shown: the user has just asked for the robot by tapping
+  // the edge handle.
+  bool _peeking = false;
   Timer? _idleTimer;
+
+  final GlobalKey _bubbleKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _armIdleTimer();
+    GestureBinding.instance.pointerRouter.addGlobalRoute(_onAnyPointer);
   }
 
   @override
   void dispose() {
     _idleTimer?.cancel();
+    GestureBinding.instance.pointerRouter.removeGlobalRoute(_onAnyPointer);
     super.dispose();
   }
 
+  // HO-03 residual (Phase C2): while expanded the robot covers whatever is
+  // beneath it. Any touch OUTSIDE it folds it back into the edge handle.
+  // This only observes pointer events (a global route never consumes
+  // them), so the control the user touched still gets its tap/scroll.
+  void _onAnyPointer(PointerEvent event) {
+    if (event is! PointerDownEvent || _dragging || !mounted) return;
+    final box = _bubbleKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize || !box.attached) return;
+    // Inflated a little: the keyboard / hide badges hang just outside it.
+    final rect = (box.localToGlobal(Offset.zero) & box.size).inflate(8);
+    if (!rect.contains(event.position)) widget.onCollapse();
+  }
+
+  // Untouched for [kVoiceBubbleAutoCollapse] → fold back into the edge
+  // handle so the robot never rests over screen content (HO-03).
   void _armIdleTimer() {
     _idleTimer?.cancel();
-    _idleTimer = Timer(const Duration(seconds: 30), () {
-      if (mounted) setState(() => _peeking = true);
+    _idleTimer = Timer(kVoiceBubbleAutoCollapse, () {
+      if (mounted) widget.onCollapse();
     });
   }
 
@@ -308,6 +386,7 @@ class _DraggableMicBubbleState extends State<_DraggableMicBubble> {
         _armIdleTimer();
       },
       child: AnimatedScale(
+        key: _bubbleKey,
         scale: _dragging ? 1.12 : 1.0,
         duration: const Duration(milliseconds: 120),
         curve: Curves.easeOut,
@@ -347,6 +426,31 @@ class _DraggableMicBubbleState extends State<_DraggableMicBubble> {
                 ),
               ),
             ),
+            // Hide control (HO-03): folds the robot into the edge handle.
+            Positioned(
+              left: -4,
+              bottom: -4,
+              child: Semantics(
+                container: true,
+                button: true,
+                label: 'Hide voice assistant',
+                child: GestureDetector(
+                  key: const ValueKey('voice-mic-hide'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: widget.onCollapse,
+                  child: Material(
+                    color: AppColors.surface,
+                    shape: const CircleBorder(),
+                    elevation: 3,
+                    child: SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: Icon(Icons.close_rounded, size: 13, color: AppColors.textSecondary),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -365,5 +469,54 @@ class _DraggableMicBubbleState extends State<_DraggableMicBubble> {
             top: target.dy,
             child: bubble,
           );
+  }
+}
+
+/// The folded-away assistant: a slim tab flush with the right screen edge,
+/// narrow enough to stay inside the page's side margin so it never covers a
+/// value, field or button (HO-03). Tapping it brings the robot back; it
+/// never starts listening by itself.
+class _CollapsedVoiceHandle extends StatelessWidget {
+  static const double height = 56;
+  static const double _visibleWidth = 14;
+  static const double _hitWidth = 20;
+
+  final double top;
+  final VoidCallback onExpand;
+
+  const _CollapsedVoiceHandle({super.key, required this.top, required this.onExpand});
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      right: 0,
+      top: top,
+      child: Semantics(
+        container: true,
+        button: true,
+        label: 'Show voice assistant',
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onExpand,
+          child: SizedBox(
+            width: _hitWidth,
+            height: height,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                width: _visibleWidth,
+                height: height,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(10)),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 4)],
+                ),
+                child: const Icon(Icons.mic_none_rounded, size: 12, color: Colors.white),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

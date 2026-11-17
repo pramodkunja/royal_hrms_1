@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'modal_route_tracker.dart';
 import '../../shared/widgets/not_found_view.dart';
 import '../../features/auth/presentation/providers/auth_providers.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
@@ -357,9 +358,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   ref.listen(authStateProvider, (_, __) => notifier.refresh());
   ref.onDispose(notifier.dispose);
 
+  // One observer per navigator (root + dashboard shell) so the voice overlay
+  // knows when a dialog / sheet / picker / menu is open (see
+  // modal_route_tracker.dart, HO-02).
+  final modalTracker = ref.read(modalRouteTrackerProvider);
+
   return GoRouter(
     initialLocation: AppRoutes.splash,
     refreshListenable: notifier,
+    observers: [modalTracker.newObserver()],
     redirect: (context, state) => resolveAuthRedirect(
       authState: ref.read(authStateProvider).valueOrNull,
       path: state.uri.path,
@@ -498,6 +505,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // ── Dashboard shell ────────────────────────────────────────────────
       ShellRoute(
+        observers: [modalTracker.newObserver()],
         builder: (context, state, child) => DashboardShell(child: child),
         routes: [
           GoRoute(

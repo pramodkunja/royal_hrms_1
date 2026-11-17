@@ -651,16 +651,35 @@ class ConsoleStatsRow extends StatelessWidget {
 
   const ConsoleStatsRow({super.key, required this.stats});
 
+  /// Above this text scale four cells no longer fit one row legibly
+  /// (HO-21: at 1.5 the labels clipped to "Employ…", "Approv…").
+  static const double twoColumnTextScale = 1.15;
+
   @override
   Widget build(BuildContext context) {
+    Widget cell(ConsoleStatData s) =>
+        LightStatCell(icon: s.icon, value: s.value, label: s.label, color: s.color);
+    final scale = MediaQuery.textScalerOf(context).scale(1);
+    if (scale > twoColumnTextScale && stats.length > 2) {
+      // Two per row, full words, at large text.
+      return LayoutBuilder(
+        builder: (context, c) {
+          final w = (c.maxWidth - 10) / 2;
+          return Wrap(
+            key: const Key('console-stats-two-column'),
+            spacing: 10,
+            runSpacing: 14,
+            children: [for (final s in stats) SizedBox(width: w, child: cell(s))],
+          );
+        },
+      );
+    }
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (var i = 0; i < stats.length; i++) ...[
           if (i > 0) const SizedBox(width: 10),
-          Expanded(
-            child: LightStatCell(icon: stats[i].icon, value: stats[i].value, label: stats[i].label, color: stats[i].color),
-          ),
+          Expanded(child: cell(stats[i])),
         ],
       ],
     );

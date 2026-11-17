@@ -374,9 +374,28 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('global-search')), findsNothing);
       expect(find.text('Employee EMP-7'), findsOneWidget);
+      // Task C1 (HO-05): detail routes carry their own back-arrow bar, so
+      // the shell's top bar (with Search) is off there — go back first.
+      GoRouter.of(tester.element(find.text('Employee EMP-7'))).pop();
+      await tester.pumpAndSettle();
       await openSearch(tester);
       expect(tester.widget<TextField>(input).controller!.text, '');
       expect(find.byType(ListView), findsNothing);
+    });
+
+    testWidgets('HO-05: a detail route shows only its own header — the shell bar is off there', (tester) async {
+      await pumpShell(tester);
+      final router = GoRouter.of(tester.element(find.text('Home')));
+      router.go('/dashboard/employees');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('global-search-button')), findsOneWidget); // section: shell bar
+      router.push('/dashboard/employees/EMP-7');
+      await tester.pumpAndSettle();
+      expect(find.text('Employee EMP-7'), findsOneWidget);
+      expect(find.byKey(const Key('global-search-button')), findsNothing); // detail: no shell bar
+      router.pop();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('global-search-button')), findsOneWidget);
     });
 
     testWidgets('13. a page result opens its section', (tester) async {

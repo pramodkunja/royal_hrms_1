@@ -137,6 +137,7 @@ class LeaveBalanceModel extends LeaveBalanceEntity {
     required super.typeName,
     required super.used,
     required super.total,
+    super.availableDays,
   });
 
   // Backend returns: leave_type (code), leave_type_display (name), used_days, total_days
@@ -147,6 +148,9 @@ class LeaveBalanceModel extends LeaveBalanceEntity {
       typeName: json['leave_type_display'] as String? ?? code,
       used: _toDouble(json['used_days']),
       total: _toDouble(json['total_days']),
+      // GET /leave/balance/: total_days / used_days are 1-dp decimals sent as
+      // strings (DRF); available_days is a float. Keep fractions exactly.
+      availableDays: json['available_days'] == null ? null : _toDouble(json['available_days']),
     );
   }
 }
@@ -409,7 +413,7 @@ class LeavePreviewModel extends LeavePreviewEntity {
     required super.sandwichLeaveEnabled,
     required super.actualLeaveDays,
     required super.availableBalance,
-    required super.earnedLeaveUsed,
+    required super.leaveDaysUsed,
     required super.lopDays,
     required super.lopEnabled,
     required super.sufficientBalance,
@@ -427,7 +431,9 @@ class LeavePreviewModel extends LeavePreviewEntity {
       sandwichLeaveEnabled: json['sandwich_leave_enabled'] as bool? ?? false,
       actualLeaveDays: _toDouble(json['actual_leave_days']),
       availableBalance: _toDouble(json['available_balance']),
-      earnedLeaveUsed: _toDouble(json['earned_leave_used']),
+      // The backend key is `leave_days_used` (views/leave.py _leave_preview);
+      // `earned_leave_used` was never sent, so this always read 0 before.
+      leaveDaysUsed: _toDouble(json['leave_days_used']),
       lopDays: _toDouble(json['lop_days']),
       lopEnabled: json['lop_enabled'] as bool? ?? false,
       sufficientBalance: json['sufficient_balance'] as bool? ?? true,

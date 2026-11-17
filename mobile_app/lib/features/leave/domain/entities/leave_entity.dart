@@ -109,14 +109,19 @@ class LeaveBalanceEntity {
   final double used;
   final double total;
 
+  /// The server's own `available_days` (total − used, computed on exact
+  /// decimals), when sent. Preferred over subtracting two doubles here.
+  final double? availableDays;
+
   const LeaveBalanceEntity({
     required this.typeCode,
     required this.typeName,
     required this.used,
     required this.total,
+    this.availableDays,
   });
 
-  double get available => total - used;
+  double get available => availableDays ?? total - used;
   double get pct => total > 0 ? (used / total).clamp(0.0, 1.0) : 0.0;
 }
 
@@ -479,7 +484,8 @@ class LeavePreviewEntity {
   final bool sandwichLeaveEnabled;
   final double actualLeaveDays;
   final double availableBalance;
-  final double earnedLeaveUsed;
+  /// Backend `leave_days_used` (web: "Leave Days Used").
+  final double leaveDaysUsed;
   final double lopDays;
   final bool lopEnabled;
   final bool sufficientBalance;
@@ -495,7 +501,7 @@ class LeavePreviewEntity {
     required this.sandwichLeaveEnabled,
     required this.actualLeaveDays,
     required this.availableBalance,
-    required this.earnedLeaveUsed,
+    required this.leaveDaysUsed,
     required this.lopDays,
     required this.lopEnabled,
     required this.sufficientBalance,

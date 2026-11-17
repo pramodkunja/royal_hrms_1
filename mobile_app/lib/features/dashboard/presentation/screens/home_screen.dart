@@ -62,6 +62,7 @@ class _GenericDashboardView extends ConsumerWidget {
     final canViewBirthdays = permissions.contains('employees.view');
 
     Future<void> refreshAll() async {
+      ref.invalidate(leaveDashboardYearProvider);
       ref.invalidate(leaveStatsProvider);
       ref.invalidate(leaveRequestsProvider);
       ref.invalidate(todayAttendanceProvider);
@@ -225,7 +226,10 @@ class _LeaveBalanceCard extends ConsumerWidget {
         ),
         error: (e, _) => SectionError(
           message: friendlyLeaveError(e),
-          onRetry: () => ref.invalidate(leaveStatsProvider),
+          onRetry: () {
+            ref.invalidate(leaveDashboardYearProvider);
+            ref.invalidate(leaveStatsProvider);
+          },
         ),
       ),
     );

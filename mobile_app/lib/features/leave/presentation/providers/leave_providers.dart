@@ -60,21 +60,29 @@ final leaveStatsProvider =
         LeaveStatsNotifier.new);
 
 class LeaveStatsNotifier extends AutoDisposeAsyncNotifier<LeaveStatsEntity> {
+  // Always sends `year` (Task 83, LV-18): web LeaveAnalytics.tsx asks for
+  // `?year=<getLeaveYear()>` — the calendar year — whereas the backend's
+  // LeaveStatsView defaults a missing year to the financial-year start year,
+  // which is last year from January to March. Scope is left to the backend
+  // (own figures unless the user holds leave.approve), as before.
   @override
-  Future<LeaveStatsEntity> build() =>
-      ref.read(leaveRepositoryProvider).getLeaveStats();
+  Future<LeaveStatsEntity> build() => ref
+      .read(leaveRepositoryProvider)
+      .getLeaveStats(year: ref.watch(leaveDashboardYearProvider));
 
   Future<void> refresh() async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(
-        () => ref.read(leaveRepositoryProvider).getLeaveStats());
+    state = await AsyncValue.guard(() => ref
+        .read(leaveRepositoryProvider)
+        .getLeaveStats(year: ref.read(leaveDashboardYearProvider)));
   }
 }
 
-/// The clock the Leave Dashboard reads its year from. Overridable in tests.
+/// The clock the leave screens read their year from. Overridable in tests.
 final leaveDashboardClockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
 
-/// The year web's Leave Dashboard and Apply Leave form ask for: web lib/fiscalYear.ts
+/// The year web's Leave Dashboard, Leave Analytics, Apply Leave form and
+/// Employee dashboard Leave Balances card ask for: web lib/fiscalYear.ts
 /// getLeaveYear() = `new Date().getFullYear()` — the plain calendar year,
 /// because the backend keys LeaveBalance.year by calendar year (its own
 /// default when no year is sent is the financial-year start year, which

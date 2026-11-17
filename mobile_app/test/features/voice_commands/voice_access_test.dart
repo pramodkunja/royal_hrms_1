@@ -274,6 +274,12 @@ void main() {
 
     testWidgets('the mic is shown for a normal signed-in user', (tester) async {
       await pumpOverlay(tester, _user());
+      // Task C1 / HO-03: the assistant starts folded into its edge handle;
+      // tapping the handle brings the robot back.
+      expect(find.byKey(const ValueKey('voice-mic-handle')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('voice-mic-handle')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
       expect(find.byType(AnimatedVoiceAssistant), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 1));

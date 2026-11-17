@@ -130,6 +130,10 @@ class VoiceCommandController extends Notifier<VoiceConversationState?> {
 
   Future<void> startListening() async {
     if (!_ensureAllowed()) return;
+    // One recording at a time (Task C1 / HO-02): a second tap — or a stray
+    // tap while the fallback clip is recording — must not reopen the mic.
+    final phase = state?.phase;
+    if (phase == VoicePanelPhase.listening || phase == VoicePanelPhase.retrying) return;
     _autoCloseTimer?.cancel();
 
     if (!_speechInitialized) {
@@ -185,11 +189,13 @@ class VoiceCommandController extends Notifier<VoiceConversationState?> {
 
     final transcript = current.transcript.trim();
     if (transcript.isEmpty) {
-      // On-device recognition came back with literally nothing usable —
-      // mirrors web's attemptSilentSpeechFallback: try the Hindi-STT retry
-      // directly (there's no English transcript to submit first) rather
-      // than silently closing the panel with no feedback at all.
-      unawaited(_attemptSilentFallback());
+      // Nothing was heard. Say so and stop — do NOT start a second
+      // recording on our own (Task C1 / HO-02: an accidental tap opened the
+      // mic, heard nothing, then "Listening again" recorded a further clip
+      // nobody asked for). Web's attemptSilentSpeechFallback re-records here;
+      // mobile now waits for the user to tap again. The Hindi-STT retry still
+      // runs when the user actually spoke and the command didn't match.
+      _showTerminalError(_kNoSpeechMessage);
     } else {
       submitTranscript(transcript);
     }
@@ -422,40 +428,6 @@ class VoiceCommandController extends Notifier<VoiceConversationState?> {
           latitude: position.latitude,
           longitude: position.longitude,
         );
-  }
-
-  /// On-device recognition returned nothing at all — no transcript ever
-  /// reached /voice/parse/, so there's nothing to resubmit through the
-  /// no_match branch above. Tries the Hindi-STT retry directly instead of
-  /// silently giving up (mirrors web's attemptSilentSpeechFallback).
-  Future<void> _attemptSilentFallback() async {
-    // Records the mic and calls /voice/transcribe-fallback/ — same gate.
-    if (!_ensureAllowed()) return;
-    state = const VoiceConversationState(phase: VoicePanelPhase.retrying);
-    try {
-      final repo = ref.read(voiceRepositoryProvider);
-      final clip = await _recordFallbackClip();
-      if (clip == null) {
-        _showTerminalError(_kNoSpeechMessage);
-        return;
-      }
-      final fallback = await repo.transcribeFallback(audioBytes: clip);
-      if (fallback.transcript.isEmpty) {
-        _showTerminalError(_kNoSpeechMessage);
-        return;
-      }
-      await _performSubmit(
-        fallback.transcript,
-        allowFallback: false, // already used the one Sarvam attempt
-        sttLanguageProbability: fallback.languageProbability,
-        sttUsedLanguageHint: fallback.wasLanguageHinted,
-        sttDetectedLanguage: fallback.detectedLanguage,
-      );
-    } on DioException catch (e) {
-      _showTerminalError(parseDioException(e).message);
-    } catch (_) {
-      _showTerminalError(_kNoSpeechMessage);
-    }
   }
 
   /// Records a short fixed-duration clip to a temp WAV file for the

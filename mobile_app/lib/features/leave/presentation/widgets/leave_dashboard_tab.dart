@@ -5,6 +5,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/app_error_state.dart';
 import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
+import 'leave_number_format.dart';
 import 'leave_request_detail_sheet.dart';
 import 'package:mobile_app/core/network/api_client.dart';
 
@@ -376,7 +377,7 @@ class _BalanceCard extends StatelessWidget {
 
 /// A day count as web prints `Number(x)`: whole numbers without decimals,
 /// otherwise every significant digit (1.5, 1.25 — never rounded).
-String leaveDays(double v) => v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
+String leaveDays(double v) => formatLeaveDays(v);
 
 // ── Loss of Pay Card ──────────────────────────────────────────────────────────
 

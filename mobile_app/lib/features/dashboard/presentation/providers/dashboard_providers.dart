@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/router/access_control.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../leave/presentation/providers/leave_providers.dart' show leaveDashboardYearProvider;
 import '../../../separation/presentation/providers/separation_providers.dart';
 import '../../data/datasources/dashboard_remote_datasource.dart';
 import '../../data/models/admin_dashboard_models.dart';
@@ -164,7 +165,13 @@ final employeeNoticePeriodProvider = FutureProvider.autoDispose<EmployeeNoticePe
 
 final employeeLeaveBalancesProvider =
     FutureProvider.autoDispose<EmployeeLeaveBalanceSummary>(
-  (ref) => ref.read(dashboardDataSourceProvider).fetchEmployeeLeaveBalances(),
+  // web EmpLeaveBalances.tsx: useLeaveBalances(getLeaveYear()) →
+  // `?year=<calendar year>` (Task 83). The backend's own default is the
+  // server's calendar year, so this only differs around New Year across
+  // time zones — but the device's year is what web uses.
+  (ref) => ref
+      .read(dashboardDataSourceProvider)
+      .fetchEmployeeLeaveBalances(year: ref.watch(leaveDashboardYearProvider)),
 );
 
 final employeeActionItemsProvider =

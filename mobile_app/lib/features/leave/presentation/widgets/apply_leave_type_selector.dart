@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/leave_entity.dart';
+import 'leave_number_format.dart';
 import 'leave_type_icons.dart';
 import 'leave_type_presentation.dart' show isBuiltinLeaveType, kCustomLeaveTypeColor, kCustomLeaveTypeIcon;
 
@@ -11,8 +12,16 @@ class LeaveTypeOption {
   final String key; // same as code — 'CL', 'EL', etc.
   final String code; // 'CL', 'EL', etc.
   final String label;
-  final int balance; // available days (rounded)
-  final int total; // total entitlement days
+  /// Available days, exactly as the server gives them (fractions kept — web
+  /// `Number(balance.available_days)`; Task 84 / LV-08: no longer rounded).
+  final double balance;
+
+  /// Total entitlement days (`total_days`; the policy's annual days when the
+  /// user has no balance row).
+  final double total;
+
+  /// Days used (`used_days`; 0 without a balance row).
+  final double used;
   final bool isPaid;
 
   /// The server's rule only: the type's Leave Policy `attachment_required`
@@ -29,6 +38,7 @@ class LeaveTypeOption {
     required this.label,
     required this.balance,
     required this.total,
+    this.used = 0,
     required this.isPaid,
     required this.docRequired,
     required this.color,
@@ -48,8 +58,9 @@ class LeaveTypeOption {
       // Built-ins: their fixed label (web LEAVE_TYPE_CONFIG); a custom type:
       // the policy's leave_type_display (web configForPolicy).
       label: type.name.isNotEmpty ? type.name : LeaveTypeColors.labelForCode(type.code),
-      balance: balance?.available.round() ?? 0,
-      total: balance?.total.round() ?? type.maxDays,
+      balance: balance?.available ?? 0,
+      total: balance?.total ?? type.maxDays.toDouble(),
+      used: balance?.used ?? 0,
       isPaid: type.isPaid,
       docRequired: type.docRequired,
       // A custom type (e.g. Pink Leave) gets web's neutral custom styling.
@@ -205,7 +216,7 @@ class LeaveTypeSelector extends StatelessWidget {
                       Text('Unpaid · Unlimited',
                           style: AppTextStyles.caption.copyWith(fontSize: 9))
                     else ...[
-                      Text('${lt.balance}d left',
+                      Text('${formatLeaveDays(lt.balance)}d left',
                           style: AppTextStyles.caption.copyWith(
                               fontSize: 9,
                               color: lt.color,

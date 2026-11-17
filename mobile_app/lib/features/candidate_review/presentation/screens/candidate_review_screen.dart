@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/documents/document_links.dart' show previewDocumentInApp;
 import '../../../../shared/widgets/blue_hero_banner.dart';
 import '../../../../shared/widgets/stat_card.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
@@ -1117,12 +1118,50 @@ class _Row extends StatelessWidget {
   }
 }
 
-class _DocRow extends StatelessWidget {
+/// One onboarding document of the applicant (Task 82). View opens it in
+/// the app's viewer, as web OnboardingDrawer → DocPreviewModal does:
+/// PDF / JPG / PNG in-app (the backend accepts only those types); anything
+/// else opens outside the app. `file_url` is the backend's link — in this
+/// approval context a short-lived signed file-host link
+/// (EmployeeDocumentSerializer with use_cloudinary_url), otherwise the API's
+/// own /onboarding/documents/<id>/ — and the shared downloader sends the
+/// app's login only to the API's own server, never to the file host.
+/// Expired link, 401, 403, 404, server and network failures are reported as
+/// a message. One open at a time: further taps wait for it.
+class _DocRow extends ConsumerStatefulWidget {
   final ApprovalDocument doc;
   const _DocRow({required this.doc});
 
   @override
-  Widget build(BuildContext context) => Container(
+  ConsumerState<_DocRow> createState() => _DocRowState();
+}
+
+class _DocRowState extends ConsumerState<_DocRow> {
+  bool _opening = false;
+
+  Future<void> _view() async {
+    final url = (widget.doc.fileUrl ?? '').trim();
+    if (_opening || url.isEmpty) return;
+    setState(() => _opening = true);
+    try {
+      await previewDocumentInApp(
+        context,
+        ref,
+        url: url,
+        title: widget.doc.documentTypeDisplay.isNotEmpty ? widget.doc.documentTypeDisplay : 'Document',
+        fileName: widget.doc.fileName,
+      );
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final doc = widget.doc;
+    final hasLink = (doc.fileUrl ?? '').trim().isNotEmpty;
+    return Container(
+        key: Key('onboarding-doc-${doc.id}'),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: const BoxDecoration(
             border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6)))),
@@ -1146,11 +1185,14 @@ class _DocRow extends StatelessWidget {
                 ],
               ),
             ),
-            if (doc.fileUrl != null && doc.fileUrl!.isNotEmpty)
+            if (hasLink)
               TextButton.icon(
-                onPressed: () {}, // URL launcher can be added if needed
-                icon: const Icon(Icons.open_in_new, size: 13),
-                label: const Text('View'),
+                key: Key('onboarding-doc-view-${doc.id}'),
+                onPressed: _opening ? null : _view,
+                icon: _opening
+                    ? const SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.visibility_outlined, size: 13),
+                label: Text(_opening ? 'Opening…' : 'View'),
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   padding:
@@ -1166,6 +1208,7 @@ class _DocRow extends StatelessWidget {
           ],
         ),
       );
+  }
 }
 
 class _EmptyDocs extends StatelessWidget {

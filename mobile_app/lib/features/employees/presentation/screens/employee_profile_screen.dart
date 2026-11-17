@@ -11,9 +11,9 @@ import '../../../../core/permissions/permission_providers.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../notifications/presentation/widgets/notification_bell_button.dart';
 import '../../../separation/presentation/notice_period.dart' show formatNoticePeriod;
-import '../../../../shared/widgets/app_button.dart';
 import '../../data/datasources/employees_remote_datasource.dart';
 import '../../data/models/employee_model.dart';
+import '../../domain/experience.dart';
 import '../../domain/employee_profile_sections.dart';
 import '../providers/employee_providers.dart';
 import '../widgets/add_employee_sheet.dart';
@@ -233,7 +233,6 @@ class _ProfileShellState extends ConsumerState<_ProfileShell> with TickerProvide
   Widget build(BuildContext context) {
     final emp = widget.employee;
     _syncTabs(_keysFor(ref.watch(authStateProvider).valueOrNull?.user));
-    final isProfileTab = _tabCtrl.index == 0;
     // Editing and activating/deactivating need employees.edit (web
     // employees/[id]/page.tsx canEdit); without it the profile is read-only.
     final canEdit = ref.watch(permissionProvider('employees.edit'));
@@ -264,34 +263,40 @@ class _ProfileShellState extends ConsumerState<_ProfileShell> with TickerProvide
         actions: [
           // Web ProfileHeader: "ID Card" (→ /dashboard/employees/<id>/id-card),
           // offered unless the employee's onboarding is still pending.
+          // Icon buttons (tooltip + semantics label carry the name): two
+          // text-labelled buttons plus the bell squeezed the title to "Em…"
+          // on a 411 dp phone (device audit HO-05).
           if (!pendingOnboarding)
-            TextButton.icon(
+            IconButton(
               key: const Key('employee-id-card'),
+              visualDensity: VisualDensity.compact,
+              tooltip: 'ID Card',
+              color: AppColors.primary,
               onPressed: () => context.push(AppRoutes.employeeIdCardPath(widget.employeeId)),
-              icon: const Icon(Icons.badge_outlined, size: 16),
-              label: const Text('ID Card', style: TextStyle(fontSize: 12.5)),
+              icon: const Icon(Icons.badge_outlined, size: 20),
             ),
           // Web ProfileHeader: "Reset Password" for employees.edit holders.
           if (canEdit)
-            TextButton.icon(
+            IconButton(
               key: const Key('employee-reset-password'),
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Reset Password',
+              color: AppColors.primary,
               onPressed: _onResetPassword,
-              icon: const Icon(Icons.key_outlined, size: 16),
-              label: const Text('Reset Password', style: TextStyle(fontSize: 12.5)),
+              icon: const Icon(Icons.key_outlined, size: 20),
             ),
           const NotificationBellButton(),
           const SizedBox(width: 4),
         ],
-        titleSpacing: 16,
+        titleSpacing: 8,
         automaticallyImplyLeading: false,
         leadingWidth: 44,
       ),
-      bottomNavigationBar: isProfileTab && canEdit && !pendingOnboarding
-          ? _BottomBar(
-              onCancel: () => Navigator.of(context).pop(),
-              onSave: _onSave,
-            )
-          : null,
+      // No pinned Cancel / Save bar (device audit HO-06): web's ProfileForm
+      // hides its footer in read-only mode and shows it only after "Edit"
+      // (readOnly={!isEditing}); here the Personal section's own Edit opens
+      // the edit form, which carries its own Cancel / Save. The old bar's
+      // "Save" only opened that same form, and its "Cancel" left the page.
       body: pendingOnboarding
           ? ListView(
               key: const Key('employee-pending-onboarding'),
@@ -670,6 +675,17 @@ class _ProfileCard extends StatelessWidget {
             ),
           ),
 
+          // Web ProfileHeader "Current Experience" = experienceFrom(DOJ)
+          // (HO-29). Web's "Total Experience" shows the same value (it
+          // ignores total_experience_years), so it isn't copied here.
+          Divider(height: 1, color: AppColors.border),
+          _InfoCell(
+            key: const Key('employee-current-experience'),
+            label: 'CURRENT EXPERIENCE',
+            value: experienceFrom(emp.dateOfJoining),
+            icon: Icons.schedule_outlined,
+          ),
+
           Divider(height: 1, color: AppColors.border),
 
           // ── Active toggle ─────────────────────────────────────────────
@@ -722,6 +738,7 @@ class _InfoCell extends StatelessWidget {
   final IconData icon;
 
   const _InfoCell({
+    super.key,
     required this.label,
     required this.value,
     required this.icon,
@@ -1571,54 +1588,6 @@ class _DisplayField extends StatelessWidget {
     );
   }
 }
-
-// ── Bottom bar ────────────────────────────────────────────────────────────────
-
-class _BottomBar extends StatelessWidget {
-  final VoidCallback onCancel;
-  final VoidCallback onSave;
-
-  const _BottomBar({required this.onCancel, required this.onSave});
-
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).padding.bottom;
-    return Container(
-      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottom),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: OutlinedButton(
-              onPressed: onCancel,
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                side: BorderSide(color: AppColors.border),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              child: Text(
-                'Cancel',
-                style: AppTextStyles.label.copyWith(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 2,
-            child: AppButton(label: 'Save', onPressed: onSave),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 
 // ── Approval Matrix tab ────────────────────────────────────────────────────────
 

@@ -80,7 +80,11 @@ class _DashboardShellState extends ConsumerState<DashboardShell> {
         key: _scaffoldKey,
         backgroundColor: AppColors.background,
         drawer: const AppSidebar(),
-        appBar: AppTopBar(
+        // Detail screens nested in the shell (employee profile, its ID card,
+        // a separation request) bring their own AppBar with a back arrow,
+        // title and actions — drawing the shell's bar too stacked two headers
+        // with two notification bells (device audit HO-05).
+        appBar: shellDetailRouteHasOwnAppBar(currentPath) ? null : AppTopBar(
           title: title,
           // Every route except the Dashboard home screen gets the blue app
           // bar theme — Dashboard keeps its original plain white bar.
@@ -135,3 +139,11 @@ class _DashboardShellState extends ConsumerState<DashboardShell> {
     if (mounted) context.go(AppRoutes.login);
   }
 }
+
+/// Nested detail routes inside the dashboard shell whose screen renders its
+/// own AppBar (back arrow + title + actions): `/dashboard/employees/<id>`,
+/// `/dashboard/employees/<id>/id-card` and `/dashboard/separation/<id>`.
+/// The shell leaves its own top bar off for these.
+bool shellDetailRouteHasOwnAppBar(String path) =>
+    RegExp(r'^/dashboard/employees/[^/]+(/id-card)?/?$').hasMatch(path) ||
+    RegExp(r'^/dashboard/separation/[^/]+/?$').hasMatch(path);

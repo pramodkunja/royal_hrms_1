@@ -10,6 +10,8 @@ import '../../../../shared/widgets/app_button.dart';
 import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
 import 'apply_leave_type_selector.dart';
+import 'leave_number_format.dart';
+import 'leave_preview_panel.dart';
 
 // ── Duration options ───────────────────────────────────────────────────────────
 
@@ -51,8 +53,7 @@ LeaveTypeEntity _resolveLeaveEntity(
 
 /// Formats a day count trimming a trailing `.0` (e.g. `2` not `2.0`, but
 /// `2.5` stays `2.5`) — matches the existing chip/side-card formatting style.
-String _fmtDays(double d) =>
-    d == d.roundToDouble() ? d.toInt().toString() : d.toStringAsFixed(1);
+String _fmtDays(double d) => formatLeaveDays(d);
 
 enum _BalanceMode { lop, negative, blocked }
 
@@ -391,7 +392,7 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
     final isLwp = LeaveTypeColors.isLwp(lt.code);
     final localBalanceCheck = _evaluateBalance(
       isLwp: isLwp,
-      available: lt.balance.toDouble(),
+      available: lt.balance,
       requested: days,
       convertToLop: entity.convertToLop,
       allowNegativeBalance: entity.allowNegativeBalance,
@@ -647,7 +648,7 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
         ? null
         : _evaluateBalance(
             isLwp: LeaveTypeColors.isLwp(lt.code),
-            available: lt.balance.toDouble(),
+            available: lt.balance,
             requested: days,
             convertToLop: selectedEntity.convertToLop,
             allowNegativeBalance: selectedEntity.allowNegativeBalance,
@@ -778,26 +779,46 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
                   ],
                   if (_fromDate != null && (_isHalfDay || _toDate != null)) ...[
                     const SizedBox(height: 10),
-                    _WorkingDaysChip(
-                      days: days,
-                      balance: lt?.balance.toDouble() ?? 0,
-                      isLwp: lt != null && LeaveTypeColors.isLwp(lt.code),
-                      balanceCheck: balanceCheck,
-                    ),
+                    // Web ApplyLeaveForm.tsx: the instant local estimate shows
+                    // only until the server preview for the CURRENT inputs
+                    // arrives; then the preview panel replaces it, so the two
+                    // never disagree on screen. The preview is keyed by
+                    // (type, start, end, duration), so a response for earlier
+                    // inputs is never shown as current (Task 84 / LV-11).
+                    if (preview == null)
+                      _WorkingDaysChip(
+                        days: days,
+                        balance: lt?.balance ?? 0,
+                        isLwp: lt != null && LeaveTypeColors.isLwp(lt.code),
+                        balanceCheck: balanceCheck,
+                      )
+                    else
+                      LeavePreviewPanel(preview: preview),
+                    if (previewParams != null && previewAsync.isLoading) ...[
+                      const SizedBox(height: 8),
+                      const _PreviewStatusLine.loading(),
+                    ] else if (previewParams != null && previewAsync.hasError && preview == null) ...[
+                      const SizedBox(height: 8),
+                      _PreviewStatusLine.error(
+                        message: friendlyLeaveError(previewAsync.error!),
+                        onRetry: () => ref.invalidate(leavePreviewProvider(previewParams)),
+                      ),
+                    ],
                     if (durationErrs.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       _InlineErrors(messages: durationErrs),
                     ],
+                    if (preview != null && preview.warning.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      LeavePreviewWarning(text: preview.warning),
+                    ],
+                    if (preview != null && !preview.sufficientBalance && !preview.lopEnabled) ...[
+                      const SizedBox(height: 8),
+                      const LeavePreviewInsufficient(),
+                    ],
                     if (balanceCheck != null) ...[
                       const SizedBox(height: 10),
                       _BalanceStatusBanner(check: balanceCheck),
-                    ],
-                    if (preview != null &&
-                        (preview.companyHolidayCount > 0 ||
-                            preview.weekOffCount > 0 ||
-                            preview.warning.isNotEmpty)) ...[
-                      const SizedBox(height: 8),
-                      _PreviewBreakdownNote(preview: preview),
                     ],
                   ],
                 ],
@@ -1300,9 +1321,7 @@ class _WorkingDaysChip extends StatelessWidget {
         : (mode == _BalanceMode.lop || mode == _BalanceMode.negative)
             ? AppColors.warning
             : AppColors.primary;
-    final label = days == 0.5
-        ? '0.5 working day'
-        : '${days.toInt()} working day${days.toInt() == 1 ? "" : "s"}';
+    final label = '${_fmtDays(days)} working day${days == 1 ? "" : "s"}';
     final badgeText = switch (mode) {
       _BalanceMode.blocked => 'Exceeds balance',
       _BalanceMode.lop => '${_fmtDays(balanceCheck!.excess)}d → LOP',
@@ -1385,73 +1404,53 @@ class _InlineErrors extends StatelessWidget {
   }
 }
 
-// ── Preview breakdown note (holidays/week-offs excluded, policy warning) ────
+// ── Preview status (loading / failed) ────────────────────────────────────────
 //
-// Surfaces the server preview's holiday/week-off exclusions and any policy
-// warning (e.g. max-consecutive-days-with-LOP) so the day count shown in the
-// chip above isn't a mystery — mirrors the breakdown panel the web preview
-// endpoint was built to drive.
+// Web shows "Checking balance and holidays…" while the preview loads. A
+// failed preview leaves web on its local estimate with nothing said; mobile
+// keeps that fallback but says so, with a Retry (the local estimate is still
+// shown above, and submission still goes to the server's own checks).
 
-class _PreviewBreakdownNote extends StatelessWidget {
-  final LeavePreviewEntity preview;
-  const _PreviewBreakdownNote({required this.preview});
+class _PreviewStatusLine extends StatelessWidget {
+  final String? message;
+  final VoidCallback? onRetry;
+  const _PreviewStatusLine.loading()
+      : message = null,
+        onRetry = null;
+  const _PreviewStatusLine.error({required String this.message, required VoidCallback this.onRetry});
 
   @override
   Widget build(BuildContext context) {
-    final parts = <String>[
-      if (preview.companyHolidayCount > 0)
-        '${preview.companyHolidayCount} holiday${preview.companyHolidayCount == 1 ? "" : "s"}',
-      if (preview.weekOffCount > 0)
-        '${preview.weekOffCount} week-off${preview.weekOffCount == 1 ? "" : "s"}',
-    ];
-    final excludedNote = parts.isEmpty
-        ? null
-        : (preview.sandwichLeaveEnabled
-            ? '${parts.join(" + ")} included (sandwich leave policy).'
-            : '${parts.join(" + ")} excluded from the day count.');
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.info.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.info.withValues(alpha: 0.25)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+    if (onRetry == null) {
+      return Row(
+        key: const Key('leave-preview-loading'),
         children: [
-          if (excludedNote != null)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.info_outline, size: 13, color: AppColors.info),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(excludedNote,
-                      style: AppTextStyles.caption
-                          .copyWith(fontSize: 10.5, color: AppColors.info)),
-                ),
-              ],
-            ),
-          if (preview.warning.isNotEmpty) ...[
-            if (excludedNote != null) const SizedBox(height: 4),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.warning_amber_outlined,
-                    size: 13, color: AppColors.warning),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(preview.warning,
-                      style: AppTextStyles.caption.copyWith(
-                          fontSize: 10.5, color: AppColors.warning)),
-                ),
-              ],
-            ),
-          ],
+          SizedBox(
+              width: 11, height: 11, child: CircularProgressIndicator(strokeWidth: 1.6, color: AppColors.textSecondary)),
+          const SizedBox(width: 6),
+          Text('Checking balance and holidays…',
+              style: AppTextStyles.caption.copyWith(fontSize: 11, color: AppColors.textSecondary)),
         ],
-      ),
+      );
+    }
+    return Row(
+      key: const Key('leave-preview-error'),
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(Icons.info_outline, size: 13, color: AppColors.textSecondary),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text("Couldn't check balance and holidays: $message Showing an estimate.",
+              style: AppTextStyles.caption.copyWith(fontSize: 10.5, color: AppColors.textSecondary)),
+        ),
+        TextButton(
+          key: const Key('leave-preview-retry'),
+          onPressed: onRetry,
+          style: TextButton.styleFrom(
+              minimumSize: const Size(0, 32), padding: const EdgeInsets.symmetric(horizontal: 8)),
+          child: const Text('Retry'),
+        ),
+      ],
     );
   }
 }
@@ -1820,7 +1819,7 @@ class _LeaveBalanceSideCard extends StatelessWidget {
                     Text(
                       isLwp
                           ? 'Unpaid · No limit'
-                          : '${lt!.balance} of ${lt!.total} days left',
+                          : '${formatLeaveDays(lt!.balance)} of ${formatLeaveDays(lt!.total)} days left',
                       style: AppTextStyles.caption.copyWith(fontSize: 10),
                     ),
                   ],
@@ -1843,10 +1842,10 @@ class _LeaveBalanceSideCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('${lt!.total - lt!.balance} used',
+                Text('${formatLeaveDays(lt!.used)} used',
                     style: AppTextStyles.caption
                         .copyWith(fontSize: 10, color: AppColors.textHint)),
-                Text('${lt!.balance} remaining',
+                Text('${formatLeaveDays(lt!.balance)} remaining',
                     style: AppTextStyles.caption.copyWith(
                         fontSize: 10,
                         color: lt!.color,

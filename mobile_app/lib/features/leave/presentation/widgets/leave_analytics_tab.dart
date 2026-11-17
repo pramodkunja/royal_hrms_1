@@ -16,7 +16,7 @@ class LeaveAnalyticsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final statsAsync = ref.watch(leaveStatsProvider);
     final stats = statsAsync.valueOrNull;
-    final currentYear = stats?.year ?? DateTime.now().year;
+    final currentYear = stats?.year ?? ref.watch(leaveDashboardYearProvider);
     // AsyncValue.isLoading/valueOrNull alone can't distinguish "still
     // loading" from "failed" — without this check, a failed fetch (network
     // error, transient 5xx, etc.) fell through to the same zero-filled KPI
@@ -50,7 +50,7 @@ class LeaveAnalyticsTab extends ConsumerWidget {
 
     return RefreshIndicator(
       color: AppColors.primary,
-      onRefresh: () async => ref.invalidate(leaveStatsProvider),
+      onRefresh: () async => refreshLeaveStats(ref),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 96),
@@ -59,7 +59,7 @@ class LeaveAnalyticsTab extends ConsumerWidget {
                 title: 'Failed to load leave analytics.',
                 message: friendlyLeaveError(statsAsync.error!),
                 padding: const EdgeInsets.symmetric(vertical: 80),
-                onRetry: () => ref.invalidate(leaveStatsProvider),
+                onRetry: () => refreshLeaveStats(ref),
               )
             : Column(
           mainAxisSize: MainAxisSize.min,
@@ -396,4 +396,12 @@ class _StatusRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Pull-to-refresh / retry for the year-scoped leave stats: re-reads the
+/// calendar year too (so a tab left open over New Year asks for the new year,
+/// as web's re-render does) and refetches once.
+void refreshLeaveStats(WidgetRef ref) {
+  ref.invalidate(leaveDashboardYearProvider);
+  ref.invalidate(leaveStatsProvider);
 }

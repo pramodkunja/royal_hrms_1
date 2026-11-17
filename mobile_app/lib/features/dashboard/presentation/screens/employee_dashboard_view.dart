@@ -16,6 +16,7 @@ import '../widgets/emp_celebration_cards.dart';
 import '../widgets/emp_notice_period_card.dart';
 import '../widgets/emp_upcoming_holidays_card.dart';
 import '../widgets/leave_monthly_breakdown.dart';
+import '../../../leave/presentation/providers/leave_providers.dart' show leaveDashboardYearProvider;
 import '../widgets/quick_access.dart';
 import 'package:mobile_app/features/documents/presentation/providers/document_providers.dart'
     show pendingAcknowledgementsProvider;
@@ -40,6 +41,7 @@ class EmployeeDashboardView extends ConsumerWidget {
       ref.invalidate(employeeKpisProvider);
       ref.invalidate(employeeNoticePeriodProvider);
       ref.invalidate(todayAttendanceProvider);
+      ref.invalidate(leaveDashboardYearProvider);
       ref.invalidate(employeeLeaveBalancesProvider);
       ref.invalidate(employeeHolidaysProvider);
       ref.invalidate(employeeAttendanceSummaryForProvider);
@@ -264,7 +266,7 @@ class _EmpLeaveBalancesCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final balancesAsync = ref.watch(employeeLeaveBalancesProvider);
-    final year = DateTime.now().year;
+    final year = ref.watch(leaveDashboardYearProvider);
 
     // No "Apply Leave" trailing button here anymore — AttendanceRingCard
     // (right below the console header, above this card) already has one,
@@ -327,7 +329,10 @@ class _EmpLeaveBalancesCard extends ConsumerWidget {
         ),
         error: (e, _) => SectionError(
           message: friendlyDashboardError(e),
-          onRetry: () => ref.invalidate(employeeLeaveBalancesProvider),
+          onRetry: () {
+            ref.invalidate(leaveDashboardYearProvider);
+            ref.invalidate(employeeLeaveBalancesProvider);
+          },
         ),
       ),
     );

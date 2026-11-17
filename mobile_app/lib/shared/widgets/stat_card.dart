@@ -128,7 +128,7 @@ class StatCardRow extends StatelessWidget {
   Widget build(BuildContext context) {
     // 88 at normal text; grows with the text scale (capped) so larger text
     // gets room — the card scales its content down for anything beyond.
-    final height = (88 * MediaQuery.textScalerOf(context).scale(1)).clamp(88.0, 160.0);
+    final height = statCardRowHeight(context);
     return SizedBox(
       height: height,
       child: ListView.separated(
@@ -144,10 +144,25 @@ class StatCardRow extends StatelessWidget {
             valueText: c.valueText,
             label: c.label,
             color: c.color,
-            width: cardWidth,
+            // HO-21 / HO-07: a fixed width with growing text truncated
+            // labels ("Total Asse…") and, at 1.5×, broke a single word
+            // mid-way ("Pendin / g"). The strip scrolls sideways, so let
+            // each card widen with the text instead (capped).
+            width: cardWidth * statCardWidthFactor(context),
           );
         },
       ),
     );
   }
 }
+
+/// The height a [StatCardRow] takes in [context]: 88 at normal text, growing
+/// with the text scale (capped at 160) — exposed so layouts that position a
+/// row (e.g. the Employees hero overlap) reserve exactly that much.
+double statCardRowHeight(BuildContext context) =>
+    (88 * MediaQuery.textScalerOf(context).scale(1)).clamp(88.0, 160.0);
+
+/// How much wider a strip card gets at the current text scale (1.0 at normal
+/// text, up to 1.6×).
+double statCardWidthFactor(BuildContext context) =>
+    MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.6);

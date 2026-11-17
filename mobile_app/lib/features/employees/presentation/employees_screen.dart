@@ -281,8 +281,13 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   static const _statsOverlap = 44.0; // half of _StatCard's ~88 height
 
   Widget _buildHeroHeader(EmployeeFilters filters, AsyncValue<EmployeeStats> statsAsync) {
+    // HO-20: the stat cards grow with the text scale (StatCardRow:
+    // 88 × scale, 88–160), but this box was a fixed 88-card height — at
+    // font 1.3 the cards spilled out and covered the "N employees" line.
+    // Reserve whatever the row actually takes.
+    final statsHeight = statCardRowHeight(context);
     return SizedBox(
-      height: _heroContentHeight + _statsOverlap,
+      height: _heroContentHeight - _statsOverlap + statsHeight,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -510,24 +515,33 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                     ),
                   )
                 else if (_isGridView)
+                  // Two cards per row, each row as tall as its taller card
+                  // (HO-20 / HO-09): the old fixed childAspectRatio (0.58)
+                  // left ~130 px of dead space at normal text and overflowed
+                  // at system font scale 1.5. Content-sized rows can't do
+                  // either, at any text scale or name length.
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                    sliver: SliverGrid(
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        // Worst case (2-line name, id pill, role, status
-                        // pill, and the button row) measures out to ~260px
-                        // tall at this column width — 0.72 clipped that by
-                        // ~40px. 0.58 leaves real headroom instead of being
-                        // tuned to the exact overflow just reported.
-                        childAspectRatio: 0.58,
-                      ),
-                      delegate: SliverChildBuilderDelegate(
-                        (_, i) => _buildEmployeeCard(context, listState.items[i]),
-                        childCount: listState.items.length,
-                      ),
+                    sliver: SliverList.builder(
+                      itemCount: (listState.items.length + 1) ~/ 2,
+                      itemBuilder: (_, row) {
+                        final a = listState.items[row * 2];
+                        final b = row * 2 + 1 < listState.items.length ? listState.items[row * 2 + 1] : null;
+                        return Padding(
+                          key: ValueKey('employee-grid-row-$row'),
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: IntrinsicHeight(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(child: _buildEmployeeCard(context, a)),
+                                const SizedBox(width: 12),
+                                Expanded(child: b == null ? const SizedBox() : _buildEmployeeCard(context, b)),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   )
                 else

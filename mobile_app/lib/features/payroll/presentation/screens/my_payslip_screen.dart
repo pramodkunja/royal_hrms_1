@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -8,6 +10,7 @@ import '../../../dashboard/presentation/widgets/dashboard_section.dart';
 import '../../../profile/presentation/providers/profile_providers.dart';
 import '../../../settings/presentation/providers/settings_providers.dart';
 import '../../data/models/payslip_model.dart';
+import '../payslip_pdf.dart';
 import '../providers/payroll_providers.dart';
 import '../widgets/payslip_queries_section.dart';
 
@@ -199,8 +202,12 @@ class _MonthSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // HO-19: the strip was a fixed 68 × 132 px — two text lines at system
+    // font scale 1.5 overflowed it by 8 px. Grow both with the text scale
+    // (the month text keeps its ellipsis for anything beyond 1.6×).
+    final t = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0);
     return SizedBox(
-      height: 68,
+      height: 68 * t,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: payslips.length,
@@ -211,7 +218,7 @@ class _MonthSelector extends StatelessWidget {
           return GestureDetector(
             onTap: () => onSelect(p.id),
             child: Container(
-              width: 132,
+              width: 132 * t.clamp(1.0, 1.6),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: isSelected ? AppColors.primary : AppColors.surface,
@@ -327,16 +334,25 @@ class _PayslipDetailCard extends ConsumerWidget {
             subline: 'Paid on ${formatPayslipDate(payslip.payDate)}'
                 '${profileAsync.valueOrNull?.detail.bankName.isNotEmpty == true ? ' · ${profileAsync.valueOrNull!.detail.bankName} ${maskPayslipAccount(profileAsync.valueOrNull!.detail.accountNumber)}' : ''}',
           ),
-          if (payslip.payslipPdfUrl != null &&
-              payslip.payslipPdfUrl!.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () => launchUrl(Uri.parse(payslip.payslipPdfUrl!),
-                  mode: LaunchMode.externalApplication),
-              icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-              label: const Text('Open PDF'),
+          const SizedBox(height: 12),
+          // HO-28: web's "Print / Save PDF" + "Download PDF" (see payslip_pdf.dart).
+          _PayslipPdfActions(
+            payslip: payslip,
+            pdfContext: PayslipPdfContext(
+              monthLabel: monthLabel,
+              companyName: companyAsync.valueOrNull?.companyName ?? '',
+              companyCin: companyAsync.valueOrNull?.cin ?? '',
+              companyAddress: [
+                companyAsync.valueOrNull?.address ?? '',
+                companyAsync.valueOrNull?.city ?? '',
+                companyAsync.valueOrNull?.state ?? '',
+                companyAsync.valueOrNull?.pinCode ?? '',
+              ].where((s) => s.isNotEmpty).join(', '),
+              bankName: profileAsync.valueOrNull?.detail.bankName ?? '',
+              accountNumber: profileAsync.valueOrNull?.detail.accountNumber ?? '',
+              ifscCode: profileAsync.valueOrNull?.detail.ifscCode ?? '',
             ),
-          ],
+          ),
           if (payslip.status == 'sent') ...[
             const SizedBox(height: 12),
             FilledButton.icon(
@@ -535,15 +551,7 @@ class _EarningsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = <(String, double)>[
-      ('Basic Salary', payslip.basic),
-      ('House Rent Allowance (HRA)', payslip.hra),
-      ('Special Allowance', payslip.specialAllowance),
-      ('Bonus', payslip.bonus),
-      for (final entry in payslip.otherEarnings.entries)
-        (entry.key, double.tryParse(entry.value?.toString() ?? '') ?? 0.0),
-    // Web hides only zero amounts.
-    ].where((r) => r.$2 != 0).toList();
+    final rows = payslipEarningLines(payslip); // shared with the PDF
 
     return _MoneySection(
       title: 'EARNINGS',
@@ -561,16 +569,7 @@ class _DeductionsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = <(String, double)>[
-      ('Provident Fund (PF)', payslip.pfEmployee),
-      ('ESI', payslip.esiEmployee),
-      ('Professional Tax (PT)', payslip.ptDeduction),
-      ('Labour Welfare Fund', payslip.lwfEmployee),
-      for (final entry in payslip.otherDeductions.entries)
-        (entry.key, double.tryParse(entry.value?.toString() ?? '') ?? 0.0),
-      // Web: LOP last.
-      ('Loss of Pay (LOP)', payslip.lopDeduction),
-    ].where((r) => r.$2 != 0).toList();
+    final rows = payslipDeductionLines(payslip); // shared with the PDF
 
     return _MoneySection(
       title: 'DEDUCTIONS',
@@ -753,6 +752,93 @@ class _NetPayBanner extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── PDF actions (HO-28) ──────────────────────────────────────────────────────
+
+/// "Print / Save PDF" and "Share PDF" build the payslip shown above into a
+/// PDF on the device (Android print dialog offers "Save as PDF"); "Download
+/// PDF" opens the server's stored file — web's same button — and, like web,
+/// is disabled ("PDF not yet available for this payslip") when the server has
+/// none (today: always). Busy while building; an error message never carries
+/// a URL or payslip data.
+class _PayslipPdfActions extends ConsumerStatefulWidget {
+  final PayslipModel payslip;
+  final PayslipPdfContext pdfContext;
+  const _PayslipPdfActions({required this.payslip, required this.pdfContext});
+
+  @override
+  ConsumerState<_PayslipPdfActions> createState() => _PayslipPdfActionsState();
+}
+
+class _PayslipPdfActionsState extends ConsumerState<_PayslipPdfActions> {
+  bool _busy = false;
+
+  Future<Uint8List> _bytes() async {
+    final fonts = await ref.read(payslipPdfFontsProvider)();
+    return buildPayslipPdf(widget.payslip, widget.pdfContext, fonts).save();
+  }
+
+  Future<void> _run(Future<void> Function() action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await action();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text("Couldn't prepare the payslip PDF. Please try again."),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final out = ref.read(payslipPdfOutputProvider);
+    final name = payslipPdfFileName(widget.payslip);
+    final stored = widget.payslip.payslipPdfUrl;
+    final hasStored = stored != null && stored.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              key: const Key('payslip-print-pdf'),
+              onPressed: _busy ? null : () => _run(() async => out.print((_) => _bytes(), name)),
+              icon: _busy
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.print_outlined, size: 18),
+              label: const Text('Print / Save PDF'),
+            ),
+            OutlinedButton.icon(
+              key: const Key('payslip-share-pdf'),
+              onPressed: _busy ? null : () => _run(() async => out.share(await _bytes(), name)),
+              icon: const Icon(Icons.ios_share_outlined, size: 18),
+              label: const Text('Share PDF'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Tooltip(
+          message: hasStored ? 'Download the PDF issued for this payslip' : 'PDF not yet available for this payslip',
+          child: OutlinedButton.icon(
+            key: const Key('payslip-download-pdf'),
+            onPressed: hasStored ? () => launchUrl(Uri.parse(stored), mode: LaunchMode.externalApplication) : null,
+            icon: const Icon(Icons.download_outlined, size: 18),
+            label: Text(hasStored ? 'Download PDF' : 'Download PDF (not yet available)'),
+          ),
+        ),
+      ],
     );
   }
 }
