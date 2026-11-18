@@ -5,6 +5,7 @@ import '../../../../core/router/access_control.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../data/datasources/contacts_remote_datasource.dart';
 import '../../data/models/company_contact.dart';
+import '../../data/models/contact_approvers.dart';
 
 final contactsDatasourceProvider =
     Provider.autoDispose<ContactsRemoteDatasource>((ref) => ContactsRemoteDatasource(ref.watch(dioProvider)));
@@ -57,3 +58,8 @@ class ContactActions {
 
 // Not autoDispose: an action's Ref must outlive the tap that started it.
 final contactActionsProvider = Provider<ContactActions>((ref) => ContactActions(ref));
+
+/// Approvers for a workflow (web ApproversSection useFetch per workflow).
+final contactApproversProvider = FutureProvider.autoDispose.family<ApproversResponse, String>(
+  (ref, workflow) => ref.watch(contactsDatasourceProvider).fetchApprovers(workflow),
+);

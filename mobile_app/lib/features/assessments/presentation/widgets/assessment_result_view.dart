@@ -72,14 +72,11 @@ class AssessmentResultView extends StatelessWidget {
             key: const Key('assessment-result-badge'),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
             decoration: BoxDecoration(
-              color: passed
-                  ? AppColors.successContainer
-                  : AppColors.errorContainer,
+              color: passed ? AppColors.successContainer : AppColors.errorContainer,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(passed ? 'Passed' : 'Not Passed',
-                style: AppTextStyles.label
-                    .copyWith(color: color, fontWeight: FontWeight.w700)),
+                style: AppTextStyles.label.copyWith(color: color, fontWeight: FontWeight.w700)),
           ),
         ),
         const SizedBox(height: 10),
@@ -91,19 +88,13 @@ class AssessmentResultView extends StatelessWidget {
         ),
         if (completedOn != null) ...[
           const SizedBox(height: 2),
-          Center(
-              child:
-                  Text('Completed $completedOn', style: AppTextStyles.caption)),
+          Center(child: Text('Completed $completedOn', style: AppTextStyles.caption)),
         ],
         Center(
-            child: Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(title, style: AppTextStyles.caption))),
+            child: Padding(padding: const EdgeInsets.only(top: 4), child: Text(title, style: AppTextStyles.caption))),
         const SizedBox(height: 28),
         if (retakeError != null) ...[
-          Text(retakeError!,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.body.copyWith(color: AppColors.error)),
+          Text(retakeError!, textAlign: TextAlign.center, style: AppTextStyles.body.copyWith(color: AppColors.error)),
           const SizedBox(height: 10),
         ],
         if (onRetake != null) ...[
@@ -117,9 +108,7 @@ class AssessmentResultView extends StatelessWidget {
         ],
         AppButton(
           label: doneLabel,
-          variant: onRetake != null
-              ? AppButtonVariant.outline
-              : AppButtonVariant.filled,
+          variant: onRetake != null ? AppButtonVariant.outline : AppButtonVariant.filled,
           onPressed: retaking ? null : onDone,
         ),
       ],

@@ -39,12 +39,9 @@ class CandidateCard extends ConsumerWidget {
               children: [
                 CircleAvatar(
                   radius: 20,
-                  backgroundColor:
-                      AppColors.primary.withValues(alpha: 0.15),
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.15),
                   child: Text(initials,
-                      style: AppTextStyles.label.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w700)),
+                      style: AppTextStyles.label.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -52,13 +49,11 @@ class CandidateCard extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(c.name,
-                          style: AppTextStyles.label.copyWith(
-                              fontWeight: FontWeight.w700),
+                          style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
                       Text(c.email,
-                          style: AppTextStyles.caption
-                              .copyWith(color: AppColors.textSecondary),
+                          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
                       if (c.referralBy != null) ...[
@@ -66,14 +61,12 @@ class CandidateCard extends ConsumerWidget {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.person_add_alt_outlined,
-                                size: 10, color: _kReferredByColor),
+                            const Icon(Icons.person_add_alt_outlined, size: 10, color: _kReferredByColor),
                             const SizedBox(width: 3),
                             Flexible(
                               child: Text(
                                 'Referred by ${c.referralByName.isNotEmpty ? c.referralByName : 'Employee'}',
-                                style: AppTextStyles.caption.copyWith(
-                                    color: _kReferredByColor, fontSize: 11),
+                                style: AppTextStyles.caption.copyWith(color: _kReferredByColor, fontSize: 11),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -96,19 +89,11 @@ class CandidateCard extends ConsumerWidget {
               spacing: 12,
               runSpacing: 6,
               children: [
-                _MetaChip(
-                    icon: Icons.work_outline, label: c.positionApplied),
-                if (c.branchName.isNotEmpty)
-                  _MetaChip(
-                      icon: Icons.location_on_outlined,
-                      label: c.branchName),
+                _MetaChip(icon: Icons.work_outline, label: c.positionApplied),
+                if (c.branchName.isNotEmpty) _MetaChip(icon: Icons.location_on_outlined, label: c.branchName),
                 if (c.interviewDate.isNotEmpty)
-                  _MetaChip(
-                      icon: Icons.calendar_today_outlined,
-                      label: _fmtDate(c.interviewDate)),
-                _MetaChip(
-                    icon: Icons.videocam_outlined,
-                    label: interviewModeLabel(c.interviewMode)),
+                  _MetaChip(icon: Icons.calendar_today_outlined, label: _fmtDate(c.interviewDate)),
+                _MetaChip(icon: Icons.videocam_outlined, label: interviewModeLabel(c.interviewMode)),
               ],
             ),
           ),
@@ -138,10 +123,7 @@ class CandidateCard extends ConsumerWidget {
   static String _fmtDate(String raw) {
     final dt = DateTime.tryParse(raw);
     if (dt == null) return raw;
-    const m = [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
+    const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return '${dt.day} ${m[dt.month]} ${dt.year}';
   }
 }
@@ -158,9 +140,7 @@ class _MetaChip extends StatelessWidget {
     return Row(mainAxisSize: MainAxisSize.min, children: [
       Icon(icon, size: 12, color: AppColors.textHint),
       const SizedBox(width: 4),
-      Text(label,
-          style: AppTextStyles.caption
-              .copyWith(color: AppColors.textSecondary, fontSize: 11)),
+      Text(label, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontSize: 11)),
     ]);
   }
 }
@@ -236,24 +216,19 @@ class _StatusChangeButton extends ConsumerWidget {
     if (!canChangeCandidateStatus(user, candidate)) return const SizedBox.shrink();
     return PopupMenuButton<String>(
       key: Key('candidate-status-menu-${candidate.id}'),
-      icon: Icon(Icons.more_vert, size: 18,
-          color: AppColors.textSecondary),
+      icon: Icon(Icons.more_vert, size: 18, color: AppColors.textSecondary),
       tooltip: 'Change status',
       onSelected: (newStatus) async {
         // Selected/Rejected always route through a confirmation step (remarks
         // + fixed email template), matching web's MarkCandidateModal — every
         // other status is an instant PATCH.
         if (newStatus == 'selected' || newStatus == 'rejected') {
-          await MarkCandidateSheet.show(context,
-              candidate: candidate, targetStatus: newStatus);
+          await MarkCandidateSheet.show(context, candidate: candidate, targetStatus: newStatus);
           return;
         }
-        final err = await ref
-            .read(candidateListProvider.notifier)
-            .updateStatus(candidate.id, newStatus);
+        final err = await ref.read(candidateListProvider.notifier).updateStatus(candidate.id, newStatus);
         if (err != null && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(err), backgroundColor: AppColors.error));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err), backgroundColor: AppColors.error));
         }
       },
       itemBuilder: (_) => kChangeableStatuses
@@ -265,11 +240,8 @@ class _StatusChangeButton extends ConsumerWidget {
                       width: 8,
                       height: 8,
                       margin: const EdgeInsets.only(right: 10),
-                      decoration: BoxDecoration(
-                          color: candidateStatusColor(s),
-                          shape: BoxShape.circle)),
-                  Text(candidateStatusLabel(s),
-                      style: AppTextStyles.bodySmall),
+                      decoration: BoxDecoration(color: candidateStatusColor(s), shape: BoxShape.circle)),
+                  Text(candidateStatusLabel(s), style: AppTextStyles.bodySmall),
                 ]),
               ))
           .toList(),
@@ -298,9 +270,11 @@ class _PortalActionButtonState extends ConsumerState<_PortalActionButton> {
     if (!mounted) return;
     setState(() => _sending = false);
     if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(err),
-          backgroundColor: AppColors.error));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err), backgroundColor: AppColors.error));
+    } else {
+      // Web interview-list/page.tsx:248.
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: const Text('Portal login sent.'), backgroundColor: AppColors.success));
     }
   }
 
@@ -328,8 +302,7 @@ class _PortalActionButtonState extends ConsumerState<_PortalActionButton> {
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.primary,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          textStyle:
-              const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+          textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
         ),
       );
     }
@@ -345,10 +318,7 @@ class _PortalActionButtonState extends ConsumerState<_PortalActionButton> {
         border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(label,
-          style: AppTextStyles.labelSmall.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
-              fontSize: 11)),
+          style: AppTextStyles.labelSmall.copyWith(color: color, fontWeight: FontWeight.w600, fontSize: 11)),
     );
   }
 }

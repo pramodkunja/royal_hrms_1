@@ -23,8 +23,18 @@ String _fmtDate(String? raw) {
   try {
     final dt = DateTime.parse(raw);
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
   } catch (_) {
@@ -164,9 +174,7 @@ class _ProfilePersonalSectionState extends ConsumerState<ProfilePersonalSection>
                     CircleAvatar(
                       radius: 30,
                       backgroundColor: p.avatarColor,
-                      backgroundImage: (p.photoUrl ?? '').isNotEmpty
-                          ? NetworkImage(p.photoUrl!)
-                          : null,
+                      backgroundImage: (p.photoUrl ?? '').isNotEmpty ? NetworkImage(p.photoUrl!) : null,
                       child: (p.photoUrl ?? '').isEmpty
                           ? Text(
                               p.initials,
@@ -215,14 +223,11 @@ class _ProfilePersonalSectionState extends ConsumerState<ProfilePersonalSection>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_s(p.fullName),
-                        style: AppTextStyles.label
-                            .copyWith(fontWeight: FontWeight.w700)),
+                    Text(_s(p.fullName), style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 2),
                     Text(
                       p.roleDisplay.isNotEmpty ? p.roleDisplay : p.roleName,
-                      style: AppTextStyles.caption
-                          .copyWith(color: AppColors.textSecondary),
+                      style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
                     ),
                   ],
                 ),
@@ -241,30 +246,42 @@ class _ProfilePersonalSectionState extends ConsumerState<ProfilePersonalSection>
           ),
           const SizedBox(height: 12),
           ProfileDisplayFieldRow(
-            label1: 'Employee ID', value1: _s(p.employeeId),
-            label2: 'Role', value2: _s(p.roleDisplay.isNotEmpty ? p.roleDisplay : p.roleName),
+            label1: 'Employee ID',
+            value1: _s(p.employeeId),
+            label2: 'Role',
+            value2: _s(p.roleDisplay.isNotEmpty ? p.roleDisplay : p.roleName),
           ),
           ProfileDisplayFieldRow(
-            label1: 'Department', value1: _s(p.department),
-            label2: 'Designation', value2: _s(p.designation),
+            label1: 'Department',
+            value1: _s(p.department),
+            label2: 'Designation',
+            value2: _s(p.designation),
           ),
           ProfileDisplayFieldRow(
-            label1: 'Branch', value1: _s(p.branch),
-            label2: 'Date of Joining', value2: _fmtDate(p.dateOfJoining),
+            label1: 'Branch',
+            value1: _s(p.branch),
+            label2: 'Date of Joining',
+            value2: _fmtDate(p.dateOfJoining),
           ),
           // Web My Profile → Work Information: assigned people (name only,
           // "Not assigned" when none) and the notice period, read-only.
           ProfileDisplayFieldRow(
-            label1: 'Reporting Manager', value1: assignedName(p.reportingManager),
-            label2: 'Reporting Approver', value2: assignedName(p.reportingApprover),
+            label1: 'Reporting Manager',
+            value1: assignedName(p.reportingManager),
+            label2: 'Reporting Approver',
+            value2: assignedName(p.reportingApprover),
           ),
           ProfileDisplayFieldRow(
-            label1: 'HR', value1: assignedName(p.hr),
-            label2: 'Notice Period', value2: formatNoticePeriod(p.noticePeriodDays),
+            label1: 'HR',
+            value1: assignedName(p.hr),
+            label2: 'Notice Period',
+            value2: formatNoticePeriod(p.noticePeriodDays),
           ),
           _StatusBadgeRow(
-            label1: 'Onboarding Status', status1: p.onboardingStatus,
-            label2: 'Assessment Status', status2: p.assessmentStatus,
+            label1: 'Onboarding Status',
+            status1: p.onboardingStatus,
+            label2: 'Assessment Status',
+            status2: p.assessmentStatus,
           ),
           const SizedBox(height: 6),
           Align(
@@ -289,15 +306,20 @@ class _ProfilePersonalSectionState extends ConsumerState<ProfilePersonalSection>
             Divider(height: 1, color: AppColors.border),
             const SizedBox(height: 14),
             ProfileDisplayFieldRow(
-              label1: 'Date of Birth', value1: _fmtDate(p.detail.dateOfBirth),
-              label2: 'Gender', value2: _s(p.detail.gender),
+              label1: 'Date of Birth',
+              value1: _fmtDate(p.detail.dateOfBirth),
+              label2: 'Gender',
+              value2: _s(p.detail.gender),
             ),
             ProfileDisplayFieldRow(
-              label1: 'Marital Status', value1: _s(p.detail.maritalStatus),
-              label2: 'Blood Group', value2: _s(p.detail.bloodGroup),
+              label1: 'Marital Status',
+              value1: _s(p.detail.maritalStatus),
+              label2: 'Blood Group',
+              value2: _s(p.detail.bloodGroup),
             ),
             ProfileDisplayField(
-              label: "Father's Name", value: _s(p.detail.fatherName),
+              label: "Father's Name",
+              value: _s(p.detail.fatherName),
               padBottom: false,
             ),
           ],
@@ -347,12 +369,8 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isComplete = status == 'complete';
-    final color = status.isEmpty
-        ? AppColors.textHint
-        : (isComplete ? AppColors.success : AppColors.warning);
-    final text = status.isEmpty
-        ? '—'
-        : '${status[0].toUpperCase()}${status.substring(1)}';
+    final color = status.isEmpty ? AppColors.textHint : (isComplete ? AppColors.success : AppColors.warning);
+    final text = status.isEmpty ? '—' : '${status[0].toUpperCase()}${status.substring(1)}';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -441,17 +459,23 @@ class ProfileEducationSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ProfileDisplayFieldRow(
-            label1: 'Highest Qualification', value1: _s(d.highestQualification),
-            label2: 'Specialization', value2: _s(d.specialization),
+            label1: 'Highest Qualification',
+            value1: _s(d.highestQualification),
+            label2: 'Specialization',
+            value2: _s(d.specialization),
           ),
           ProfileDisplayField(label: 'Institution / University', value: _s(d.institution)),
           ProfileDisplayFieldRow(
-            label1: 'Year of Passing', value1: _s(d.yearOfPassing?.toString()),
-            label2: 'Total Experience (yrs)', value2: _s(d.totalExperienceYears),
+            label1: 'Year of Passing',
+            value1: _s(d.yearOfPassing?.toString()),
+            label2: 'Total Experience (yrs)',
+            value2: _s(d.totalExperienceYears),
           ),
           ProfileDisplayFieldRow(
-            label1: 'Previous Employer', value1: _s(d.previousEmployer),
-            label2: 'Previous Designation', value2: _s(d.previousDesignation),
+            label1: 'Previous Employer',
+            value1: _s(d.previousEmployer),
+            label2: 'Previous Designation',
+            value2: _s(d.previousDesignation),
           ),
           ProfileDisplayField(
             label: 'Reason for Leaving',
@@ -482,16 +506,24 @@ class ProfileBankSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ProfileDisplayFieldRow(
-            label1: 'Account Holder Name', value1: _s(d.accountHolderName),
-            label2: 'Account Type', value2: _s(d.accountType),
+            label1: 'Account Holder Name',
+            value1: _s(d.accountHolderName),
+            label2: 'Account Type',
+            value2: _s(d.accountType),
           ),
           ProfileDisplayFieldRow(
-            label1: 'Account Number', value1: _s(d.accountNumber),
+            // Web ProfileClient.tsx:658: only the last 4 digits are shown.
+            label1: 'Account Number',
+            value1: d.accountNumber.isEmpty
+                ? _s(d.accountNumber)
+                : '••••${d.accountNumber.substring(d.accountNumber.length > 4 ? d.accountNumber.length - 4 : 0)}',
             label2: 'IFSC Code', value2: _s(d.ifscCode),
           ),
           ProfileDisplayFieldRow(
-            label1: 'Bank Name', value1: _s(d.bankName),
-            label2: 'Bank Branch', value2: _s(d.bankBranchName),
+            label1: 'Bank Name',
+            value1: _s(d.bankName),
+            label2: 'Bank Branch',
+            value2: _s(d.bankBranchName),
             padBottom: false,
           ),
           const SizedBox(height: 12),
@@ -549,10 +581,8 @@ class ProfileEmergencySection extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           ProfileFieldRow(
-            left: ProfileField(
-                label: 'Phone Number', controller: phoneCtrl, keyboardType: TextInputType.phone),
-            right: ProfileField(
-                label: 'Email', controller: emailCtrl, keyboardType: TextInputType.emailAddress),
+            left: ProfileField(label: 'Phone Number', controller: phoneCtrl, keyboardType: TextInputType.phone),
+            right: ProfileField(label: 'Email', controller: emailCtrl, keyboardType: TextInputType.emailAddress),
           ),
         ],
       ),
@@ -593,13 +623,9 @@ class ProfileChangePasswordSection extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           ProfileFieldRow(
-            left: ProfileField(
-                label: 'New Password', controller: newCtrl, obscureText: true, hint: '••••••••'),
-            right: ProfileField(
-                label: 'Confirm Password',
-                controller: confirmCtrl,
-                obscureText: true,
-                hint: '••••••••'),
+            left: ProfileField(label: 'New Password', controller: newCtrl, obscureText: true, hint: '••••••••'),
+            right:
+                ProfileField(label: 'Confirm Password', controller: confirmCtrl, obscureText: true, hint: '••••••••'),
           ),
           const SizedBox(height: 16),
           Align(
@@ -618,8 +644,7 @@ class ProfileChangePasswordSection extends StatelessWidget {
                 foregroundColor: AppColors.primary,
                 side: BorderSide(color: AppColors.primary),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                textStyle:
-                    AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
+                textStyle: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
           ),

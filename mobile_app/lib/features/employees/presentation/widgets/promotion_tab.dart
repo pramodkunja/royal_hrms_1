@@ -89,8 +89,9 @@ class _PromotionTabState extends ConsumerState<PromotionTab> {
                   // ~24px-per-side padding — icon + "Promote" needs ~140px
                   // total once that's added, so anything narrower (118 was
                   // tried and overflowed by 22px) clips the label.
-                  label: 'Promote',
-                  width: 150,
+                  // Web PromotionTab.tsx:181.
+                  label: 'Promote Employee',
+                  width: 200,
                   leadingIcon: Icons.trending_up_rounded,
                   onPressed: _openPromoteSheet,
                 ),
@@ -325,6 +326,14 @@ class _PromoteEmployeeSheetState extends ConsumerState<_PromoteEmployeeSheet> {
 
   bool get _isElevated => _roleSlug != widget.employee.role;
 
+  /// The chosen role's display name (web labelFor(roleOptions, form.role)).
+  String _roleLabel() =>
+      (ref.watch(employeeFormRolesProvider).valueOrNull ?? const <RoleModel>[])
+          .where((r) => r.name == _roleSlug)
+          .firstOrNull
+          ?.displayName ??
+      _roleSlug;
+
   Future<void> _pickEffectiveDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -453,7 +462,7 @@ class _PromoteEmployeeSheetState extends ConsumerState<_PromoteEmployeeSheet> {
                         onChanged: (v) => setState(() => _roleSlug = v),
                       ),
                       const SizedBox(height: 14),
-                      Text('Effective Date', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
+                      Text('Effective date', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 6),
                       InkWell(
                         onTap: _pickEffectiveDate,
@@ -493,7 +502,9 @@ class _PromoteEmployeeSheetState extends ConsumerState<_PromoteEmployeeSheet> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'This changes the employee\'s system role and access — review carefully.',
+                                  // Web PromotionTab.tsx:320-322.
+                                  'This grants ${_roleLabel()} access. New permissions apply at the '
+                                  'employee\'s next login.',
                                   style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
                                 ),
                               ),
@@ -537,7 +548,7 @@ class _PromoteEmployeeSheetState extends ConsumerState<_PromoteEmployeeSheet> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
                 child: AppButton(
-                  label: 'Submit Promotion',
+                  label: 'Update Employee',
                   isLoading: _submitting,
                   onPressed: _submit,
                 ),
@@ -572,7 +583,7 @@ class _DesignationField extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('New Designation', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
+        Text('New designation', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
           initialValue: selected.isEmpty ? null : selected,
@@ -611,7 +622,7 @@ class _RoleField extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('System Role', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
+        Text('System role', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
         const SizedBox(height: 6),
         DropdownButtonFormField<RoleModel>(
           initialValue: selectedRole,

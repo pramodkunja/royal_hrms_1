@@ -120,7 +120,7 @@ class _ApprovalOverrideSheetState extends ConsumerState<ApprovalOverrideSheet> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Override — ${widget.row.workflowLabel}',
+                      'Override Approvers — ${widget.row.workflowLabel}',
                       style: AppTextStyles.h4,
                     ),
                   ),
@@ -134,13 +134,14 @@ class _ApprovalOverrideSheetState extends ConsumerState<ApprovalOverrideSheet> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Leave a field on "Global default" to inherit the org-wide rule.',
+                'Select a specific person to override, or leave as — Global default — to revert.',
                 style: AppTextStyles.caption,
               ),
               const SizedBox(height: 18),
               _OverrideDropdown(
-                label:
-                    widget.row.l1ApproverLabel.isEmpty ? 'L1 Approver' : 'L1 Approver (${widget.row.l1ApproverLabel})',
+                label: widget.row.l1ApproverLabel.isEmpty
+                    ? 'L1 Approver'
+                    : 'L1 Approver (default: ${widget.row.l1ApproverLabel})',
                 options: managers,
                 selected: selectedL1,
                 onSelected: (o) => setState(() => _l1 = o),
@@ -150,7 +151,7 @@ class _ApprovalOverrideSheetState extends ConsumerState<ApprovalOverrideSheet> {
                 _OverrideDropdown(
                   label: (widget.row.l2ApproverLabel ?? '').isEmpty
                       ? 'L2 Approver'
-                      : 'L2 Approver (${widget.row.l2ApproverLabel})',
+                      : 'L2 Approver (default: ${widget.row.l2ApproverLabel})',
                   options: hrs,
                   selected: selectedL2,
                   onSelected: (o) => setState(() => _l2 = o),
@@ -194,7 +195,7 @@ class _ApprovalOverrideSheetState extends ConsumerState<ApprovalOverrideSheet> {
                                 color: Colors.white,
                               ),
                             )
-                          : const Text('Save'),
+                          : const Text('Save Override'),
                     ),
                   ),
                 ],

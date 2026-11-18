@@ -1,0 +1,32 @@
+# 20 — Backend Developer Action Items (maintained from Task 93–94, 18 Nov 2026)
+
+**For:** the backend developer.
+
+**Basis:** read-only review of `web_frontend_backend/backend` (clone refreshed 18 Nov 11:26). Mobile made **no** backend change and does not work around any of these.
+
+**Full specifications and tests:** doc 16 (remediation spec) and doc 17 (authorisation test matrix). Confirm each item against the production revision first (doc 18 §1).
+
+| # | ID | Sev. | Issue | Location | Requested action | Mobile impact |
+|---|---|---|---|---|---|---|
+| 1 | **HO-01** | P0 | Mandatory Face ID skipped for any client-chosen `source` other than web / voice; mobile punches are never verified | `apps/attendance/services_face_matching.py:207-208`; `serializers_my_attendance.py:34-37` | Verify every employee-initiated punch when mandatory; whitelist `web` / `mobile` on `/attendance/punch/`; wire `services_face_descriptor.descriptor_error`; make the existing `tests_face_verification_enforcement.py` pass (doc 16 §1.2) | None needed: mobile already sends a 128-d `face_embedding`, `liveness_passed`, `liveness_score` and `capture_session_id` with `source: "mobile"` |
+| 2 | **HO-18** | P1 | `branch_admin` holds `settings.edit` in production (re-granted via the Roles UI, against migrations 0052 / 0070) | `accounts/migrations/0070…`; Roles API | Remove the grant (migration); block granting `settings.edit` to `can_manage_branch` roles; set the login `is_superuser` only for real superusers / system roles (`accounts/views.py:612`) | Mobile and web read `is_superuser`; once corrected server-side, both hide the extra controls automatically |
+| 3 | **HO-50** | P1 | The `settings.edit` wildcard grants branch roles every codename, e.g. company-wide training authoring | `core/permissions.py:41`; `training/views.py:275-304, 352, 415-450` | Branch-restricted roles get only codenames they hold (doc 16 §2.2, product decision P-1) | None |
+| 4 | **HO-45** | P1 | Missing / empty-branch scoping | `hrms/views/leave.py:205-208, 702-708, 936-943`; `hrms/views/workfromhome.py:82-91, 120-127`; `hrms/views/birthdays.py:26-82, 159-160`; `training/services.py:70-72`; `accounts/views_policy.py:296-317` | Fail-closed scope helper; scope-check `employee_id`; branch-scope birthdays without email; paginate approvers (doc 16 §3) | None |
+| 5 | **HO-51** | P3 | Archived courses still editable through the API | `training/views.py:276, 321, 353, 416, 440, 457` | `_ensure_editable` → 409 (doc 16 §4) | Mobile already blocks it in the UI and before sending |
+| 6 | **NEW-1** (Task 93) | P3 | Leave-type key derivation differs between web preview and server: the server uses `label.lower().replace(' ', '_').replace('-', '_')` (`leave.py:650`), web previews with `/[\s-]+/g → "_"`. "Pink  Leave" or "A - B" give different keys (`pink__leave` vs `pink_leave`) | `hrms/views/leave.py:650`; web `PolicyTab.tsx:454` | Collapse repeated separators on the server (or change the web preview to match). Mobile shows web's preview | Cosmetic, but the shown key can be wrong |
+| 7 | **NEW-2** (Task 93) | P3 | `eligible_for_me` covers only active + gender. Branch, department, designation, employment-type and minimum-service restrictions are enforced only on submit, so web and mobile offer types the employee will be refused | `hrms/views/leave.py:597-603` vs `:546-560` | Compute `eligible_for_me` with the same `_validate_policy_rules` eligibility checks (or `_eligible_for_policy`) | Mobile already filters on `eligible_for_me`; it would benefit automatically |
+
+| 8 | **HO-59a** (Task 94) | P3 | `PUT /employees/{id}/` silently drops `current_address` (not in `_PROFILE_FIELD_KEYS`), so Current Address edits never persist (web and mobile) | `accounts/views.py:3546-3725` | Accept and store `current_address` | Mobile sends it unchanged; nothing to change |
+| 9 | **HO-59b** (Task 94) | P3 | The employee detail payload (`_employee_dict`) omits UAN, Name-as-per-Aadhaar and ESI, so web's Statutory Save sends `""` and wipes stored values | `accounts/views.py:371-406` | Return the three fields | Mobile already sends only changed Statutory fields |
+| 10 | **HO-68a** (Task 95) | P2 | Login `is_superuser` = Django flag OR `settings.edit`, but the JWT claim is the Django flag only: one name, two meanings (web proxy and frontend hooks disagree) | `accounts/views.py:612`; `accounts/tokens.py:23` | Pick one meaning (see HO-18 action) | Mobile uses the login flag |
+| 11 | **HO-68b** (Task 95) | P3 | Expense approve/reject: `remarks` never saved (B audit) and the leave email template is ignored | expenses / leave approval views | Confirm and persist / honour | none |
+| 12 | **HO-68c** (Task 95) | P3 | Attendance-approval endpoints require `payroll.edit` while web shows the tab for `payroll.view` | attendance approval views | Align the codename | Mobile follows the backend |
+| 13 | **HO-68d** (Task 95) | P3 | Seeded `system_admin` lacks many codenames (leave.approve, wfh.*, training.* …) so raw-permission web nav hides items the wildcard lets the API allow | seed migrations | Seed the codenames or drop the wildcard consistently | Mobile uses the wildcard (see doc 22 §3) |
+
+_Items 10–13 come from the Task 95 audit of source only; confirm against the production revision before acting._
+
+## Web (frontend) note — not backend
+- **WEB-1:** Apply Leave's form default `leave_type: "casual"` (`ApplyLeaveForm.tsx:28`) is kept even when Casual is not offered to the employee (inactive, or gender), so a submit is refused by the server. Mobile selects the first offered type instead. Suggest: select the first applicable type once policies load.
+- **WEB-2 (Task 94):** Employee Attendance tab shows a hard-coded "Above threshold" under Attendance % (`AttendanceTab.tsx`), even at low attendance. Mobile omits the line.
+- **WEB-3 (Task 94):** The Approval Matrix override editor pre-selects the default manager/HR when no override exists (`ApprovalMatrixTab.tsx:129-135`), so Save without a change creates an override. Mobile uses web's copy but starts at "— Global default —" (the pre-selection is not copied; deliberate difference). Suggest web does the same.
+- **WEB-4 (Task 94):** Employee profile "Change photo" button has no upload wired; header "Total Experience" repeats "Current Experience".

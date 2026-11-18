@@ -109,9 +109,8 @@ class AssessmentVideoPreview extends ConsumerWidget {
       AssessmentVideoSource.vimeo => 'Vimeo video',
       _ => 'Video file',
     };
-    final ytId = source == AssessmentVideoSource.youtube
-        ? assessmentVideoEmbedUrl(url.trim())!.split('/embed/').last
-        : null;
+    final ytId =
+        source == AssessmentVideoSource.youtube ? assessmentVideoEmbedUrl(url.trim())!.split('/embed/').last : null;
     return Container(
       key: Key('video-preview-${source.name}'),
       margin: const EdgeInsets.only(top: 8),

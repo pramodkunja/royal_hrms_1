@@ -88,20 +88,31 @@ class _ProfileFaceIdSectionState extends ConsumerState<ProfileFaceIdSection> {
       );
     }
 
-    final busy = regState.phase == FaceRegistrationPhase.capturing || regState.phase == FaceRegistrationPhase.submitting;
+    final busy =
+        regState.phase == FaceRegistrationPhase.capturing || regState.phase == FaceRegistrationPhase.submitting;
     // isRegisterMode picks the sheet copy and button label ("Register My
     // Face" vs "Update My Face") — otherwise both buttons do the exact same
     // thing (see _openCaptureFlow's own doc comment).
     final (title, subtitle, iconColor, showActionButton, isRegisterMode) = switch (regState.phase) {
       FaceRegistrationPhase.approved => (
-          'Face ID registered', 'Required for clock-in/out.', AppColors.success, true, false,
+          'Face ID registered',
+          'Required for clock-in/out.',
+          AppColors.success,
+          true,
+          false,
         ),
       FaceRegistrationPhase.pending || FaceRegistrationPhase.capturing || FaceRegistrationPhase.submitting => (
-          'Face ID pending HR approval', 'You\'ll be able to clock in with it once it\'s approved.', AppColors.warning, false, false,
+          'Face ID pending HR approval',
+          'You\'ll be able to clock in with it once it\'s approved.',
+          AppColors.warning,
+          false,
+          false,
         ),
       FaceRegistrationPhase.rejected => (
           'Face ID registration was rejected',
-          regState.registration?.notes.isNotEmpty == true ? regState.registration!.notes : 'Please update and resubmit.',
+          regState.registration?.notes.isNotEmpty == true
+              ? regState.registration!.notes
+              : 'Please update and resubmit.',
           AppColors.error,
           true,
           false,

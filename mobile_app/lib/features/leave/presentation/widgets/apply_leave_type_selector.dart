@@ -108,6 +108,25 @@ class LeaveTypeOption {
                 t, balances.where((b) => b.typeCode.toLowerCase() == t.code.toLowerCase()).firstOrNull),
       ]);
   }
+
+  /// Web `buildApplicableLeaveTypes` (leave/_data.ts:91-99): the list above,
+  /// minus any type whose policy is inactive or whose rules (e.g. gender)
+  /// don't allow this employee (`eligible_for_me`, computed by the API).
+  /// Built-ins without a policy row stay. EMPTY until the policies have
+  /// loaded ([policiesLoaded]) so a restricted type never flashes up. The
+  /// server enforces the same rules when the request is submitted.
+  static List<LeaveTypeOption> applicableFromEntities(
+    List<LeaveTypeEntity> types,
+    List<LeaveBalanceEntity> balances, {
+    required bool policiesLoaded,
+  }) {
+    if (!policiesLoaded) return const [];
+    final byCode = {for (final t in types) t.code.toLowerCase(): t};
+    return listFromEntities(types, balances).where((o) {
+      final p = byCode[o.code.toLowerCase()];
+      return p == null || (p.isActive && p.eligibleForMe != false);
+    }).toList();
+  }
 }
 
 // ── Color by leave type code (shared with dashboard/calendar tabs) ────────────

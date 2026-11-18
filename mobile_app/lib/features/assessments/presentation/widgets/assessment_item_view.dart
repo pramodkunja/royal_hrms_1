@@ -55,8 +55,7 @@ class AssessmentItemView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
-        Text(
-            'Item ${index + 1} of $total${item.sectionTitle != null ? ' · ${item.sectionTitle}' : ''}',
+        Text('Item ${index + 1} of $total${item.sectionTitle != null ? ' · ${item.sectionTitle}' : ''}',
             style: AppTextStyles.caption),
         const SizedBox(height: 6),
         ClipRRect(
@@ -69,18 +68,13 @@ class AssessmentItemView extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        Text(
-            item.title.isNotEmpty
-                ? item.title
-                : (_isQuiz ? 'Question' : 'Video'),
-            style: AppTextStyles.h4),
+        Text(item.title.isNotEmpty ? item.title : (_isQuiz ? 'Question' : 'Video'), style: AppTextStyles.h4),
         const SizedBox(height: 12),
         if (_isQuiz) ..._quiz() else ..._video(),
         if (error != null) ...[
           const SizedBox(height: 12),
           Text(error!,
-              key: const Key('assessment-item-error'),
-              style: AppTextStyles.body.copyWith(color: AppColors.error)),
+              key: const Key('assessment-item-error'), style: AppTextStyles.body.copyWith(color: AppColors.error)),
         ],
         const SizedBox(height: 20),
         if (!done)
@@ -100,10 +94,7 @@ class AssessmentItemView extends StatelessWidget {
         const SizedBox(height: 10),
         Row(children: [
           if (onPrevious != null)
-            TextButton.icon(
-                onPressed: onPrevious,
-                icon: const Icon(Icons.chevron_left),
-                label: const Text('Previous')),
+            TextButton.icon(onPressed: onPrevious, icon: const Icon(Icons.chevron_left), label: const Text('Previous')),
           const Spacer(),
           if (onNext != null)
             TextButton.icon(
@@ -133,9 +124,7 @@ class AssessmentItemView extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: chosen
-            ? AppColors.primary.withValues(alpha: 0.08)
-            : AppColors.surface,
+        color: chosen ? AppColors.primary.withValues(alpha: 0.08) : AppColors.surface,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           key: Key('assessment-option-$key'),
@@ -145,18 +134,14 @@ class AssessmentItemView extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: chosen ? AppColors.primary : AppColors.border,
-                  width: chosen ? 2 : 1),
+              border: Border.all(color: chosen ? AppColors.primary : AppColors.border, width: chosen ? 2 : 1),
             ),
             child: Row(children: [
               CircleAvatar(
                 radius: 14,
-                backgroundColor:
-                    chosen ? AppColors.primary : AppColors.backgroundMid,
+                backgroundColor: chosen ? AppColors.primary : AppColors.backgroundMid,
                 child: Text(key.toUpperCase(),
-                    style: AppTextStyles.label.copyWith(
-                        color: chosen ? Colors.white : AppColors.textPrimary)),
+                    style: AppTextStyles.label.copyWith(color: chosen ? Colors.white : AppColors.textPrimary)),
               ),
               const SizedBox(width: 12),
               Expanded(child: Text(text, style: AppTextStyles.body)),
@@ -178,15 +163,13 @@ class AssessmentItemView extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(children: [
-        Icon(correct ? Icons.check_circle : Icons.cancel,
-            color: color, size: 20),
+        Icon(correct ? Icons.check_circle : Icons.cancel, color: color, size: 20),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             '${correct ? 'Correct' : 'Incorrect'} · You answered option ${response!.selectedOption.toUpperCase()}'
             '${response!.scoreAwarded > 0 ? ' · +${response!.scoreAwarded} pts' : ''}',
-            style: AppTextStyles.body
-                .copyWith(color: color, fontWeight: FontWeight.w600),
+            style: AppTextStyles.body.copyWith(color: color, fontWeight: FontWeight.w600),
           ),
         ),
       ]),
@@ -195,8 +178,7 @@ class AssessmentItemView extends StatelessWidget {
 
   List<Widget> _video() => [
         if (item.durationSecs != null) ...[
-          Text('Duration: ${(item.durationSecs! / 60).ceil()} min',
-              style: AppTextStyles.bodySecondary),
+          Text('Duration: ${(item.durationSecs! / 60).ceil()} min', style: AppTextStyles.bodySecondary),
           const SizedBox(height: 10),
         ],
         OutlinedButton.icon(
@@ -209,8 +191,7 @@ class AssessmentItemView extends StatelessWidget {
           Row(children: [
             Icon(Icons.check_circle, color: AppColors.success, size: 18),
             const SizedBox(width: 6),
-            Text('You have watched this video.',
-                style: AppTextStyles.body.copyWith(color: AppColors.success)),
+            Text('You have watched this video.', style: AppTextStyles.body.copyWith(color: AppColors.success)),
           ]),
         ],
       ];

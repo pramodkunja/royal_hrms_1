@@ -93,6 +93,9 @@ class ApiServer implements HttpClientAdapter {
   final media = <String, (int, List<int>)>{'/media/employee_docs/letter.pdf': (200, pdfBytes)};
   final uploads = <RequestOptions>[];
 
+  /// Settings → Document Types; empty = web's built-in six.
+  List<Map<String, dynamic>> typeConfig = [];
+
   @override
   Future<ResponseBody> fetch(RequestOptions o, Stream<List<int>>? _, Future<void>? __) async {
     calls.add(o);
@@ -106,6 +109,9 @@ class ApiServer implements HttpClientAdapter {
     if (o.uri.path == '/api/employees/$code/documents/' && o.method == 'POST') {
       uploads.add(o);
       return _json(201, {'status': 'success', 'message': 'Document uploaded.', 'data': {}});
+    }
+    if (o.uri.path == '/api/onboarding/document-type-config/' && o.method == 'GET') {
+      return _json(200, {'status': 'success', 'data': typeConfig});
     }
     final m = media[o.uri.path];
     if (m != null) return _bytes(m.$1, m.$2, 'application/pdf');
@@ -528,10 +534,35 @@ void main() {
       expect(btn.onPressed, isNull);
     });
 
+    testDocs('13. Task 94 slots: configured visible types in order; "Not uploaded"; web date · size; no free type picker',
+        (tester) async {
+      final s = ApiServer()
+        ..typeConfig = [
+          {'type_key': 'pan_card', 'label': 'PAN Card', 'order': 2, 'visible': true, 'required': true},
+          {'type_key': 'nda', 'label': 'Signed NDA', 'order': 1, 'visible': true, 'required': false},
+          {'type_key': 'aadhaar_card', 'label': 'Aadhaar Card', 'order': 3, 'visible': false},
+        ];
+      await pumpProfile(tester, withApi: s);
+      expect(find.text('All documents uploaded by the employee or '), findsNothing); // inside a Text.rich
+      expect(find.textContaining('All documents uploaded by the employee or HR', findRichText: true), findsOneWidget);
+      expect(find.text('Signed NDA'), findsOneWidget);
+      expect(find.text('Not uploaded'), findsWidgets);
+      // Order: NDA (1) before PAN (2).
+      expect(tester.getTopLeft(find.text('Signed NDA')).dy, lessThan(tester.getTopLeft(find.text('PAN Card')).dy));
+      expect(find.text('Mar 1, 2026 · 2 KB'), findsWidgets);
+      // Aadhaar is hidden in config but the employee has an upload → still reachable below the cards.
+      expect(find.byKey(const Key('employee-doc-1')), findsOneWidget);
+      expect(find.text('Upload Document'), findsNothing);
+      expect(find.text('Select Document Type'), findsNothing);
+      expect(s.uploads, isEmpty);
+    });
+
     testDocs('9. viewer without employees.edit can view (as web); Upload/Replace unchanged', (tester) async {
       await pumpProfile(tester, as: hrUser(['employees.view']));
-      expect(find.text('Upload Document'), findsOneWidget);
-      expect(find.byTooltip('Replace'), findsNWidgets(4));
+      // Task 94: web's per-type slots (built-in list: the config GET here
+      // returns nothing) — Passport Photo and Cancelled Cheque not uploaded.
+      expect(find.byTooltip('Upload document'), findsNWidgets(2));
+      expect(find.byTooltip('Replace document'), findsNWidgets(4));
       await view(tester, 3);
       expect(find.byType(ProfileDocumentViewerScreen), findsOneWidget);
       await closeViewer(tester);

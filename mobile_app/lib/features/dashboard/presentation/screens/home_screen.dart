@@ -175,7 +175,12 @@ class _WelcomeCard extends ConsumerWidget {
         ],
       ),
       statsContent: ConsoleStatsRow(stats: [
-        (icon: Icons.badge_outlined, value: roleDisplay.isEmpty ? 'Employee' : roleDisplay, label: 'Role', color: AppColors.primary),
+        (
+          icon: Icons.badge_outlined,
+          value: roleDisplay.isEmpty ? 'Employee' : roleDisplay,
+          label: 'Role',
+          color: AppColors.primary
+        ),
         (
           icon: Icons.verified_user_outlined,
           value: '${permissions.length}',
@@ -207,8 +212,7 @@ class _LeaveBalanceCard extends ConsumerWidget {
             final year = stats.year > 0 ? stats.year : DateTime.now().year;
             return SectionMessage(
               icon: Icons.beach_access_outlined,
-              label:
-                  'No leave balance found for $year. Contact HR to credit your leave.',
+              label: 'No leave balance found for $year. Contact HR to credit your leave.',
             );
           }
           return Column(
@@ -243,8 +247,7 @@ class _BalanceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        Color(LeaveTypeColors.colorValueForCode(balance.leaveTypeCode));
+    final color = Color(LeaveTypeColors.colorValueForCode(balance.leaveTypeCode));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -261,8 +264,7 @@ class _BalanceRow extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               '${balance.available.toStringAsFixed(1)} / ${balance.totalDays.toStringAsFixed(1)} days',
-              style: AppTextStyles.caption
-                  .copyWith(color: AppColors.textSecondary),
+              style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
               overflow: TextOverflow.ellipsis,
             ),
           ],
@@ -369,8 +371,7 @@ class _RequestRow extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 '${request.from} – ${request.to} · ${request.days} day${request.days == 1 ? '' : 's'}',
-                style: AppTextStyles.caption
-                    .copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
               ),
@@ -386,8 +387,7 @@ class _RequestRow extends StatelessWidget {
           ),
           child: Text(
             request.status,
-            style: AppTextStyles.caption
-                .copyWith(color: sc, fontWeight: FontWeight.w600),
+            style: AppTextStyles.caption.copyWith(color: sc, fontWeight: FontWeight.w600),
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -511,8 +511,7 @@ class _BirthdayRow extends StatelessWidget {
               if (sub.isNotEmpty)
                 Text(
                   showAge && age != null ? '$sub · Turning $age' : sub,
-                  style: AppTextStyles.caption
-                      .copyWith(color: AppColors.textSecondary),
+                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                 ),

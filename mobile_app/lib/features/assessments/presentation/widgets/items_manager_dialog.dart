@@ -103,10 +103,10 @@ class _ItemsManagerDialogState extends ConsumerState<ItemsManagerDialog> {
     _correctOption = d.correctOption.isEmpty ? 'a' : d.correctOption;
     // Web: a new item starts as Multiple Choice; an existing True/False
     // question reopens as True/False.
-    _questionType = isTrueFalseQuestion(
-            itemType: d.itemType, optionA: d.optionA, optionB: d.optionB, optionC: d.optionC)
-        ? kQuestionTypeTrueFalse
-        : kQuestionTypeMcq;
+    _questionType =
+        isTrueFalseQuestion(itemType: d.itemType, optionA: d.optionA, optionB: d.optionB, optionC: d.optionC)
+            ? kQuestionTypeTrueFalse
+            : kQuestionTypeMcq;
   }
 
   /// Web openAddItem(sectionId): next order across all items.

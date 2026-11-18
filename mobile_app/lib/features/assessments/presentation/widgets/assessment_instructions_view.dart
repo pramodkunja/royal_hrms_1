@@ -25,19 +25,16 @@ class AssessmentInstructionsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final a = assignment;
-    final quizzes =
-        a.items.where((i) => i.type == AssessmentItemType.quiz).length;
+    final quizzes = a.items.where((i) => i.type == AssessmentItemType.quiz).length;
     final videos = a.items.length - quizzes;
     final rules = <String>[
       'Work through the items in order. Each answer is saved as soon as you submit it and can\'t be changed afterwards.',
-      if (videos > 0)
-        'For a video, open it, watch it, then mark it as watched.',
+      if (videos > 0) 'For a video, open it, watch it, then mark it as watched.',
       'When every item is done, submit the assessment to get your score.',
       'You need ${a.passPercentage}% to pass.',
       if (a.timeLimitMins != null)
         'You have ${a.timeLimitMins} minutes from your first answer. When the time runs out, the assessment is submitted automatically.',
-      if (a.deadline != null)
-        'Submit before ${formatAssessmentDate(a.deadline)}.',
+      if (a.deadline != null) 'Submit before ${formatAssessmentDate(a.deadline)}.',
       a.effectiveMaxAttempts == 0
           ? 'If you don\'t pass, you can retake it.'
           : 'If you don\'t pass, you can retake it while attempts remain (${a.effectiveMaxAttempts} in total).',
@@ -63,23 +60,19 @@ class AssessmentInstructionsView extends StatelessWidget {
         _Card(child: MyAssessmentFacts(assignment: a, showHeader: false)),
         const SizedBox(height: 12),
         _Card(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Before you start', style: AppTextStyles.labelLarge),
             const SizedBox(height: 8),
             for (final r in rules)
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6, right: 8),
-                        child: Icon(Icons.circle,
-                            size: 6, color: AppColors.textSecondary),
-                      ),
-                      Expanded(child: Text(r, style: AppTextStyles.body)),
-                    ]),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6, right: 8),
+                    child: Icon(Icons.circle, size: 6, color: AppColors.textSecondary),
+                  ),
+                  Expanded(child: Text(r, style: AppTextStyles.body)),
+                ]),
               ),
           ]),
         ),
@@ -96,8 +89,7 @@ class AssessmentInstructionsView extends StatelessWidget {
               Icon(Icons.block, size: 18, color: AppColors.error),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(blockedReason!,
-                    style: AppTextStyles.body.copyWith(color: AppColors.error)),
+                child: Text(blockedReason!, style: AppTextStyles.body.copyWith(color: AppColors.error)),
               ),
             ]),
           ),
@@ -106,8 +98,7 @@ class AssessmentInstructionsView extends StatelessWidget {
         AppButton(
           label: a.items.isEmpty ? 'No items to take' : 'Start assessment',
           leadingIcon: Icons.play_arrow_rounded,
-          onPressed:
-              blockedReason == null && a.items.isNotEmpty ? onStart : null,
+          onPressed: blockedReason == null && a.items.isNotEmpty ? onStart : null,
         ),
       ],
     );

@@ -23,8 +23,7 @@ class _InfoBanner extends StatelessWidget {
               child: Text(
                 'Move candidates through the pipeline stages. '
                 'Send portal login to selected candidates so they can fill their onboarding wizard.',
-                style: AppTextStyles.caption
-                    .copyWith(color: AppColors.info, fontSize: 11),
+                style: AppTextStyles.caption.copyWith(color: AppColors.info, fontSize: 11),
               ),
             ),
           ],
@@ -49,8 +48,7 @@ class _EmptyView extends StatelessWidget {
           Icon(Icons.people_outline, size: 48, color: AppColors.textHint),
           const SizedBox(height: 12),
           Text(branchName != null ? 'No candidates in $branchName' : 'No candidates found',
-              style:
-                  AppTextStyles.label.copyWith(color: AppColors.textSecondary)),
+              style: AppTextStyles.label.copyWith(color: AppColors.textSecondary)),
         ],
       ),
     );
@@ -66,26 +64,10 @@ class _StatsRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 16),
       child: StatCardRow(cards: [
-        StatCard(
-            icon: Icons.groups_outlined,
-            count: stats.total,
-            label: 'Total',
-            color: AppColors.primary),
-        StatCard(
-            icon: Icons.access_time_outlined,
-            count: stats.pending,
-            label: 'Pending',
-            color: AppColors.warning),
-        StatCard(
-            icon: Icons.how_to_reg_outlined,
-            count: stats.selected,
-            label: 'Selected',
-            color: AppColors.success),
-        StatCard(
-            icon: Icons.person_off_outlined,
-            count: stats.rejected,
-            label: 'Rejected',
-            color: AppColors.error),
+        StatCard(icon: Icons.groups_outlined, count: stats.total, label: 'Total', color: AppColors.primary),
+        StatCard(icon: Icons.access_time_outlined, count: stats.pending, label: 'Pending', color: AppColors.warning),
+        StatCard(icon: Icons.how_to_reg_outlined, count: stats.selected, label: 'Selected', color: AppColors.success),
+        StatCard(icon: Icons.person_off_outlined, count: stats.rejected, label: 'Rejected', color: AppColors.error),
       ]),
     );
   }
@@ -105,9 +87,7 @@ class _StatsShimmer extends StatelessWidget {
             child: Container(
               height: 80,
               margin: const EdgeInsets.only(right: 10),
-              decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ),
@@ -160,8 +140,7 @@ class _SearchFilterState extends ConsumerState<_SearchFilter> {
           key: const Key('candidate-search'),
           onChanged: _onSearch,
           style: AppTextStyles.bodySmall,
-          decoration:
-              heroSearchFieldDecoration(hintText: 'Search candidate...'),
+          decoration: heroSearchFieldDecoration(hintText: 'Search candidates…'),
         ),
       ),
       const SizedBox(height: 10),
@@ -183,13 +162,11 @@ class _SearchFilterState extends ConsumerState<_SearchFilter> {
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 decoration: BoxDecoration(
                   color: isActive ? AppColors.primary : AppColors.surface,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: isActive ? AppColors.primary : AppColors.border),
+                  border: Border.all(color: isActive ? AppColors.primary : AppColors.border),
                 ),
                 child: Text(
                   label,
@@ -275,9 +252,8 @@ class _BranchFilter extends ConsumerWidget {
             ],
             // Disabled until the branches have loaded (web shows only "All
             // Branches" until then).
-            onChanged: optionsAsync.isLoading
-                ? null
-                : (v) => ref.read(candidateBranchFilterProvider.notifier).state = v,
+            onChanged:
+                optionsAsync.isLoading ? null : (v) => ref.read(candidateBranchFilterProvider.notifier).state = v,
           ),
         ),
         if (optionsAsync.isLoading) ...[
@@ -337,10 +313,7 @@ class _ListFooterState extends ConsumerState<_ListFooter> {
     Widget child;
     if (p.loadingMore) {
       child = const SizedBox(
-          key: Key('candidates-loading-more'),
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(strokeWidth: 2));
+          key: Key('candidates-loading-more'), width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2));
     } else if (p.loadMoreError != null) {
       child = Column(mainAxisSize: MainAxisSize.min, children: [
         Text(p.loadMoreError!,

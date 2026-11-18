@@ -18,6 +18,7 @@ import 'package:mobile_app/features/dashboard/data/models/admin_dashboard_models
 import 'package:mobile_app/features/dashboard/data/models/dashboard_common_models.dart';
 import 'package:mobile_app/features/dashboard/data/models/hr_dashboard_models.dart' show HrLifecycleEmployee;
 import 'package:mobile_app/features/dashboard/presentation/providers/dashboard_providers.dart';
+import 'package:mobile_app/features/dashboard/presentation/screens/hr_dashboard_view.dart' show HrActionQueueCard;
 import 'package:mobile_app/features/dashboard/presentation/widgets/attendance_ring_card.dart';
 import 'package:mobile_app/features/dashboard/presentation/widgets/dashboard_section.dart';
 import 'package:mobile_app/features/dashboard/presentation/widgets/emp_celebration_cards.dart'
@@ -41,6 +42,8 @@ class AdminDashboardView extends ConsumerWidget {
       ref.invalidate(todayAttendanceProvider);
       ref.invalidate(systemAdminAnnouncementProvider);
       ref.invalidate(pendingApprovalsProvider);
+      ref.invalidate(hrActionQueueProvider);
+      ref.invalidate(hrSeparationQueueCountProvider);
       ref.invalidate(systemAdminDepartmentHeadcountProvider);
       ref.invalidate(systemAdminEmployeeLifecycleProvider);
       ref.invalidate(systemAdminBirthdaysTodayProvider);
@@ -56,6 +59,10 @@ class AdminDashboardView extends ConsumerWidget {
     ref.listen<int>(dashboardRevisitProvider, (prev, next) {
       if (prev != null) refreshAll();
     });
+
+    // Web AdminDashboard.tsx:83: a Branch Admin also gets its own branch's
+    // Action Queue, between Pending Approvals and Department Headcount.
+    final branchAdmin = ref.watch(authStateProvider.select((s) => s.valueOrNull?.user?.canManageBranch ?? false));
 
     return RefreshIndicator(
       onRefresh: refreshAll,
@@ -83,6 +90,10 @@ class AdminDashboardView extends ConsumerWidget {
             const SizedBox(height: 20),
             const _PendingApprovalsCard(),
             const SizedBox(height: 20),
+            if (branchAdmin) ...[
+              const HrActionQueueCard(key: Key('admin-branch-action-queue')),
+              const SizedBox(height: 20),
+            ],
             const _DepartmentHeadcountCard(),
             const SizedBox(height: 20),
             const _EmployeeLifecycleCard(),

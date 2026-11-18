@@ -15,8 +15,7 @@ final assessmentsDataSourceProvider = Provider<AssessmentsRemoteDataSource>((ref
 
 // ── Assessments list ──────────────────────────────────────────────────────────
 
-final assessmentsProvider =
-    AsyncNotifierProvider.autoDispose<AssessmentsNotifier, List<AssessmentModel>>(
+final assessmentsProvider = AsyncNotifierProvider.autoDispose<AssessmentsNotifier, List<AssessmentModel>>(
   AssessmentsNotifier.new,
 );
 
@@ -85,18 +84,16 @@ class AssessmentsNotifier extends AutoDisposeAsyncNotifier<List<AssessmentModel>
 
 // ── Assessment items (per-assessment, fetched lazily when Items dialog opens) ─
 
-final assessmentItemsProvider = AsyncNotifierProvider.autoDispose
-    .family<AssessmentItemsNotifier, List<AssessmentItemModel>, String>(
+final assessmentItemsProvider =
+    AsyncNotifierProvider.autoDispose.family<AssessmentItemsNotifier, List<AssessmentItemModel>, String>(
   AssessmentItemsNotifier.new,
 );
 
-class AssessmentItemsNotifier
-    extends AutoDisposeFamilyAsyncNotifier<List<AssessmentItemModel>, String> {
+class AssessmentItemsNotifier extends AutoDisposeFamilyAsyncNotifier<List<AssessmentItemModel>, String> {
   AssessmentsRemoteDataSource get _ds => ref.read(assessmentsDataSourceProvider);
 
   @override
-  Future<List<AssessmentItemModel>> build(String assessmentId) =>
-      _ds.fetchItems(assessmentId);
+  Future<List<AssessmentItemModel>> build(String assessmentId) => _ds.fetchItems(assessmentId);
 
   List<AssessmentItemModel> _sorted(List<AssessmentItemModel> items) =>
       [...items]..sort((a, b) => a.order.compareTo(b.order));
@@ -170,15 +167,14 @@ bool canDeleteAssessments(UserEntity? user) => _has(user, 'assessments.delete');
 
 const kAssessmentEditDenied = 'Permission denied.';
 
-final assessmentSectionsProvider = AsyncNotifierProvider.autoDispose
-    .family<AssessmentSectionsNotifier, List<AssessmentSectionModel>, String>(
+final assessmentSectionsProvider =
+    AsyncNotifierProvider.autoDispose.family<AssessmentSectionsNotifier, List<AssessmentSectionModel>, String>(
   AssessmentSectionsNotifier.new,
 );
 
 /// Sections in `order` (web sorts them the same way). Writes are refused
 /// before any request without assessments.edit, and run one at a time.
-class AssessmentSectionsNotifier
-    extends AutoDisposeFamilyAsyncNotifier<List<AssessmentSectionModel>, String> {
+class AssessmentSectionsNotifier extends AutoDisposeFamilyAsyncNotifier<List<AssessmentSectionModel>, String> {
   AssessmentsRemoteDataSource get _ds => ref.read(assessmentsDataSourceProvider);
   bool _busy = false;
 
@@ -211,19 +207,16 @@ class AssessmentSectionsNotifier
       _write(() => _ds.updateSection(arg, sectionId, form));
 
   /// The server moves the section's items to unsectioned.
-  Future<String?> removeSection(String sectionId) =>
-      _write(() => _ds.deleteSection(arg, sectionId), reloadItems: true);
+  Future<String?> removeSection(String sectionId) => _write(() => _ds.deleteSection(arg, sectionId), reloadItems: true);
 }
 
 // ── Employees + email templates for the Assign dialog ─────────────────────────
 
-final assignableEmployeesProvider =
-    FutureProvider.autoDispose<List<AssignableEmployeeModel>>((ref) {
+final assignableEmployeesProvider = FutureProvider.autoDispose<List<AssignableEmployeeModel>>((ref) {
   return ref.read(assessmentsDataSourceProvider).fetchAssignableEmployees();
 });
 
-final assignEmailTemplateOptionsProvider =
-    FutureProvider.autoDispose<List<EmailTemplateOptionModel>>((ref) {
+final assignEmailTemplateOptionsProvider = FutureProvider.autoDispose<List<EmailTemplateOptionModel>>((ref) {
   return ref.read(assessmentsDataSourceProvider).fetchEmailTemplateOptions();
 });
 

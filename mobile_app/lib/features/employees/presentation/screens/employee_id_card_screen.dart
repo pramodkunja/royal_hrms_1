@@ -224,7 +224,7 @@ class _EmployeeIdCardScreenState extends ConsumerState<EmployeeIdCardScreen> {
                     for (final l in IdCardPrintLayout.values)
                       DropdownMenuItem(
                           value: l,
-                          child: Text(l == IdCardPrintLayout.card ? 'Card size' : 'A4 sheet',
+                          child: Text(l == IdCardPrintLayout.card ? 'Card size (50 × 85 mm)' : 'A4 sheet',
                               style: AppTextStyles.bodySmall)),
                   ],
                   onChanged: _busy != null ? null : (v) => setState(() => _layout = v ?? _layout),

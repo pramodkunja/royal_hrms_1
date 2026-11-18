@@ -27,29 +27,26 @@ class DocumentEmptyView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Text('No Documents Yet',
-              style: AppTextStyles.h4.copyWith(color: AppColors.textSecondary)),
+          Text('No Documents Yet', style: AppTextStyles.h4.copyWith(color: AppColors.textSecondary)),
           const SizedBox(height: 6),
           Text(
             onUpload != null
                 ? 'Upload policies, forms, and templates\nfor your team.'
                 : 'No documents have been shared yet.',
-            style: AppTextStyles.bodySmall
-                .copyWith(color: AppColors.textHint),
+            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
             textAlign: TextAlign.center,
           ),
           if (onUpload != null) ...[
-          const SizedBox(height: 20),
-          FilledButton.icon(
-            onPressed: onUpload,
-            icon: const Icon(Icons.upload_file_outlined, size: 16),
-            label: const Text('Upload Document'),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: onUpload,
+              icon: const Icon(Icons.upload_file_outlined, size: 16),
+              label: const Text('Upload Document'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
             ),
-          ),
           ],
         ],
       ),
@@ -60,8 +57,7 @@ class DocumentEmptyView extends StatelessWidget {
 class DocumentErrorView extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
-  const DocumentErrorView(
-      {super.key, required this.message, required this.onRetry});
+  const DocumentErrorView({super.key, required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -71,12 +67,9 @@ class DocumentErrorView extends StatelessWidget {
         children: [
           Icon(Icons.error_outline, size: 48, color: AppColors.error),
           const SizedBox(height: 12),
-          Text('Failed to load documents',
-              style: AppTextStyles.label
-                  .copyWith(color: AppColors.textSecondary)),
+          Text('Failed to load documents', style: AppTextStyles.label.copyWith(color: AppColors.textSecondary)),
           const SizedBox(height: 6),
-          Text(message,
-              style: AppTextStyles.caption, textAlign: TextAlign.center),
+          Text(message, style: AppTextStyles.caption, textAlign: TextAlign.center),
           const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: onRetry,

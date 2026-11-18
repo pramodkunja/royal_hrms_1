@@ -94,10 +94,7 @@ class ProfileRemoteDataSource {
     final res = await _dio.get(ApiConstants.onboardingDocuments);
     final raw = _unwrap(res.data);
     final list = raw is List ? raw : <dynamic>[];
-    return list
-        .whereType<Map<String, dynamic>>()
-        .map(ProfileDocumentModel.fromJson)
-        .toList();
+    return list.whereType<Map<String, dynamic>>().map(ProfileDocumentModel.fromJson).toList();
   }
 
   // ── Documents (self-service upload / replace / view) ─────────────────────

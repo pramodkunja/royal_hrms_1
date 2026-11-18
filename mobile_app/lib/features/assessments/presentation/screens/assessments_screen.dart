@@ -92,14 +92,12 @@ class _AssessmentsScreenState extends ConsumerState<AssessmentsScreen> {
                           child: Column(
                             children: assessments
                                 .map((a) => Padding(
-                                      padding:
-                                          const EdgeInsets.only(bottom: 12),
+                                      padding: const EdgeInsets.only(bottom: 12),
                                       child: AssessmentCard(
                                         assessment: a,
                                         isExpanded: _expandedId == a.id,
                                         onToggleResults: () => setState(
-                                          () => _expandedId =
-                                              _expandedId == a.id ? null : a.id,
+                                          () => _expandedId = _expandedId == a.id ? null : a.id,
                                         ),
                                         onItems: canEdit ? () => _openItems(a) : null,
                                         onAssign: canEdit ? () => _openAssign(a) : null,
@@ -130,11 +128,8 @@ class _AssessmentsScreenState extends ConsumerState<AssessmentsScreen> {
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 icon: const Icon(Icons.add),
-                label: const Text('New Assessment',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
+                label: const Text('New Assessment', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
         orElse: () => null,
       ),
@@ -166,8 +161,7 @@ class _AssessmentsScreenState extends ConsumerState<AssessmentsScreen> {
     );
     // Item counts (item_count) shown on the card can change after managing
     // items — refresh this assessment's row so the counter stays accurate.
-    if (mounted)
-      await ref.read(assessmentsProvider.notifier).refreshOne(assessment.id);
+    if (mounted) await ref.read(assessmentsProvider.notifier).refreshOne(assessment.id);
   }
 
   Future<void> _openAssign(AssessmentModel assessment) async {
@@ -190,9 +184,7 @@ class _AssessmentsScreenState extends ConsumerState<AssessmentsScreen> {
         title: const Text('Delete Assessment?'),
         content: Text('Delete "${assessment.title}"? This cannot be undone.'),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () => Navigator.pop(dialogContext, true),
@@ -202,9 +194,7 @@ class _AssessmentsScreenState extends ConsumerState<AssessmentsScreen> {
       ),
     );
     if (ok != true || !mounted) return;
-    final error = await ref
-        .read(assessmentsProvider.notifier)
-        .removeAssessment(assessment.id);
+    final error = await ref.read(assessmentsProvider.notifier).removeAssessment(assessment.id);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(error ?? '"${assessment.title}" deleted.'),
@@ -237,8 +227,7 @@ class _Header extends StatelessWidget {
               color: Colors.white.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.assignment_outlined,
-                size: 18, color: Colors.white),
+            child: const Icon(Icons.assignment_outlined, size: 18, color: Colors.white),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -248,8 +237,7 @@ class _Header extends StatelessWidget {
                 'Build pre-onboarding assessments and assign them to candidates.',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.bodySecondary
-                    .copyWith(color: Colors.white.withValues(alpha: 0.9)),
+                style: AppTextStyles.bodySecondary.copyWith(color: Colors.white.withValues(alpha: 0.9)),
               ),
             ),
           ),
@@ -267,13 +255,10 @@ class _OverallStatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final assigned =
-        assessments.fold<int>(0, (sum, a) => sum + a.assignedCount);
+    final assigned = assessments.fold<int>(0, (sum, a) => sum + a.assignedCount);
     final pending = assessments.fold<int>(0, (sum, a) => sum + a.pendingCount);
-    final inProgress =
-        assessments.fold<int>(0, (sum, a) => sum + a.inProgressCount);
-    final completed =
-        assessments.fold<int>(0, (sum, a) => sum + a.completedCount);
+    final inProgress = assessments.fold<int>(0, (sum, a) => sum + a.inProgressCount);
+    final completed = assessments.fold<int>(0, (sum, a) => sum + a.completedCount);
 
     final stats = [
       // The total assessment count from the backend wasn't surfaced
@@ -285,30 +270,10 @@ class _OverallStatsRow extends StatelessWidget {
         icon: Icons.fact_check_outlined,
         color: const Color(0xFF1E4E8C)
       ),
-      (
-        label: 'Total Assigned',
-        value: assigned,
-        icon: Icons.people_outline,
-        color: AppColors.primary
-      ),
-      (
-        label: 'Pending',
-        value: pending,
-        icon: Icons.access_time,
-        color: AppColors.warning
-      ),
-      (
-        label: 'In Progress',
-        value: inProgress,
-        icon: Icons.edit_outlined,
-        color: AppColors.info
-      ),
-      (
-        label: 'Completed',
-        value: completed,
-        icon: Icons.check_circle_outline,
-        color: AppColors.success
-      ),
+      (label: 'Total Assigned', value: assigned, icon: Icons.people_outline, color: AppColors.primary),
+      (label: 'Pending', value: pending, icon: Icons.access_time, color: AppColors.warning),
+      (label: 'In Progress', value: inProgress, icon: Icons.edit_outlined, color: AppColors.info),
+      (label: 'Completed', value: completed, icon: Icons.check_circle_outline, color: AppColors.success),
     ];
 
     // Shared StatCard/StatCardRow — same visual design as the Employees
@@ -375,10 +340,7 @@ class _StateIconBadge extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            color.withValues(alpha: 0.16),
-            color.withValues(alpha: 0.06)
-          ],
+          colors: [color.withValues(alpha: 0.16), color.withValues(alpha: 0.06)],
         ),
         shape: BoxShape.circle,
       ),
@@ -401,8 +363,7 @@ class _LoadingView extends StatelessWidget {
             child: SizedBox(
               width: 26,
               height: 26,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2.5, color: AppColors.primary),
+              child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.primary),
             ),
           ),
           const SizedBox(height: 18),
@@ -426,12 +387,10 @@ class _EmptyView extends StatelessWidget {
         children: [
           _StateIconBadge(
             color: AppColors.primary,
-            child: Icon(Icons.assignment_outlined,
-                size: 32, color: AppColors.primary),
+            child: Icon(Icons.assignment_outlined, size: 32, color: AppColors.primary),
           ),
           const SizedBox(height: 20),
-          Text('No assessments yet',
-              style: AppTextStyles.h3, textAlign: TextAlign.center),
+          Text('No assessments yet', style: AppTextStyles.h3, textAlign: TextAlign.center),
           const SizedBox(height: 8),
           Text(
             'Create your first assessment to assign to candidates during onboarding.',
@@ -439,25 +398,23 @@ class _EmptyView extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           if (onAdd != null) ...[
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: onAdd,
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Create Assessment'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: onAdd,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Create Assessment'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
               ),
             ),
-          ),
           ],
         ],
       ),
     );
   }
 }
-

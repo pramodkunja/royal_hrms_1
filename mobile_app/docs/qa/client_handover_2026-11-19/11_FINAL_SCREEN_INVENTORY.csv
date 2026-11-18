@@ -1,0 +1,115 @@
+Module,Screen,Tab/Subscreen,Implementation Status,UI Status,Fields Status,Buttons Status,API Status,Physical Device Tested,Evidence,Remaining Work,Priority
+Auth,Login,—,COMPLETE,OK,Company code / email / password present,"Sign In verified (user login, Phase B, C2, C3)",POST login OK,Yes,evidence/auth/,—,—
+Auth,Forgot Password,—,UNTESTED,Not opened,—,Submit sends an OTP email (not exercised),Not exercised,No,—,Open + validate fields (no submit),P3
+Auth,Change Password (forced),—,BLOCKED,—,—,—,—,No,—,Needs an account with must_change_password (role/state access),P2
+Auth,Logout,—,UNTESTED,—,—,Sign out not tapped (ends the session),—,No,—,Test at end of a session,P3
+Onboarding,Onboarding wizard,—,BLOCKED,—,—,—,Endpoints fixed 2026-08 (source),No,—,Needs a pending-onboarding account,P1
+Onboarding,Awaiting approval,—,BLOCKED,—,—,—,—,No,—,Needs an onboarding-submitted account,P2
+Onboarding,Candidate assessments,—,BLOCKED,—,—,—,—,No,—,Needs a candidate account,P2
+Assessments,Take assessment,/assessments/:id,BLOCKED,—,—,Taking it records answers (write),—,No,My Assessments shows 1 pending,Disposable assignment needed,P2
+Dashboard,Admin dashboard (System Console),—,COMPLETE,OK; 2×2 KPIs at large text (C2),KPIs match live web,Clock In on the card BLOCKED (write); shortcuts open,Admin KPI endpoints OK,Yes (1.0/1.3/1.5),"evidence/dashboard/, c2_text_scale/",HO-13/HO-27 label wording,P3
+Dashboard,Employee dashboard,—,BLOCKED,—,—,—,—,No,—,Needs Employee account,P1
+Dashboard,HR dashboard,—,BLOCKED,—,—,—,—,No,—,Needs HR account,P1
+Dashboard,Manager dashboard,—,BLOCKED,—,—,—,—,No,—,Needs Manager account,P1
+Global,Navigation drawer,—,COMPLETE,"30 items, scrolls",—,All items open,—,Yes,evidence/dashboard/,Training items absent (HO-25),—
+Global,Notifications panel,—,COMPLETE,"Opens, lists items",—,Mark-read / Mark all BLOCKED (write),GET notifications OK,Yes,evidence/dashboard/notifications_panel_android.png,—,—
+Global,Global Search,—,COMPLETE,"Opens, results grouped","Query ""Rahul"" → EMPLOYEES result",Close / clear OK,GET search OK,Yes (Task 86),evidence/t86/d03_search_results,Page-result navigation not re-checked on device,P3
+Global,Voice assistant,—,PARTIAL,Edge tab; hide; auto-collapse; hidden under dialogs,—,Voice recording not exercised on purpose,—,Yes (C1/C2),"evidence/c1_retest/, c2_text_scale/",Real voice command end-to-end not device-tested,P2
+Announcements,Announcements,List / filters / read more,BLOCKED,OK (robot fixed),"Stats, categories, posts",Read more OK; Post / Edit / Delete / React BLOCKED (writes),GET OK,Yes,evidence/announcements/,Write flows on disposable data,P2
+Recruitment,Interview List,—,BLOCKED,OK; empty state,"Search, status chips, branch filter, stats",Add candidate / bulk import BLOCKED; no candidates to open detail,GET candidates/stats OK (endpoints = live web),Yes,evidence/recruitment/interview_list_android.png,Candidate detail/edit/pipeline untested (no data),P1
+Recruitment,Candidate detail / edit,—,BLOCKED,—,—,—,—,No,—,Needs a test candidate,P1
+Recruitment,Candidate bulk import,/interview-list/bulk-import,BLOCKED,—,—,Import = write,—,No,—,—,P3
+Recruitment,Review & Onboarding,—,BLOCKED,OK; empty state,Stats,No submissions to review (doc viewing Task 82 untested on device),GET onboarding/approvals OK,Yes,evidence/recruitment/review_onboarding_android.png,Needs a submission,P1
+Recruitment,Assessments (admin),List,BLOCKED,OK,2 assessments; stats,New / Edit / Delete / Assign BLOCKED,GET OK,Yes,evidence/recruitment/,—,P2
+Recruitment,Assessments (admin),Results (expand),COMPLETE,OK,Results list,—,GET OK,Yes (Task 86),evidence/t86/c12_assess_results,—,—
+Recruitment,Assessments (admin),Items / Sections dialog,BLOCKED,OK,Sections + items,Add / Edit / Delete BLOCKED (saves per action),GET OK,Yes (Task 86),evidence/t86/c13_assess_items,—,P3
+Recruitment,Email Logs,—,COMPLETE,OK; empty state,Search,—,GET OK,Yes,evidence/recruitment/email_logs_android.png,—,—
+Recruitment,My Referrals,My Referrals tab,BLOCKED,OK; empty,Stats,Refer Someone BLOCKED (write),GET OK,Yes,evidence/recruitment/referrals_android.png,—,P2
+Recruitment,My Referrals,All Referrals tab,COMPLETE,OK; empty,—,—,GET OK,Yes (Task 86),evidence/t86/a16_ref_all,—,—
+Recruitment,My Referrals,Referral Rules tab,COMPLETE,OK,6 rules,—,GET OK,Yes (Task 86),evidence/t86/a17_ref_rules,—,—
+Recruitment,My Assessments,—,BLOCKED,OK,1 pending,Start assessment = write,GET OK,Yes,evidence/self/my_assessments_android.png,—,P2
+Employees,Employees list,—,BLOCKED,OK at 1.0/1.3/1.5 (C2 fix),"Card shows name, code, designation, Department · Branch (Task 87), status",View OK; Edit form / Add / Bulk import BLOCKED,GET OK,"Yes (1.0/1.3/1.5, Task 87)",evidence/t87/,HO-10 a11y labels; Add / Edit / Import untested (writes),P3
+Employees,Employee profile,Header + Profile/Personal,BLOCKED,Single header (HO-05 fixed),All personal fields; Current Experience (HO-29),Edit / Active switch / Reset Password BLOCKED,GET OK,Yes,"evidence/c1_retest/, c3/",Edit save path untested,P2
+Employees,Employee profile,Profile › Education & Experience,COMPLETE,OK,Fields populated,Edit BLOCKED,GET OK,Yes (Task 86),evidence/t86/b03_prof_education,—,—
+Employees,Employee profile,Profile › Bank Details,COMPLETE,OK,Fields populated,Edit BLOCKED,GET OK,Yes (Task 86),evidence/t86/b04_prof_bank,—,—
+Employees,Employee profile,Profile › Emergency Contact,COMPLETE,OK,Populated (demo data: name holds a number — HO-16),Edit BLOCKED,GET OK,Yes (Task 86),evidence/t86/b05_prof_emergency,—,—
+Employees,Employee profile,Profile › EPF / Statutory,COMPLETE,OK,Fields (empty for this employee),Edit BLOCKED,GET OK,Yes (Task 86),evidence/t86/b06_prof_epf,—,—
+Employees,Employee profile,Profile › Documents,BLOCKED,OK,Documents listed with view / replace,Upload / replace BLOCKED; view not exercised,GET OK,Yes (Task 86),evidence/t86/b07_prof_documents,Document view (preview) on device,P2
+Employees,Employee profile,Salary tab,BLOCKED,OK,"CTC, structure, history",Revise CTC BLOCKED,GET OK,Yes (C1),evidence/employees/employee_profile_salary_tab_android.png,—,P2
+Employees,Employee profile,Payroll tab,COMPLETE,OK,Payslip history,—,GET OK,Yes (C1),evidence/employees/ (C1),—,—
+Employees,Employee profile,Leave tab,COMPLETE,OK,Annual / monthly breakdown,—,GET OK,Yes (C1),evidence/employees/ (C1),—,—
+Employees,Employee profile,Attendance tab,COMPLETE,"OK (labels truncate, HO-07)",Monthly summary,—,GET OK,Yes (Task 86),evidence/t86/b08_prof_attendance,HO-07,P3
+Employees,Employee profile,Approval Matrix tab,BLOCKED,OK,"Reporting relationships, workflows",Edit relationship BLOCKED,GET OK,Yes (C1),evidence/employees/ (C1),—,P2
+Employees,Employee profile,Promotion tab,BLOCKED,OK,"Current designation, history (none)",Promote BLOCKED,GET OK,Yes (Task 86),evidence/t86/b09_prof_promotion,—,P2
+Employees,Employee profile,Send Wishes tab,BLOCKED,OK,Birthday / anniversary / other,Send Wish BLOCKED (sends email),GET OK,Yes (Task 86),evidence/t86/b10_prof_wishes,—,P2
+Employees,Employee profile,Assets tab,BLOCKED,—,—,—,—,No,—,Assets module off for tenant,P3
+Employees,Employee ID Card,—,COMPLETE,OK,Card preview; missing-data notice,Share PDF / Print available (not exercised in Task 86),GET OK,Yes (Task 86),evidence/t86/b12_id_card,Print/share device check,P3
+Employees,Employee bulk import,—,BLOCKED,—,—,Import = write,—,No,—,—,P3
+Employees,Org Chart,—,COMPLETE,OK,3 departments,—,GET OK,Yes,evidence/employees/org_chart_android.png,—,—
+Employees,Branch Management,List + stats,PARTIAL,OK,Stats differ from web (HO-26); distribution unscoped (HO-11),Add / Edit / Delete BLOCKED,GET OK,Yes,evidence/branches/,Backend scoping decision,P2
+Employees,Branch Management,View Details sheet,COMPLETE,OK,"Identity, location, workforce",—,GET OK,Yes (Task 86),evidence/t86/c10_branch_details,—,—
+Attendance,Attendance & Time,Attendance tab — Team Day View,BLOCKED,OK,"Filters, status chips, rows",Export / Import BLOCKED; + FAB BLOCKED,GET OK,Yes,evidence/attendance/,—,P2
+Attendance,Attendance & Time,Attendance tab — Employee Month View,COMPLETE,OK,Employee picker prompt,—,GET OK,Yes (Task 86),evidence/t86/a02_att_month_view,Month grid with a selected employee,P3
+Attendance,Attendance & Time,OT Entry tab,BLOCKED,OK,Add OT form + OT records,Add OT Entry BLOCKED,GET overtime OK (= live web),Yes (Task 86),evidence/t86/a04_att_ot,—,P2
+Attendance,Attendance & Time,Invalid Punches tab,COMPLETE,OK; empty,—,Assign (none to assign),GET OK (= live web),Yes (Task 86),evidence/t86/a05_att_invalid,—,—
+Attendance,Attendance & Time,Un-punches tab,BLOCKED,OK; empty,Correction requests section,Approve BLOCKED,GET OK (= live web),Yes (Task 86),evidence/t86/a06_att_unpunches,—,P2
+Attendance,Attendance & Time,Late Justifications tab,BLOCKED,OK,Status chips,Approve / Reject BLOCKED,GET OK (= live web),Yes (Task 86),evidence/t86/a07_att_late,—,P2
+Attendance,Attendance & Time,Weekly Off Assignment tab,BLOCKED,OK,"Filters, assignments",Change / Assign / Bulk Assign BLOCKED,GET OK (= live web),Yes (Task 86),evidence/t86/a08_att_weekly_off,—,P2
+Attendance,Attendance & Time,Shift Assignment tab,BLOCKED,OK,"Shifts list, filters",Add Shift / Edit / Deactivate BLOCKED,GET OK (= live web),Yes (Task 86),evidence/t86/a09_att_shift,—,P2
+Attendance,My Attendance,Attendance tab,BLOCKED,OK,"Stats, today, late limit, summary",Clock In BLOCKED (not authorized; HO-01 open),GET OK,Yes,evidence/attendance/my_attendance_android.png,Clock-in/out end-to-end,P0
+Attendance,My Attendance,Attendance Corrections tab,BLOCKED,OK,"Counts, list",Request Attendance Correction BLOCKED,GET OK,Yes (Task 86),evidence/t86/a11_my_att_corrections,—,P2
+Attendance,Face ID Registrations,—,BLOCKED,OK,Org-wide employee list (HO-12),Register / update BLOCKED (camera + write),GET OK,Yes,evidence/face_id/,Registration + verification on device (FACE-06/07/08),P0
+Leave,Leave Management,Dashboard tab,COMPLETE,OK,"Balances (= live web), own requests",Cancel request BLOCKED,GET OK,Yes,evidence/leave/,HO-27 status wording,P3
+Leave,Leave Management,Apply Leave tab,BLOCKED,OK; date picker fixed,"Types, fractional balances (= live web), preview",Submit BLOCKED (write),GET preview OK,Yes (1.0/1.3/1.5),evidence/c1_retest/,Submit end-to-end,P1
+Leave,Leave Management,Team Calendar tab,COMPLETE,OK,"Month grid, legend",—,GET OK,Yes,evidence/leave/leave_team_calendar_android.png,—,—
+Leave,Leave Management,Analytics tab,COMPLETE,OK,Calendar-year stats,—,GET OK,Yes,evidence/leave/leave_analytics_android.png,—,—
+Leave,Leave request detail,—,BLOCKED,OK,"Details, approval flow",Cancel BLOCKED,GET OK,Yes (Task 86),evidence/t86/e05_my_request_detail,—,P2
+WFH,Work From Home,Request tab,BLOCKED,OK,All fields,Use current location / Submit BLOCKED,—,Yes,evidence/wfh/,Submit end-to-end,P1
+WFH,Work From Home,My Requests tab,BLOCKED,OK,1 pending request,Cancel Request BLOCKED,GET OK (= live web),Yes (Task 86),evidence/t86/a13_wfh_my_requests,—,P2
+WFH,Work From Home,Daily Work Report tab,BLOCKED,OK,"Date, work completed, pending, updates",Submit Report BLOCKED,GET OK (= live web),Yes (Task 86),evidence/t86/a14_wfh_daily_report,—,P2
+Expenses,Expense Claims,List,COMPLETE,OK; empty,"Stats, categories",—,GET OK,Yes,evidence/expenses/,—,—
+Expenses,Expense Claims,New Expense form,BLOCKED,OK,"Title, amount, category, date, description, receipts",Submit BLOCKED,—,"Yes (Task 86, form only)",evidence/t86/e07_expense_form,Submit + receipt upload,P2
+Approvals,Approvals,Team Approvals tab,BLOCKED,OK,"Summary (= live web), filters",Approve / Reject / bulk BLOCKED,GET OK,Yes,evidence/approvals/,"Decision flows (incl. L2, remarks)",P1
+Approvals,Approvals,Attendance Approval tab,COMPLETE,OK; empty,—,—,GET OK,Yes,evidence/approvals/,—,—
+Approvals,Approvals,Face ID Approvals tab,COMPLETE,OK; empty,—,—,GET OK,Yes,evidence/approvals/,"Label ""Face Registration"" on web (HO-27)",P3
+Approvals,Approvals,Leave Cancellations tab,COMPLETE,OK; empty,—,—,GET OK,Yes,evidence/approvals/,—,—
+Approvals,Approvals,Delegation tab,BLOCKED,OK,Form + lists,Delegate BLOCKED,GET OK,Yes,evidence/approvals/approvals_android_delegation.png,—,P2
+Separation,Separation & Exit,My Requests tab,BLOCKED,OK; empty,Filters,Request Separation BLOCKED,GET OK,Yes,evidence/separation/,—,P2
+Separation,Separation & Exit,Team Requests tab,COMPLETE,OK,2 approved requests,—,GET OK,Yes (Task 86),evidence/t86/a19_sep_team,—,—
+Separation,Separation detail,—,BLOCKED,OK,Employee + separation details,Stage actions BLOCKED,GET OK,Yes (Task 86),evidence/t86/e03_sep_detail,—,P2
+Documents,Document Center,—,BLOCKED,OK; empty,"Categories, stats",Upload BLOCKED,GET OK,Yes,evidence/documents/,—,P2
+Payroll,My Payslips,—,COMPLETE,OK; chip fixed at 1.5,Payslip matches live web,Print / Save PDF + Share verified (C3); Download disabled as web; Acknowledge / Raise Query BLOCKED,GET my-payslips OK,Yes,evidence/c3/,—,—
+Payroll,Payroll (admin),Dashboard / Salary Setup / Adjustments / Queries / Reports / Analytics,INTENTIONAL WEB-ONLY,—,—,—,—,n/a,evidence/web_live/c3_t3_payroll*,Web-only by decision,—
+Self,My Requests,—,COMPLETE,OK,"5 requests, filters",Detail opens,GET OK,Yes,evidence/t86/e04_my_requests,—,—
+Self,Contact Matrix,—,BLOCKED,OK,1 contact,Actions menu / Add Contact BLOCKED,GET OK,Yes,evidence/t86/e08_contacts,—,P3
+Self,My Profile,—,BLOCKED,OK,Personal info,Save Changes BLOCKED,GET OK,Yes,evidence/profile/,—,P2
+Training,Training & Learning (admin),Courses / Reports,MISSING,—,—,—,No /training/ endpoints in app,n/a,evidence/web_live/c3_t1_training*.txt,HO-25 — scope decision (6–9 days),P1 (scope)
+Training,My Learning,6 status tabs + course viewer,MISSING,—,—,—,—,n/a,evidence/web_live/c3_t2_my_learning*.txt,HO-25 — learner-only 3–4 days,P1 (scope)
+Settings,Settings hub,Category tabs,COMPLETE,OK,17 tiles,Tiles open,—,Yes,evidence/settings/,—,—
+Settings,Company Info,Company Information,BLOCKED,OK,"Logo, FY, details",Save BLOCKED,GET OK,Yes,evidence/settings/company_info_android.png,—,P2
+Settings,Company Info,Plan Details,MISSING,—,—,—,—,n/a,evidence/web_live/w12_company_plan.txt,HO-24 decision (after HO-18),P2 (scope)
+Settings,Depts & Designations,—,BLOCKED,OK,"3 departments (company-wide counts, HO-17)",Add / Edit / Delete BLOCKED,GET OK,Yes,evidence/settings/departments_android.png,—,P2
+Settings,Roles & Permissions,List + matrix,BLOCKED,OK,"6 roles, matrix",Edit / Active switch BLOCKED,GET OK,Yes,evidence/settings/roles_permissions_android.png,HO-10 a11y; HO-18 decision,P1
+Settings,Employee ID Format,—,BLOCKED,OK,"Prefix, format, preview",Save BLOCKED,GET OK,Yes,evidence/settings/employee_id_format_android.png,—,P3
+Settings,ID Card settings,—,BLOCKED,OK,"Reference PDF, logo, signature",Replace / Remove / Upload BLOCKED,GET OK,Yes,evidence/settings/id_card_settings_android.png,—,P3
+Settings,Leave Policy,Leave Types tab,BLOCKED,OK,8 types,Add / Edit menu BLOCKED,GET OK,Yes,evidence/settings/leave_policy_android.png,—,P2
+Settings,Leave Policy,Leave Policy (rules) tab,BLOCKED,OK,"Per-type rules, late limit",Save BLOCKED,GET OK,Yes (Task 86),evidence/t86/c03_lp_tab_policy,—,P2
+Settings,Leave Policy,Credit Rules tab,BLOCKED,OK,"Credit balances card; accrual editor replaced by a ""not available"" notice (Task 87)","Credit All Employees present (confirmation verified, cancelled) — execution BLOCKED (write)",Accrual rules: no backend,Yes (Task 86),evidence/t87/,Execute only with approval,P2
+Settings,Leave Policy,Carry Forward tab,BLOCKED,OK,"Year range, history","Preview enabled; Run disabled until successful preview (Task 88 guard); POSTs UNVERIFIED, not called",GET years + history OK on production; POST preview/run UNVERIFIED,"Yes (Task 86, Task 88 code 12)",evidence/t88/02_after_code12_run_disabled_hint.png,Backend to confirm POST preview/run contract; then remove guard (HO-37),P2
+Settings,Leave Policy,Monthly Leave Management tab,BLOCKED,OK,Import / manual entry / assignments panels,Import / entry BLOCKED,GET OK,Yes (Task 86),evidence/t86/c06_lp_monthly,—,P2
+Settings,Leave Policy,Import Opening Balances,BLOCKED,—,—,Import = write,—,No,—,—,P3
+Settings,Attendance Rules,—,BLOCKED,OK,"Shift, grace, break, weekly-off patterns",Save BLOCKED,GET OK,Yes,evidence/settings/attendance_rules_android.png,—,P2
+Settings,Holiday Calendar,—,BLOCKED,OK; 0 holidays,"Year, branch, categories",Add BLOCKED,GET OK,Yes,evidence/settings/holiday_calendar_android.png,—,P2
+Settings,Onboarding Fields,Personal Information tab,BLOCKED,OK,Field toggles,Toggles BLOCKED,GET OK,Yes,evidence/settings/onboarding_fields_android.png,—,P3
+Settings,Onboarding Fields,Education & Experience tab,BLOCKED,OK,Field toggles,Toggles BLOCKED,GET OK,Yes (Task 86),evidence/t86/c08_onb_education,—,P3
+Settings,Referral Rules,—,BLOCKED,OK,6 rules,Edit / Delete BLOCKED,GET OK,Yes,evidence/settings/referral_rules_android.png,—,P3
+Settings,Notice Period,—,BLOCKED,OK,Per-employee days,Save / Import BLOCKED,GET OK,Yes,evidence/settings/notice_period_android.png,—,P3
+Settings,Assessment Config,—,BLOCKED,OK,"Pass %, attempts, time limit",Edit BLOCKED,GET OK,Yes,evidence/settings/assessment_config_android.png,—,P3
+Settings,Approval Rules,—,BLOCKED,OK,"3 workflows, escalation",Edit BLOCKED,GET OK,Yes,evidence/settings/approval_rules_android.png,—,P2
+Settings,SMTP Settings,—,BLOCKED,OK,2 configs,Test / Set Active / Edit / Delete BLOCKED,GET OK,Yes,evidence/settings/smtp_settings_android.png,—,P3
+Settings,Email Templates,—,BLOCKED,OK,"Branding, 55 templates",Edit BLOCKED,GET OK,Yes,evidence/settings/email_templates_android.png,—,P3
+Settings,Notification Settings,—,BLOCKED,OK,Category toggles,Toggles BLOCKED,GET OK,Yes,evidence/settings/notification_settings_android.png,—,P3
+Settings,Audit Log,—,PARTIAL,OK,"Records; date format ""11 / 11 / 2026"" (HO-14)",Search / filter,GET OK,Yes,evidence/settings/audit_log_android.png,HO-14 date format,P3
+Settings,Assets (settings),—,BLOCKED,—,—,—,—,No,—,Assets module off for tenant,P3
+Reports,Reports,—,INTENTIONAL WEB-ONLY,—,—,—,—,n/a,—,Web page is ComingSoon; not in web nav,—
+Platform,Platform Admin,—,INTENTIONAL WEB-ONLY,—,—,—,—,n/a,—,Web-only by decision,—

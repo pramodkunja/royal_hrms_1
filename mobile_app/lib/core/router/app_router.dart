@@ -67,6 +67,11 @@ import '../../features/referrals/presentation/screens/referrals_screen.dart';
 import '../../features/email_log/presentation/screens/email_log_screen.dart';
 import '../../features/my_requests/presentation/screens/my_requests_screen.dart';
 import '../../features/contacts/presentation/screens/contact_matrix_screen.dart';
+import '../../features/training/data/models/training_models.dart';
+import '../../features/training/presentation/screens/my_course_screen.dart';
+import '../../features/training/presentation/screens/my_learning_screen.dart';
+import '../../features/training/presentation/screens/training_course_screen.dart';
+import '../../features/training/presentation/screens/training_screen.dart';
 
 // ─── Route path constants ─────────────────────────────────────────────────────
 
@@ -116,6 +121,8 @@ class AppRoutes {
   static const String referrals = '/dashboard/referrals';
   static const String myRequests = '/dashboard/my-requests';
   static const String contacts = '/dashboard/contacts';
+  static const String training = '/dashboard/training';
+  static const String myLearning = '/dashboard/my-learning';
   static const String profile = '/dashboard/profile';
   static const String reports = '/dashboard/reports';
   static const String settings = '/dashboard/settings';
@@ -627,6 +634,36 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.documents,
             pageBuilder: (_, state) =>
                 NoTransitionPage(key: state.pageKey, child: const DocumentsScreen()),
+          ),
+          // Training & Learning admin (training.view + module, see access_control).
+          GoRoute(
+            path: AppRoutes.training,
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: const TrainingScreen()),
+            routes: [
+              GoRoute(
+                path: ':courseId',
+                builder: (context, state) => TrainingCourseScreen(
+                  courseId: state.pathParameters['courseId']!,
+                  initial: state.extra is TrainingCourse ? state.extra as TrainingCourse : null,
+                ),
+              ),
+            ],
+          ),
+          // My Learning: every signed-in user (module 'training' only).
+          GoRoute(
+            path: AppRoutes.myLearning,
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: const MyLearningScreen()),
+            routes: [
+              GoRoute(
+                path: ':assignmentId',
+                builder: (context, state) => MyCourseScreen(
+                  assignmentId: state.pathParameters['assignmentId']!,
+                  initial: state.extra is MyTraining ? state.extra as MyTraining : null,
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: AppRoutes.faceIdRegistrations,

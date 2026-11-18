@@ -85,8 +85,7 @@ class DocumentsScreen extends ConsumerWidget {
               data: (_) {
                 if (filtered.isEmpty) {
                   return SliverToBoxAdapter(
-                    child: DocumentEmptyView(
-                        onUpload: canUpload ? () => _openUpload(context) : null),
+                    child: DocumentEmptyView(onUpload: canUpload ? () => _openUpload(context) : null),
                   );
                 }
                 return _DocumentGrid(
@@ -120,8 +119,7 @@ class DocumentsScreen extends ConsumerWidget {
     showDialog<void>(
       context: context,
       builder: (_) => Dialog(
-        insetPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 40),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 40),
         backgroundColor: Colors.transparent,
         elevation: 0,
         child: DocumentDetailDialog(document: doc),

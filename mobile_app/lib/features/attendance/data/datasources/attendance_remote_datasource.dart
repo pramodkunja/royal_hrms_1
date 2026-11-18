@@ -430,8 +430,9 @@ class AttendanceRemoteDataSource {
   /// GET /attendance/export/ — exactly one of [date] (one day; omitted means
   /// the server's today), [month] (`YYYY-MM`, the whole month) or
   /// [fromDate] + [toDate] (`YYYY-MM-DD`, both inclusive), plus the branch and
-  /// department filters, as web's attendanceExportParams sends them. The CSV
-  /// is built by the server and returned untouched.
+  /// department filters — or [employee] (an exact employee ID, web
+  /// "Single Employee") instead of them — as web's attendanceExportParams
+  /// sends them. The CSV is built by the server and returned untouched.
   Future<List<int>> exportCsv({
     String? date,
     String? month,
@@ -439,7 +440,9 @@ class AttendanceRemoteDataSource {
     String? toDate,
     String? branch,
     String? department,
+    String? employee,
   }) async {
+    final one = employee != null && employee.isNotEmpty;
     try {
       final res = await _dio.get(
         ApiConstants.attendanceExport,
@@ -451,8 +454,11 @@ class AttendanceRemoteDataSource {
             'to_date': toDate ?? '',
           } else if (date != null)
             'date': date,
-          if (branch != null && branch.isNotEmpty) 'branch': branch,
-          if (department != null && department.isNotEmpty) 'department': department,
+          // Web attendanceExportParams: one employee drops the branch /
+          // department filters so they can't hide that employee.
+          if (one) 'employee': employee,
+          if (!one && branch != null && branch.isNotEmpty) 'branch': branch,
+          if (!one && department != null && department.isNotEmpty) 'department': department,
         },
         options: Options(responseType: ResponseType.bytes),
       );
@@ -485,6 +491,21 @@ class AttendanceRemoteDataSource {
       }
       rethrow;
     }
+  }
+
+  /// Web AttendanceTab single-employee export search: GET /employees/
+  /// ?search=<q>&page_size=20 (the server scopes it to the caller), inactive
+  /// employees dropped (the export covers active employees), first 8 kept.
+  Future<List<ExportEmployeeOption>> searchExportEmployees(String query) async {
+    final res = await _dio.get(
+      ApiConstants.employees,
+      queryParameters: {'search': query, 'page_size': 20},
+    );
+    return _unwrapList(res.data)
+        .map(ExportEmployeeOption.fromJson)
+        .where((e) => e.employeeId.isNotEmpty && e.status != 'inactive')
+        .take(8)
+        .toList();
   }
 
   /// POST /attendance/import/ (multipart). Bulk mode sends only `file`;

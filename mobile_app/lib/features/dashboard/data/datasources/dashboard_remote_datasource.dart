@@ -53,40 +53,31 @@ class DashboardRemoteDataSource {
   Future<DashboardAnnouncement?> fetchSystemAdminAnnouncement() async {
     final res = await _dio.get(ApiConstants.dashboardSystemAdminAnnouncement);
     final data = _unwrap(res.data);
-    return data is Map<String, dynamic>
-        ? DashboardAnnouncement.fromJson(data)
-        : null;
+    return data is Map<String, dynamic> ? DashboardAnnouncement.fromJson(data) : null;
   }
 
   Future<PendingApprovals> fetchPendingApprovals() async {
-    final res =
-        await _dio.get(ApiConstants.dashboardSystemAdminPendingApprovals);
+    final res = await _dio.get(ApiConstants.dashboardSystemAdminPendingApprovals);
     return PendingApprovals.fromJson(_asMap(res.data));
   }
 
   Future<List<DeptHeadcount>> fetchSystemAdminDepartmentHeadcount() async {
-    final res =
-        await _dio.get(ApiConstants.dashboardSystemAdminDepartmentHeadcount);
+    final res = await _dio.get(ApiConstants.dashboardSystemAdminDepartmentHeadcount);
     return _asList(res.data, DeptHeadcount.fromJson);
   }
 
   Future<AdminEmployeeLifecycle> fetchSystemAdminEmployeeLifecycle() async {
-    final res =
-        await _dio.get(ApiConstants.dashboardSystemAdminEmployeeLifecycle);
+    final res = await _dio.get(ApiConstants.dashboardSystemAdminEmployeeLifecycle);
     return AdminEmployeeLifecycle.fromJson(_asMap(res.data));
   }
 
-  Future<List<DashboardBirthdayEmployee>>
-      fetchSystemAdminBirthdaysToday() async {
-    final res =
-        await _dio.get(ApiConstants.dashboardSystemAdminBirthdaysToday);
+  Future<List<DashboardBirthdayEmployee>> fetchSystemAdminBirthdaysToday() async {
+    final res = await _dio.get(ApiConstants.dashboardSystemAdminBirthdaysToday);
     return _asList(res.data, DashboardBirthdayEmployee.fromJson);
   }
 
-  Future<List<DashboardBirthdayEmployee>>
-      fetchSystemAdminBirthdaysUpcoming() async {
-    final res =
-        await _dio.get(ApiConstants.dashboardSystemAdminBirthdaysUpcoming);
+  Future<List<DashboardBirthdayEmployee>> fetchSystemAdminBirthdaysUpcoming() async {
+    final res = await _dio.get(ApiConstants.dashboardSystemAdminBirthdaysUpcoming);
     return _asList(res.data, DashboardBirthdayEmployee.fromJson);
   }
 
@@ -194,8 +185,7 @@ class DashboardRemoteDataSource {
     return EmployeeKpis.fromJson(_asMap(res.data));
   }
 
-  Future<EmployeeLeaveBalanceSummary> fetchEmployeeLeaveBalances(
-      {int? year}) async {
+  Future<EmployeeLeaveBalanceSummary> fetchEmployeeLeaveBalances({int? year}) async {
     final res = await _dio.get(
       ApiConstants.dashboardEmployeeLeaveBalances,
       queryParameters: year != null ? {'year': year} : null,
@@ -237,8 +227,6 @@ class DashboardRemoteDataSource {
   Future<DashboardAnnouncement?> fetchSharedAnnouncement() async {
     final res = await _dio.get(ApiConstants.dashboardAnnouncement);
     final data = _unwrap(res.data);
-    return data is Map<String, dynamic>
-        ? DashboardAnnouncement.fromJson(data)
-        : null;
+    return data is Map<String, dynamic> ? DashboardAnnouncement.fromJson(data) : null;
   }
 }

@@ -368,7 +368,8 @@ class _AssignDialogState extends State<AssignDialog> {
                             onPressed: (_assigning || _selectedIds.isEmpty) ? null : _submit,
                             icon: _assigning
                                 ? const SizedBox(
-                                    width: 16, height: 16,
+                                    width: 16,
+                                    height: 16,
                                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                                 : const Icon(Icons.person_add_alt_1_outlined, size: 18),
                             label: Text(

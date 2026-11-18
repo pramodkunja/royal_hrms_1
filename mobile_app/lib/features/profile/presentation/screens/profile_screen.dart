@@ -48,10 +48,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   void dispose() {
     for (final c in [
-      _phoneCtrl, _currentAddressCtrl, _permanentAddressCtrl,
-      _emergencyNameCtrl, _emergencyRelationshipCtrl,
-      _emergencyPhoneCtrl, _emergencyEmailCtrl,
-      _curPassCtrl, _newPassCtrl, _cfmPassCtrl,
+      _phoneCtrl,
+      _currentAddressCtrl,
+      _permanentAddressCtrl,
+      _emergencyNameCtrl,
+      _emergencyRelationshipCtrl,
+      _emergencyPhoneCtrl,
+      _emergencyEmailCtrl,
+      _curPassCtrl,
+      _newPassCtrl,
+      _cfmPassCtrl,
     ]) {
       c.dispose();
     }
@@ -139,8 +145,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       return;
     }
     if (newPass == oldPass) {
-      _showSnack('New password must be different from the current password.',
-          isError: true);
+      _showSnack('New password must be different from the current password.', isError: true);
       return;
     }
 
@@ -298,10 +303,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             label: Text(_saving ? 'Saving…' : 'Save Changes'),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primary,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              textStyle: AppTextStyles.bodySmall
-                  .copyWith(fontWeight: FontWeight.w600),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              textStyle: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
         ],

@@ -24,8 +24,7 @@ class SystemAdminKpis {
     return SystemAdminKpis(
       totalEmployees: (json['total_employees'] as num? ?? 0).toInt(),
       pendingApprovals: (json['pending_approvals'] as num? ?? 0).toInt(),
-      employeesOnboarding:
-          (json['employees_onboarding'] as num? ?? 0).toInt(),
+      employeesOnboarding: (json['employees_onboarding'] as num? ?? 0).toInt(),
       activeBranches: (json['active_branches'] as num? ?? 0).toInt(),
       apiStatus: json['api_status'] as bool? ?? false,
       databaseStatus: json['database_status'] as bool? ?? false,
@@ -141,10 +140,7 @@ class AdminLifecycleGroup {
     final list = json['employees'] as List<dynamic>? ?? [];
     return AdminLifecycleGroup(
       count: (json['count'] as num? ?? 0).toInt(),
-      employees: list
-          .whereType<Map<String, dynamic>>()
-          .map(AdminLifecycleEmployee.fromJson)
-          .toList(),
+      employees: list.whereType<Map<String, dynamic>>().map(AdminLifecycleEmployee.fromJson).toList(),
     );
   }
 }
@@ -164,8 +160,7 @@ class AdminEmployeeLifecycle {
     return AdminEmployeeLifecycle(
       newJoiners: AdminLifecycleGroup.fromJson(json['new_joiners']),
       noticePeriod: AdminLifecycleGroup.fromJson(json['notice_period']),
-      workAnniversaries:
-          AdminLifecycleGroup.fromJson(json['work_anniversaries']),
+      workAnniversaries: AdminLifecycleGroup.fromJson(json['work_anniversaries']),
     );
   }
 }
@@ -224,10 +219,7 @@ class AuditLogsResponse {
       count: (json['count'] as num? ?? 0).toInt(),
       limit: (json['limit'] as num? ?? 20).toInt(),
       offset: (json['offset'] as num? ?? 0).toInt(),
-      results: list
-          .whereType<Map<String, dynamic>>()
-          .map(AuditLogEntry.fromJson)
-          .toList(),
+      results: list.whereType<Map<String, dynamic>>().map(AuditLogEntry.fromJson).toList(),
     );
   }
 }

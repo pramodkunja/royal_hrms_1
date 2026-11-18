@@ -18,11 +18,9 @@ final documentRepositoryProvider = Provider<DocumentRepository>((ref) {
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 final documentStatsProvider =
-    AsyncNotifierProvider.autoDispose<DocumentStatsNotifier, DocumentStatsEntity>(
-        DocumentStatsNotifier.new);
+    AsyncNotifierProvider.autoDispose<DocumentStatsNotifier, DocumentStatsEntity>(DocumentStatsNotifier.new);
 
-class DocumentStatsNotifier
-    extends AutoDisposeAsyncNotifier<DocumentStatsEntity> {
+class DocumentStatsNotifier extends AutoDisposeAsyncNotifier<DocumentStatsEntity> {
   DocumentRepository get _repo => ref.read(documentRepositoryProvider);
 
   @override
@@ -37,11 +35,9 @@ class DocumentStatsNotifier
 // ── Document list ─────────────────────────────────────────────────────────────
 
 final documentListProvider =
-    AsyncNotifierProvider.autoDispose<DocumentListNotifier, List<DocumentEntity>>(
-        DocumentListNotifier.new);
+    AsyncNotifierProvider.autoDispose<DocumentListNotifier, List<DocumentEntity>>(DocumentListNotifier.new);
 
-class DocumentListNotifier
-    extends AutoDisposeAsyncNotifier<List<DocumentEntity>> {
+class DocumentListNotifier extends AutoDisposeAsyncNotifier<List<DocumentEntity>> {
   DocumentRepository get _repo => ref.read(documentRepositoryProvider);
 
   @override
@@ -167,16 +163,13 @@ final policyAckActionsProvider = Provider<PolicyAckActions>((ref) => PolicyAckAc
 
 // ── Filter / search state ─────────────────────────────────────────────────────
 
-final documentFilterProvider =
-    StateProvider.autoDispose<String>((ref) => 'all');
+final documentFilterProvider = StateProvider.autoDispose<String>((ref) => 'all');
 
-final documentSearchProvider =
-    StateProvider.autoDispose<String>((ref) => '');
+final documentSearchProvider = StateProvider.autoDispose<String>((ref) => '');
 
 // ── Derived filtered list ─────────────────────────────────────────────────────
 
-final filteredDocumentsProvider =
-    Provider.autoDispose<List<DocumentEntity>>((ref) {
+final filteredDocumentsProvider = Provider.autoDispose<List<DocumentEntity>>((ref) {
   final allDocs = ref.watch(documentListProvider).valueOrNull ?? [];
   final filter = ref.watch(documentFilterProvider);
   final search = ref.watch(documentSearchProvider).toLowerCase().trim();

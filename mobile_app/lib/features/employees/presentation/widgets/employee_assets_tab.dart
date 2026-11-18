@@ -28,8 +28,7 @@ final employeeAssetsProvider = FutureProvider.autoDispose.family<EmployeeAssets,
 /// Web usePermission("assets.edit"): superuser flag or the permission. (The
 /// login payload's is_superuser already includes settings.edit holders —
 /// backend LoginView; the API checks assets.edit itself either way.)
-bool canEditAssets(UserEntity? user) =>
-    user != null && (user.isSuperuser || user.permissions.contains('assets.edit'));
+bool canEditAssets(UserEntity? user) => user != null && (user.isSuperuser || user.permissions.contains('assets.edit'));
 
 const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -123,8 +122,7 @@ class _EmployeeAssetsTabState extends ConsumerState<EmployeeAssetsTab> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
         children: [
-          if (_success != null)
-            _Banner(key: const Key('assets-success'), text: _success!, success: true),
+          if (_success != null) _Banner(key: const Key('assets-success'), text: _success!, success: true),
           _Card(
             title: 'Assigned Assets',
             action: canEdit
@@ -137,7 +135,8 @@ class _EmployeeAssetsTabState extends ConsumerState<EmployeeAssetsTab> {
                   )
                 : null,
             child: loading
-                ? const _Empty(key: Key('assets-loading'), icon: Icons.hourglass_empty, title: 'Loading assets…', busy: true)
+                ? const _Empty(
+                    key: Key('assets-loading'), icon: Icons.hourglass_empty, title: 'Loading assets…', busy: true)
                 : error != null
                     ? Column(key: const Key('assets-error'), children: [
                         Text(userFriendlyMessage(error), style: AppTextStyles.caption.copyWith(color: AppColors.error)),
@@ -168,7 +167,8 @@ class _EmployeeAssetsTabState extends ConsumerState<EmployeeAssetsTab> {
             child: loading || error != null
                 ? const SizedBox.shrink()
                 : (data?.history ?? const []).isEmpty
-                    ? const _Empty(key: Key('assets-history-empty'), icon: Icons.history, title: 'No returned assets yet')
+                    ? const _Empty(
+                        key: Key('assets-history-empty'), icon: Icons.history, title: 'No returned assets yet')
                     : Column(children: [for (final a in data!.history) _HistoryRow(a: a)]),
           ),
         ],
@@ -412,7 +412,8 @@ class _SheetFrame extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 8, 0),
             child: Row(children: [
-              Expanded(child: Text(title, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, fontSize: 16))),
+              Expanded(
+                  child: Text(title, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, fontSize: 16))),
               IconButton(
                 tooltip: 'Close',
                 icon: const Icon(Icons.close),

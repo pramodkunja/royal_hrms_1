@@ -2,7 +2,9 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../shared/models/bulk_import_result.dart';
-import '../../../onboarding/data/models/onboarding_config_models.dart' show CustomFileValue, onboardingUploadMime;
+import '../../../onboarding/data/models/onboarding_config_models.dart'
+    show CustomFileValue, OnboardingConfig, onboardingUploadMime;
+import '../../../settings/data/models/onboarding_field_config_model.dart' show DocumentTypeConfigModel;
 import '../models/employee_id_card_model.dart';
 import '../models/employee_model.dart';
 import '../models/promotion_record_model.dart';
@@ -18,6 +20,7 @@ const kActiveApprovalWorkflows = {'leave', 'expense', 'attendance_correction'};
 class EmployeeApprovalMatrixRow {
   final String workflowType;
   final String workflowLabel;
+
   /// Role ids from the global rule (backend sends integers or null).
   final int? l1ApproverRole;
   final String l1ApproverLabel;
@@ -207,6 +210,13 @@ class EmployeesRemoteDataSource {
     final body = res.data;
     final data = body is Map && body['data'] is Map ? body['data'] : body;
     return IdCardData.fromJson((data as Map).cast<String, dynamic>());
+  }
+
+  /// GET /onboarding/document-type-config/ — every configured document type
+  /// (visible or not); the profile's Documents slots (web page.tsx:81-105).
+  Future<List<DocumentTypeConfigModel>> fetchDocumentTypes() async {
+    final res = await _dio.get(ApiConstants.onboardingDocumentTypeConfig);
+    return OnboardingConfig.parseDocumentTypes(_unwrap(res.data));
   }
 
   Future<EmployeeModel> fetchEmployee(String employeeId) async {

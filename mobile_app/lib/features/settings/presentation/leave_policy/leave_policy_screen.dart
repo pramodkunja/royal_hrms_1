@@ -46,9 +46,9 @@ Tab _iconTab(IconData icon, String label) => Tab(
 //   eligibility, documentation, etc.) for one leave type at a time, picked
 //   via a dropdown — see LeavePolicyRulesTab, matching web's
 //   LeavePoliciesTab.tsx.
-// - "Credit Rules" hosts the real "Credit Annual Leave" action plus a
-//   local-only accrual-rules preview (see CreditRulesTab doc comment for why
-//   that part isn't backend-connected).
+// - "Credit Rules" hosts the real "Credit Annual Leave" action and a
+//   read-only "accrual rules not available" notice (HO-35: the old local-only
+//   accrual editor was removed — see CreditRulesTab doc comment).
 // - "Carry Forward" (system_admin/hr_admin/hr only, same role gate as web)
 //   mirrors web's CarryForwardTab.tsx — see LeaveCarryForwardTab's doc
 //   comment for why every action there currently 404s (no backend routes
@@ -140,16 +140,7 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
-        2 => FloatingActionButton.extended(
-            onPressed: () => _creditRulesKey.currentState?.openAdd(),
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            icon: const Icon(Icons.add),
-            label: const Text('Add Rule',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          ),
+        // No "Add Rule" on Credit Rules: accrual rules have no backend (HO-35).
         _ => null,
       },
       body: TabBarView(

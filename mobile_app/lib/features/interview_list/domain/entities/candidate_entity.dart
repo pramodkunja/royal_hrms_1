@@ -34,8 +34,8 @@ class CandidateEntity {
   final String positionApplied;
   final int? branchId;
   final String branchName;
-  final String interviewDate;   // yyyy-MM-dd or empty
-  final String interviewMode;   // in_person | phone | video_call
+  final String interviewDate; // yyyy-MM-dd or empty
+  final String interviewMode; // in_person | phone | video_call
   // Web Candidate interview_time ("HH:MM[:SS]" or empty), meeting_link
   // (video call URL or empty), interviewer (User uuid FK) + interviewer_name.
   final String interviewTime;
@@ -74,10 +74,10 @@ class CandidateEntity {
   });
 
   // Convenience
-  bool get isConverted     => status == 'converted';
-  bool get isOfferSent     => status == 'offer_sent';
-  bool get isSelected      => status == 'selected';
-  bool get isRejected      => status == 'rejected';
-  bool get canSendLogin    => isSelected && !portalCredentialsSent;
-  bool get canResendLogin  => isOfferSent && portalCredentialsSent;
+  bool get isConverted => status == 'converted';
+  bool get isOfferSent => status == 'offer_sent';
+  bool get isSelected => status == 'selected';
+  bool get isRejected => status == 'rejected';
+  bool get canSendLogin => isSelected && !portalCredentialsSent;
+  bool get canResendLogin => isOfferSent && portalCredentialsSent;
 }

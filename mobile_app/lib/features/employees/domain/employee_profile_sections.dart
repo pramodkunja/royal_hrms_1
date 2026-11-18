@@ -57,7 +57,8 @@ const _accountTypes = [ProfileFieldOption('savings', 'Savings'), ProfileFieldOpt
 
 /// [step] is web SECTION_TO_STEP (Settings → Onboarding Fields); null for a
 /// section web doesn't map (EPF / Statutory).
-final Map<EmployeeProfileSection, ({String title, int? step, List<ProfileFieldDef> fields})> kEmployeeProfileSections = {
+final Map<EmployeeProfileSection, ({String title, int? step, List<ProfileFieldDef> fields})> kEmployeeProfileSections =
+    {
   EmployeeProfileSection.education: (
     title: 'Education & Experience',
     step: 1,
@@ -201,10 +202,96 @@ bool isProfileFieldVisible(
   return entry?.visible ?? true;
 }
 
+/// Web CAMEL_TO_SNAKE for the Personal section (onboarding step 0): the only
+/// built-in Personal fields Settings → Onboarding Fields can hide. Identity
+/// and employment fields (ID, name, login email, phone, joining date,
+/// department, designation, role, branch, approvers, notice period) always
+/// show.
+const kPersonalConfigurableFields = {
+  'date_of_birth', 'gender', 'marital_status', 'father_name', 'blood_group', //
+  'current_address', 'permanent_address',
+};
+
+/// Web applyFieldConfig for step 0 (the Personal section).
+bool isPersonalFieldVisible(String key, Map<int, List<OnboardingFieldConfigModel>>? config) {
+  if (!kPersonalConfigurableFields.contains(key)) return true;
+  final entry = (config?[0] ?? const <OnboardingFieldConfigModel>[]).where((c) => c.fieldKey == key).firstOrNull;
+  return entry?.visible ?? true;
+}
+
 /// The label shown for a select value (e.g. "savings" → "Savings"); a value
 /// that isn't one of the options (older/imported data) is shown as stored.
 String profileFieldDisplay(ProfileFieldDef f, String value) {
   if (value.isEmpty) return '—';
   if (f.kind != ProfileFieldKind.select) return value;
   return f.options.where((o) => o.value == value).firstOrNull?.label ?? value;
+}
+
+// ── Documents slots (web employees/_data.ts:233-245, applyDocumentTypeConfig
+// :280-288, [id]/page.tsx buildDocEntries:81-105) ───────────────────────────
+
+/// One expected document type on the profile, with the employee's upload
+/// for it (web: the first upload of that type), if any.
+class EmployeeDocSlot {
+  const EmployeeDocSlot({required this.typeKey, required this.label, required this.required, this.doc});
+  final String typeKey;
+  final String label;
+  final bool required;
+  final EmployeeDocumentEntity? doc;
+}
+
+/// Web's built-in list, used until / unless the type config loads.
+const kBuiltInEmployeeDocSlots = [
+  (typeKey: 'pan_card', label: 'PAN Card', required: true),
+  (typeKey: 'aadhaar_card', label: 'Aadhaar Card', required: true),
+  (typeKey: 'degree_certificate', label: 'Degree Certificate', required: false),
+  (typeKey: 'experience_letter', label: 'Experience Letter', required: false),
+  (typeKey: 'passport_photo', label: 'Passport Photo', required: true),
+  (typeKey: 'cancelled_cheque', label: 'Cancelled Cheque', required: true),
+];
+
+/// The configured visible types in `order` (or the built-in list when the
+/// config is empty), each merged with the employee's first upload of it.
+List<EmployeeDocSlot> buildEmployeeDocSlots(List<DocumentTypeConfigModel> config, List<EmployeeDocumentEntity> docs) {
+  final types = config.isEmpty
+      ? kBuiltInEmployeeDocSlots
+      : ([...config.where((t) => t.visible)]..sort((a, b) => a.order.compareTo(b.order)))
+          .map((t) => (typeKey: t.typeKey, label: t.label, required: t.required))
+          .toList();
+  return [
+    for (final t in types)
+      EmployeeDocSlot(
+        typeKey: t.typeKey,
+        label: t.label,
+        required: t.required,
+        doc: docs.where((d) => d.documentType == t.typeKey).firstOrNull,
+      ),
+  ];
+}
+
+/// Uploads no slot shows (a type since hidden / removed, or a second file
+/// of a type). Web leaves them out; mobile still lists them so they stay
+/// reachable (deliberate difference).
+List<EmployeeDocumentEntity> unslottedEmployeeDocs(List<EmployeeDocSlot> slots, List<EmployeeDocumentEntity> docs) {
+  final shown = {
+    for (final s in slots)
+      if (s.doc != null) s.doc!.id
+  };
+  return docs.where((d) => !shown.contains(d.id)).toList();
+}
+
+/// Web fmtBytes.
+String webFileSize(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
+  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+}
+
+/// Web toLocaleDateString("en-US", {month: "short", day: "numeric", year:
+/// "numeric"}): "Nov 18, 2026". Unparseable → as stored.
+String webShortDate(String raw) {
+  final d = DateTime.tryParse(raw)?.toLocal();
+  if (d == null) return raw;
+  const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return '${m[d.month - 1]} ${d.day}, ${d.year}';
 }

@@ -32,13 +32,10 @@ class EmployeeKpis {
       workingDays: (json['working_days'] as num? ?? 0).toInt(),
       absentDays: (json['absent_days'] as num? ?? 0).toInt(),
       pendingActionItems: (json['pending_action_items'] as num? ?? 0).toInt(),
-      pendingExpenseClaims:
-          (json['pending_expense_claims'] as num? ?? 0).toInt(),
+      pendingExpenseClaims: (json['pending_expense_claims'] as num? ?? 0).toInt(),
       pendingDocuments: (json['pending_documents'] as num? ?? 0).toInt(),
       clockedIn: json['clocked_in'] as bool? ?? false,
-      todayAttendance: today is Map<String, dynamic>
-          ? TodayAttendanceSnapshot.fromJson(today)
-          : null,
+      todayAttendance: today is Map<String, dynamic> ? TodayAttendanceSnapshot.fromJson(today) : null,
     );
   }
 }
@@ -59,10 +56,7 @@ class EmployeeLeaveBalanceSummary {
     final list = json['balances'] as List<dynamic>? ?? [];
     return EmployeeLeaveBalanceSummary(
       year: (json['year'] as num? ?? 0).toInt(),
-      balances: list
-          .whereType<Map<String, dynamic>>()
-          .map(EmployeeLeaveBalance.fromJson)
-          .toList(),
+      balances: list.whereType<Map<String, dynamic>>().map(EmployeeLeaveBalance.fromJson).toList(),
       lopDays: (json['lop_days'] as num? ?? 0).toDouble(),
     );
   }
@@ -124,15 +118,12 @@ class EmployeeLeaveBalance {
   }
 
   /// Web typesWithBreakdown: something to show month by month.
-  bool get hasMonthlyBreakdown =>
-      (statement?.months.isNotEmpty ?? false) || (monthly?.months.isNotEmpty ?? false);
+  bool get hasMonthlyBreakdown => (statement?.months.isNotEmpty ?? false) || (monthly?.months.isNotEmpty ?? false);
 
   /// Web scheduleLabel.
   String get scheduleLabel {
     if (creditSchedule != 'monthly') return 'Credited annually';
-    return monthlyCarryForward == false
-        ? 'Credited monthly · no carry forward'
-        : 'Credited monthly · carries forward';
+    return monthlyCarryForward == false ? 'Credited monthly · no carry forward' : 'Credited monthly · carries forward';
   }
 }
 
@@ -181,8 +172,7 @@ class EmployeeAttendanceSummary {
       leaveDays: (json['leave_days'] as num? ?? 0).toInt(),
       workingDays: (json['working_days'] as num? ?? 0).toInt(),
       avgHoursPerDay: (json['avg_hours_per_day'] as num? ?? 0).toDouble(),
-      attendancePercentage:
-          (json['attendance_percentage'] as num? ?? 0).toDouble(),
+      attendancePercentage: (json['attendance_percentage'] as num? ?? 0).toDouble(),
       otHours: json['ot_hours']?.toString() ?? '0h',
     );
   }
@@ -255,11 +245,13 @@ class ActionItemsResponse {
   const ActionItemsResponse({required this.total, required this.actionItems});
 
   factory ActionItemsResponse.fromJson(Map<String, dynamic> json) {
-    final list = json['action_items'] as List<dynamic>? ?? [];
+    // Production (EmployeeActionItemsView → paginated_data): `results` +
+    // `count` (+ page / page_size / total_pages). The older `action_items` /
+    // `total` names are still accepted.
+    final list = (json['results'] ?? json['action_items']) as List<dynamic>? ?? [];
     return ActionItemsResponse(
-      total: (json['total'] as num? ?? 0).toInt(),
-      actionItems:
-          list.whereType<Map<String, dynamic>>().map(ActionItem.fromJson).toList(),
+      total: ((json['count'] ?? json['total']) as num? ?? 0).toInt(),
+      actionItems: list.whereType<Map<String, dynamic>>().map(ActionItem.fromJson).toList(),
     );
   }
 }
@@ -306,13 +298,12 @@ class RecentRequestsResponse {
   const RecentRequestsResponse({required this.total, required this.requests});
 
   factory RecentRequestsResponse.fromJson(Map<String, dynamic> json) {
-    final list = json['requests'] as List<dynamic>? ?? [];
+    // Production (EmployeeRecentRequestsView → paginated_data): `results` +
+    // `count`; the older `requests` / `total` names are still accepted.
+    final list = (json['results'] ?? json['requests']) as List<dynamic>? ?? [];
     return RecentRequestsResponse(
-      total: (json['total'] as num? ?? 0).toInt(),
-      requests: list
-          .whereType<Map<String, dynamic>>()
-          .map(RecentRequest.fromJson)
-          .toList(),
+      total: ((json['count'] ?? json['total']) as num? ?? 0).toInt(),
+      requests: list.whereType<Map<String, dynamic>>().map(RecentRequest.fromJson).toList(),
     );
   }
 }

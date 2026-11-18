@@ -56,8 +56,7 @@ class DocumentStatsModel extends DocumentStatsEntity {
   });
 
   factory DocumentStatsModel.fromJson(Map<String, dynamic> json) {
-    final byCategory =
-        json['by_category'] as Map<String, dynamic>? ?? {};
+    final byCategory = json['by_category'] as Map<String, dynamic>? ?? {};
     return DocumentStatsModel(
       total: json['total'] as int? ?? 0,
       policy: byCategory['policy'] as int? ?? 0,

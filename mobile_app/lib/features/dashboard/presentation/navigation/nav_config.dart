@@ -41,32 +41,92 @@ final class NavItem extends NavEntry {
 
 const kAllNav = <NavEntry>[
   NavSection('Main'),
-  NavItem(id: 'dashboard',        icon: Icons.dashboard_outlined,              label: 'Dashboard',        path: '/dashboard',                  permission: null),
+  NavItem(id: 'dashboard', icon: Icons.dashboard_outlined, label: 'Dashboard', path: '/dashboard', permission: null),
   // permission: null, matching web's navConfig.ts — every signed-in employee
   // reads the announcements targeted at them (the backend filters by
   // audience); posting/editing stay gated by announcements.create/edit/delete.
-  NavItem(id: 'announcements',    icon: Icons.campaign_outlined,               label: 'Announcements',    path: '/dashboard/announcements',    permission: null),
+  NavItem(
+      id: 'announcements',
+      icon: Icons.campaign_outlined,
+      label: 'Announcements',
+      path: '/dashboard/announcements',
+      permission: null),
 
   NavSection('Recruitment'),
-  NavItem(id: 'interview-list',   icon: Icons.people_outline,                  label: 'Interview List',   path: '/dashboard/interview-list',   permission: 'recruitment.view'),
-  NavItem(id: 'candidate-review', icon: Icons.how_to_reg_outlined,             label: 'Review & Onboarding', path: '/dashboard/candidate-review', permission: 'recruitment.view'),
-  NavItem(id: 'assessments',      icon: Icons.assignment_outlined,             label: 'Assessments',      path: '/dashboard/assessments',      permission: 'assessments.view'),
-  NavItem(id: 'email-logs',       icon: Icons.mail_outline,                    label: 'Email Logs',       path: '/dashboard/email-logs',       permission: 'recruitment.view'),
+  NavItem(
+      id: 'interview-list',
+      icon: Icons.people_outline,
+      label: 'Interview List',
+      path: '/dashboard/interview-list',
+      permission: 'recruitment.view'),
+  NavItem(
+      id: 'candidate-review',
+      icon: Icons.how_to_reg_outlined,
+      label: 'Review & Onboarding',
+      path: '/dashboard/candidate-review',
+      permission: 'recruitment.view'),
+  NavItem(
+      id: 'assessments',
+      icon: Icons.assignment_outlined,
+      label: 'Assessments',
+      path: '/dashboard/assessments',
+      permission: 'assessments.view'),
+  NavItem(
+      id: 'email-logs',
+      icon: Icons.mail_outline,
+      label: 'Email Logs',
+      path: '/dashboard/email-logs',
+      permission: 'recruitment.view'),
 
   NavSection('Workforce'),
-  NavItem(id: 'employees',        icon: Icons.badge_outlined,                  label: 'Employees',        path: '/dashboard/employees',        permission: 'employees.view'),
-  NavItem(id: 'org-chart',        icon: Icons.account_tree_outlined,           label: 'Org Chart',        path: '/dashboard/org-chart',        permission: 'org_chart.view'),
-  NavItem(id: 'branches',         icon: Icons.business_outlined,               label: 'Branches',         path: '/dashboard/branches',         permission: 'branches.view'),
+  NavItem(
+      id: 'employees',
+      icon: Icons.badge_outlined,
+      label: 'Employees',
+      path: '/dashboard/employees',
+      permission: 'employees.view'),
+  NavItem(
+      id: 'org-chart',
+      icon: Icons.account_tree_outlined,
+      label: 'Org Chart',
+      path: '/dashboard/org-chart',
+      permission: 'org_chart.view'),
+  NavItem(
+      id: 'branches',
+      icon: Icons.business_outlined,
+      label: 'Branches',
+      path: '/dashboard/branches',
+      permission: 'branches.view'),
 
   NavSection('Time & Pay'),
   // The team/HR attendance screen — 'attendance.create', matching web's
   // navConfig.ts (it replaces the old role-name exclusion of 'employee'; the
   // default employee role no longer holds attendance.view/create, backend
   // migrations 0029/0042). Everyone's own attendance is 'My Attendance'.
-  NavItem(id: 'attendance',       icon: Icons.access_time_outlined,            label: 'Attendance',       path: '/dashboard/attendance',       anyOfPermissions: ['attendance.edit', 'settings.edit']),
-  NavItem(id: 'leave',            icon: Icons.beach_access_outlined,           label: 'Leave Management', path: '/dashboard/leave',            permission: 'leave.view'),
-  NavItem(id: 'wfh',              icon: Icons.home_work_outlined,              label: 'Work From Home',   path: '/dashboard/wfh',              permission: 'wfh.view'),
-  NavItem(id: 'expenses',         icon: Icons.account_balance_wallet_outlined, label: 'Expenses',         path: '/dashboard/expenses',         permission: 'expenses.view'),
+  NavItem(
+      id: 'attendance',
+      icon: Icons.access_time_outlined,
+      label: 'Attendance',
+      path: '/dashboard/attendance',
+      anyOfPermissions: ['attendance.edit', 'settings.edit']),
+  NavItem(
+      id: 'leave',
+      icon: Icons.beach_access_outlined,
+      label: 'Leave Management',
+      path: '/dashboard/leave',
+      permission: 'leave.view'),
+  NavItem(
+      id: 'wfh',
+      icon: Icons.home_work_outlined,
+      label: 'Work From Home',
+      path: '/dashboard/wfh',
+      permission: 'wfh.view'),
+  NavItem(
+      id: 'expenses',
+      icon: Icons.account_balance_wallet_outlined,
+      label: 'Expenses',
+      path: '/dashboard/expenses',
+      permission: 'expenses.view'),
 
   NavSection('HR Ops'),
   // Backend's approval endpoints authorize on 'leave.approve' OR 'expenses.approve'
@@ -78,7 +138,12 @@ const kAllNav = <NavEntry>[
   // on web, HR roles holding these permissions see Approvals too.
   // separation.approve: separation requests are part of the same inbox
   // (web approvals/page.tsx gate).
-  NavItem(id: 'approvals',        icon: Icons.checklist_outlined,              label: 'Approvals',        path: '/dashboard/approvals',        anyOfPermissions: ['leave.approve', 'expenses.approve', 'wfh.approve', 'separation.approve']),
+  NavItem(
+      id: 'approvals',
+      icon: Icons.checklist_outlined,
+      label: 'Approvals',
+      path: '/dashboard/approvals',
+      anyOfPermissions: ['leave.approve', 'expenses.approve', 'wfh.approve', 'separation.approve']),
   // permission: null, matching web's navConfig.ts exactly — every employee
   // can create and view their own separation request, not just HR/managers
   // (the backend's separation endpoints only require IsAuthenticated for
@@ -86,35 +151,114 @@ const kAllNav = <NavEntry>[
   // approving/managing someone else's request). This item used to be gated
   // on 'employees.view' (an HR/manager-only permission), which incorrectly
   // hid the entire self-service flow from regular employees.
-  NavItem(id: 'separation',       icon: Icons.exit_to_app_outlined,            label: 'Separation & Exit', path: '/dashboard/separation',       permission: null),
-  NavItem(id: 'documents',        icon: Icons.folder_outlined,                 label: 'Document Center',  path: '/dashboard/documents',        permission: 'documents.view'),
+  NavItem(
+      id: 'separation',
+      icon: Icons.exit_to_app_outlined,
+      label: 'Separation & Exit',
+      path: '/dashboard/separation',
+      permission: null),
+  NavItem(
+      id: 'documents',
+      icon: Icons.folder_outlined,
+      label: 'Document Center',
+      path: '/dashboard/documents',
+      permission: 'documents.view'),
+  // Web navConfig.ts "training" (HR Ops): training.view, module 'training'.
+  NavItem(
+      id: 'training',
+      icon: Icons.school_outlined,
+      label: 'Training & Learning',
+      path: '/dashboard/training',
+      permission: 'training.view'),
   // Backend also accepts settings.edit as a superset of this permission
   // (see apps/attendance/views/face_registration.py::_has_perm) — settings.edit
   // holders already see everything via the 'settings' item below, so this
   // nav entry only needs its own specific permission.
-  NavItem(id: 'face-id-registrations', icon: Icons.face_outlined,             label: 'Face ID Registrations', path: '/dashboard/face-id-registrations', permission: 'facial_recognition.approve'),
+  NavItem(
+      id: 'face-id-registrations',
+      icon: Icons.face_outlined,
+      label: 'Face ID Registrations',
+      path: '/dashboard/face-id-registrations',
+      permission: 'facial_recognition.approve'),
 
   NavSection('My'),
-  NavItem(id: 'my-attendance',    icon: Icons.fingerprint,                     label: 'My Attendance',    path: '/dashboard/my-attendance',    permission: null),
+  NavItem(
+      id: 'my-attendance',
+      icon: Icons.fingerprint,
+      label: 'My Attendance',
+      path: '/dashboard/my-attendance',
+      permission: null),
   // permission: null, matching my-attendance above and web's navConfig.ts
   // exactly — the backend's MyPayslipsView only requires being authenticated
   // plus the 'payroll.view_own' permission it checks itself server-side
   // (seeded for every role), not a client-side nav-visibility gate.
-  NavItem(id: 'my-payslip',       icon: Icons.receipt_long_outlined,           label: 'My Payslips',      path: '/dashboard/my-payslip',       permission: null),
-  NavItem(id: 'my-assessments',   icon: Icons.assignment_turned_in_outlined,   label: 'My Assessments',   path: '/dashboard/my-assessments',   permission: null),
-  NavItem(id: 'referrals',        icon: Icons.person_add_alt_1_outlined,       label: 'My Referrals',     path: '/dashboard/referrals',        permission: null),
-  NavItem(id: 'my-requests',      icon: Icons.inbox_outlined,                  label: 'My Requests',      path: '/dashboard/my-requests',      permission: null),
+  NavItem(
+      id: 'my-payslip',
+      icon: Icons.receipt_long_outlined,
+      label: 'My Payslips',
+      path: '/dashboard/my-payslip',
+      permission: null),
+  NavItem(
+      id: 'my-assessments',
+      icon: Icons.assignment_turned_in_outlined,
+      label: 'My Assessments',
+      path: '/dashboard/my-assessments',
+      permission: null),
+  // Web navConfig.ts "my-learning": every signed-in employee (own assignments), module 'training'.
+  NavItem(
+      id: 'my-learning',
+      icon: Icons.menu_book_outlined,
+      label: 'My Learning',
+      path: '/dashboard/my-learning',
+      permission: null),
+  NavItem(
+      id: 'referrals',
+      icon: Icons.person_add_alt_1_outlined,
+      label: 'My Referrals',
+      path: '/dashboard/referrals',
+      permission: null),
+  NavItem(
+      id: 'my-requests',
+      icon: Icons.inbox_outlined,
+      label: 'My Requests',
+      path: '/dashboard/my-requests',
+      permission: null),
   // Every signed-in employee (web navConfig "contacts"): who to contact for HR matters.
-  NavItem(id: 'contacts',         icon: Icons.contact_phone_outlined,          label: 'Contact Matrix',   path: '/dashboard/contacts',         permission: null),
-  NavItem(id: 'profile',          icon: Icons.account_circle_outlined,         label: 'My Profile',       path: '/dashboard/profile',          permission: null),
+  NavItem(
+      id: 'contacts',
+      icon: Icons.contact_phone_outlined,
+      label: 'Contact Matrix',
+      path: '/dashboard/contacts',
+      permission: null),
+  NavItem(
+      id: 'profile',
+      icon: Icons.account_circle_outlined,
+      label: 'My Profile',
+      path: '/dashboard/profile',
+      permission: null),
 
   NavSection('System'),
-  NavItem(id: 'reports',          icon: Icons.bar_chart_outlined,              label: 'Reports',          path: '/dashboard/reports',          permission: 'reports.view'),
+  NavItem(
+      id: 'reports',
+      icon: Icons.bar_chart_outlined,
+      label: 'Reports',
+      path: '/dashboard/reports',
+      permission: 'reports.view'),
   // Points straight at the real, fully-wired Audit Log screen (same one
   // reachable from Settings → Audit Log) instead of the unimplemented
   // placeholder that used to sit at /dashboard/audit.
-  NavItem(id: 'audit',            icon: Icons.security_outlined,               label: 'Audit Log',        path: '/settings/audit',             permission: 'audit.view'),
-  NavItem(id: 'settings',         icon: Icons.settings_outlined,               label: 'Settings',         path: '/dashboard/settings',         permission: 'settings.view'),
+  NavItem(
+      id: 'audit',
+      icon: Icons.security_outlined,
+      label: 'Audit Log',
+      path: '/settings/audit',
+      permission: 'audit.view'),
+  NavItem(
+      id: 'settings',
+      icon: Icons.settings_outlined,
+      label: 'Settings',
+      path: '/dashboard/settings',
+      permission: 'settings.view'),
 ];
 
 // ─── Dart port of TypeScript buildNav() ──────────────────────────────────────
@@ -158,33 +302,34 @@ List<NavEntry> buildNav(UserEntity? user) {
 // Mirrors PAGE_TITLES from frontend/components/dashboard/DashboardShell.tsx.
 
 const kPageTitles = <String, String>{
-  '/dashboard':                 'Dashboard',
-  '/dashboard/announcements':   'Announcements',
-  '/dashboard/interview-list':  'Interview List',
-  '/dashboard/candidate-review':'Candidate Review & Onboarding',
-  '/dashboard/assessments':     'Assessment Management',
-  '/dashboard/my-assessments':  'My Assessments',
-  '/dashboard/email-logs':      'Email Logs',
-  '/dashboard/employees':       'Employees',
-  '/dashboard/org-chart':       'Organisation Chart',
-  '/dashboard/branches':        'Branch Management',
-  '/dashboard/attendance':      'Attendance & Time',
-  '/dashboard/leave':           'Leave Management',
-  '/dashboard/wfh':             'Work From Home',
-  '/dashboard/expenses':        'Expense Claims',
-  '/dashboard/approvals':       'Team Approvals',
-  '/dashboard/separation':      'Separation & Exit',
-  '/dashboard/documents':       'Document Center',
+  '/dashboard': 'Dashboard',
+  '/dashboard/announcements': 'Announcements',
+  '/dashboard/interview-list': 'Interview List',
+  '/dashboard/candidate-review': 'Candidate Review & Onboarding',
+  '/dashboard/assessments': 'Assessment Management',
+  '/dashboard/my-assessments': 'My Assessments',
+  '/dashboard/email-logs': 'Email Logs',
+  '/dashboard/employees': 'Employees',
+  '/dashboard/org-chart': 'Organisation Chart',
+  '/dashboard/branches': 'Branch Management',
+  '/dashboard/attendance': 'Attendance & Time',
+  '/dashboard/leave': 'Leave Management',
+  '/dashboard/wfh': 'Work From Home',
+  '/dashboard/expenses': 'Expense Claims',
+  '/dashboard/approvals': 'Team Approvals',
+  '/dashboard/separation': 'Separation & Exit',
+  '/dashboard/documents': 'Document Center',
+  '/dashboard/training': 'Training & Learning',
+  '/dashboard/my-learning': 'My Learning',
   '/dashboard/face-id-registrations': 'Face ID Registrations',
-  '/dashboard/my-attendance':   'My Attendance',
-  '/dashboard/my-payslip':      'My Payslips',
-  '/dashboard/referrals':       'My Referrals',
-  '/dashboard/my-requests':     'My Requests',
-  '/dashboard/contacts':        'Contact Matrix',
-  '/dashboard/profile':         'My Profile',
-  '/dashboard/reports':         'Reports',
-  '/dashboard/settings':        'Settings',
+  '/dashboard/my-attendance': 'My Attendance',
+  '/dashboard/my-payslip': 'My Payslips',
+  '/dashboard/referrals': 'My Referrals',
+  '/dashboard/my-requests': 'My Requests',
+  '/dashboard/contacts': 'Contact Matrix',
+  '/dashboard/profile': 'My Profile',
+  '/dashboard/reports': 'Reports',
+  '/dashboard/settings': 'Settings',
 };
 
-String pageTitle(String path) =>
-    kPageTitles[path] ?? 'Royal HRMS';
+String pageTitle(String path) => kPageTitles[path] ?? 'Royal HRMS';

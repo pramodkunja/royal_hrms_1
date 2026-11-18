@@ -148,8 +148,7 @@ class _EmpConsoleCard extends ConsumerWidget {
     // module (not fetched otherwise); the expense stat only with expenses.
     final attendanceOn = userHasModule(user, AppModules.attendance);
     final expensesOn = userHasModule(user, AppModules.expenses);
-    final clockedIn =
-        attendanceOn && (ref.watch(todayAttendanceProvider).valueOrNull?.isClockedIn ?? false);
+    final clockedIn = attendanceOn && (ref.watch(todayAttendanceProvider).valueOrNull?.isClockedIn ?? false);
 
     return ConsoleHeaderShell(
       heroContent: Column(
@@ -195,7 +194,12 @@ class _EmpConsoleCard extends ConsumerWidget {
               label: 'Days Present',
               color: AppColors.success,
             ),
-            (icon: Icons.event_busy_outlined, value: '${kpis.absentDays}', label: 'Absent Days', color: AppColors.error),
+            (
+              icon: Icons.event_busy_outlined,
+              value: '${kpis.absentDays}',
+              label: 'Absent Days',
+              color: AppColors.error
+            ),
           ],
           (
             icon: Icons.checklist_outlined,
@@ -207,7 +211,7 @@ class _EmpConsoleCard extends ConsumerWidget {
             (
               icon: Icons.receipt_long_outlined,
               value: '${kpis.pendingExpenseClaims}',
-              label: 'Expenses',
+              label: 'Expense Claims',
               color: AppColors.info,
             ),
         ]),
@@ -241,11 +245,11 @@ class _EmpConsoleCard extends ConsumerWidget {
 // every other themed color on this screen correctly flipped. 'lwp' has no
 // existing AppColors equivalent, so it's left as a literal.
 Map<String, Color> get _kLeaveTypeColor => {
-  'casual': AppColors.info,
-  'sick': AppColors.warning,
-  'earned': AppColors.success,
-  'lwp': const Color(0xFF64748B),
-};
+      'casual': AppColors.info,
+      'sick': AppColors.warning,
+      'earned': AppColors.success,
+      'lwp': const Color(0xFF64748B),
+    };
 
 /// Web: leave_type_label || LEAVE_TYPE_LABEL[leave_type] || leave_type —
 /// the server's label covers custom leave types.
@@ -281,8 +285,7 @@ class _EmpLeaveBalancesCard extends ConsumerWidget {
           if (summary.balances.isEmpty) {
             return SectionMessage(
               icon: Icons.beach_access_outlined,
-              label:
-                  'No leave balances found for ${summary.year}. Contact HR to credit your leave.',
+              label: 'No leave balances found for ${summary.year}. Contact HR to credit your leave.',
             );
           }
           return Column(
@@ -347,9 +350,7 @@ class _EmpBalanceCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = _kLeaveTypeColor[balance.leaveType] ?? AppColors.primary;
     final label = _leaveTypeLabelFor(balance);
-    final pct = balance.totalDays > 0
-        ? (balance.remaining / balance.totalDays).clamp(0.0, 1.0)
-        : 0.0;
+    final pct = balance.totalDays > 0 ? (balance.remaining / balance.totalDays).clamp(0.0, 1.0) : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -383,8 +384,7 @@ class _EmpBalanceCell extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                balance.remaining.toStringAsFixed(
-                    balance.remaining == balance.remaining.roundToDouble() ? 0 : 1),
+                balance.remaining.toStringAsFixed(balance.remaining == balance.remaining.roundToDouble() ? 0 : 1),
                 style: AppTextStyles.h4.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(width: 6),
@@ -427,16 +427,25 @@ class _EmpBalanceCell extends StatelessWidget {
 // ── Attendance summary (month picker + % bar + 9-stat grid) ────────────────
 
 const _kMonthNames = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 class _EmpAttendanceSummaryCard extends ConsumerStatefulWidget {
   const _EmpAttendanceSummaryCard();
 
   @override
-  ConsumerState<_EmpAttendanceSummaryCard> createState() =>
-      _EmpAttendanceSummaryCardState();
+  ConsumerState<_EmpAttendanceSummaryCard> createState() => _EmpAttendanceSummaryCardState();
 }
 
 class _EmpAttendanceSummaryCardState extends ConsumerState<_EmpAttendanceSummaryCard> {
@@ -600,8 +609,7 @@ class _MonthDropdown extends StatelessWidget {
       initialValue: month,
       onSelected: onChanged,
       itemBuilder: (context) => [
-        for (var m = 1; m <= 12; m++)
-          PopupMenuItem(value: m, child: Text('${_kMonthNames[m - 1]} $year')),
+        for (var m = 1; m <= 12; m++) PopupMenuItem(value: m, child: Text('${_kMonthNames[m - 1]} $year')),
       ],
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -697,8 +705,7 @@ class _EmpActionItemsCard extends ConsumerWidget {
     return AppColors.primary;
   }
 
-  static bool _isDone(ActionItem item) =>
-      item.status == 'approved' || item.actionType == 'leave_approved';
+  static bool _isDone(ActionItem item) => item.status == 'approved' || item.actionType == 'leave_approved';
 
   // Mobile's route structure doesn't mirror web's 1:1 (e.g. self-service
   // attendance lives at /dashboard/my-attendance here, not
@@ -786,8 +793,7 @@ class _CountBadge extends StatelessWidget {
       ),
       child: Text(
         '$count $label',
-        style: AppTextStyles.labelSmall
-            .copyWith(color: AppColors.warning, fontWeight: FontWeight.w700, fontSize: 10),
+        style: AppTextStyles.labelSmall.copyWith(color: AppColors.warning, fontWeight: FontWeight.w700, fontSize: 10),
       ),
     );
   }
@@ -887,8 +893,7 @@ class _StatusBadge extends StatelessWidget {
       ),
       child: Text(
         labelMap[status] ?? status,
-        style: AppTextStyles.labelSmall
-            .copyWith(color: fg, fontWeight: FontWeight.w700, fontSize: 10),
+        style: AppTextStyles.labelSmall.copyWith(color: fg, fontWeight: FontWeight.w700, fontSize: 10),
       ),
     );
   }
@@ -913,13 +918,12 @@ class _EmpRecentRequestsCard extends ConsumerWidget {
     final canApplyLeave = canAccessPath(ref.watch(authStateProvider).valueOrNull?.user, AppRoutes.leave);
 
     return SectionCard(
-      title: 'Recent Requests',
+      title: 'Recent Activity',
       icon: Icons.inbox_outlined,
       accentColor: AppColors.warning,
       trailing: requestsAsync.maybeWhen(
         data: (r) {
-          final pending =
-              r.requests.where((x) => x.status == 'pending' || x.status == 'l2_pending').length;
+          final pending = r.requests.where((x) => x.status == 'pending' || x.status == 'l2_pending').length;
           return pending > 0 ? _CountBadge(count: pending, label: 'pending') : const SizedBox.shrink();
         },
         orElse: () => const SizedBox.shrink(),
@@ -976,8 +980,18 @@ String _fmtShortDate(String iso) {
   final dt = DateTime.tryParse(iso);
   if (dt == null) return iso.isEmpty ? '—' : iso;
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   return '${dt.day} ${months[dt.month - 1]}';
 }
@@ -1185,8 +1199,8 @@ class _EmpAnnouncementBannerState extends ConsumerState<_EmpAnnouncementBanner> 
                       children: [
                         Text(
                           'View',
-                          style: AppTextStyles.labelSmall
-                              .copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
+                          style:
+                              AppTextStyles.labelSmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(width: 2),
                         Icon(Icons.arrow_forward, size: 12, color: AppColors.primary),
@@ -1352,25 +1366,12 @@ class _QuickLinkItem {
   final String label;
   final IconData icon;
   final String path;
-  const _QuickLinkItem(
-      {required this.label, required this.icon, required this.path});
+  const _QuickLinkItem({required this.label, required this.icon, required this.path});
 }
 
 const _kQuickLinksEmployee = <_QuickLinkItem>[
-  _QuickLinkItem(
-      label: 'Leave History',
-      icon: Icons.beach_access_outlined,
-      path: '/dashboard/leave'),
-  _QuickLinkItem(
-      label: 'My Attendance',
-      icon: Icons.access_time_outlined,
-      path: '/dashboard/my-attendance'),
-  _QuickLinkItem(
-      label: 'Claim Expense',
-      icon: Icons.account_balance_wallet_outlined,
-      path: '/dashboard/expenses'),
-  _QuickLinkItem(
-      label: 'My Documents',
-      icon: Icons.description_outlined,
-      path: '/dashboard/documents'),
+  _QuickLinkItem(label: 'Leave History', icon: Icons.beach_access_outlined, path: '/dashboard/leave'),
+  _QuickLinkItem(label: 'My Attendance', icon: Icons.access_time_outlined, path: '/dashboard/my-attendance'),
+  _QuickLinkItem(label: 'Claim Expense', icon: Icons.account_balance_wallet_outlined, path: '/dashboard/expenses'),
+  _QuickLinkItem(label: 'My Documents', icon: Icons.description_outlined, path: '/dashboard/documents'),
 ];

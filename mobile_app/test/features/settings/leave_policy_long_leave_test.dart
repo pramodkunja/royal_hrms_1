@@ -277,7 +277,7 @@ void main() {
       expect(put.body['applicable_gender'], 'female');
       expect(put.body['medical_certificate_after_days'], 4);
       expect(put.body['policy_note'], 'Synthetic note');
-      expect(find.text('Leave policy updated.'), findsOneWidget);
+      expect(find.text('Policy updated.'), findsOneWidget); // the server's message, as web (Task 93)
     });
 
     testWidgets('0 turns the rule off and is sent as 0; blank is sent as 0; only digits can be typed', (tester) async {

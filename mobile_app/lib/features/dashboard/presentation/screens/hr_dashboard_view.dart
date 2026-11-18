@@ -14,8 +14,7 @@ import 'package:mobile_app/features/dashboard/presentation/widgets/attendance_ri
 import 'package:mobile_app/features/dashboard/presentation/widgets/dashboard_section.dart';
 import 'package:mobile_app/features/dashboard/presentation/widgets/hr_notice_period_row.dart';
 import 'package:mobile_app/features/dashboard/presentation/widgets/quick_access.dart';
-import 'package:mobile_app/features/employees/data/models/employee_model.dart'
-    show EmployeeFilters;
+import 'package:mobile_app/features/employees/data/models/employee_model.dart' show EmployeeFilters;
 import 'package:mobile_app/features/employees/presentation/providers/employee_providers.dart'
     show employeeFiltersProvider;
 
@@ -78,7 +77,7 @@ class HrDashboardView extends ConsumerWidget {
               module: AppModules.attendance,
               child: Column(children: [_AttendanceSummaryCard(), SizedBox(height: 20)]),
             ),
-            const _ActionQueueCard(),
+            const HrActionQueueCard(),
             const SizedBox(height: 20),
             const ModuleGate(
               module: AppModules.recruitment,
@@ -117,8 +116,7 @@ class _HrConsoleHeader extends ConsumerWidget {
     // module, active interviews only with recruitment.
     final attendanceOn = userHasModule(user, AppModules.attendance);
     final recruitmentOn = userHasModule(user, AppModules.recruitment);
-    final clockedIn =
-        attendanceOn && (ref.watch(todayAttendanceProvider).valueOrNull?.isClockedIn ?? false);
+    final clockedIn = attendanceOn && (ref.watch(todayAttendanceProvider).valueOrNull?.isClockedIn ?? false);
 
     return ConsoleHeaderShell(
       heroContent: Column(
@@ -158,9 +156,19 @@ class _HrConsoleHeader extends ConsumerWidget {
       statsContent: kpisAsync.when(
         data: (kpis) => ConsoleStatsRow(stats: [
           (icon: Icons.groups_outlined, value: '${kpis.totalWorkforce}', label: 'Workforce', color: AppColors.primary),
-          (icon: Icons.pending_actions_outlined, value: '${kpis.pendingActions}', label: 'Pending', color: AppColors.warning),
+          (
+            icon: Icons.pending_actions_outlined,
+            value: '${kpis.pendingActions}',
+            label: 'Pending',
+            color: AppColors.warning
+          ),
           if (recruitmentOn)
-            (icon: Icons.person_search_outlined, value: '${kpis.activeInterviews}', label: 'Interviews', color: AppColors.info),
+            (
+              icon: Icons.person_search_outlined,
+              value: '${kpis.activeInterviews}',
+              label: 'Interviews',
+              color: AppColors.info
+            ),
           if (attendanceOn)
             (
               icon: Icons.edit_calendar_outlined,
@@ -353,8 +361,12 @@ class _AttendanceSummaryCard extends ConsumerWidget {
 
 // ── Action Queue ─────────────────────────────────────────────────────────────
 
-class _ActionQueueCard extends ConsumerWidget {
-  const _ActionQueueCard();
+/// Web components/dashboard/hr/HrActionQueue.tsx. Also shown on the Admin
+/// dashboard for a Branch Admin (web AdminDashboard.tsx:83,
+/// `session.can_manage_branch`), where the API scopes the counts to the
+/// admin's branch.
+class HrActionQueueCard extends ConsumerWidget {
+  const HrActionQueueCard({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -381,66 +393,101 @@ class _ActionQueueCard extends ConsumerWidget {
           // `counted` rows are the ones the backend sums into total_pending
           // (HRActionQueueView), so the total shown matches the visible rows.
           final rows = [
-            (path: AppRoutes.candidateReview, module: null, perm: null, counted: true, row: ActionRow(
-              icon: Icons.how_to_reg_outlined,
-              iconColor: AppColors.info,
-              title: 'Candidate Reviews',
-              count: queue.candidateReviews,
-              onTap: () => goToDashboardSection(context, AppRoutes.candidateReview),
-            )),
+            (
+              path: AppRoutes.candidateReview,
+              module: null,
+              perm: null,
+              counted: true,
+              row: ActionRow(
+                icon: Icons.how_to_reg_outlined,
+                iconColor: AppColors.info,
+                title: 'Candidate Reviews',
+                count: queue.candidateReviews,
+                onTap: () => goToDashboardSection(context, AppRoutes.candidateReview),
+              )
+            ),
             // Web HrActionQueue: Leave Approvals opens the Approvals screen
             // (the Leave page has no approval queue); leave module only.
-            (path: AppRoutes.approvals, module: AppModules.leave, perm: 'leave.approve', counted: true, row: ActionRow(
-              icon: Icons.beach_access_outlined,
-              iconColor: AppColors.success,
-              title: 'Leave Approvals',
-              count: queue.leaveApprovals,
-              onTap: () => goToDashboardSection(context, AppRoutes.approvals),
-            )),
-            (path: AppRoutes.approvals, module: AppModules.attendance, perm: 'attendance.create', counted: true, row: ActionRow(
-              icon: Icons.edit_calendar_outlined,
-              iconColor: AppColors.error,
-              title: 'Attendance Corrections',
-              count: queue.attendanceCorrections,
-              onTap: () => goToDashboardSection(context, AppRoutes.approvals),
-            )),
-            (path: AppRoutes.expenses, module: null, perm: null, counted: true, row: ActionRow(
-              icon: Icons.account_balance_wallet_outlined,
-              iconColor: AppColors.warning,
-              title: 'Expense Claims',
-              count: queue.expenseClaims,
-              onTap: () => goToDashboardSection(context, AppRoutes.expenses),
-            )),
-            (path: AppRoutes.employees, module: null, perm: null, counted: true, row: ActionRow(
-              icon: Icons.person_add_alt_outlined,
-              iconColor: AppColors.primary,
-              title: 'Onboarding Reviews',
-              count: queue.onboardingReviews,
-              // No dedicated onboarding-review screen exists in this app
-              // yet, so this opens the Employees list pre-filtered to
-              // status=onboarding — the same fallback the Admin dashboard
-              // uses for the identical tile.
-              onTap: () {
-                ref.read(employeeFiltersProvider.notifier).state =
-                    const EmployeeFilters(status: 'onboarding');
-                goToDashboardSection(context, AppRoutes.employees);
-              },
-            )),
-            (path: AppRoutes.separation, module: null, perm: null, counted: true, row: ActionRow(
-              key: const Key('hr-queue-separation'),
-              icon: Icons.logout_outlined,
-              iconColor: AppColors.secondary,
-              title: 'Separation Requests',
-              // Unknown (loading / failed) counts as nothing in the total —
-              // web does the same — but the row says so instead of "0".
-              count: separationCount ?? 0,
-              countText: separationCount != null
-                  ? null
-                  : separationAsync.hasError
-                      ? '—'
-                      : '…',
-              onTap: () => goToDashboardSection(context, AppRoutes.separation),
-            )),
+            (
+              path: AppRoutes.approvals,
+              module: AppModules.leave,
+              perm: 'leave.approve',
+              counted: true,
+              row: ActionRow(
+                icon: Icons.beach_access_outlined,
+                iconColor: AppColors.success,
+                title: 'Leave Approvals',
+                count: queue.leaveApprovals,
+                onTap: () => goToDashboardSection(context, AppRoutes.approvals),
+              )
+            ),
+            (
+              path: AppRoutes.approvals,
+              module: AppModules.attendance,
+              perm: 'attendance.create',
+              counted: true,
+              row: ActionRow(
+                icon: Icons.edit_calendar_outlined,
+                iconColor: AppColors.error,
+                title: 'Attendance Corrections',
+                count: queue.attendanceCorrections,
+                onTap: () => goToDashboardSection(context, AppRoutes.approvals),
+              )
+            ),
+            (
+              path: AppRoutes.expenses,
+              module: null,
+              perm: null,
+              counted: true,
+              row: ActionRow(
+                icon: Icons.account_balance_wallet_outlined,
+                iconColor: AppColors.warning,
+                title: 'Expense Claims',
+                count: queue.expenseClaims,
+                onTap: () => goToDashboardSection(context, AppRoutes.expenses),
+              )
+            ),
+            (
+              path: AppRoutes.employees,
+              module: null,
+              perm: null,
+              counted: true,
+              row: ActionRow(
+                icon: Icons.person_add_alt_outlined,
+                iconColor: AppColors.primary,
+                title: 'Onboarding Reviews',
+                count: queue.onboardingReviews,
+                // No dedicated onboarding-review screen exists in this app
+                // yet, so this opens the Employees list pre-filtered to
+                // status=onboarding — the same fallback the Admin dashboard
+                // uses for the identical tile.
+                onTap: () {
+                  ref.read(employeeFiltersProvider.notifier).state = const EmployeeFilters(status: 'onboarding');
+                  goToDashboardSection(context, AppRoutes.employees);
+                },
+              )
+            ),
+            (
+              path: AppRoutes.separation,
+              module: null,
+              perm: null,
+              counted: true,
+              row: ActionRow(
+                key: const Key('hr-queue-separation'),
+                icon: Icons.logout_outlined,
+                iconColor: AppColors.secondary,
+                title: 'Separation Requests',
+                // Unknown (loading / failed) counts as nothing in the total —
+                // web does the same — but the row says so instead of "0".
+                count: separationCount ?? 0,
+                countText: separationCount != null
+                    ? null
+                    : separationAsync.hasError
+                        ? '—'
+                        : '…',
+                onTap: () => goToDashboardSection(context, AppRoutes.separation),
+              )
+            ),
           ]
               // Opening Approvals is not permission for every queue on it
               // (Task 71g): the two Approvals rows also need the queue's own
@@ -623,8 +670,7 @@ class _LifecycleList extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 16),
         // Web: "No employees currently serving notice" on the Notice tab.
         child: Center(
-            child: Text(tab == 1 ? 'No employees currently serving notice' : 'No data',
-                style: AppTextStyles.caption)),
+            child: Text(tab == 1 ? 'No employees currently serving notice' : 'No data', style: AppTextStyles.caption)),
       );
     }
     return Column(
@@ -743,8 +789,7 @@ class _DepartmentHeadcountCard extends ConsumerWidget {
               label: 'No department data available.',
             );
           }
-          final maxValue =
-              list.fold<int>(0, (m, d) => d.count > m ? d.count : m);
+          final maxValue = list.fold<int>(0, (m, d) => d.count > m ? d.count : m);
           final effectiveMax = maxValue <= 0 ? 1 : maxValue;
           // A different color per department (cycling through the same
           // palette web uses for its department swatches) instead of one

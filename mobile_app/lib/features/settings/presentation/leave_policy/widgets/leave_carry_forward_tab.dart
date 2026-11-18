@@ -19,14 +19,20 @@ bool canManageCarryForward(UserEntity? user) => userHasPermission(user, 'leave.e
 /// The "Carry Forward" tab — mirrors web's `CarryForwardTab.tsx` exactly:
 /// pick a from/to year range, Preview what would happen, then Run it.
 ///
-/// IMPORTANT: as of this writing, none of the 4 endpoints this tab calls
-/// (`/leave/carry-forward/years|preview|run|history/`) exist anywhere in the
-/// Django backend (confirmed by grepping apps/hrms/urls.py) — so every
-/// action here 404s on the real server today, exactly as it does on the web
-/// app itself. This is not a mobile-only stub: it's a faithful port of a
-/// feature the web team built the frontend for before the backend, and it
-/// will start working the moment those routes are added — no mobile changes
-/// needed then. See ApiConstants.carryForward* for the same note.
+/// Endpoints (`ApiConstants.carryForward*`):
+///   GET  /leave/carry-forward/years/    — year pairs + defaults (read)
+///   GET  /leave/carry-forward/history/  — past runs, paged (read)
+///   POST /leave/carry-forward/preview/  — {from_year, to_year}; dry run
+///   POST /leave/carry-forward/run/      — {from_year, to_year}; WRITES balances
+///
+/// Production status (Task 88, 18 Nov 2026 — corrects an older note here
+/// that said "every action 404s", which came from the out-of-date LOCAL
+/// backend copy, see QA HO-31): on the production server both GETs succeed —
+/// the device renders the year selectors (2025 → 2026) and the empty-history
+/// message, which only appear on a successful response. Preview and Run are
+/// POSTs and were deliberately NOT called, so their availability is
+/// UNVERIFIED. Run stays behind the explicit "cannot be undone" confirmation
+/// dialog (web parity: web also allows Run without a prior Preview).
 class LeaveCarryForwardTab extends ConsumerStatefulWidget {
   const LeaveCarryForwardTab({super.key});
 
@@ -49,9 +55,24 @@ class _LeaveCarryForwardTabState extends ConsumerState<LeaveCarryForwardTab> {
 
   SettingsRemoteDataSource get _ds => ref.read(settingsDataSourceProvider);
 
+  /// Temporary safety guard (Task 88 / HO-37). Run writes leave balances on
+  /// production and the run/preview POSTs are unverified there, so Run is
+  /// enabled only after a successful Preview for exactly the selected years.
+  /// A failed or missing preview therefore can never lead to a Run. This is a
+  /// deliberate, documented deviation from web, which allows Run without a
+  /// preview; remove it once the POST endpoints are confirmed.
+  /// Keyed on the years the preview was REQUESTED for (not response fields,
+  /// whose production shape is unverified).
+  (int, int)? _previewedFor;
+  bool get _hasMatchingPreview =>
+      _preview != null &&
+      _previewedFor != null &&
+      _previewedFor == (_fromYear, _toYear);
+
   void _onYearChanged() {
     setState(() {
       _preview = null;
+      _previewedFor = null;
       _previewError = null;
       _duplicateWarning = null;
     });
@@ -67,10 +88,19 @@ class _LeaveCarryForwardTabState extends ConsumerState<LeaveCarryForwardTab> {
     try {
       final result = await _ds.previewCarryForward(fromYear: from, toYear: to);
       if (!mounted) return;
-      setState(() => _preview = result);
+      // Ignore a late response for years the user has since changed.
+      if (_fromYear != from || _toYear != to) return;
+      setState(() {
+        _preview = result;
+        _previewedFor = (from, to);
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _previewError = friendlySettingsError(e));
+      setState(() {
+        _preview = null;
+        _previewedFor = null;
+        _previewError = friendlySettingsError(e);
+      });
     } finally {
       if (mounted) setState(() => _previewLoading = false);
     }
@@ -285,6 +315,7 @@ class _LeaveCarryForwardTabState extends ConsumerState<LeaveCarryForwardTab> {
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
+                              key: const Key('carry-forward-preview'),
                               onPressed: (_previewLoading || _running || _fromYear == null || _toYear == null)
                                   ? null
                                   : _runPreview,
@@ -307,7 +338,12 @@ class _LeaveCarryForwardTabState extends ConsumerState<LeaveCarryForwardTab> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: FilledButton.icon(
-                              onPressed: (_previewLoading || _running || _fromYear == null || _toYear == null)
+                              key: const Key('carry-forward-run'),
+                              onPressed: (_previewLoading ||
+                                      _running ||
+                                      _fromYear == null ||
+                                      _toYear == null ||
+                                      !_hasMatchingPreview)
                                   ? null
                                   : _showRunConfirm,
                               style: FilledButton.styleFrom(
@@ -321,6 +357,26 @@ class _LeaveCarryForwardTabState extends ConsumerState<LeaveCarryForwardTab> {
                           ),
                         ],
                       ),
+                      if (!_hasMatchingPreview) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          key: const Key('carry-forward-preview-required'),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline_rounded,
+                                size: 16, color: AppColors.textSecondary),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Preview the selected years first. Run is '
+                                'enabled only after a successful preview.',
+                                style: TextStyle(
+                                    fontSize: 12, color: AppColors.textSecondary),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       if (_previewError != null) ...[
                         const SizedBox(height: 12),
                         _InlineError(message: _previewError!),

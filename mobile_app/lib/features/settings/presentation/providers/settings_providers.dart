@@ -757,6 +757,24 @@ class LeavePoliciesNotifier extends AutoDisposeAsyncNotifier<List<LeavePolicyMod
   @override
   Future<List<LeavePolicyModel>> build() => _ds.fetchLeavePolicies();
 
+  /// updatePolicy, but also returning the server's success message (web
+  /// LeavePoliciesTab toast: `res.data.message || "Policy updated."`).
+  Future<({String? error, String message})> updatePolicyWithMessage(
+      String leaveType, LeavePolicyFormData form) async {
+    if (!canEditLeavePolicies(ref.read(authStateProvider).valueOrNull?.user)) {
+      return (error: kLeavePolicyEditDenied, message: '');
+    }
+    try {
+      final r = await _ds.updateLeavePolicyWithMessage(leaveType, form);
+      state = AsyncData(
+        (state.valueOrNull ?? []).map((p) => p.leaveType == leaveType ? r.policy : p).toList(),
+      );
+      return (error: null, message: r.message.isNotEmpty ? r.message : 'Policy updated.');
+    } catch (e) {
+      return (error: _friendly(e), message: '');
+    }
+  }
+
   Future<String?> updatePolicy(String leaveType, LeavePolicyFormData form) async {
     // Refused before any request without settings.edit or leave.approve
     // (production LeavePolicyView.put answers 403 "Permission denied.").
@@ -779,6 +797,9 @@ class LeavePoliciesNotifier extends AutoDisposeAsyncNotifier<List<LeavePolicyMod
   // — that UI work is tracked separately.
   Future<String?> createPolicy(
       LeavePolicyFormData form, {required String leaveTypeLabel}) async {
+    // Same rule as the backend's LeavePolicyView.post (settings.edit or
+    // leave.approve): refused before any request, as updatePolicy.
+    if (!canEditLeavePolicies(ref.read(authStateProvider).valueOrNull?.user)) return kLeavePolicyEditDenied;
     try {
       final created =
           await _ds.createLeavePolicy(form, leaveTypeLabel: leaveTypeLabel);

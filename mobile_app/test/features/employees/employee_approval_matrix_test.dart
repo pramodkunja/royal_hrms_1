@@ -58,6 +58,7 @@ class Server implements HttpClientAdapter {
     (status: 200, body: {'status': 'success', 'message': 'Approval matrix retrieved.', 'data': productionRows}),
   ];
   int matrixGets = 0;
+  final writes = <String>[];
   String employeeBranch = 'North';
 
   @override
@@ -90,6 +91,15 @@ class Server implements HttpClientAdapter {
         },
       });
     }
+    if (o.path == '/employees/managers/' && o.method == 'GET') {
+      return _json(200, {
+        'status': 'success',
+        'data': [
+          {'id': 'uuid-m9', 'employee_id': 'EMP-9', 'full_name': 'Nova Manager', 'department': 'QA', 'branch': 'North'},
+        ],
+      });
+    }
+    if (o.method != 'GET') writes.add('${o.method} ${o.path}');
     if (o.method == 'GET') return _json(200, {'status': 'success', 'data': <Object>[]});
     return _json(404, {'status': 'error', 'message': 'Not found', 'data': {}});
   }
@@ -210,7 +220,7 @@ void main() {
     testWidgets('2. empty list: the empty state, not an error', (tester) async {
       await openMatrix(tester, with_: Server()..answers = [(status: 200, body: envelope([]))]);
       expect(byKey('approval-matrix-empty'), findsOneWidget);
-      expect(find.text('No approval workflows configured.'), findsOneWidget);
+      expect(find.text('No approval matrix configured.'), findsOneWidget);
     });
 
     testWidgets('3. malformed response: an error with Retry, never shown as empty', (tester) async {
@@ -263,6 +273,47 @@ void main() {
       expect(s.matrixGets, 2);
       expect(byKey('approval-matrix-error-other'), findsNothing);
       expect(find.text('Attendance Correction'), findsWidgets);
+    });
+
+    testWidgets('8. web copy: Approval Matrix heading and description, relationships subtitle', (tester) async {
+      await openMatrix(tester);
+      expect(byKey('approval-matrix-heading'), findsOneWidget);
+      expect(
+          find.text(
+              'By default the global role rules apply. Override below to assign a specific person for this employee.'),
+          findsOneWidget);
+      expect(find.text('Used as the default approvers for all workflows unless overridden below'), findsOneWidget);
+      expect(find.text('Reporting manager and branch HR assigned to this employee'), findsNothing);
+    });
+
+    testWidgets(
+        '9. relationship editor (web RelationshipEditorModal): Select person, — Select —, Save disabled '
+        'until a person is picked, no way to clear', (tester) async {
+      await openMatrix(tester);
+      await tester.tap(find.byIcon(Icons.edit_outlined).first);
+      await tester.pumpAndSettle();
+      expect(find.text('Select person'), findsOneWidget);
+      expect(find.text('— Select —'), findsOneWidget);
+      expect(find.text('— Global default —'), findsNothing);
+      expect(tester.widget<FilledButton>(byKey('relationship-save')).onPressed, isNull);
+      expect(server.writes, isEmpty);
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Nova Manager (EMP-9)').last);
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(byKey('relationship-save')).onPressed, isNotNull);
+    });
+
+    testWidgets('10. override sheet uses web copy', (tester) async {
+      await openMatrix(tester);
+      await tester.tap(find.byTooltip('Override').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Override Approvers — Leave'), findsOneWidget);
+      expect(
+          find.text('Select a specific person to override, or leave as — Global default — to revert.'), findsOneWidget);
+      expect(find.textContaining('(default: '), findsWidgets);
+      expect(find.text('Save Override'), findsOneWidget);
+      expect(server.writes, isEmpty);
     });
 
     testWidgets(

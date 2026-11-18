@@ -87,7 +87,7 @@ class _EmailLogScreenState extends ConsumerState<EmailLogScreen> {
                   Text('Email Logs', style: AppTextStyles.h4.copyWith(color: Colors.white)),
                   const SizedBox(height: 2),
                   Text(
-                    'Recruitment emails sent to candidates',
+                    'Recruitment email history and delivery status',
                     style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.85)),
                   ),
                 ],

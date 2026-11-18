@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/network/api_client.dart' show userFriendlyMessage;
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/documents/document_links.dart' show previewDocumentInApp;
@@ -77,7 +78,7 @@ class CandidateReviewScreen extends ConsumerWidget {
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => _ErrorView(
-          message: e.toString(), onRetry: () => ref.refresh(approvalsProvider)),
+          message: userFriendlyMessage(e), onRetry: () => ref.refresh(approvalsProvider)),
       data: (rows) => _Body(rows: rows),
     );
   }

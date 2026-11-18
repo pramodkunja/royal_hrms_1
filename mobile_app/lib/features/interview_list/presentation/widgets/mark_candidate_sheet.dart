@@ -45,8 +45,7 @@ class MarkCandidateSheet extends ConsumerStatefulWidget {
   }
 
   @override
-  ConsumerState<MarkCandidateSheet> createState() =>
-      _MarkCandidateSheetState();
+  ConsumerState<MarkCandidateSheet> createState() => _MarkCandidateSheetState();
 }
 
 class _MarkCandidateSheetState extends ConsumerState<MarkCandidateSheet> {
@@ -55,8 +54,7 @@ class _MarkCandidateSheetState extends ConsumerState<MarkCandidateSheet> {
   String? _error;
 
   bool get _isSelect => widget.targetStatus == 'selected';
-  String get _templateSlug =>
-      _isSelect ? 'candidate_selected' : 'candidate_rejected';
+  String get _templateSlug => _isSelect ? 'candidate_selected' : 'candidate_rejected';
 
   @override
   void dispose() {
@@ -103,10 +101,8 @@ class _MarkCandidateSheetState extends ConsumerState<MarkCandidateSheet> {
     final templatesAsync = ref.watch(emailTemplatesProvider);
 
     final loadingTemplates = templatesAsync.isLoading && !templatesAsync.hasValue;
-    final activeTemplates =
-        (templatesAsync.valueOrNull ?? []).where((t) => t.isActive).toList();
-    final matching =
-        activeTemplates.where((t) => t.name == _templateSlug).toList();
+    final activeTemplates = (templatesAsync.valueOrNull ?? []).where((t) => t.isActive).toList();
+    final matching = activeTemplates.where((t) => t.name == _templateSlug).toList();
     final template = matching.isEmpty ? null : matching.first;
 
     final actionColor = _isSelect ? AppColors.success : AppColors.error;
@@ -166,10 +162,8 @@ class _MarkCandidateSheetState extends ConsumerState<MarkCandidateSheet> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(_error!,
-                                  style: AppTextStyles.body.copyWith(
-                                      fontSize: 12,
-                                      color: AppColors.error,
-                                      fontWeight: FontWeight.w600)),
+                                  style: AppTextStyles.body
+                                      .copyWith(fontSize: 12, color: AppColors.error, fontWeight: FontWeight.w600)),
                             ),
                           ]),
                         ),
@@ -208,8 +202,8 @@ class _MarkCandidateSheetState extends ConsumerState<MarkCandidateSheet> {
                       ),
                       const SizedBox(height: 16),
                       Text('Email Template',
-                          style: AppTextStyles.caption.copyWith(
-                              fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+                          style: AppTextStyles.caption
+                              .copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
                       const SizedBox(height: 6),
                       if (loadingTemplates)
                         Row(children: [
@@ -235,14 +229,13 @@ class _MarkCandidateSheetState extends ConsumerState<MarkCandidateSheet> {
                             Icon(Icons.lock_outline, size: 14, color: AppColors.textHint),
                             const SizedBox(width: 8),
                             Expanded(
-                                child: Text(template.displayName,
-                                    style: AppTextStyles.body.copyWith(fontSize: 13))),
+                                child: Text(template.displayName, style: AppTextStyles.body.copyWith(fontSize: 13))),
                           ]),
                         ),
                       const SizedBox(height: 16),
                       Text('Interview feedback / remarks',
-                          style: AppTextStyles.caption.copyWith(
-                              fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+                          style: AppTextStyles.caption
+                              .copyWith(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _remarksCtrl,
@@ -254,11 +247,9 @@ class _MarkCandidateSheetState extends ConsumerState<MarkCandidateSheet> {
                           fillColor: AppColors.surface,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                           border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: AppColors.border)),
+                              borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
                           enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: AppColors.border)),
+                              borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
                         ),
                       ),
                     ],
@@ -289,9 +280,7 @@ class _MarkCandidateSheetState extends ConsumerState<MarkCandidateSheet> {
                     Expanded(
                       flex: 2,
                       child: FilledButton.icon(
-                        onPressed: (_saving || loadingTemplates || template == null)
-                            ? null
-                            : _confirm,
+                        onPressed: (_saving || loadingTemplates || template == null) ? null : _confirm,
                         style: FilledButton.styleFrom(
                           backgroundColor: actionColor,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

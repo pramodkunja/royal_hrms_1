@@ -46,15 +46,12 @@ class AssessmentPortalItem {
     final section = _s(json['section_title']).trim();
     return AssessmentPortalItem(
       id: _s(json['id']),
-      type: json['item_type'] == 'video'
-          ? AssessmentItemType.video
-          : AssessmentItemType.quiz,
+      type: json['item_type'] == 'video' ? AssessmentItemType.video : AssessmentItemType.quiz,
       title: _s(json['title']),
       order: _int(json['order']),
       sectionTitle: section.isEmpty ? null : section,
       videoUrl: _s(json['video_url']),
-      durationSecs:
-          json['duration_secs'] == null ? null : _int(json['duration_secs']),
+      durationSecs: json['duration_secs'] == null ? null : _int(json['duration_secs']),
       question: _s(json['question']),
       options: options,
     );
@@ -79,13 +76,11 @@ class AssessmentItemResponse {
     this.scoreAwarded = 0,
   });
 
-  factory AssessmentItemResponse.fromJson(Map<String, dynamic> json) =>
-      AssessmentItemResponse(
+  factory AssessmentItemResponse.fromJson(Map<String, dynamic> json) => AssessmentItemResponse(
         itemId: _s(json['item_id']),
         isWatched: json['is_watched'] == true,
         selectedOption: _s(json['selected_option']).toLowerCase(),
-        isCorrect:
-            json['is_correct'] is bool ? json['is_correct'] as bool : null,
+        isCorrect: json['is_correct'] is bool ? json['is_correct'] as bool : null,
         scoreAwarded: _int(json['score_awarded']),
       );
 }

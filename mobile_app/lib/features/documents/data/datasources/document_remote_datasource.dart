@@ -40,9 +40,7 @@ class DocumentRemoteDataSource {
     } else {
       results = [];
     }
-    return results
-        .map((item) => DocumentModel.fromJson(item as Map<String, dynamic>))
-        .toList();
+    return results.map((item) => DocumentModel.fromJson(item as Map<String, dynamic>)).toList();
   }
 
   Future<DocumentModel> createDocument({

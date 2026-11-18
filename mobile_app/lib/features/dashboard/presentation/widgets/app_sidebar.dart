@@ -145,9 +145,7 @@ class _NavTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
       child: Material(
-        color: isActive
-            ? AppColors.primary.withValues(alpha: 0.10)
-            : Colors.transparent,
+        color: isActive ? AppColors.primary.withValues(alpha: 0.10) : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
@@ -166,9 +164,7 @@ class _NavTile extends StatelessWidget {
                   child: Text(
                     item.label,
                     style: AppTextStyles.label.copyWith(
-                      color: isActive
-                          ? AppColors.primary
-                          : AppColors.textSecondary,
+                      color: isActive ? AppColors.primary : AppColors.textSecondary,
                       fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -176,8 +172,7 @@ class _NavTile extends StatelessWidget {
                 ),
                 if (item.badge != null)
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: AppColors.primary,
                       borderRadius: BorderRadius.circular(10),
@@ -249,8 +244,7 @@ class _UserCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right,
-                    color: AppColors.textHint, size: 16),
+                Icon(Icons.chevron_right, color: AppColors.textHint, size: 16),
               ],
             ),
           ),

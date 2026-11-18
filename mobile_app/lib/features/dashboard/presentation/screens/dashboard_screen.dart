@@ -24,9 +24,7 @@ class DashboardScreen extends ConsumerWidget {
             child: CircleAvatar(
               backgroundColor: AppColors.primaryLight,
               child: Text(
-                user?.fullName.isNotEmpty == true
-                    ? user!.fullName[0].toUpperCase()
-                    : '?',
+                user?.fullName.isNotEmpty == true ? user!.fullName[0].toUpperCase() : '?',
                 style: AppTextStyles.labelLarge.copyWith(color: AppColors.surface),
               ),
             ),

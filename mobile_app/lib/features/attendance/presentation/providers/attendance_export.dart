@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/router/access_control.dart' show userHasPermission;
 import '../../../auth/domain/entities/user_entity.dart';
+import '../../domain/entities/attendance_entity.dart' show ExportEmployeeOption;
 import '../../../auth/presentation/providers/auth_providers.dart';
 import 'attendance_providers.dart';
 
@@ -27,6 +28,21 @@ const kMaxExportRangeDays = 31;
 const kAttendanceExportPermission = 'attendance.export';
 
 const kAttendanceExportNotPermitted = 'You do not have permission to export attendance.';
+
+/// Web AttendanceTab: the alert under the toolbar and the button's title
+/// while "Single Employee" has no employee picked.
+const kExportSelectEmployee = 'Select an employee from the list to export.';
+const kExportSelectEmployeeTitle = 'Select an employee to export.';
+
+/// Web: the search runs from 2 characters, 300 ms after typing stops.
+const kExportEmployeeMinChars = 2;
+const kExportEmployeeDebounce = Duration(milliseconds: 300);
+
+/// Web AttendanceTab employee search (GET /employees/?search=&page_size=20,
+/// active only, first 8). Keyed by the trimmed query.
+final attendanceExportEmployeeSearchProvider = FutureProvider.autoDispose.family<List<ExportEmployeeOption>, String>(
+  (ref, query) => ref.watch(attendanceRepositoryProvider).searchExportEmployees(query),
+);
 
 String isoDay(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
@@ -67,7 +83,7 @@ String exportBranchSlug(UserEntity? user) {
 /// What to export. [date] null in day mode means "today" (the server's
 /// today; the app has always sent no date then).
 class AttendanceExportRequest {
-  const AttendanceExportRequest.day({this.date, this.branch = '', this.department = ''})
+  const AttendanceExportRequest.day({this.date, this.branch = '', this.department = '', this.employeeId = ''})
       : mode = AttendanceExportMode.day,
         year = null,
         month = null,
@@ -79,6 +95,7 @@ class AttendanceExportRequest {
     required int this.month,
     this.branch = '',
     this.department = '',
+    this.employeeId = '',
   })  : mode = AttendanceExportMode.month,
         date = null,
         from = null,
@@ -89,6 +106,7 @@ class AttendanceExportRequest {
     required this.to,
     this.branch = '',
     this.department = '',
+    this.employeeId = '',
   })  : mode = AttendanceExportMode.range,
         date = null,
         year = null,
@@ -102,6 +120,11 @@ class AttendanceExportRequest {
   final DateTime? to;
   final String branch;
   final String department;
+
+  /// Web "Single Employee": the exact employee ID; empty = all employees.
+  final String employeeId;
+
+  bool get single => employeeId.isNotEmpty;
 
   /// Why this can't be exported, or null.
   String? problem(DateTime today) => switch (mode) {
@@ -117,17 +140,21 @@ class AttendanceExportRequest {
           AttendanceExportMode.range => {'from_date': isoDay(from!), 'to_date': isoDay(to!)},
           AttendanceExportMode.day => {if (date != null) 'date': isoDay(date!)},
         },
-        if (branch.isNotEmpty) 'branch': branch,
-        if (department.isNotEmpty) 'department': department,
+        // One employee: the branch / department filters must not hide them.
+        if (single) 'employee': employeeId,
+        if (!single && branch.isNotEmpty) 'branch': branch,
+        if (!single && department.isNotEmpty) 'department': department,
       };
 
-  /// Web attendanceExportFilename: attendance_<branch>_<period>.csv.
+  /// Web attendanceExportFilename: attendance_<branch>_<period>.csv, or
+  /// attendance_<employee ID>_<period>.csv for one employee.
   String fileName(DateTime today, {String branchSlug = ''}) {
     final period = switch (mode) {
       AttendanceExportMode.month => isoMonth(year!, month!),
       AttendanceExportMode.range => '${isoDay(from!)}_to_${isoDay(to!)}',
       AttendanceExportMode.day => isoDay(date ?? today),
     };
+    if (single) return 'attendance_${employeeId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')}_$period.csv';
     return 'attendance_$branchSlug$period.csv';
   }
 }
@@ -212,8 +239,9 @@ class AttendanceExporter {
               month: p['month'],
               fromDate: p['from_date'],
               toDate: p['to_date'],
-              branch: request.branch,
-              department: request.department,
+              branch: p['branch'],
+              department: p['department'],
+              employee: p['employee'],
             );
       } catch (e) {
         return AttendanceExportFailed(friendlyAttendanceError(e));

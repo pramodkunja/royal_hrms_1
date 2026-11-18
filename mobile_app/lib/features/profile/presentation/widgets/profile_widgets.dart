@@ -105,8 +105,7 @@ class ProfileField extends StatelessWidget {
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
             filled: true,
             fillColor: AppColors.surface,
             border: OutlineInputBorder(
@@ -202,8 +201,7 @@ class ProfileDisplayField extends StatelessWidget {
                       fontSize: 13,
                     ),
                     maxLines: maxLines,
-                    overflow:
-                        maxLines > 1 ? TextOverflow.visible : TextOverflow.ellipsis,
+                    overflow: maxLines > 1 ? TextOverflow.visible : TextOverflow.ellipsis,
                   ),
                 ),
                 if (trailingIcon != null) ...[
@@ -243,13 +241,11 @@ class ProfileDisplayFieldRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: ProfileDisplayField(
-                label: label1, value: value1, padBottom: false),
+            child: ProfileDisplayField(label: label1, value: value1, padBottom: false),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: ProfileDisplayField(
-                label: label2, value: value2, padBottom: false),
+            child: ProfileDisplayField(label: label2, value: value2, padBottom: false),
           ),
         ],
       ),
@@ -284,8 +280,7 @@ class ProfileDocumentItem extends StatelessWidget {
               color: AppColors.primary.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(Icons.insert_drive_file_outlined,
-                size: 16, color: AppColors.primary),
+            child: Icon(Icons.insert_drive_file_outlined, size: 16, color: AppColors.primary),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -293,13 +288,10 @@ class ProfileDocumentItem extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(name,
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
                 if (subtitle.isNotEmpty) ...[
                   const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: AppTextStyles.caption
-                          .copyWith(color: AppColors.textSecondary)),
+                  Text(subtitle, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
                 ],
               ],
             ),
@@ -313,8 +305,7 @@ class ProfileDocumentItem extends StatelessWidget {
                   color: AppColors.backgroundLow,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(Icons.visibility_outlined,
-                    size: 16, color: AppColors.textSecondary),
+                child: Icon(Icons.visibility_outlined, size: 16, color: AppColors.textSecondary),
               ),
             ),
         ],

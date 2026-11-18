@@ -77,6 +77,11 @@ dependencies:
   pdfx: ^2.11.0
   pdf: ">=3.12.0 <3.13.0"
   printing: ">=5.14.3 <5.15.0"
+  # My Learning video players (Task 90 batch 2): YouTube IFrame API, Vimeo embed and
+  # HTML5 <video> for uploaded / direct videos — the same players and playback events
+  # as web MaterialViewer.tsx. BSD-3-Clause (Flutter authors). video_player was not
+  # needed: uploaded videos play from the backend's signed Cloudinary URL.
+  webview_flutter: ^4.14.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

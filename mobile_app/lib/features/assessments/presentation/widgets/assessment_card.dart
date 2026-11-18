@@ -62,8 +62,10 @@ class AssessmentCard extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
-                    if (assessment.isActive) _Badge(label: 'Active', color: AppColors.success, bg: AppColors.successContainer),
-                    if (assessment.isDefault) _Badge(label: 'Default', color: AppColors.info, bg: AppColors.infoContainer),
+                    if (assessment.isActive)
+                      _Badge(label: 'Active', color: AppColors.success, bg: AppColors.successContainer),
+                    if (assessment.isDefault)
+                      _Badge(label: 'Default', color: AppColors.info, bg: AppColors.infoContainer),
                   ],
                 ),
               ],
@@ -112,8 +114,8 @@ class AssessmentCard extends StatelessWidget {
             MiniStatsGrid(assessment: assessment),
             const SizedBox(height: 12),
             Text('CANDIDATE RESULTS',
-                style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.textHint, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+                style: AppTextStyles.labelSmall
+                    .copyWith(color: AppColors.textHint, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
             const SizedBox(height: 8),
             if (assessment.candidates.isEmpty)
               const NoCandidates()
@@ -151,13 +153,16 @@ class _ConfigRow extends StatelessWidget {
       (icon: Icons.percent_rounded, label: '${assessment.passPercentage}% to pass'),
       (
         icon: Icons.replay_outlined,
-        label: '${assessment.effectiveMaxAttempts} attempt${assessment.effectiveMaxAttempts == 1 ? '' : 's'}',
+        // Web assessments/page.tsx:379-380.
+        label:
+            '${assessment.effectiveMaxAttempts == 0 ? 'Unlimited' : '${assessment.effectiveMaxAttempts} attempt${assessment.effectiveMaxAttempts == 1 ? '' : 's'}'}'
+            '${assessment.maxAttempts == null ? ' (global)' : ''}',
       ),
       (
         icon: Icons.timer_outlined,
         label: assessment.effectiveTimeLimitMins == null
-            ? 'No time limit'
-            : '${assessment.effectiveTimeLimitMins} min',
+            ? 'No limit'
+            : '${assessment.effectiveTimeLimitMins} min${assessment.timeLimitMins == null ? ' (global)' : ''}',
       ),
     ];
     return Wrap(
@@ -175,8 +180,7 @@ class _ConfigRow extends StatelessWidget {
                   children: [
                     Icon(c.icon, size: 11, color: AppColors.textSecondary),
                     const SizedBox(width: 4),
-                    Text(c.label,
-                        style: AppTextStyles.caption.copyWith(fontSize: 10, fontWeight: FontWeight.w600)),
+                    Text(c.label, style: AppTextStyles.caption.copyWith(fontSize: 10, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ))

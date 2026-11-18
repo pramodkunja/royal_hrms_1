@@ -32,8 +32,7 @@ class ActivityLogDialog extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     'Activity Log — $candidateName',
-                    style: AppTextStyles.label
-                        .copyWith(fontWeight: FontWeight.w700),
+                    style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700),
                   ),
                 ),
                 IconButton(
@@ -51,21 +50,17 @@ class ActivityLogDialog extends ConsumerWidget {
             child: detailAsync.when(
               loading: () => Padding(
                 padding: const EdgeInsets.all(40),
-                child: Center(
-                    child: CircularProgressIndicator(
-                        color: AppColors.primary)),
+                child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
               ),
               error: (e, _) => Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text(userFriendlyMessage(e),
-                    style: AppTextStyles.bodySmall),
+                child: Text(userFriendlyMessage(e), style: AppTextStyles.bodySmall),
               ),
               data: (c) => c.logs.isEmpty
                   ? Padding(
                       padding: const EdgeInsets.all(32),
-                      child: Text('No activity yet.',
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: AppColors.textHint)),
+                      child:
+                          Text('No activity yet.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint)),
                     )
                   : _LogList(candidate: c),
             ),
@@ -97,8 +92,7 @@ class _LogList extends StatelessWidget {
       shrinkWrap: true,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       itemCount: candidate.logs.length,
-      separatorBuilder: (_, __) =>
-          Divider(height: 1, color: AppColors.border),
+      separatorBuilder: (_, __) => Divider(height: 1, color: AppColors.border),
       itemBuilder: (_, i) => _LogItem(log: candidate.logs[i]),
     );
   }
@@ -110,27 +104,34 @@ class _LogItem extends StatelessWidget {
 
   IconData get _icon {
     switch (log.logType) {
-      case 'success': return Icons.check_circle_outline;
-      case 'error':   return Icons.error_outline;
-      case 'warn':    return Icons.warning_amber_outlined;
-      default:        return Icons.info_outline;
+      case 'success':
+        return Icons.check_circle_outline;
+      case 'error':
+        return Icons.error_outline;
+      case 'warn':
+        return Icons.warning_amber_outlined;
+      default:
+        return Icons.info_outline;
     }
   }
 
   Color get _color {
     switch (log.logType) {
-      case 'success': return AppColors.success;
-      case 'error':   return AppColors.error;
-      case 'warn':    return AppColors.warning;
-      default:        return AppColors.info;
+      case 'success':
+        return AppColors.success;
+      case 'error':
+        return AppColors.error;
+      case 'warn':
+        return AppColors.warning;
+      default:
+        return AppColors.info;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final dt = log.createdAt.toLocal();
-    final dateStr =
-        '${dt.day} ${_monthName(dt.month)} ${dt.year}, '
+    final dateStr = '${dt.day} ${_monthName(dt.month)} ${dt.year}, '
         '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} '
         '${dt.hour < 12 ? 'am' : 'pm'}';
 
@@ -153,21 +154,15 @@ class _LogItem extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(log.title,
-                    style: AppTextStyles.bodySmall
-                        .copyWith(fontWeight: FontWeight.w600)),
+                Text(log.title, style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
                 if (log.description.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
-                    child: Text(log.description,
-                        style: AppTextStyles.caption
-                            .copyWith(color: AppColors.textSecondary)),
+                    child: Text(log.description, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
                   ),
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
-                  child: Text(dateStr,
-                      style: AppTextStyles.caption
-                          .copyWith(color: AppColors.textHint, fontSize: 10)),
+                  child: Text(dateStr, style: AppTextStyles.caption.copyWith(color: AppColors.textHint, fontSize: 10)),
                 ),
               ],
             ),
@@ -177,8 +172,6 @@ class _LogItem extends StatelessWidget {
     );
   }
 
-  static String _monthName(int m) => const [
-        '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-      ][m];
+  static String _monthName(int m) =>
+      const ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m];
 }

@@ -13,7 +13,8 @@ const kQuestionTypeTrueFalse = 'truefalse';
 
 /// Web openEditItem: a quiz item reopens as True/False when option A is
 /// "true", option B is "false" (any case) and there is no option C.
-bool isTrueFalseQuestion({required String itemType, required String optionA, required String optionB, required String optionC}) =>
+bool isTrueFalseQuestion(
+        {required String itemType, required String optionA, required String optionB, required String optionC}) =>
     itemType == AssessmentItemType.quiz &&
     optionA.toLowerCase() == 'true' &&
     optionB.toLowerCase() == 'false' &&
@@ -43,6 +44,7 @@ class ItemForm extends StatelessWidget {
   final bool saving;
   final String itemType;
   final String correctOption;
+
   /// [kQuestionTypeMcq] or [kQuestionTypeTrueFalse] (quiz items only).
   final String questionType;
   final ValueChanged<String> onQuestionTypeChanged;
@@ -97,8 +99,7 @@ class ItemForm extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(isAdd ? 'Add Item' : 'Edit Item',
-              style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
+          Text(isAdd ? 'Add Item' : 'Edit Item', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
           if (error != null) ...[
             _InlineError(message: error!),
@@ -120,8 +121,7 @@ class ItemForm extends StatelessWidget {
           TextFormField(
             controller: titleCtrl,
             maxLength: 200,
-            decoration: _dec('Title *',
-                hint: _isVideo ? 'e.g. Company Introduction' : 'e.g. Policy Quiz Q1'),
+            decoration: _dec('Title *', hint: _isVideo ? 'e.g. Company Introduction' : 'e.g. Policy Quiz Q1'),
           ),
           if (_isVideo) ...[
             const SizedBox(height: 2),
@@ -183,9 +183,13 @@ class ItemForm extends StatelessWidget {
             if (!_isTrueFalse) ...[
               const SizedBox(height: 10),
               Row(children: [
-                Expanded(child: TextFormField(key: const Key('item-option-c'), controller: optCCtrl, decoration: _dec('Option C'))),
+                Expanded(
+                    child: TextFormField(
+                        key: const Key('item-option-c'), controller: optCCtrl, decoration: _dec('Option C'))),
                 const SizedBox(width: 10),
-                Expanded(child: TextFormField(key: const Key('item-option-d'), controller: optDCtrl, decoration: _dec('Option D'))),
+                Expanded(
+                    child: TextFormField(
+                        key: const Key('item-option-d'), controller: optDCtrl, decoration: _dec('Option D'))),
               ]),
             ],
             const SizedBox(height: 10),
@@ -235,8 +239,7 @@ class ItemForm extends StatelessWidget {
                   ),
                   child: saving
                       ? const SizedBox(
-                          width: 18, height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : Text(isAdd ? 'Add Item' : 'Update Item'),
                 ),
               ),
@@ -248,22 +251,22 @@ class ItemForm extends StatelessWidget {
   }
 
   InputDecoration _dec(String label, {String? hint}) => InputDecoration(
-    labelText: label,
-    hintText: hint,
-    isDense: true,
-    labelStyle: AppTextStyles.caption,
-    hintStyle: AppTextStyles.caption,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: AppColors.border),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: AppColors.primary, width: 1.5),
-    ),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-  );
+        labelText: label,
+        hintText: hint,
+        isDense: true,
+        labelStyle: AppTextStyles.caption,
+        hintStyle: AppTextStyles.caption,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: AppColors.primary, width: 1.5),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      );
 }
 
 class _InlineError extends StatelessWidget {

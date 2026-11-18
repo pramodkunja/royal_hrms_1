@@ -25,8 +25,7 @@ final systemAdminKpisProvider = FutureProvider.autoDispose<SystemAdminKpis>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchSystemAdminKpis(),
 );
 
-final systemAdminAnnouncementProvider =
-    FutureProvider.autoDispose<DashboardAnnouncement?>(
+final systemAdminAnnouncementProvider = FutureProvider.autoDispose<DashboardAnnouncement?>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchSystemAdminAnnouncement(),
 );
 
@@ -34,31 +33,20 @@ final pendingApprovalsProvider = FutureProvider.autoDispose<PendingApprovals>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchPendingApprovals(),
 );
 
-final systemAdminDepartmentHeadcountProvider =
-    FutureProvider.autoDispose<List<DeptHeadcount>>(
-  (ref) => ref
-      .read(dashboardDataSourceProvider)
-      .fetchSystemAdminDepartmentHeadcount(),
+final systemAdminDepartmentHeadcountProvider = FutureProvider.autoDispose<List<DeptHeadcount>>(
+  (ref) => ref.read(dashboardDataSourceProvider).fetchSystemAdminDepartmentHeadcount(),
 );
 
-final systemAdminEmployeeLifecycleProvider =
-    FutureProvider.autoDispose<AdminEmployeeLifecycle>(
-  (ref) => ref
-      .read(dashboardDataSourceProvider)
-      .fetchSystemAdminEmployeeLifecycle(),
+final systemAdminEmployeeLifecycleProvider = FutureProvider.autoDispose<AdminEmployeeLifecycle>(
+  (ref) => ref.read(dashboardDataSourceProvider).fetchSystemAdminEmployeeLifecycle(),
 );
 
-final systemAdminBirthdaysTodayProvider =
-    FutureProvider.autoDispose<List<DashboardBirthdayEmployee>>(
-  (ref) =>
-      ref.read(dashboardDataSourceProvider).fetchSystemAdminBirthdaysToday(),
+final systemAdminBirthdaysTodayProvider = FutureProvider.autoDispose<List<DashboardBirthdayEmployee>>(
+  (ref) => ref.read(dashboardDataSourceProvider).fetchSystemAdminBirthdaysToday(),
 );
 
-final systemAdminBirthdaysUpcomingProvider =
-    FutureProvider.autoDispose<List<DashboardBirthdayEmployee>>(
-  (ref) => ref
-      .read(dashboardDataSourceProvider)
-      .fetchSystemAdminBirthdaysUpcoming(),
+final systemAdminBirthdaysUpcomingProvider = FutureProvider.autoDispose<List<DashboardBirthdayEmployee>>(
+  (ref) => ref.read(dashboardDataSourceProvider).fetchSystemAdminBirthdaysUpcoming(),
 );
 
 /// Keyed by (offset, module) so the "Load more" pagination and module
@@ -66,8 +54,7 @@ final systemAdminBirthdaysUpcomingProvider =
 /// backed by a distinct, independently-cached page — `ref.invalidate(
 /// auditLogsPageProvider)` (no params) clears every cached page/module
 /// combination at once, which is what pull-to-refresh does.
-final auditLogsPageProvider = FutureProvider.autoDispose
-    .family<AuditLogsResponse, ({int offset, String module})>(
+final auditLogsPageProvider = FutureProvider.autoDispose.family<AuditLogsResponse, ({int offset, String module})>(
   (ref, params) => ref.read(dashboardDataSourceProvider).fetchAuditLogs(
         limit: 20,
         offset: params.offset,
@@ -88,8 +75,7 @@ final hrKpisProvider = FutureProvider.autoDispose<HrKpis>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchHrKpis(),
 );
 
-final hrAttendanceSummaryProvider =
-    FutureProvider.autoDispose<HrAttendanceSummary>(
+final hrAttendanceSummaryProvider = FutureProvider.autoDispose<HrAttendanceSummary>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchHrAttendanceSummary(),
 );
 
@@ -111,28 +97,23 @@ final hrSeparationQueueCountProvider = FutureProvider.autoDispose<int>((ref) asy
   return ref.read(separationDataSourceProvider).fetchTeamRequestCount();
 });
 
-final hrRecruitmentFunnelProvider =
-    FutureProvider.autoDispose<HrRecruitmentFunnel>(
+final hrRecruitmentFunnelProvider = FutureProvider.autoDispose<HrRecruitmentFunnel>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchHrRecruitmentFunnel(),
 );
 
-final hrEmployeeLifecycleProvider =
-    FutureProvider.autoDispose<HrEmployeeLifecycle>(
+final hrEmployeeLifecycleProvider = FutureProvider.autoDispose<HrEmployeeLifecycle>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchHrEmployeeLifecycle(),
 );
 
-final hrBirthdaysTodayProvider =
-    FutureProvider.autoDispose<List<DashboardBirthdayEmployee>>(
+final hrBirthdaysTodayProvider = FutureProvider.autoDispose<List<DashboardBirthdayEmployee>>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchHrBirthdaysToday(),
 );
 
-final hrBirthdaysUpcomingProvider =
-    FutureProvider.autoDispose<List<DashboardBirthdayEmployee>>(
+final hrBirthdaysUpcomingProvider = FutureProvider.autoDispose<List<DashboardBirthdayEmployee>>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchHrBirthdaysUpcoming(),
 );
 
-final hrDepartmentHeadcountProvider =
-    FutureProvider.autoDispose<List<DeptHeadcount>>(
+final hrDepartmentHeadcountProvider = FutureProvider.autoDispose<List<DeptHeadcount>>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchHrDepartmentHeadcount(),
 );
 
@@ -163,48 +144,40 @@ final employeeNoticePeriodProvider = FutureProvider.autoDispose<EmployeeNoticePe
   (ref) => ref.read(dashboardDataSourceProvider).fetchEmployeeNoticePeriod(),
 );
 
-final employeeLeaveBalancesProvider =
-    FutureProvider.autoDispose<EmployeeLeaveBalanceSummary>(
+final employeeLeaveBalancesProvider = FutureProvider.autoDispose<EmployeeLeaveBalanceSummary>(
   // web EmpLeaveBalances.tsx: useLeaveBalances(getLeaveYear()) →
   // `?year=<calendar year>` (Task 83). The backend's own default is the
   // server's calendar year, so this only differs around New Year across
   // time zones — but the device's year is what web uses.
-  (ref) => ref
-      .read(dashboardDataSourceProvider)
-      .fetchEmployeeLeaveBalances(year: ref.watch(leaveDashboardYearProvider)),
+  (ref) =>
+      ref.read(dashboardDataSourceProvider).fetchEmployeeLeaveBalances(year: ref.watch(leaveDashboardYearProvider)),
 );
 
-final employeeActionItemsProvider =
-    FutureProvider.autoDispose<ActionItemsResponse>(
+final employeeActionItemsProvider = FutureProvider.autoDispose<ActionItemsResponse>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchEmployeeActionItems(),
 );
 
-final employeeRecentRequestsProvider =
-    FutureProvider.autoDispose<RecentRequestsResponse>(
+final employeeRecentRequestsProvider = FutureProvider.autoDispose<RecentRequestsResponse>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchEmployeeRecentRequests(),
 );
 
-final employeeAttendanceSummaryProvider =
-    FutureProvider.autoDispose<EmployeeAttendanceSummary>(
-  (ref) =>
-      ref.read(dashboardDataSourceProvider).fetchEmployeeAttendanceSummary(),
+final employeeAttendanceSummaryProvider = FutureProvider.autoDispose<EmployeeAttendanceSummary>(
+  (ref) => ref.read(dashboardDataSourceProvider).fetchEmployeeAttendanceSummary(),
 );
 
 /// Keyed by (month, year) so the Employee dashboard's month picker (mirrors
 /// web's `EmpAttendanceSummary` month `<select>`) can switch periods without
 /// losing the previously-fetched month's cached data.
-final employeeAttendanceSummaryForProvider = FutureProvider.autoDispose
-    .family<EmployeeAttendanceSummary, ({int month, int year})>(
+final employeeAttendanceSummaryForProvider =
+    FutureProvider.autoDispose.family<EmployeeAttendanceSummary, ({int month, int year})>(
   (ref, params) => ref.read(dashboardDataSourceProvider).fetchEmployeeAttendanceSummary(
         month: params.month,
         year: params.year,
       ),
 );
 
-final employeeAttendanceStatusProvider =
-    FutureProvider.autoDispose<EmployeeAttendanceStatus>(
-  (ref) =>
-      ref.read(dashboardDataSourceProvider).fetchEmployeeAttendanceStatus(),
+final employeeAttendanceStatusProvider = FutureProvider.autoDispose<EmployeeAttendanceStatus>(
+  (ref) => ref.read(dashboardDataSourceProvider).fetchEmployeeAttendanceStatus(),
 );
 
 /// Every holiday the employee can see (web EmpUpcomingHolidays' one
@@ -225,8 +198,7 @@ final upcomingHolidayDatesProvider = Provider.autoDispose<HolidayDayRefs>(
 
 // ── Shared ─────────────────────────────────────────────────────────────────
 
-final sharedAnnouncementProvider =
-    FutureProvider.autoDispose<DashboardAnnouncement?>(
+final sharedAnnouncementProvider = FutureProvider.autoDispose<DashboardAnnouncement?>(
   (ref) => ref.read(dashboardDataSourceProvider).fetchSharedAnnouncement(),
 );
 

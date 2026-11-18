@@ -15,8 +15,7 @@ class CandidateLogModel extends CandidateLogEntity {
       logType: j['log_type'] as String? ?? 'info',
       title: j['title'] as String? ?? '',
       description: j['description'] as String? ?? '',
-      createdAt: DateTime.tryParse(j['created_at'] as String? ?? '') ??
-          DateTime.now(),
+      createdAt: DateTime.tryParse(j['created_at'] as String? ?? '') ?? DateTime.now(),
     );
   }
 }
@@ -62,16 +61,10 @@ class CandidateModel extends CandidateEntity {
       interviewer: j['interviewer']?.toString(),
       interviewerName: j['interviewer_name'] as String? ?? '',
       status: j['status'] as String? ?? 'pending',
-      portalCredentialsSent:
-          j['portal_credentials_sent'] as bool? ?? false,
+      portalCredentialsSent: j['portal_credentials_sent'] as bool? ?? false,
       addedByName: j['added_by_name'] as String? ?? '',
-      createdAt:
-          DateTime.tryParse(j['created_at'] as String? ?? '') ??
-              DateTime.now(),
-      logs: rawLogs
-          .map((l) =>
-              CandidateLogModel.fromJson(l as Map<String, dynamic>))
-          .toList(),
+      createdAt: DateTime.tryParse(j['created_at'] as String? ?? '') ?? DateTime.now(),
+      logs: rawLogs.map((l) => CandidateLogModel.fromJson(l as Map<String, dynamic>)).toList(),
       // referral_by is a FK to User, whose PK is a UUID — not an int.
       referralBy: j['referral_by'] as String?,
       referralByName: j['referral_by_name'] as String? ?? '',

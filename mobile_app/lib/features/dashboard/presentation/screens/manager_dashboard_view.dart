@@ -179,8 +179,7 @@ class _ManagerConsoleHeader extends ConsumerWidget {
     // the pending-approvals figure with the leave module.
     final attendanceOn = userHasModule(user, AppModules.attendance);
     final leaveOn = userHasModule(user, AppModules.leave);
-    final clockedIn =
-        attendanceOn && (ref.watch(todayAttendanceProvider).valueOrNull?.isClockedIn ?? false);
+    final clockedIn = attendanceOn && (ref.watch(todayAttendanceProvider).valueOrNull?.isClockedIn ?? false);
     final ov = overview;
     final name = (ov?.managerName.isNotEmpty ?? false) ? ov!.managerName : (user?.fullName ?? '');
     final first = name.trim().isEmpty ? 'there' : name.trim().split(' ').first;

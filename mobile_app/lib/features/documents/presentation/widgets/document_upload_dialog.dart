@@ -10,12 +10,10 @@ class DocumentUploadDialog extends ConsumerStatefulWidget {
   const DocumentUploadDialog({super.key});
 
   @override
-  ConsumerState<DocumentUploadDialog> createState() =>
-      _DocumentUploadDialogState();
+  ConsumerState<DocumentUploadDialog> createState() => _DocumentUploadDialogState();
 }
 
-class _DocumentUploadDialogState
-    extends ConsumerState<DocumentUploadDialog> {
+class _DocumentUploadDialogState extends ConsumerState<DocumentUploadDialog> {
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
 
@@ -55,21 +53,17 @@ class _DocumentUploadDialogState
             decoration: BoxDecoration(color: AppColors.primary),
             child: Row(
               children: [
-                const Icon(Icons.upload_file_outlined,
-                    color: Colors.white, size: 22),
+                const Icon(Icons.upload_file_outlined, color: Colors.white, size: 22),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Upload Document',
-                          style: AppTextStyles.label
-                              .copyWith(color: Colors.white,
-                                  fontWeight: FontWeight.w700)),
+                          style: AppTextStyles.label.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
                       Text(
                         'PDF, Word, Excel, PPT, images, TXT, CSV — up to 25 MB',
-                        style: AppTextStyles.caption
-                            .copyWith(color: Colors.white70, fontSize: 10),
+                        style: AppTextStyles.caption.copyWith(color: Colors.white70, fontSize: 10),
                       ),
                     ],
                   ),
@@ -87,7 +81,9 @@ class _DocumentUploadDialogState
               color: AppColors.background,
               child: SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
-                  16, 14, 16,
+                  16,
+                  14,
+                  16,
                   MediaQuery.viewInsetsOf(context).bottom + 20,
                 ),
                 child: Column(
@@ -118,10 +114,7 @@ class _DocumentUploadDialogState
                       initialValue: _category,
                       style: AppTextStyles.body,
                       decoration: _dec('Category'),
-                      items: _categories
-                          .map((c) => DropdownMenuItem(
-                              value: c.$1, child: Text(c.$2)))
-                          .toList(),
+                      items: _categories.map((c) => DropdownMenuItem(value: c.$1, child: Text(c.$2))).toList(),
                       onChanged: (val) {
                         if (val != null) setState(() => _category = val);
                       },
@@ -136,8 +129,8 @@ class _DocumentUploadDialogState
                         contentPadding: EdgeInsets.zero,
                         controlAffinity: ListTileControlAffinity.leading,
                         dense: true,
-                        title: Text('Employees must read and acknowledge this document',
-                            style: AppTextStyles.bodySmall),
+                        title:
+                            Text('Employees must read and acknowledge this document', style: AppTextStyles.bodySmall),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -145,12 +138,10 @@ class _DocumentUploadDialogState
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed:
-                                _uploading ? null : () => Navigator.pop(context),
+                            onPressed: _uploading ? null : () => Navigator.pop(context),
                             style: OutlinedButton.styleFrom(
                               minimumSize: const Size.fromHeight(46),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             ),
                             child: const Text('Cancel'),
                           ),
@@ -162,19 +153,16 @@ class _DocumentUploadDialogState
                             style: FilledButton.styleFrom(
                               minimumSize: const Size.fromHeight(46),
                               backgroundColor: AppColors.primary,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             ),
                             child: _uploading
                                 ? const SizedBox(
                                     width: 18,
                                     height: 18,
-                                    child: CircularProgressIndicator(
-                                        color: Colors.white, strokeWidth: 2),
+                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                                   )
                                 : Text('Upload Document',
-                                    style: AppTextStyles.labelSmall
-                                        .copyWith(color: Colors.white)),
+                                    style: AppTextStyles.labelSmall.copyWith(color: Colors.white)),
                           ),
                         ),
                       ],
@@ -193,8 +181,18 @@ class _DocumentUploadDialogState
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: [
-        'pdf', 'doc', 'docx', 'xls', 'xlsx',
-        'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'txt', 'csv',
+        'pdf',
+        'doc',
+        'docx',
+        'xls',
+        'xlsx',
+        'ppt',
+        'pptx',
+        'jpg',
+        'jpeg',
+        'png',
+        'txt',
+        'csv',
       ],
     );
     if (result != null && result.files.isNotEmpty) {
@@ -208,9 +206,7 @@ class _DocumentUploadDialogState
   bool _validate() {
     setState(() {
       _fileError = _pickedFile == null ? 'Please select a file' : null;
-      _titleError = _titleCtrl.text.trim().isEmpty
-          ? 'Document name is required'
-          : null;
+      _titleError = _titleCtrl.text.trim().isEmpty ? 'Document name is required' : null;
     });
     return _pickedFile != null && _titleCtrl.text.trim().isNotEmpty;
   }
@@ -241,8 +237,7 @@ class _DocumentUploadDialogState
         content: Text(error),
         backgroundColor: AppColors.error,
         behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ));
     }
   }
@@ -260,8 +255,6 @@ class _DocumentUploadDialogState
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: AppColors.primary, width: 1.5),
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       );
 }
-

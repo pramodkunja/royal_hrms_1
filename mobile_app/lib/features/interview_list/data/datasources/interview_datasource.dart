@@ -18,8 +18,7 @@ class InterviewDataSource {
 
   Future<CandidateStatsModel> fetchStats() async {
     final res = await _dio.get(ApiConstants.candidateStats);
-    return CandidateStatsModel.fromJson(
-        _unwrap(res.data) as Map<String, dynamic>);
+    return CandidateStatsModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
   /// GET /recruitment/candidates/ exactly as web's RECRUITMENT_API.list:
@@ -44,22 +43,17 @@ class InterviewDataSource {
 
   Future<CandidateModel> fetchCandidate(int id) async {
     final res = await _dio.get(ApiConstants.candidateDetail(id));
-    return CandidateModel.fromJson(
-        _unwrap(res.data) as Map<String, dynamic>);
+    return CandidateModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
-  Future<CandidateModel> createCandidate(
-      Map<String, dynamic> data) async {
+  Future<CandidateModel> createCandidate(Map<String, dynamic> data) async {
     final res = await _dio.post(ApiConstants.candidates, data: data);
-    return CandidateModel.fromJson(
-        _unwrap(res.data) as Map<String, dynamic>);
+    return CandidateModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
-  Future<CandidateModel> updateCandidate(
-      int id, Map<String, dynamic> data) async {
+  Future<CandidateModel> updateCandidate(int id, Map<String, dynamic> data) async {
     final res = await _dio.put(ApiConstants.candidateDetail(id), data: data);
-    return CandidateModel.fromJson(
-        _unwrap(res.data) as Map<String, dynamic>);
+    return CandidateModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
   /// PATCH /recruitment/candidates/<id>/status/. For `selected` / `rejected`
@@ -68,9 +62,7 @@ class InterviewDataSource {
   /// "… Email could not be sent — check SMTP settings."), so the message is
   /// returned alongside the updated candidate. Clients must NOT also call
   /// /send-email/ — that would email the candidate twice.
-  Future<({CandidateModel candidate, String message})> updateStatus(
-      int id, String status,
-      {String? remarks}) async {
+  Future<({CandidateModel candidate, String message})> updateStatus(int id, String status, {String? remarks}) async {
     final res = await _dio.patch(
       ApiConstants.candidateStatus(id),
       data: {
@@ -79,8 +71,7 @@ class InterviewDataSource {
       },
     );
     final body = res.data;
-    final message =
-        body is Map && body['message'] is String ? body['message'] as String : '';
+    final message = body is Map && body['message'] is String ? body['message'] as String : '';
     return (
       candidate: CandidateModel.fromJson(_unwrap(res.data) as Map<String, dynamic>),
       message: message,

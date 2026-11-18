@@ -5,7 +5,18 @@ import '../../data/models/assessment_model.dart';
 import 'assessment_video_preview.dart';
 
 const _kMonthShort = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 String _fmtDate(DateTime? d) {
@@ -34,9 +45,8 @@ class ItemRow extends StatelessWidget {
 
     final String subtitle;
     if (isVideo) {
-      subtitle = item.durationSecs != null && item.durationSecs! > 0
-          ? '${(item.durationSecs! / 60).ceil()} min'
-          : 'Video';
+      subtitle =
+          item.durationSecs != null && item.durationSecs! > 0 ? '${(item.durationSecs! / 60).ceil()} min' : 'Video';
     } else {
       // Web ItemsModal: the question (first 60 characters, "…" after) and
       // "· Correct: X" ("—" when unset). Items carry no points.
@@ -72,9 +82,7 @@ class ItemRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 2),
                 Text(subtitle,
-                    style: AppTextStyles.caption.copyWith(fontSize: 11),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                    style: AppTextStyles.caption.copyWith(fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
                 // Web VideoLink: "Watch video" / the shortened URL.
                 if (isVideo && item.videoUrl.isNotEmpty) AssessmentVideoLink(url: item.videoUrl),
               ],
@@ -90,21 +98,21 @@ class ItemRow extends StatelessWidget {
             )
           else ...[
             if (onEdit != null)
-            IconButton(
-              key: Key('item-edit-${item.id}'),
-              icon: const Icon(Icons.edit_outlined, size: 16),
-              color: AppColors.textSecondary,
-              visualDensity: VisualDensity.compact,
-              onPressed: onEdit,
-            ),
+              IconButton(
+                key: Key('item-edit-${item.id}'),
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                color: AppColors.textSecondary,
+                visualDensity: VisualDensity.compact,
+                onPressed: onEdit,
+              ),
             if (onDelete != null)
-            IconButton(
-              key: Key('item-delete-${item.id}'),
-              icon: const Icon(Icons.delete_outline, size: 16),
-              color: AppColors.error,
-              visualDensity: VisualDensity.compact,
-              onPressed: onDelete,
-            ),
+              IconButton(
+                key: Key('item-delete-${item.id}'),
+                icon: const Icon(Icons.delete_outline, size: 16),
+                color: AppColors.error,
+                visualDensity: VisualDensity.compact,
+                onPressed: onDelete,
+              ),
           ],
         ],
       ),

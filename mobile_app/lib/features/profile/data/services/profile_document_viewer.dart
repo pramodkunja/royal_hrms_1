@@ -189,6 +189,24 @@ class ProfileDocumentTempStore {
     return File(_join(dir, 'doc-$documentId.pdf'));
   }
 
+  /// A fresh path for a training material PDF (Task 90). Same folder, so the
+  /// same cleanup (app start, before each view, sign-out) removes it. The
+  /// name holds no title, id or URL.
+  Future<File> trainingPdfFile() async {
+    final dir = Directory(_join(await tempRoot(), folderName));
+    await dir.create(recursive: true);
+    return File(_join(dir, 'training-material.pdf'));
+  }
+
+  /// A fresh path for a training PowerPoint / Word copy handed to another app
+  /// (HO-47). Same folder and cleanup; [extension] is pptx or docx only.
+  Future<File> trainingOfficeFile(String extension) async {
+    if (extension != 'pptx' && extension != 'docx') throw ArgumentError.value(extension, 'extension');
+    final dir = Directory(_join(await tempRoot(), folderName));
+    await dir.create(recursive: true);
+    return File(_join(dir, 'training-material.$extension'));
+  }
+
   Future<void> deleteFile(File f) async {
     try {
       if (await f.exists()) await f.delete();

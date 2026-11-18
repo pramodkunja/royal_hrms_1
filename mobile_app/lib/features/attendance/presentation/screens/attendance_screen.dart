@@ -11,8 +11,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/app_error_state.dart';
 import '../../../../shared/widgets/blue_hero_banner.dart';
-import '../../../../shared/widgets/expandable_fab.dart'
-    show expandableFabOpenProvider;
+import '../../../../shared/widgets/expandable_fab.dart' show expandableFabOpenProvider;
 import '../../../../shared/widgets/stat_card.dart';
 import '../../../employees/data/models/employee_model.dart';
 import '../../../employees/presentation/providers/employee_providers.dart';
@@ -85,10 +84,7 @@ String _titleCaseStatus(String key) {
     orElse: () => const MapEntry('', ''),
   );
   if (match.value.isNotEmpty) return match.value;
-  return key
-      .split('_')
-      .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
-      .join(' ');
+  return key.split('_').map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}').join(' ');
 }
 
 const _kAttendanceSortByOptions = <MapEntry<String, String>>[
@@ -150,8 +146,7 @@ class AttendanceScreen extends ConsumerStatefulWidget {
   ConsumerState<AttendanceScreen> createState() => _AttendanceScreenState();
 }
 
-class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
-    with SingleTickerProviderStateMixin {
+class _AttendanceScreenState extends ConsumerState<AttendanceScreen> with SingleTickerProviderStateMixin {
   late final TabController _tab;
 
   @override
@@ -184,8 +179,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen>
               tabAlignment: TabAlignment.start,
               labelColor: AppColors.primary,
               unselectedLabelColor: AppColors.textSecondary,
-              labelStyle:
-                  AppTextStyles.label.copyWith(fontWeight: FontWeight.w600),
+              labelStyle: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600),
               unselectedLabelStyle: AppTextStyles.label,
               indicatorColor: AppColors.primary,
               indicatorWeight: 2.5,
@@ -254,14 +248,9 @@ class _BadgeTab extends StatelessWidget {
             const SizedBox(width: 6),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                  color: AppColors.error,
-                  borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(color: AppColors.error, borderRadius: BorderRadius.circular(10)),
               child: Text('$count',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700)),
+                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
             ),
           ],
         ),
@@ -288,18 +277,14 @@ class _StatsBar extends ConsumerWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Attendance & Time',
-                      style: AppTextStyles.h3.copyWith(color: Colors.white)),
+                  Text('Attendance & Time', style: AppTextStyles.h3.copyWith(color: Colors.white)),
                   Text(_todayDisplay(),
-                      style: AppTextStyles.labelSmall.copyWith(
-                          color: Colors.white.withValues(alpha: 0.85))),
+                      style: AppTextStyles.labelSmall.copyWith(color: Colors.white.withValues(alpha: 0.85))),
                 ],
               ),
               const SizedBox(height: 2),
-              Text(
-                  'Monitor daily attendance, overtime, and correction requests',
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: Colors.white.withValues(alpha: 0.85))),
+              Text('Monitor daily attendance, overtime, and correction requests',
+                  style: AppTextStyles.bodySmall.copyWith(color: Colors.white.withValues(alpha: 0.85))),
             ],
           ),
         ),
@@ -347,9 +332,8 @@ class _StatsBar extends ConsumerWidget {
             error: (e, _) => SizedBox(
               height: 60,
               child: Center(
-                child: Text(friendlyAttendanceError(e),
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.error)),
+                child:
+                    Text(friendlyAttendanceError(e), style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
               ),
             ),
           ),
@@ -361,11 +345,9 @@ class _StatsBar extends ConsumerWidget {
 
 // ─── Tab 1: Attendance ────────────────────────────────────────────────────────
 
-String _isoDate(DateTime d) =>
-    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+String _isoDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-String _shortDate(DateTime d) =>
-    '${d.day} ${_monthNames[d.month - 1]} ${d.year}';
+String _shortDate(DateTime d) => '${d.day} ${_monthNames[d.month - 1]} ${d.year}';
 
 // Wraps the "Team Day View" (flat records list) / "Employee Month View"
 // (per-employee search + calendar) toggle that web's Attendance & Time page
@@ -415,9 +397,7 @@ class _AttendanceTabState extends ConsumerState<_AttendanceTab> {
             ),
           ),
           Expanded(
-            child: _viewMode == 0
-                ? const _TeamDayView()
-                : const _EmployeeMonthView(),
+            child: _viewMode == 0 ? const _TeamDayView() : const _EmployeeMonthView(),
           ),
         ],
       ),
@@ -440,12 +420,10 @@ class _AttendanceTabState extends ConsumerState<_AttendanceTab> {
 class _AttendanceSpeedDial extends ConsumerStatefulWidget {
   final VoidCallback onAddRecord;
   final VoidCallback onReprocess;
-  const _AttendanceSpeedDial(
-      {required this.onAddRecord, required this.onReprocess});
+  const _AttendanceSpeedDial({required this.onAddRecord, required this.onReprocess});
 
   @override
-  ConsumerState<_AttendanceSpeedDial> createState() =>
-      _AttendanceSpeedDialState();
+  ConsumerState<_AttendanceSpeedDial> createState() => _AttendanceSpeedDialState();
 }
 
 class _AttendanceSpeedDialState extends ConsumerState<_AttendanceSpeedDial> {
@@ -473,8 +451,7 @@ class _AttendanceSpeedDialState extends ConsumerState<_AttendanceSpeedDial> {
   void dispose() {
     if (_open) {
       final notifier = ref.read(expandableFabOpenProvider.notifier);
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => notifier.state = false);
+      WidgetsBinding.instance.addPostFrameCallback((_) => notifier.state = false);
     }
     super.dispose();
   }
@@ -554,9 +531,7 @@ class _SpeedDialAction extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               boxShadow: AppColors.elevatedShadow,
             ),
-            child: Text(label,
-                style: AppTextStyles.labelSmall
-                    .copyWith(fontWeight: FontWeight.w600)),
+            child: Text(label, style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w600)),
           ),
           const SizedBox(width: 10),
           FloatingActionButton.small(
@@ -590,15 +565,12 @@ class _ViewModeButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected ? AppColors.primary : AppColors.surface,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-                color: selected ? AppColors.primary : AppColors.border),
+            border: Border.all(color: selected ? AppColors.primary : AppColors.border),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon,
-                  size: 15,
-                  color: selected ? Colors.white : AppColors.textSecondary),
+              Icon(icon, size: 15, color: selected ? Colors.white : AppColors.textSecondary),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
@@ -651,8 +623,7 @@ class _EmployeeMonthViewState extends ConsumerState<_EmployeeMonthView> {
   // overlay) wouldn't fire from re-calling _searchEmployees directly.
   TextEditingController? _fieldController;
 
-  Future<Iterable<EmployeeModel>> _searchEmployees(
-      TextEditingValue value) async {
+  Future<Iterable<EmployeeModel>> _searchEmployees(TextEditingValue value) async {
     final query = value.text.trim();
     if (query.isEmpty) {
       _searchGeneration++;
@@ -676,18 +647,15 @@ class _EmployeeMonthViewState extends ConsumerState<_EmployeeMonthView> {
     }
 
     await Future.delayed(const Duration(milliseconds: 400));
-    if (generation != _searchGeneration)
-      return const Iterable<EmployeeModel>.empty();
+    if (generation != _searchGeneration) return const Iterable<EmployeeModel>.empty();
 
     try {
-      final result =
-          await ref.read(employeesDataSourceProvider).fetchEmployeesPage(
-                page: 1,
-                pageSize: 20,
-                filters: EmployeeFilters(search: query),
-              );
-      if (generation != _searchGeneration)
-        return const Iterable<EmployeeModel>.empty();
+      final result = await ref.read(employeesDataSourceProvider).fetchEmployeesPage(
+            page: 1,
+            pageSize: 20,
+            filters: EmployeeFilters(search: query),
+          );
+      if (generation != _searchGeneration) return const Iterable<EmployeeModel>.empty();
       if (mounted) {
         setState(() {
           _searching = false;
@@ -696,8 +664,7 @@ class _EmployeeMonthViewState extends ConsumerState<_EmployeeMonthView> {
       }
       return result.items;
     } catch (e) {
-      if (generation != _searchGeneration)
-        return const Iterable<EmployeeModel>.empty();
+      if (generation != _searchGeneration) return const Iterable<EmployeeModel>.empty();
       if (mounted) {
         setState(() {
           _searching = false;
@@ -728,14 +695,11 @@ class _EmployeeMonthViewState extends ConsumerState<_EmployeeMonthView> {
                   isDense: true,
                   hintText: 'Search employee by name or ID…',
                   prefixIcon: const Icon(Icons.search, size: 16),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: AppColors.border)),
+                      borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
                   enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: AppColors.border)),
+                      borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
                 ),
               );
             },
@@ -755,9 +719,7 @@ class _EmployeeMonthViewState extends ConsumerState<_EmployeeMonthView> {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(_searchError!,
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.error)),
+                  child: Text(_searchError!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
                 ),
                 TextButton(
                   onPressed: () {
@@ -783,15 +745,12 @@ class _EmployeeMonthViewState extends ConsumerState<_EmployeeMonthView> {
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
             child: Text('No employees match your search.',
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textSecondary)),
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
           ),
         const SizedBox(height: 8),
         Expanded(
           child: _selected == null
-              ? const _EmptyState(
-                  message:
-                      'Search and select an employee above to view their monthly attendance.')
+              ? const _EmptyState(message: 'Search and select an employee above to view their monthly attendance.')
               : EmployeeAttendanceTab(employee: _selected!),
         ),
       ],
@@ -813,14 +772,10 @@ Future<void> _reprocessAttendance(BuildContext context, WidgetRef ref) async {
         'may overwrite manual edits made for this day.',
       ),
       actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
         ElevatedButton(
           onPressed: () => Navigator.pop(context, true),
-          style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white),
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
           child: const Text('Reprocess'),
         ),
       ],
@@ -849,8 +804,7 @@ class _TeamDayView extends ConsumerStatefulWidget {
 }
 
 class _TeamDayViewState extends ConsumerState<_TeamDayView> {
-  late final _searchCtrl =
-      TextEditingController(text: ref.read(attendanceRecordsSearchProvider));
+  late final _searchCtrl = TextEditingController(text: ref.read(attendanceRecordsSearchProvider));
   Timer? _searchDebounce;
 
   @override
@@ -908,9 +862,7 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
     if (saved == null || !context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-          content: Text(saved.empty
-              ? 'Attendance exported — no records matched the filters.'
-              : 'Attendance exported.'),
+          content: Text(saved.empty ? 'Attendance exported — no records matched the filters.' : 'Attendance exported.'),
           backgroundColor: AppColors.success),
     );
   }
@@ -946,18 +898,15 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
     final canImport = ref.watch(permissionProvider(kAttendanceImportPermission));
     final selectedStatus = ref.watch(attendanceRecordsStatusFilterProvider);
     final statusLabel = _kAttendanceStatusFilterOptions
-        .firstWhere((e) => e.key == selectedStatus,
-            orElse: () => _kAttendanceStatusFilterOptions.first)
+        .firstWhere((e) => e.key == selectedStatus, orElse: () => _kAttendanceStatusFilterOptions.first)
         .value;
     final selectedSortBy = ref.watch(attendanceRecordsSortByProvider);
     final sortByLabel = _kAttendanceSortByOptions
-        .firstWhere((e) => e.key == selectedSortBy,
-            orElse: () => _kAttendanceSortByOptions.first)
+        .firstWhere((e) => e.key == selectedSortBy, orElse: () => _kAttendanceSortByOptions.first)
         .value;
     final selectedSortDir = ref.watch(attendanceRecordsSortDirProvider);
     final chips = dashboardSlice.chips ?? const <String, int>{};
-    final totalEmployees =
-        dashboardSlice.total ?? recordsAsync.valueOrNull?.results.length ?? 0;
+    final totalEmployees = dashboardSlice.total ?? recordsAsync.valueOrNull?.results.length ?? 0;
 
     // The filter panel (including the search field) and the status-chips
     // row used to live INSIDE recordsAsync.when()'s `data:` branch — so
@@ -998,27 +947,20 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.filter_list,
-                        size: 16, color: AppColors.textSecondary),
+                    Icon(Icons.filter_list, size: 16, color: AppColors.textSecondary),
                     const SizedBox(width: 6),
                     Text('Filters',
-                        style: AppTextStyles.label.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary)),
+                        style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                   ],
                 ),
                 const SizedBox(height: 10),
                 Row(children: [
                   Expanded(
                     child: _Dropdown(
-                      value: selectedBranch.isEmpty
-                          ? 'All Branches'
-                          : selectedBranch,
+                      value: selectedBranch.isEmpty ? 'All Branches' : selectedBranch,
                       items: ['All Branches', ...branchList],
                       onChanged: (v) {
-                        ref
-                            .read(hrAttendanceBranchFilterProvider.notifier)
-                            .state = (v == 'All Branches') ? '' : v!;
+                        ref.read(hrAttendanceBranchFilterProvider.notifier).state = (v == 'All Branches') ? '' : v!;
                         _resetPages(ref);
                       },
                     ),
@@ -1026,14 +968,11 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: _Dropdown(
-                      value: selectedDept.isEmpty
-                          ? 'All Departments'
-                          : selectedDept,
+                      value: selectedDept.isEmpty ? 'All Departments' : selectedDept,
                       items: ['All Departments', ...deptList],
                       onChanged: (v) {
-                        ref
-                            .read(hrAttendanceDepartmentFilterProvider.notifier)
-                            .state = (v == 'All Departments') ? '' : v!;
+                        ref.read(hrAttendanceDepartmentFilterProvider.notifier).state =
+                            (v == 'All Departments') ? '' : v!;
                         _resetPages(ref);
                       },
                     ),
@@ -1050,14 +989,11 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
                         isDense: true,
                         hintText: 'Search employee…',
                         prefixIcon: const Icon(Icons.search, size: 16),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 9),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                         border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: AppColors.border)),
+                            borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
                         enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: AppColors.border)),
+                            borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
                       ),
                     ),
                   ),
@@ -1065,16 +1001,10 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
                   Expanded(
                     child: _Dropdown(
                       value: statusLabel,
-                      items: _kAttendanceStatusFilterOptions
-                          .map((e) => e.value)
-                          .toList(),
+                      items: _kAttendanceStatusFilterOptions.map((e) => e.value).toList(),
                       onChanged: (v) {
-                        final entry = _kAttendanceStatusFilterOptions
-                            .firstWhere((e) => e.value == v);
-                        ref
-                            .read(
-                                attendanceRecordsStatusFilterProvider.notifier)
-                            .state = entry.key;
+                        final entry = _kAttendanceStatusFilterOptions.firstWhere((e) => e.value == v);
+                        ref.read(attendanceRecordsStatusFilterProvider.notifier).state = entry.key;
                         _resetPages(ref);
                       },
                     ),
@@ -1086,9 +1016,7 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
                     child: GestureDetector(
                       onTap: () => _pickDate(context, ref),
                       child: _FakeInput(
-                        value: selectedDate == null
-                            ? 'Today'
-                            : _shortDate(selectedDate),
+                        value: selectedDate == null ? 'Today' : _shortDate(selectedDate),
                         icon: Icons.calendar_today_outlined,
                       ),
                     ),
@@ -1098,13 +1026,10 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
                       tooltip: 'Reset to today',
                       visualDensity: VisualDensity.compact,
                       onPressed: () {
-                        ref
-                            .read(hrAttendanceDateFilterProvider.notifier)
-                            .state = null;
+                        ref.read(hrAttendanceDateFilterProvider.notifier).state = null;
                         _resetPages(ref);
                       },
-                      icon: Icon(Icons.close,
-                          size: 18, color: AppColors.textSecondary),
+                      icon: Icon(Icons.close, size: 18, color: AppColors.textSecondary),
                     ),
                   const SizedBox(width: 4),
                   if (canExport)
@@ -1120,58 +1045,48 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
                     ),
                   const SizedBox(width: 6),
                   if (canImport)
-                  OutlinedButton.icon(
-                    key: const Key('attendance-import-button'),
-                    onPressed: () => showDialog(
-                      context: context,
-                      builder: (_) => const _ImportAttendanceDialog(),
+                    OutlinedButton.icon(
+                      key: const Key('attendance-import-button'),
+                      onPressed: () => showDialog(
+                        context: context,
+                        builder: (_) => const _ImportAttendanceDialog(),
+                      ),
+                      icon: const Icon(Icons.upload_outlined, size: 15),
+                      label: const Text('Import'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        textStyle: AppTextStyles.labelSmall,
+                      ),
                     ),
-                    icon: const Icon(Icons.upload_outlined, size: 15),
-                    label: const Text('Import'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      textStyle: AppTextStyles.labelSmall,
-                    ),
-                  ),
                 ]),
                 const SizedBox(height: 8),
                 Row(children: [
                   Expanded(
                     child: _Dropdown(
                       value: sortByLabel,
-                      items: _kAttendanceSortByOptions
-                          .map((e) => e.value)
-                          .toList(),
+                      items: _kAttendanceSortByOptions.map((e) => e.value).toList(),
                       onChanged: (v) {
-                        final entry = _kAttendanceSortByOptions
-                            .firstWhere((e) => e.value == v);
-                        ref
-                            .read(attendanceRecordsSortByProvider.notifier)
-                            .state = entry.key;
+                        final entry = _kAttendanceSortByOptions.firstWhere((e) => e.value == v);
+                        ref.read(attendanceRecordsSortByProvider.notifier).state = entry.key;
                         _resetPages(ref);
                       },
                     ),
                   ),
                   const SizedBox(width: 8),
                   IconButton(
-                    tooltip:
-                        selectedSortDir == 'asc' ? 'Ascending' : 'Descending',
+                    tooltip: selectedSortDir == 'asc' ? 'Ascending' : 'Descending',
                     visualDensity: VisualDensity.compact,
                     style: IconButton.styleFrom(
                       side: BorderSide(color: AppColors.border),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: () {
-                      ref
-                          .read(attendanceRecordsSortDirProvider.notifier)
-                          .state = selectedSortDir == 'asc' ? 'desc' : 'asc';
+                      ref.read(attendanceRecordsSortDirProvider.notifier).state =
+                          selectedSortDir == 'asc' ? 'desc' : 'asc';
                       _resetPages(ref);
                     },
                     icon: Icon(
-                      selectedSortDir == 'asc'
-                          ? Icons.arrow_upward
-                          : Icons.arrow_downward,
+                      selectedSortDir == 'asc' ? Icons.arrow_upward : Icons.arrow_downward,
                       size: 16,
                     ),
                   ),
@@ -1188,15 +1103,11 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
                   final label = _titleCaseStatus(e.key);
                   return Padding(
                     padding: const EdgeInsets.only(right: 6),
-                    child: _Chip(
-                        label: '${e.value} $label',
-                        color: _statusColor(label),
-                        bg: _statusBg(label)),
+                    child: _Chip(label: '${e.value} $label', color: _statusColor(label), bg: _statusBg(label)),
                   );
                 }),
                 Text('Total: $totalEmployees employees',
-                    style: AppTextStyles.labelSmall
-                        .copyWith(color: AppColors.textSecondary)),
+                    style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
               ],
             ),
           ),
@@ -1206,9 +1117,7 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
               final rows = page.results;
               return Column(
                 children: [
-                  if (rows.isEmpty)
-                    const _EmptyState(
-                        message: 'No attendance records for this day.'),
+                  if (rows.isEmpty) const _EmptyState(message: 'No attendance records for this day.'),
                   ...rows.map((r) => _AttendanceCard(record: r)),
                   if (page.totalPages > 1) ...[
                     const SizedBox(height: 4),
@@ -1216,14 +1125,10 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
                       page: page.page,
                       totalPages: page.totalPages,
                       onPrev: page.page > 1
-                          ? () => ref
-                              .read(attendanceRecordsPageProvider.notifier)
-                              .state = page.page - 1
+                          ? () => ref.read(attendanceRecordsPageProvider.notifier).state = page.page - 1
                           : null,
                       onNext: page.page < page.totalPages
-                          ? () => ref
-                              .read(attendanceRecordsPageProvider.notifier)
-                              .state = page.page + 1
+                          ? () => ref.read(attendanceRecordsPageProvider.notifier).state = page.page + 1
                           : null,
                     ),
                   ],
@@ -1237,8 +1142,7 @@ class _TeamDayViewState extends ConsumerState<_TeamDayView> {
             error: (e, _) => AppErrorState(
               message: friendlyAttendanceError(e),
               padding: const EdgeInsets.all(24),
-              onRetry: () =>
-                  ref.read(attendanceRecordsProvider.notifier).refresh(),
+              onRetry: () => ref.read(attendanceRecordsProvider.notifier).refresh(),
             ),
           ),
         ],
@@ -1252,8 +1156,7 @@ class _PaginationBar extends StatelessWidget {
   final int totalPages;
   final VoidCallback? onPrev;
   final VoidCallback? onNext;
-  const _PaginationBar(
-      {required this.page, required this.totalPages, this.onPrev, this.onNext});
+  const _PaginationBar({required this.page, required this.totalPages, this.onPrev, this.onNext});
 
   @override
   Widget build(BuildContext context) => Row(
@@ -1261,22 +1164,17 @@ class _PaginationBar extends StatelessWidget {
         children: [
           OutlinedButton(
             onPressed: onPrev,
-            style: OutlinedButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 6)),
+            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6)),
             child: const Text('Prev'),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Text('Page $page of $totalPages',
-                style: AppTextStyles.labelSmall
-                    .copyWith(color: AppColors.textSecondary)),
+                style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
           ),
           OutlinedButton(
             onPressed: onNext,
-            style: OutlinedButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 6)),
+            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6)),
             child: const Text('Next'),
           ),
         ],
@@ -1307,9 +1205,9 @@ final attendanceImportDatePickerProvider =
         });
 
 /// Saves web's "Download Error Report" CSV (tests override it).
-final attendanceImportReportSaverProvider =
-    Provider<Future<String?> Function(String fileName, Uint8List bytes)>((ref) => (fileName, bytes) =>
-        FilePicker.platform.saveFile(fileName: fileName, bytes: bytes, type: FileType.custom, allowedExtensions: ['csv']));
+final attendanceImportReportSaverProvider = Provider<Future<String?> Function(String fileName, Uint8List bytes)>(
+    (ref) => (fileName, bytes) => FilePicker.platform
+        .saveFile(fileName: fileName, bytes: bytes, type: FileType.custom, allowedExtensions: ['csv']));
 
 /// Web ACTION_LABEL for preview rows.
 const _kImportActionLabel = {
@@ -1326,12 +1224,10 @@ class _ImportAttendanceDialog extends ConsumerStatefulWidget {
   const _ImportAttendanceDialog();
 
   @override
-  ConsumerState<_ImportAttendanceDialog> createState() =>
-      _ImportAttendanceDialogState();
+  ConsumerState<_ImportAttendanceDialog> createState() => _ImportAttendanceDialogState();
 }
 
-class _ImportAttendanceDialogState
-    extends ConsumerState<_ImportAttendanceDialog> {
+class _ImportAttendanceDialogState extends ConsumerState<_ImportAttendanceDialog> {
   PlatformFile? _file;
   bool _uploading = false;
   String? _error;
@@ -1355,9 +1251,7 @@ class _ImportAttendanceDialogState
   Future<void> _downloadSample(String format) async {
     setState(() => _downloadingSample = true);
     try {
-      final bytes = await ref
-          .read(attendanceRepositoryProvider)
-          .fetchImportSample(format: format);
+      final bytes = await ref.read(attendanceRepositoryProvider).fetchImportSample(format: format);
       final path = await FilePicker.platform.saveFile(
         fileName: 'attendance_import_sample.$format',
         bytes: Uint8List.fromList(bytes),
@@ -1368,18 +1262,14 @@ class _ImportAttendanceDialogState
       setState(() => _downloadingSample = false);
       if (path != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: const Text('Sample template downloaded.'),
-              backgroundColor: AppColors.success),
+          SnackBar(content: const Text('Sample template downloaded.'), backgroundColor: AppColors.success),
         );
       }
     } catch (e) {
       if (!mounted) return;
       setState(() => _downloadingSample = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(friendlyAttendanceError(e)),
-            backgroundColor: AppColors.error),
+        SnackBar(content: Text(friendlyAttendanceError(e)), backgroundColor: AppColors.error),
       );
     }
   }
@@ -1505,8 +1395,8 @@ class _ImportAttendanceDialogState
 
   Future<void> _downloadReport(String base64Csv) async {
     try {
-      final saved = await ref.read(attendanceImportReportSaverProvider)(
-          'attendance_import_errors.csv', base64Decode(base64Csv));
+      final saved =
+          await ref.read(attendanceImportReportSaverProvider)('attendance_import_errors.csv', base64Decode(base64Csv));
       if (saved != null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: const Text('Error report downloaded.'), backgroundColor: AppColors.success));
@@ -1520,8 +1410,8 @@ class _ImportAttendanceDialogState
   Widget build(BuildContext context) {
     final result = _result;
     final preview = _preview;
-    Widget spinner() => const SizedBox(
-        width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white));
+    Widget spinner() =>
+        const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white));
     final importable = preview?.importable ?? 0;
     return PopScope(
       canPop: !_uploading,
@@ -1554,11 +1444,9 @@ class _ImportAttendanceDialogState
                     ElevatedButton(
                       key: const Key('attendance-import-confirm'),
                       onPressed: _uploading || importable == 0 ? null : _confirmImport,
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-                      child: _uploading
-                          ? spinner()
-                          : Text('Import $importable record${importable == 1 ? '' : 's'}'),
+                      style:
+                          ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                      child: _uploading ? spinner() : Text('Import $importable record${importable == 1 ? '' : 's'}'),
                     ),
                   ]
                 : [
@@ -1569,8 +1457,8 @@ class _ImportAttendanceDialogState
                     ElevatedButton(
                       key: const Key('attendance-import-preview'),
                       onPressed: _uploading ? null : _runPreview,
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                      style:
+                          ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
                       child: _uploading ? spinner() : const Text('Preview'),
                     ),
                   ],
@@ -1590,9 +1478,7 @@ class _ImportAttendanceDialogState
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
             color: active ? AppColors.primary.withValues(alpha: 0.05) : null,
-            border: Border.all(
-                color: active ? AppColors.primary : AppColors.border,
-                width: active ? 1.5 : 1),
+            border: Border.all(color: active ? AppColors.primary : AppColors.border, width: active ? 1.5 : 1),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1602,9 +1488,8 @@ class _ImportAttendanceDialogState
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(title,
-                      style: AppTextStyles.label.copyWith(
-                          fontSize: 12,
-                          color: active ? AppColors.primary : AppColors.textPrimary)),
+                      style: AppTextStyles.label
+                          .copyWith(fontSize: 12, color: active ? AppColors.primary : AppColors.textPrimary)),
                 ),
               ]),
               const SizedBox(height: 2),
@@ -1633,9 +1518,7 @@ class _ImportAttendanceDialogState
               child: GestureDetector(
                 key: Key('attendance-import-date-${from ? 'from' : 'to'}'),
                 onTap: _uploading ? null : () => _pickDate(from),
-                child: _FakeInput(
-                    value: value == null ? 'Any' : _fmtDate(value),
-                    icon: Icons.calendar_today_outlined),
+                child: _FakeInput(value: value == null ? 'Any' : _fmtDate(value), icon: Icons.calendar_today_outlined),
               ),
             ),
             if (value != null)
@@ -1713,31 +1596,22 @@ class _ImportAttendanceDialogState
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Download sample:',
-                style: AppTextStyles.labelSmall
-                    .copyWith(color: AppColors.textSecondary)),
+            Text('Download sample:', style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
             const SizedBox(width: 4),
             TextButton(
-              onPressed:
-                  _downloadingSample ? null : () => _downloadSample('csv'),
-              style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
+              onPressed: _downloadingSample ? null : () => _downloadSample('csv'),
+              style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
               child: Text('CSV', style: AppTextStyles.bodySmall),
             ),
             Text('·', style: AppTextStyles.caption),
             TextButton(
-              onPressed:
-                  _downloadingSample ? null : () => _downloadSample('xlsx'),
-              style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
+              onPressed: _downloadingSample ? null : () => _downloadSample('xlsx'),
+              style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
               child: Text('XLSX', style: AppTextStyles.bodySmall),
             ),
             if (_downloadingSample) ...[
               const SizedBox(width: 6),
-              const SizedBox(
-                  width: 12,
-                  height: 12,
-                  child: CircularProgressIndicator(strokeWidth: 2)),
+              const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
             ],
           ],
         ),
@@ -1745,16 +1619,13 @@ class _ImportAttendanceDialogState
         GestureDetector(
           key: const Key('attendance-import-file'),
           onTap: _uploading ? null : _pickFile,
-          child: _FakeInput(
-              value: _file?.name ?? 'Choose CSV file',
-              icon: Icons.attach_file),
+          child: _FakeInput(value: _file?.name ?? 'Choose CSV file', icon: Icons.attach_file),
         ),
         if (_error != null) ...[
           const SizedBox(height: 6),
           Text(_error!,
               key: const Key('attendance-import-error'),
-              style:
-                  AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
         ],
       ],
     );
@@ -1852,7 +1723,8 @@ class _ImportAttendanceDialogState
                   ),
                 ),
                 Text(_kImportActionLabel[r.action] ?? r.action,
-                    style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w700, color: actionColor(r.action))),
+                    style:
+                        AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w700, color: actionColor(r.action))),
               ]),
             ),
         ],
@@ -1878,28 +1750,14 @@ class _ImportAttendanceDialogState
           Text(r.message,
               key: const Key('attendance-import-message'),
               style: AppTextStyles.bodySmall.copyWith(
-                  color: r.failed > 0
-                      ? (r.success > 0 ? AppColors.warning : AppColors.error)
-                      : AppColors.success)),
+                  color: r.failed > 0 ? (r.success > 0 ? AppColors.warning : AppColors.error) : AppColors.success)),
           const SizedBox(height: 10),
         ],
         Row(children: [
           Expanded(child: _KV(k: 'Total Rows', v: '${r.totalRows}')),
-          Expanded(
-              child: _KV(
-                  k: 'Success',
-                  v: '${r.success}',
-                  vColor: AppColors.success)),
-          Expanded(
-              child: _KV(
-                  k: 'Failed',
-                  v: '${r.failed}',
-                  vColor: r.failed > 0 ? AppColors.error : null)),
-          Expanded(
-              child: _KV(
-                  k: 'Skipped',
-                  v: '${r.skipped}',
-                  vColor: r.skipped > 0 ? AppColors.warning : null)),
+          Expanded(child: _KV(k: 'Success', v: '${r.success}', vColor: AppColors.success)),
+          Expanded(child: _KV(k: 'Failed', v: '${r.failed}', vColor: r.failed > 0 ? AppColors.error : null)),
+          Expanded(child: _KV(k: 'Skipped', v: '${r.skipped}', vColor: r.skipped > 0 ? AppColors.warning : null)),
         ]),
         // Row errors, with web's error report download.
         _errorList(r.errors.take(5).toList(), r.failed, r.errorReportCsv),
@@ -1939,28 +1797,21 @@ class _AttendanceCard extends ConsumerWidget {
                       _KVRow('Clock Out', d.clockOut),
                       _KVRow('Total Hours', d.totalHours),
                       _KVRow('Overtime', d.overtime),
-                      if (d.note != null && d.note!.isNotEmpty)
-                        _KVRow('Note', d.note!),
+                      if (d.note != null && d.note!.isNotEmpty) _KVRow('Note', d.note!),
                       // Web "Punch History & Location": Clock In / Clock Out
                       // location + GPS accuracy guidance (display only).
-                      PunchLocationSection(
-                          clockIn: d.clockInLocation,
-                          clockOut: d.clockOutLocation),
+                      PunchLocationSection(clockIn: d.clockInLocation, clockOut: d.clockOutLocation),
                       if (d.punches.isNotEmpty) ...[
                         const SizedBox(height: 8),
-                        Text('Punches',
-                            style: AppTextStyles.label.copyWith(
-                                fontWeight: FontWeight.w600, fontSize: 12)),
-                        ...d.punches.map((p) => Text(
-                            '${p.punchType} · ${p.time} · ${p.mode}',
-                            style: AppTextStyles.bodySmall)),
+                        Text('Punches', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
+                        ...d.punches
+                            .map((p) => Text('${p.punchType} · ${p.time} · ${p.mode}', style: AppTextStyles.bodySmall)),
                       ],
                       const SizedBox(height: 12),
                       Divider(height: 1, color: AppColors.backgroundLow),
                       const SizedBox(height: 10),
                       Text('Correction Requests',
-                          style: AppTextStyles.label.copyWith(
-                              fontWeight: FontWeight.w600, fontSize: 12)),
+                          style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
                       const SizedBox(height: 6),
                       // Web AttendanceDetailDrawer: pending corrections can
                       // be approved/rejected here by attendance.create holders.
@@ -1974,59 +1825,40 @@ class _AttendanceCard extends ConsumerWidget {
                       Divider(height: 1, color: AppColors.backgroundLow),
                       const SizedBox(height: 10),
                       Text('Audit History',
-                          style: AppTextStyles.label.copyWith(
-                              fontWeight: FontWeight.w600, fontSize: 12)),
+                          style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
                       const SizedBox(height: 6),
                       Consumer(builder: (context, ref, _) {
                         final recordId = d.recordId;
                         if (recordId == null) {
                           return Text('No audit history for this record yet.',
-                              style: AppTextStyles.labelSmall
-                                  .copyWith(color: AppColors.textSecondary));
+                              style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary));
                         }
-                        final auditAsync =
-                            ref.watch(attendanceRecordAuditProvider(recordId));
+                        final auditAsync = ref.watch(attendanceRecordAuditProvider(recordId));
                         return auditAsync.when(
                           data: (entries) => entries.isEmpty
                               ? Text('No audit history for this record yet.',
-                                  style: AppTextStyles.labelSmall
-                                      .copyWith(color: AppColors.textSecondary))
+                                  style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary))
                               : Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: entries
                                       .map((a) => Padding(
-                                            padding: const EdgeInsets.only(
-                                                bottom: 8),
+                                            padding: const EdgeInsets.only(bottom: 8),
                                             child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
+                                              crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
                                                 Text(a.action,
                                                     style: AppTextStyles.label
-                                                        .copyWith(
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            fontSize: 12)),
-                                                Text(
-                                                    '${a.performedBy} · ${a.performedAt}',
-                                                    style: AppTextStyles
-                                                        .labelSmall
-                                                        .copyWith(
-                                                            color: AppColors
-                                                                .textSecondary)),
-                                                if (a.oldValue != null ||
-                                                    a.newValue != null)
-                                                  Text(
-                                                      '${a.oldValue ?? '—'} → ${a.newValue ?? '—'}',
-                                                      style: const TextStyle(
-                                                          fontSize: 11)),
-                                                if (a.remarks != null &&
-                                                    a.remarks!.isNotEmpty)
+                                                        .copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
+                                                Text('${a.performedBy} · ${a.performedAt}',
+                                                    style: AppTextStyles.labelSmall
+                                                        .copyWith(color: AppColors.textSecondary)),
+                                                if (a.oldValue != null || a.newValue != null)
+                                                  Text('${a.oldValue ?? '—'} → ${a.newValue ?? '—'}',
+                                                      style: const TextStyle(fontSize: 11)),
+                                                if (a.remarks != null && a.remarks!.isNotEmpty)
                                                   Text(a.remarks!,
-                                                      style: const TextStyle(
-                                                          fontSize: 11,
-                                                          fontStyle: FontStyle
-                                                              .italic)),
+                                                      style:
+                                                          const TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
                                               ],
                                             ),
                                           ))
@@ -2034,32 +1866,25 @@ class _AttendanceCard extends ConsumerWidget {
                                 ),
                           loading: () => const SizedBox(
                             height: 20,
-                            child: Center(
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2)),
+                            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
                           ),
                           error: (e, _) => Text(friendlyAttendanceError(e),
-                              style: AppTextStyles.labelSmall
-                                  .copyWith(color: AppColors.error)),
+                              style: AppTextStyles.labelSmall.copyWith(color: AppColors.error)),
                         );
                       }),
                     ],
                   ),
                   loading: () => const SizedBox(
                     height: 60,
-                    child: Center(
-                        child: CircularProgressIndicator(strokeWidth: 2)),
+                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
                   ),
-                  error: (e, _) => Text(friendlyAttendanceError(e),
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.error)),
+                  error: (e, _) =>
+                      Text(friendlyAttendanceError(e), style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
                 ),
               ),
             ),
             actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close')),
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
               Builder(builder: (context) {
                 final d = detailAsync.valueOrNull;
                 return ElevatedButton.icon(
@@ -2083,9 +1908,7 @@ class _AttendanceCard extends ConsumerWidget {
                         },
                   icon: const Icon(Icons.edit_outlined, size: 15),
                   label: const Text('Edit'),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
                 );
               }),
             ],
@@ -2117,12 +1940,9 @@ class _AttendanceCard extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(record.name,
-                            style: AppTextStyles.label
-                                .copyWith(fontWeight: FontWeight.w600)),
+                        Text(record.name, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
                         Text('${record.employeeId} · ${record.department}',
-                            style: AppTextStyles.labelSmall
-                                .copyWith(color: AppColors.textSecondary)),
+                            style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
                       ],
                     ),
                   ),
@@ -2131,57 +1951,37 @@ class _AttendanceCard extends ConsumerWidget {
               ),
               const SizedBox(height: 10),
               Row(children: [
-                Expanded(
-                    child: _TimeCell(
-                        label: 'Clock In',
-                        value: record.clockIn,
-                        isLate: record.isLate)),
-                Expanded(
-                    child:
-                        _TimeCell(label: 'Clock Out', value: record.clockOut)),
-                Expanded(
-                    child: _TimeCell(
-                        label: 'Total Hrs', value: record.totalHours)),
-                if (record.ot != '—')
-                  Expanded(
-                      child:
-                          _TimeCell(label: 'OT', value: record.ot, isOt: true)),
+                Expanded(child: _TimeCell(label: 'Clock In', value: record.clockIn, isLate: record.isLate)),
+                Expanded(child: _TimeCell(label: 'Clock Out', value: record.clockOut)),
+                Expanded(child: _TimeCell(label: 'Total Hrs', value: record.totalHours)),
+                if (record.ot != '—') Expanded(child: _TimeCell(label: 'OT', value: record.ot, isOt: true)),
               ]),
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(children: [
-                    Icon(Icons.business_outlined,
-                        size: 12, color: AppColors.textSecondary),
+                    Icon(Icons.business_outlined, size: 12, color: AppColors.textSecondary),
                     const SizedBox(width: 4),
-                    Text(record.branch,
-                        style: AppTextStyles.labelSmall
-                            .copyWith(color: AppColors.textSecondary)),
+                    Text(record.branch, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
                   ]),
                   if (record.recordId != null)
                     OutlinedButton(
                       onPressed: () => _showDetail(context, ref),
                       style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 4),
-                        side: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.4)),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
                         foregroundColor: AppColors.primary,
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                       ),
                       child: Text('View',
-                          style: AppTextStyles.labelSmall.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w600)),
+                          style:
+                              AppTextStyles.labelSmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
                     )
                   else
-                    Text('No record',
-                        style: AppTextStyles.labelSmall
-                            .copyWith(color: AppColors.textHint)),
+                    Text('No record', style: AppTextStyles.labelSmall.copyWith(color: AppColors.textHint)),
                 ],
               ),
             ],
@@ -2240,12 +2040,10 @@ class _AttendanceRecordFormDialog extends ConsumerStatefulWidget {
   bool get isEdit => recordId != null;
 
   @override
-  ConsumerState<_AttendanceRecordFormDialog> createState() =>
-      _AttendanceRecordFormDialogState();
+  ConsumerState<_AttendanceRecordFormDialog> createState() => _AttendanceRecordFormDialogState();
 }
 
-class _AttendanceRecordFormDialogState
-    extends ConsumerState<_AttendanceRecordFormDialog> {
+class _AttendanceRecordFormDialogState extends ConsumerState<_AttendanceRecordFormDialog> {
   String? _employeeId;
   DateTime _date = DateTime.now();
   late String _status;
@@ -2284,11 +2082,9 @@ class _AttendanceRecordFormDialogState
     super.dispose();
   }
 
-  String _fmtDate(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  String _fmtDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  String _fmtTime(TimeOfDay t) =>
-      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:00';
+  String _fmtTime(TimeOfDay t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:00';
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -2305,8 +2101,7 @@ class _AttendanceRecordFormDialogState
       context: context,
       initialTime: (isIn ? _clockIn : _clockOut) ?? TimeOfDay.now(),
     );
-    if (picked != null)
-      setState(() => isIn ? _clockIn = picked : _clockOut = picked);
+    if (picked != null) setState(() => isIn ? _clockIn = picked : _clockOut = picked);
   }
 
   Future<void> _submit() async {
@@ -2323,8 +2118,7 @@ class _AttendanceRecordFormDialogState
       }
     }
     if (_reasonCtrl.text.trim().isEmpty) {
-      setState(() =>
-          _error = "Reason is required — it's recorded in the audit log.");
+      setState(() => _error = "Reason is required — it's recorded in the audit log.");
       return;
     }
 
@@ -2362,9 +2156,7 @@ class _AttendanceRecordFormDialogState
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(widget.isEdit
-            ? 'Attendance record updated.'
-            : 'Attendance record created.'),
+        content: Text(widget.isEdit ? 'Attendance record updated.' : 'Attendance record created.'),
         backgroundColor: AppColors.success,
       ),
     );
@@ -2374,9 +2166,7 @@ class _AttendanceRecordFormDialogState
   Widget build(BuildContext context) {
     final employeesAsync = ref.watch(employeesProvider);
     return AlertDialog(
-      title: Text(widget.isEdit
-          ? 'Edit Attendance — ${widget.employeeName}'
-          : 'Add Attendance Record'),
+      title: Text(widget.isEdit ? 'Edit Attendance — ${widget.employeeName}' : 'Add Attendance Record'),
       content: SizedBox(
         width: 340,
         child: SingleChildScrollView(
@@ -2385,9 +2175,7 @@ class _AttendanceRecordFormDialogState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (_error != null) ...[
-                Text(_error!,
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.error)),
+                Text(_error!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
                 const SizedBox(height: 10),
               ],
               if (!widget.isEdit) ...[
@@ -2398,38 +2186,31 @@ class _AttendanceRecordFormDialogState
                     decoration: InputDecoration(
                       isDense: true,
                       hintText: 'Select employee',
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 9),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     isExpanded: true,
                     items: employees
                         .map((e) => DropdownMenuItem(
                               value: e.employeeId,
-                              child: Text('${e.fullName} (${e.employeeId})',
-                                  overflow: TextOverflow.ellipsis),
+                              child: Text('${e.fullName} (${e.employeeId})', overflow: TextOverflow.ellipsis),
                             ))
                         .toList(),
                     onChanged: (v) => setState(() => _employeeId = v),
                   ),
                   loading: () => const LinearProgressIndicator(),
-                  error: (e, _) => Text(friendlyAttendanceError(e),
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.error)),
+                  error: (e, _) =>
+                      Text(friendlyAttendanceError(e), style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
                 ),
                 const SizedBox(height: 12),
                 const _FormLabel('Date'),
                 GestureDetector(
                   onTap: _pickDate,
-                  child: _FakeInput(
-                      value: _fmtDate(_date),
-                      icon: Icons.calendar_today_outlined),
+                  child: _FakeInput(value: _fmtDate(_date), icon: Icons.calendar_today_outlined),
                 ),
                 const SizedBox(height: 12),
               ] else ...[
-                _KVRow('Employee',
-                    '${widget.employeeName} (${widget.employeeId})'),
+                _KVRow('Employee', '${widget.employeeName} (${widget.employeeId})'),
                 _KVRow('Date', _fmtDate(widget.date!)),
                 const SizedBox(height: 8),
               ],
@@ -2438,51 +2219,40 @@ class _AttendanceRecordFormDialogState
                 initialValue: _status,
                 decoration: InputDecoration(
                   isDense: true,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 isExpanded: true,
                 items: _kAttendanceRecordStatuses
-                    .map((e) =>
-                        DropdownMenuItem(value: e.key, child: Text(e.value)))
+                    .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
                     .toList(),
                 onChanged: (v) => setState(() => _status = v!),
               ),
               const SizedBox(height: 12),
               Row(children: [
                 Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      const _FormLabel('Clock In'),
-                      GestureDetector(
-                        onTap: () => _pickTime(true),
-                        child: _FakeInput(
-                          value: _clockIn == null
-                              ? '—'
-                              : _fmtTime(_clockIn!).substring(0, 5),
-                          icon: Icons.access_time,
-                        ),
-                      ),
-                    ])),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const _FormLabel('Clock In'),
+                  GestureDetector(
+                    onTap: () => _pickTime(true),
+                    child: _FakeInput(
+                      value: _clockIn == null ? '—' : _fmtTime(_clockIn!).substring(0, 5),
+                      icon: Icons.access_time,
+                    ),
+                  ),
+                ])),
                 const SizedBox(width: 10),
                 Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      const _FormLabel('Clock Out'),
-                      GestureDetector(
-                        onTap: () => _pickTime(false),
-                        child: _FakeInput(
-                          value: _clockOut == null
-                              ? '—'
-                              : _fmtTime(_clockOut!).substring(0, 5),
-                          icon: Icons.access_time,
-                        ),
-                      ),
-                    ])),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const _FormLabel('Clock Out'),
+                  GestureDetector(
+                    onTap: () => _pickTime(false),
+                    child: _FakeInput(
+                      value: _clockOut == null ? '—' : _fmtTime(_clockOut!).substring(0, 5),
+                      icon: Icons.access_time,
+                    ),
+                  ),
+                ])),
               ]),
               const SizedBox(height: 12),
               const _FormLabel('Note'),
@@ -2492,10 +2262,8 @@ class _AttendanceRecordFormDialogState
                 decoration: InputDecoration(
                   isDense: true,
                   hintText: 'Optional note',
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 ),
               ),
               const _FormLabel('Reason *'),
@@ -2505,12 +2273,9 @@ class _AttendanceRecordFormDialogState
                 maxLines: 2,
                 decoration: InputDecoration(
                   isDense: true,
-                  hintText:
-                      "Why this record is being ${widget.isEdit ? 'edited' : 'added'}…",
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8)),
+                  hintText: "Why this record is being ${widget.isEdit ? 'edited' : 'added'}…",
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 ),
               ),
             ],
@@ -2524,15 +2289,10 @@ class _AttendanceRecordFormDialogState
         ),
         ElevatedButton(
           onPressed: _submitting ? null : _submit,
-          style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white),
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
           child: _submitting
               ? const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white))
+                  width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
               : Text(widget.isEdit ? 'Save Changes' : 'Add Record'),
         ),
       ],
@@ -2554,19 +2314,13 @@ class _TimeCell extends StatelessWidget {
   final String label;
   final String value;
   final bool isLate, isOt;
-  const _TimeCell(
-      {required this.label,
-      required this.value,
-      this.isLate = false,
-      this.isOt = false});
+  const _TimeCell({required this.label, required this.value, this.isLate = false, this.isOt = false});
 
   @override
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: AppTextStyles.labelSmall
-                  .copyWith(color: AppColors.textHint, fontSize: 10)),
+          Text(label, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textHint, fontSize: 10)),
           const SizedBox(height: 2),
           Text(
             value,
@@ -2619,11 +2373,9 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
     super.dispose();
   }
 
-  String _fmtDate(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  String _fmtDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  String _fmtTime(TimeOfDay t) =>
-      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:00';
+  String _fmtTime(TimeOfDay t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:00';
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -2640,8 +2392,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
       context: context,
       initialTime: (isStart ? _otStart : _otEnd) ?? TimeOfDay.now(),
     );
-    if (picked != null)
-      setState(() => isStart ? _otStart = picked : _otEnd = picked);
+    if (picked != null) setState(() => isStart ? _otStart = picked : _otEnd = picked);
   }
 
   /// Web OtEntryTab: "Add OT Entry" only for usePermission("attendance.create")
@@ -2690,8 +2441,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
           otStart: _fmtTime(_otStart!),
           otEnd: _fmtTime(_otEnd!),
           approvedBy: approver.approvedBy,
-          reason:
-              _reasonCtrl.text.trim().isEmpty ? null : _reasonCtrl.text.trim(),
+          reason: _reasonCtrl.text.trim().isEmpty ? null : _reasonCtrl.text.trim(),
         );
 
     if (!mounted) return;
@@ -2709,9 +2459,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
       _reasonCtrl.clear();
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: const Text('OT entry added.'),
-          backgroundColor: AppColors.success),
+      SnackBar(content: const Text('OT entry added.'), backgroundColor: AppColors.success),
     );
   }
 
@@ -2738,8 +2486,7 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(children: [
-                  Icon(Icons.timer_outlined,
-                      size: 18, color: AppColors.primary),
+                  Icon(Icons.timer_outlined, size: 18, color: AppColors.primary),
                   const SizedBox(width: 8),
                   Text('Add OT Entry', style: AppTextStyles.h4),
                 ]),
@@ -2751,17 +2498,14 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                     decoration: InputDecoration(
                       isDense: true,
                       hintText: 'Select employee',
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 9),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     isExpanded: true,
                     items: employees
                         .map((e) => DropdownMenuItem(
                               value: e.employeeId,
-                              child: Text('${e.fullName} (${e.employeeId})',
-                                  overflow: TextOverflow.ellipsis),
+                              child: Text('${e.fullName} (${e.employeeId})', overflow: TextOverflow.ellipsis),
                             ))
                         .toList(),
                     onChanged: (v) => setState(() {
@@ -2772,77 +2516,63 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                     }),
                   ),
                   loading: () => const LinearProgressIndicator(),
-                  error: (e, _) => Text(friendlyAttendanceError(e),
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.error)),
+                  error: (e, _) =>
+                      Text(friendlyAttendanceError(e), style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
                 ),
                 const SizedBox(height: 12),
                 Row(children: [
                   Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                        const _FormLabel('Date'),
-                        GestureDetector(
-                          onTap: _pickDate,
-                          child: _FakeInput(
-                              value: _fmtDate(_date),
-                              icon: Icons.calendar_today_outlined),
-                        ),
-                      ])),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const _FormLabel('Date'),
+                    GestureDetector(
+                      onTap: _pickDate,
+                      child: _FakeInput(value: _fmtDate(_date), icon: Icons.calendar_today_outlined),
+                    ),
+                  ])),
                   const SizedBox(width: 10),
                   Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                        const _FormLabel('OT Type'),
-                        DropdownButtonFormField<String>(
-                          initialValue: _otType,
-                          decoration: InputDecoration(
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 9),
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                          ),
-                          isExpanded: true,
-                          items: _otTypeLabels.entries
-                              .map((e) => DropdownMenuItem(
-                                  value: e.key, child: Text(e.value)))
-                              .toList(),
-                          onChanged: (v) => setState(() => _otType = v!),
-                        ),
-                      ])),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const _FormLabel('OT Type'),
+                    DropdownButtonFormField<String>(
+                      initialValue: _otType,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      isExpanded: true,
+                      items: _otTypeLabels.entries
+                          .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                          .toList(),
+                      onChanged: (v) => setState(() => _otType = v!),
+                    ),
+                  ])),
                 ]),
                 const SizedBox(height: 12),
                 Row(children: [
                   Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                        const _FormLabel('OT Start'),
-                        GestureDetector(
-                          onTap: () => _pickTime(true),
-                          child: _FakeInput(
-                            value: _otStart?.format(context) ?? 'Select time',
-                            icon: Icons.access_time_outlined,
-                          ),
-                        ),
-                      ])),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const _FormLabel('OT Start'),
+                    GestureDetector(
+                      onTap: () => _pickTime(true),
+                      child: _FakeInput(
+                        value: _otStart?.format(context) ?? 'Select time',
+                        icon: Icons.access_time_outlined,
+                      ),
+                    ),
+                  ])),
                   const SizedBox(width: 10),
                   Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                        const _FormLabel('OT End'),
-                        GestureDetector(
-                          onTap: () => _pickTime(false),
-                          child: _FakeInput(
-                            value: _otEnd?.format(context) ?? 'Select time',
-                            icon: Icons.access_time_outlined,
-                          ),
-                        ),
-                      ])),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const _FormLabel('OT End'),
+                    GestureDetector(
+                      onTap: () => _pickTime(false),
+                      child: _FakeInput(
+                        value: _otEnd?.format(context) ?? 'Select time',
+                        icon: Icons.access_time_outlined,
+                      ),
+                    ),
+                  ])),
                 ]),
                 const SizedBox(height: 12),
                 const _FormLabel('Approved By'),
@@ -2863,46 +2593,39 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                   maxLength: 500,
                   decoration: InputDecoration(
                     hintText: 'Describe the overtime work…',
-                    hintStyle: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.textHint),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                    hintStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     contentPadding: const EdgeInsets.all(10),
                   ),
                   style: AppTextStyles.bodySmall,
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 6),
-                  Text(_error!,
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.error)),
+                  Text(_error!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
                 ],
                 const SizedBox(height: 14),
                 if (ref.watch(permissionProvider('attendance.create')))
-                SizedBox(
-                  key: const Key('ot-add-entry'),
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _submitting ? null : _submit,
-                    icon: _submitting
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.add, size: 16),
-                    label: const Text('Add OT Entry'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      textStyle: AppTextStyles.label
-                          .copyWith(fontWeight: FontWeight.w600),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                  SizedBox(
+                    key: const Key('ot-add-entry'),
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _submitting ? null : _submit,
+                      icon: _submitting
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.add, size: 16),
+                      label: const Text('Add OT Entry'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        textStyle: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -2923,15 +2646,10 @@ class _OtEntryTabState extends ConsumerState<_OtEntryTab> {
                       _PaginationBar(
                         page: page.page,
                         totalPages: page.totalPages,
-                        onPrev: page.page > 1
-                            ? () => ref
-                                .read(overtimePageProvider.notifier)
-                                .state = page.page - 1
-                            : null,
+                        onPrev:
+                            page.page > 1 ? () => ref.read(overtimePageProvider.notifier).state = page.page - 1 : null,
                         onNext: page.page < page.totalPages
-                            ? () => ref
-                                .read(overtimePageProvider.notifier)
-                                .state = page.page + 1
+                            ? () => ref.read(overtimePageProvider.notifier).state = page.page + 1
                             : null,
                       ),
                     ],
@@ -2971,22 +2689,15 @@ class _OtCard extends StatelessWidget {
         ),
         child: Padding(
           padding: const EdgeInsets.all(12),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               _Avatar(name: record.name, initials: record.initials),
               const SizedBox(width: 10),
               Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    Text(record.name,
-                        style: AppTextStyles.label
-                            .copyWith(fontWeight: FontWeight.w600)),
-                    Text(record.employeeId,
-                        style: AppTextStyles.labelSmall
-                            .copyWith(color: AppColors.textSecondary)),
-                  ])),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(record.name, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
+                Text(record.employeeId, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
+              ])),
               _StatusBadge(status: record.status),
             ]),
             const SizedBox(height: 10),
@@ -2994,26 +2705,16 @@ class _OtCard extends StatelessWidget {
             const SizedBox(height: 10),
             Row(children: [
               Expanded(child: _KV(k: 'Date', v: record.date)),
-              Expanded(
-                  child: _KV(
-                      k: 'OT Hrs',
-                      v: record.otHours,
-                      vColor: AppColors.primary)),
+              Expanded(child: _KV(k: 'OT Hrs', v: record.otHours, vColor: AppColors.primary)),
               Expanded(child: _KV(k: 'Type', v: record.otType)),
-              Expanded(
-                  child: _KV(
-                      k: 'Amount',
-                      v: '₹ ${record.otAmount}',
-                      vColor: AppColors.success)),
+              Expanded(child: _KV(k: 'Amount', v: '₹ ${record.otAmount}', vColor: AppColors.success)),
             ]),
             const SizedBox(height: 8),
             Row(children: [
-              Icon(Icons.person_outline,
-                  size: 12, color: AppColors.textSecondary),
+              Icon(Icons.person_outline, size: 12, color: AppColors.textSecondary),
               const SizedBox(width: 4),
               Text('Approved by: ${record.approvedBy}',
-                  style: AppTextStyles.labelSmall
-                      .copyWith(color: AppColors.textSecondary)),
+                  style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
             ]),
           ]),
         ),
@@ -3047,9 +2748,7 @@ class _InvalidPunchesTab extends ConsumerWidget {
           invalidAsync.when(
             data: (rows) => rows.isEmpty
                 ? const _EmptyState(message: 'No invalid punches for today.')
-                : Column(
-                    children:
-                        rows.map((p) => _InvalidPunchCard(punch: p)).toList()),
+                : Column(children: rows.map((p) => _InvalidPunchCard(punch: p)).toList()),
             loading: () => const Padding(
               padding: EdgeInsets.symmetric(vertical: 40),
               child: Center(child: CircularProgressIndicator()),
@@ -3057,8 +2756,7 @@ class _InvalidPunchesTab extends ConsumerWidget {
             error: (e, _) => AppErrorState(
               message: friendlyAttendanceError(e),
               padding: const EdgeInsets.symmetric(vertical: 24),
-              onRetry: () =>
-                  ref.read(invalidPunchesProvider.notifier).refresh(),
+              onRetry: () => ref.read(invalidPunchesProvider.notifier).refresh(),
             ),
           ),
         ],
@@ -3104,9 +2802,7 @@ class _InvalidPunchCardState extends ConsumerState<_InvalidPunchCard> {
       builder: (_) => const _AssignPunchDialog(),
     );
     if (assignedTo == null || !mounted) return;
-    await _run(() => ref
-        .read(invalidPunchesProvider.notifier)
-        .assign(widget.punch.id, assignedTo: assignedTo));
+    await _run(() => ref.read(invalidPunchesProvider.notifier).assign(widget.punch.id, assignedTo: assignedTo));
   }
 
   Future<void> _convert() async {
@@ -3130,9 +2826,7 @@ class _InvalidPunchCardState extends ConsumerState<_InvalidPunchCard> {
       builder: (_) => const _DiscardPunchDialog(),
     );
     if (remarks == null || !mounted) return;
-    await _run(() => ref
-        .read(invalidPunchesProvider.notifier)
-        .discard(widget.punch.id, remarks: remarks));
+    await _run(() => ref.read(invalidPunchesProvider.notifier).discard(widget.punch.id, remarks: remarks));
   }
 
   @override
@@ -3153,29 +2847,21 @@ class _InvalidPunchCardState extends ConsumerState<_InvalidPunchCard> {
           Row(children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                  color: AppColors.backgroundLow,
-                  borderRadius: BorderRadius.circular(6)),
+              decoration: BoxDecoration(color: AppColors.backgroundLow, borderRadius: BorderRadius.circular(6)),
               child: Row(children: [
-                Icon(Icons.devices_outlined,
-                    size: 13, color: AppColors.textSecondary),
+                Icon(Icons.devices_outlined, size: 13, color: AppColors.textSecondary),
                 const SizedBox(width: 4),
                 Text(punch.deviceId,
-                    style: AppTextStyles.label.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary)),
+                    style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
               ]),
             ),
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                  color: _issueBg(punch.issueType),
-                  borderRadius: BorderRadius.circular(20)),
+              decoration: BoxDecoration(color: _issueBg(punch.issueType), borderRadius: BorderRadius.circular(20)),
               child: Text(punch.issue,
-                  style: AppTextStyles.labelSmall.copyWith(
-                      color: _issueColor(punch.issueType),
-                      fontWeight: FontWeight.w600)),
+                  style: AppTextStyles.labelSmall
+                      .copyWith(color: _issueColor(punch.issueType), fontWeight: FontWeight.w600)),
             ),
           ]),
           const SizedBox(height: 10),
@@ -3196,19 +2882,14 @@ class _InvalidPunchCardState extends ConsumerState<_InvalidPunchCard> {
           else if (_busy)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 6),
-              child: Center(
-                  child: SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2))),
+              child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
             )
           else
             Row(children: [
               Expanded(
                 child: OutlinedButton(
                   onPressed: _assign,
-                  style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 8)),
+                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 8)),
                   child: Text('Assign', style: AppTextStyles.bodySmall),
                 ),
               ),
@@ -3219,8 +2900,7 @@ class _InvalidPunchCardState extends ConsumerState<_InvalidPunchCard> {
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     foregroundColor: AppColors.primary,
-                    side: BorderSide(
-                        color: AppColors.primary.withValues(alpha: 0.4)),
+                    side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
                   ),
                   child: Text('Convert', style: AppTextStyles.bodySmall),
                 ),
@@ -3232,8 +2912,7 @@ class _InvalidPunchCardState extends ConsumerState<_InvalidPunchCard> {
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     foregroundColor: AppColors.error,
-                    side: BorderSide(
-                        color: AppColors.error.withValues(alpha: 0.4)),
+                    side: BorderSide(color: AppColors.error.withValues(alpha: 0.4)),
                   ),
                   child: Text('Discard', style: AppTextStyles.bodySmall),
                 ),
@@ -3273,39 +2952,31 @@ class _AssignPunchDialogState extends ConsumerState<_AssignPunchDialog> {
                 decoration: InputDecoration(
                   isDense: true,
                   hintText: 'Select HR user',
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 isExpanded: true,
                 items: users
                     .map((u) => DropdownMenuItem(
                           value: u.id,
-                          child: Text('${u.fullName} (${u.employeeId})',
-                              overflow: TextOverflow.ellipsis),
+                          child: Text('${u.fullName} (${u.employeeId})', overflow: TextOverflow.ellipsis),
                         ))
                     .toList(),
                 onChanged: (v) => setState(() => _selectedId = v),
               ),
               loading: () => const LinearProgressIndicator(),
-              error: (e, _) => Text(friendlyAttendanceError(e),
-                  style:
-                      AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+              error: (e, _) =>
+                  Text(friendlyAttendanceError(e), style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
             ),
             if (_error != null) ...[
               const SizedBox(height: 6),
-              Text(_error!,
-                  style:
-                      AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+              Text(_error!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
             ],
           ],
         ),
       ),
       actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
         ElevatedButton(
           onPressed: () {
             if (_selectedId == null) {
@@ -3314,9 +2985,7 @@ class _AssignPunchDialogState extends ConsumerState<_AssignPunchDialog> {
             }
             Navigator.pop(context, _selectedId);
           },
-          style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white),
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
           child: const Text('Assign'),
         ),
       ],
@@ -3350,10 +3019,8 @@ class _ConvertPunchDialogState extends State<_ConvertPunchDialog> {
               initialValue: _punchType,
               decoration: InputDecoration(
                 isDense: true,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
               isExpanded: true,
               items: const [
@@ -3366,8 +3033,7 @@ class _ConvertPunchDialogState extends State<_ConvertPunchDialog> {
             const _FormLabel('Target Time'),
             GestureDetector(
               onTap: () async {
-                final picked = await showTimePicker(
-                    context: context, initialTime: _time ?? TimeOfDay.now());
+                final picked = await showTimePicker(context: context, initialTime: _time ?? TimeOfDay.now());
                 if (picked != null) setState(() => _time = picked);
               },
               child: _FakeInput(
@@ -3377,17 +3043,13 @@ class _ConvertPunchDialogState extends State<_ConvertPunchDialog> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 6),
-              Text(_error!,
-                  style:
-                      AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+              Text(_error!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
             ],
           ],
         ),
       ),
       actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
         ElevatedButton(
           onPressed: () {
             if (_time == null) {
@@ -3398,9 +3060,7 @@ class _ConvertPunchDialogState extends State<_ConvertPunchDialog> {
             final mm = _time!.minute.toString().padLeft(2, '0');
             Navigator.pop(context, (punchType: _punchType, time: '$hh:$mm'));
           },
-          style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white),
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
           child: const Text('Convert'),
         ),
       ],
@@ -3440,10 +3100,8 @@ class _DiscardPunchDialogState extends State<_DiscardPunchDialog> {
               maxLength: 500,
               decoration: InputDecoration(
                 hintText: 'Why is this punch being discarded?',
-                hintStyle:
-                    AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                hintStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 contentPadding: const EdgeInsets.all(10),
               ),
               style: AppTextStyles.bodySmall,
@@ -3452,13 +3110,10 @@ class _DiscardPunchDialogState extends State<_DiscardPunchDialog> {
         ),
       ),
       actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
         ElevatedButton(
           onPressed: () => Navigator.pop(context, _remarksCtrl.text.trim()),
-          style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error, foregroundColor: Colors.white),
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
           child: const Text('Discard'),
         ),
       ],
@@ -3477,20 +3132,13 @@ class _UnpunchesTab extends ConsumerWidget {
     final statusFilter = ref.watch(hrCorrectionsStatusFilterProvider);
     final branchFilter = ref.watch(hrAttendanceBranchFilterProvider);
     final departmentFilter = ref.watch(hrAttendanceDepartmentFilterProvider);
-    final correctionsFilter = (
-      status: statusFilter,
-      branch: branchFilter,
-      department: departmentFilter
-    );
-    final correctionsAsync =
-        ref.watch(hrCorrectionsProvider(correctionsFilter));
+    final correctionsFilter = (status: statusFilter, branch: branchFilter, department: departmentFilter);
+    final correctionsAsync = ref.watch(hrCorrectionsProvider(correctionsFilter));
 
     return RefreshIndicator(
       onRefresh: () async {
         await ref.read(unpunchesProvider.notifier).refresh();
-        await ref
-            .read(hrCorrectionsProvider(correctionsFilter).notifier)
-            .refresh();
+        await ref.read(hrCorrectionsProvider(correctionsFilter).notifier).refresh();
       },
       child: ListView(
         primary: false,
@@ -3508,9 +3156,7 @@ class _UnpunchesTab extends ConsumerWidget {
           unpunchesAsync.when(
             data: (rows) => rows.isEmpty
                 ? const _EmptyState(message: 'No un-punches for today.')
-                : Column(
-                    children:
-                        rows.map((r) => _UnpunchCard(record: r)).toList()),
+                : Column(children: rows.map((r) => _UnpunchCard(record: r)).toList()),
             loading: () => const Padding(
               padding: EdgeInsets.symmetric(vertical: 40),
               child: Center(child: CircularProgressIndicator()),
@@ -3545,9 +3191,7 @@ class _UnpunchesTab extends ConsumerWidget {
               'Approved',
               'Rejected',
             ],
-            onChanged: (v) => ref
-                .read(hrCorrectionsStatusFilterProvider.notifier)
-                .state = switch (v) {
+            onChanged: (v) => ref.read(hrCorrectionsStatusFilterProvider.notifier).state = switch (v) {
               'Pending — Manager' => 'pending',
               'Pending — HR' => 'l2_pending',
               'Approved' => 'approved',
@@ -3564,8 +3208,7 @@ class _UnpunchesTab extends ConsumerWidget {
                         .map((r) => HrCorrectionCard(
                               record: r,
                               onReview: (approve) => ref
-                                  .read(hrCorrectionsProvider(correctionsFilter)
-                                      .notifier)
+                                  .read(hrCorrectionsProvider(correctionsFilter).notifier)
                                   .reviewCorrection(r.id, approve: approve),
                             ))
                         .toList()),
@@ -3576,9 +3219,7 @@ class _UnpunchesTab extends ConsumerWidget {
             error: (e, _) => AppErrorState(
               message: friendlyAttendanceError(e),
               padding: const EdgeInsets.symmetric(vertical: 24),
-              onRetry: () => ref
-                  .read(hrCorrectionsProvider(correctionsFilter).notifier)
-                  .refresh(),
+              onRetry: () => ref.read(hrCorrectionsProvider(correctionsFilter).notifier).refresh(),
             ),
           ),
         ],
@@ -3602,9 +3243,7 @@ class _UnpunchCardState extends ConsumerState<_UnpunchCard> {
     final correctionId = widget.record.correctionId;
     if (correctionId == null) return;
     setState(() => _reviewing = true);
-    final error = await ref
-        .read(unpunchesProvider.notifier)
-        .reviewCorrection(correctionId, approve: approve);
+    final error = await ref.read(unpunchesProvider.notifier).reviewCorrection(correctionId, approve: approve);
     if (!mounted) return;
     setState(() => _reviewing = false);
     if (error != null) {
@@ -3614,8 +3253,7 @@ class _UnpunchCardState extends ConsumerState<_UnpunchCard> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text(approve ? 'Correction approved.' : 'Correction rejected.'),
+          content: Text(approve ? 'Correction approved.' : 'Correction rejected.'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -3640,34 +3278,21 @@ class _UnpunchCardState extends ConsumerState<_UnpunchCard> {
             _Avatar(name: record.name, initials: record.initials),
             const SizedBox(width: 10),
             Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(record.name,
-                      style: AppTextStyles.label
-                          .copyWith(fontWeight: FontWeight.w600)),
-                  Text(record.employeeId,
-                      style: AppTextStyles.labelSmall
-                          .copyWith(color: AppColors.textSecondary)),
-                ])),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(record.name, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
+              Text(record.employeeId, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
+            ])),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                  color: AppColors.errorContainer,
-                  borderRadius: BorderRadius.circular(20)),
+              decoration: BoxDecoration(color: AppColors.errorContainer, borderRadius: BorderRadius.circular(20)),
               child: Text('OUT missing',
-                  style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.error, fontWeight: FontWeight.w600)),
+                  style: AppTextStyles.labelSmall.copyWith(color: AppColors.error, fontWeight: FontWeight.w600)),
             ),
           ]),
           const SizedBox(height: 10),
           Row(children: [
             Expanded(child: _KV(k: 'Date', v: record.date)),
-            Expanded(
-                child: _KV(
-                    k: 'Clock In',
-                    v: record.clockIn,
-                    vColor: AppColors.primary)),
+            Expanded(child: _KV(k: 'Clock In', v: record.clockIn, vColor: AppColors.primary)),
             Expanded(child: _KV(k: 'Expected Out', v: record.expectedOut)),
             Expanded(child: _KV(k: 'Branch', v: record.branch, small: true)),
           ]),
@@ -3681,11 +3306,9 @@ class _UnpunchCardState extends ConsumerState<_UnpunchCard> {
                   label: const Text('Reject'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.error,
-                    side: BorderSide(
-                        color: AppColors.error.withValues(alpha: 0.4)),
+                    side: BorderSide(color: AppColors.error.withValues(alpha: 0.4)),
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
               ),
@@ -3695,18 +3318,14 @@ class _UnpunchCardState extends ConsumerState<_UnpunchCard> {
                   onPressed: _reviewing ? null : () => _review(true),
                   icon: _reviewing
                       ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
+                          width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Icon(Icons.check, size: 14),
                   label: const Text('Approve'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     elevation: 0,
                   ),
                 ),
@@ -3723,8 +3342,7 @@ class _UnpunchCardState extends ConsumerState<_UnpunchCard> {
               alignment: Alignment.center,
               child: Text(
                 'Awaiting employee correction request',
-                style: AppTextStyles.labelSmall
-                    .copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary),
               ),
             ),
         ]),
@@ -3749,10 +3367,8 @@ class _Avatar extends StatelessWidget {
           borderRadius: BorderRadius.circular(9),
         ),
         alignment: Alignment.center,
-        child: Text(
-            (initials?.isNotEmpty ?? false) ? initials! : _initials(name),
-            style: AppTextStyles.label.copyWith(
-                color: AppColors.primary, fontWeight: FontWeight.w700)),
+        child: Text((initials?.isNotEmpty ?? false) ? initials! : _initials(name),
+            style: AppTextStyles.label.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)),
       );
 }
 
@@ -3763,11 +3379,9 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-            color: _statusBg(status), borderRadius: BorderRadius.circular(20)),
+        decoration: BoxDecoration(color: _statusBg(status), borderRadius: BorderRadius.circular(20)),
         child: Text(status,
-            style: AppTextStyles.labelSmall.copyWith(
-                color: _statusColor(status), fontWeight: FontWeight.w600)),
+            style: AppTextStyles.labelSmall.copyWith(color: _statusColor(status), fontWeight: FontWeight.w600)),
       );
 }
 
@@ -3776,16 +3390,13 @@ class _KV extends StatelessWidget {
   final String v;
   final Color? vColor;
   final bool small;
-  const _KV(
-      {required this.k, required this.v, this.vColor, this.small = false});
+  const _KV({required this.k, required this.v, this.vColor, this.small = false});
 
   @override
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(k,
-              style: AppTextStyles.labelSmall
-                  .copyWith(color: AppColors.textHint, fontSize: 10)),
+          Text(k, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textHint, fontSize: 10)),
           const SizedBox(height: 2),
           Text(
             v,
@@ -3809,17 +3420,11 @@ class _Chip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration:
-            BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
           const SizedBox(width: 4),
-          Text(label,
-              style: AppTextStyles.labelSmall
-                  .copyWith(color: color, fontWeight: FontWeight.w600)),
+          Text(label, style: AppTextStyles.labelSmall.copyWith(color: color, fontWeight: FontWeight.w600)),
         ]),
       );
 }
@@ -3828,8 +3433,7 @@ class _Dropdown extends StatelessWidget {
   final String value;
   final List<String> items;
   final ValueChanged<String?> onChanged;
-  const _Dropdown(
-      {required this.value, required this.items, required this.onChanged});
+  const _Dropdown({required this.value, required this.items, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -3838,24 +3442,18 @@ class _Dropdown extends StatelessWidget {
     return DropdownButtonFormField<String>(
       initialValue: value,
       decoration: InputDecoration(
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: AppColors.border)),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: AppColors.border)),
+        border:
+            OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
+        enabledBorder:
+            OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
         focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: AppColors.primary)),
+            borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.primary)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         isDense: true,
       ),
       style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
       isExpanded: true,
-      items: safeItems
-          .map((s) => DropdownMenuItem(
-              value: s, child: Text(s, overflow: TextOverflow.ellipsis)))
-          .toList(),
+      items: safeItems.map((s) => DropdownMenuItem(value: s, child: Text(s, overflow: TextOverflow.ellipsis))).toList(),
       onChanged: onChanged,
     );
   }
@@ -3874,10 +3472,7 @@ class _FakeInput extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(children: [
-          Expanded(
-              child: Text(value,
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.textPrimary))),
+          Expanded(child: Text(value, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary))),
           Icon(icon, size: 15, color: AppColors.textSecondary),
         ]),
       );
@@ -3891,8 +3486,7 @@ class _FormLabel extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 5),
         child: Text(text,
-            style: AppTextStyles.labelSmall.copyWith(
-                color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+            style: AppTextStyles.labelSmall.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
       );
 }
 
@@ -3901,27 +3495,17 @@ class _InfoBanner extends StatelessWidget {
   final Color color, bg, border;
   final String message;
   const _InfoBanner(
-      {required this.icon,
-      required this.color,
-      required this.bg,
-      required this.border,
-      required this.message});
+      {required this.icon, required this.color, required this.bg, required this.border, required this.message});
 
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: border)),
+        decoration:
+            BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10), border: Border.all(color: border)),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Padding(
-              padding: const EdgeInsets.only(top: 1),
-              child: Icon(icon, size: 15, color: color)),
+          Padding(padding: const EdgeInsets.only(top: 1), child: Icon(icon, size: 15, color: color)),
           const SizedBox(width: 8),
-          Expanded(
-              child: Text(message,
-                  style: AppTextStyles.bodySmall.copyWith(color: color))),
+          Expanded(child: Text(message, style: AppTextStyles.bodySmall.copyWith(color: color))),
         ]),
       );
 }
@@ -3934,9 +3518,7 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 40),
         child: Center(
-          child: Text(message,
-              style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.textSecondary)),
+          child: Text(message, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
         ),
       );
 }

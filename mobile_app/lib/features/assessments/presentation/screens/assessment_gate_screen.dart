@@ -32,9 +32,7 @@ class AssessmentGateScreen extends ConsumerWidget {
       }
     });
     final async = ref.watch(myAssessmentsProvider);
-    final gated =
-        ref.watch(authStateProvider).valueOrNull?.user?.needsAssessments ??
-            false;
+    final gated = ref.watch(authStateProvider).valueOrNull?.user?.needsAssessments ?? false;
 
     return PopScope(
       canPop: false,
@@ -42,15 +40,12 @@ class AssessmentGateScreen extends ConsumerWidget {
         backgroundColor: AppColors.background,
         body: SafeArea(
           child: RefreshIndicator(
-            onRefresh: () => ref
-                .refresh(myAssessmentsProvider.future)
-                .then((_) {}, onError: (_) {}),
+            onRefresh: () => ref.refresh(myAssessmentsProvider.future).then((_) {}, onError: (_) {}),
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
               children: [
-                Icon(Icons.assignment_outlined,
-                    size: 40, color: AppColors.primary),
+                Icon(Icons.assignment_outlined, size: 40, color: AppColors.primary),
                 const SizedBox(height: 12),
                 Text('Complete your assessments', style: AppTextStyles.h3),
                 const SizedBox(height: 6),
@@ -90,8 +85,7 @@ class AssessmentGateScreen extends ConsumerWidget {
                           child: MyAssessmentCard(
                             key: ValueKey('gate-assessment-${a.id}'),
                             assignment: a,
-                            onTap: () => context
-                                .push(AppRoutes.assessmentTakePath(a.id)),
+                            onTap: () => context.push(AppRoutes.assessmentTakePath(a.id)),
                           ),
                         ),
                     ],
@@ -99,8 +93,7 @@ class AssessmentGateScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 TextButton.icon(
-                  onPressed: () =>
-                      ref.read(authStateProvider.notifier).logout(),
+                  onPressed: () => ref.read(authStateProvider.notifier).logout(),
                   icon: const Icon(Icons.logout),
                   label: const Text('Log out'),
                 ),

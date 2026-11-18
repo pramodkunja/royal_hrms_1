@@ -26,8 +26,7 @@ String _friendlyError(Object e) {
   return e.toString();
 }
 
-final interviewDataSourceProvider =
-    Provider<InterviewDataSource>((ref) {
+final interviewDataSourceProvider = Provider<InterviewDataSource>((ref) {
   return InterviewDataSource(ref.watch(dioProvider));
 });
 
@@ -55,7 +54,6 @@ class CandidateCreateDenied implements Exception {
 
 const kCandidateImportDenied = 'You do not have permission to import candidates.';
 
-
 /// Saves a downloaded sample through the system "save as" dialog (as the
 /// other import screens do — no storage permission needed); returns the saved
 /// path, or null when the user cancels. Tests override it.
@@ -70,11 +68,9 @@ final candidateSampleSaverProvider = Provider<Future<String?> Function(String fi
 
 // ── Filter state ──────────────────────────────────────────────────────────────
 
-final candidateStatusFilterProvider =
-    StateProvider.autoDispose<String>((ref) => 'all');
+final candidateStatusFilterProvider = StateProvider.autoDispose<String>((ref) => 'all');
 
-final candidateSearchProvider =
-    StateProvider.autoDispose<String>((ref) => '');
+final candidateSearchProvider = StateProvider.autoDispose<String>((ref) => '');
 
 /// Web interview-list branch filter: null = "All Branches" (web's default
 /// for unrestricted users), else a Branch id sent as `?branch=<id>`.
@@ -92,9 +88,8 @@ bool isUnrestrictedCandidateViewer(UserEntity? user) =>
 /// The picker's options, as web loads them once on mount:
 /// GET /branch/branches/?status=active&page_size=100 (shown "Name (CODE)").
 final candidateBranchOptionsProvider = FutureProvider.autoDispose<List<BranchModel>>((ref) async {
-  final res = await ref
-      .read(dioProvider)
-      .get(ApiConstants.branches, queryParameters: {'status': 'active', 'page_size': 100});
+  final res =
+      await ref.read(dioProvider).get(ApiConstants.branches, queryParameters: {'status': 'active', 'page_size': 100});
   final body = res.data;
   final data = body is Map && body.containsKey('data') ? body['data'] : body;
   final results = data is Map ? data['results'] : data;
@@ -107,19 +102,15 @@ final candidateBranchOptionsProvider = FutureProvider.autoDispose<List<BranchMod
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 final candidateStatsProvider =
-    AsyncNotifierProvider.autoDispose<_StatsNotifier, CandidateStatsEntity>(
-        _StatsNotifier.new);
+    AsyncNotifierProvider.autoDispose<_StatsNotifier, CandidateStatsEntity>(_StatsNotifier.new);
 
-class _StatsNotifier
-    extends AutoDisposeAsyncNotifier<CandidateStatsEntity> {
+class _StatsNotifier extends AutoDisposeAsyncNotifier<CandidateStatsEntity> {
   @override
-  Future<CandidateStatsEntity> build() =>
-      ref.read(interviewDataSourceProvider).fetchStats();
+  Future<CandidateStatsEntity> build() => ref.read(interviewDataSourceProvider).fetchStats();
 
   Future<void> refresh() async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(
-        () => ref.read(interviewDataSourceProvider).fetchStats());
+    state = await AsyncValue.guard(() => ref.read(interviewDataSourceProvider).fetchStats());
   }
 }
 
@@ -172,9 +163,8 @@ class CandidateListState {
       );
 }
 
-final candidateListProvider = AsyncNotifierProvider.autoDispose<
-    CandidateListNotifier,
-    CandidateListState>(CandidateListNotifier.new);
+final candidateListProvider =
+    AsyncNotifierProvider.autoDispose<CandidateListNotifier, CandidateListState>(CandidateListNotifier.new);
 
 /// Web interview-list page: canEditRec = usePermission("recruitment.edit") —
 /// a superuser, or recruitment.edit in the user's OWN permissions. Unlike
@@ -185,8 +175,7 @@ bool canEditCandidates(UserEntity? user) =>
 
 /// Web: "Edit" is shown when `canEditRec && status !== "converted"` (selected
 /// and offer_sent candidates can still be edited).
-bool canEditCandidate(UserEntity? user, CandidateEntity candidate) =>
-    canEditCandidates(user) && !candidate.isConverted;
+bool canEditCandidate(UserEntity? user, CandidateEntity candidate) => canEditCandidates(user) && !candidate.isConverted;
 
 const kCandidateEditDenied = 'You do not have permission to edit this candidate.';
 
@@ -201,10 +190,7 @@ const kCandidateStatusChangeDenied = 'You do not have permission to change this 
 /// candidate can still be moved. The backend itself only refuses
 /// non-recruitment.edit users and converted candidates.
 bool canChangeCandidateStatus(UserEntity? user, CandidateEntity candidate) =>
-    canEditCandidates(user) &&
-    !candidate.isConverted &&
-    !candidate.isSelected &&
-    !candidate.isOfferSent;
+    canEditCandidates(user) && !candidate.isConverted && !candidate.isSelected && !candidate.isOfferSent;
 
 const kCandidateSendLoginDenied = 'You do not have permission to send the portal login.';
 
@@ -223,10 +209,8 @@ bool canSendCandidateLogin(UserEntity? user, CandidateEntity candidate) =>
 /// branch filter changes (web: fetchAll(…, 1)); a change made while an older
 /// request is still running wins — Riverpod drops the stale build, and a page
 /// load started under an older query is discarded ([_generation]).
-class CandidateListNotifier
-    extends AutoDisposeAsyncNotifier<CandidateListState> {
-  InterviewDataSource get _ds =>
-      ref.read(interviewDataSourceProvider);
+class CandidateListNotifier extends AutoDisposeAsyncNotifier<CandidateListState> {
+  InterviewDataSource get _ds => ref.read(interviewDataSourceProvider);
 
   int _generation = 0;
 
@@ -331,10 +315,8 @@ class CandidateListNotifier
       return kCandidateStatusChangeDenied;
     }
     try {
-      final result =
-          await _ds.updateStatus(id, newStatus, remarks: remarks);
-      _replaceItems((list) =>
-          list.map((c) => c.id == id ? result.candidate : c).toList());
+      final result = await _ds.updateStatus(id, newStatus, remarks: remarks);
+      _replaceItems((list) => list.map((c) => c.id == id ? result.candidate : c).toList());
       await ref.read(candidateStatsProvider.notifier).refresh();
       onServerMessage?.call(result.message);
       return null;
@@ -370,8 +352,7 @@ class CandidateListNotifier
 /// The loaded candidates. Search and the status tab are applied by the server;
 /// the tab is re-applied here only so a candidate whose status was just
 /// changed leaves the tab at once (web refetches the page instead).
-final filteredCandidatesProvider =
-    Provider.autoDispose<List<CandidateEntity>>((ref) {
+final filteredCandidatesProvider = Provider.autoDispose<List<CandidateEntity>>((ref) {
   final all = ref.watch(candidateListProvider).valueOrNull?.items ?? const <CandidateEntity>[];
   final status = ref.watch(candidateStatusFilterProvider);
   return status == 'all' ? all : all.where((c) => c.status == status).toList();
@@ -379,7 +360,6 @@ final filteredCandidatesProvider =
 
 // ── Detail (for activity log) ─────────────────────────────────────────────────
 
-final candidateDetailProvider = FutureProvider.autoDispose
-    .family<CandidateEntity, int>((ref, id) {
+final candidateDetailProvider = FutureProvider.autoDispose.family<CandidateEntity, int>((ref, id) {
   return ref.read(interviewDataSourceProvider).fetchCandidate(id);
 });

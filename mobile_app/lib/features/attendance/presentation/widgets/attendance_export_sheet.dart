@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/network/api_client.dart' show userFriendlyMessage;
 import '../../../../core/theme/app_text_styles.dart';
+import '../../domain/entities/attendance_entity.dart' show ExportEmployeeOption;
 import '../providers/attendance_export.dart';
 
 // Web AttendanceTab.tsx toolbar: "Export:" Single Day / Month / Custom Date
@@ -11,6 +15,10 @@ import '../providers/attendance_export.dart';
 // "Export CSV" / "Exporting…". On mobile these live in a sheet opened from
 // the table's Export button. The table's branch and department filters
 // apply to every mode; single day uses the date the table shows.
+// "Export employees": All Employees / Single Employee — the latter searches
+// GET /employees/ (2+ characters, 300 ms debounce, active only, first 8),
+// sends `employee=<ID>` instead of the branch / department filters and saves
+// attendance_<ID>_<period>.csv; Export stays disabled until one is picked.
 
 const _monthNames = [
   'January', 'February', 'March', 'April', 'May', 'June', //
@@ -57,18 +65,58 @@ class _AttendanceExportSheetState extends ConsumerState<AttendanceExportSheet> {
   late DateTime _to = DateTime(_today.year, _today.month, _today.day);
   bool _exporting = false;
   String? _error;
+  bool _single = false;
+  final _empQuery = TextEditingController();
+  String _empSearch = '';
+  Timer? _debounce;
+  ExportEmployeeOption? _employee;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _empQuery.dispose();
+    super.dispose();
+  }
+
+  void _onEmpQuery(String v) {
+    // Web: typing clears the picked employee; the search follows 300 ms later.
+    setState(() {
+      _employee = null;
+      _error = null;
+    });
+    _debounce?.cancel();
+    _debounce = Timer(kExportEmployeeDebounce, () {
+      if (mounted) setState(() => _empSearch = v.trim());
+    });
+  }
+
+  void _pickEmployee(ExportEmployeeOption e) {
+    _debounce?.cancel();
+    _empQuery.text = e.label;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _employee = e;
+      _error = null;
+    });
+  }
+
+  String get _employeeId => _single ? (_employee?.employeeId ?? '') : '';
 
   AttendanceExportRequest get _request => switch (_mode) {
-        AttendanceExportMode.day =>
-          AttendanceExportRequest.day(date: widget.tableDate, branch: widget.branch, department: widget.department),
+        AttendanceExportMode.day => AttendanceExportRequest.day(
+            date: widget.tableDate, branch: widget.branch, department: widget.department, employeeId: _employeeId),
         AttendanceExportMode.month => AttendanceExportRequest.month(
-            year: _year, month: _month, branch: widget.branch, department: widget.department),
-        AttendanceExportMode.range =>
-          AttendanceExportRequest.range(from: _from, to: _to, branch: widget.branch, department: widget.department),
+            year: _year, month: _month, branch: widget.branch, department: widget.department, employeeId: _employeeId),
+        AttendanceExportMode.range => AttendanceExportRequest.range(
+            from: _from, to: _to, branch: widget.branch, department: widget.department, employeeId: _employeeId),
       };
 
   Future<void> _export() async {
     if (_exporting) return;
+    if (_single && _employee == null) {
+      setState(() => _error = kExportSelectEmployee);
+      return;
+    }
     setState(() {
       _exporting = true;
       _error = null;
@@ -143,6 +191,7 @@ class _AttendanceExportSheetState extends ConsumerState<AttendanceExportSheet> {
   @override
   Widget build(BuildContext context) {
     final problem = _mode == AttendanceExportMode.day ? null : _request.problem(_today);
+    final needsEmployee = _single && _employee == null;
     final filters = [
       'Branch: ${widget.branch.isEmpty ? 'All' : widget.branch}',
       'Department: ${widget.department.isEmpty ? 'All' : widget.department}',
@@ -163,7 +212,7 @@ class _AttendanceExportSheetState extends ConsumerState<AttendanceExportSheet> {
               Text('Export Attendance CSV', style: AppTextStyles.h4.copyWith(fontSize: 16)),
             ]),
             const SizedBox(height: 4),
-            Text(filters,
+            Text(_single ? 'Branch and department filters do not apply to a single employee.' : filters,
                 key: const Key('export-filters'),
                 style: AppTextStyles.caption.copyWith(fontSize: 11.5, color: AppColors.textSecondary)),
             const SizedBox(height: 14),
@@ -234,10 +283,48 @@ class _AttendanceExportSheetState extends ConsumerState<AttendanceExportSheet> {
               Text('One row per employee per day, up to today for the current month.',
                   style: AppTextStyles.caption.copyWith(fontSize: 11, color: AppColors.textSecondary)),
             ],
+            const SizedBox(height: 12),
+            Text('Export employees', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            DropdownButtonFormField<bool>(
+              key: const Key('export-scope'),
+              initialValue: _single,
+              isExpanded: true,
+              decoration: _inputDec(null),
+              items: const [
+                DropdownMenuItem(value: false, child: Text('All Employees')),
+                DropdownMenuItem(value: true, child: Text('Single Employee')),
+              ],
+              onChanged: _exporting
+                  ? null
+                  : (v) => setState(() {
+                        _single = v ?? false;
+                        _error = null;
+                      }),
+            ),
+            if (_single) ...[
+              const SizedBox(height: 8),
+              TextField(
+                key: const Key('export-employee-search'),
+                controller: _empQuery,
+                enabled: !_exporting,
+                decoration: _inputDec('Search employee by name or ID…')
+                    .copyWith(prefixIcon: const Icon(Icons.search, size: 18)),
+                onChanged: _onEmpQuery,
+              ),
+              if (_employee == null && _empSearch.length >= kExportEmployeeMinChars)
+                _EmployeeResults(query: _empSearch, onPick: _pickEmployee),
+            ],
             if (problem != null) ...[
               const SizedBox(height: 8),
               Text(problem,
                   key: const Key('export-problem'),
+                  style: AppTextStyles.caption.copyWith(fontSize: 11.5, color: AppColors.error)),
+            ],
+            if (problem == null && needsEmployee && _error == null) ...[
+              const SizedBox(height: 8),
+              Text(kExportSelectEmployee,
+                  key: const Key('export-select-employee'),
                   style: AppTextStyles.caption.copyWith(fontSize: 11.5, color: AppColors.error)),
             ],
             if (_error != null) ...[
@@ -262,7 +349,7 @@ class _AttendanceExportSheetState extends ConsumerState<AttendanceExportSheet> {
               const Spacer(),
               FilledButton.icon(
                 key: const Key('export-submit'),
-                onPressed: _exporting || problem != null ? null : _export,
+                onPressed: _exporting || problem != null || needsEmployee ? null : _export,
                 icon: _exporting
                     ? const SizedBox(
                         width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
@@ -272,6 +359,71 @@ class _AttendanceExportSheetState extends ConsumerState<AttendanceExportSheet> {
             ]),
           ],
         ),
+      ),
+    );
+  }
+}
+
+InputDecoration _inputDec(String? hint) => InputDecoration(
+      hintText: hint,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+    );
+
+/// Web's search dropdown: "Searching…", the error, "No matching employees.",
+/// or up to 8 rows of name + "ID · department".
+class _EmployeeResults extends ConsumerWidget {
+  const _EmployeeResults({required this.query, required this.onPick});
+  final String query;
+  final ValueChanged<ExportEmployeeOption> onPick;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(attendanceExportEmployeeSearchProvider(query));
+    final muted = AppTextStyles.caption.copyWith(fontSize: 12, color: AppColors.textSecondary);
+    Widget note(String text, Key key, {Color? color}) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          child: Text(text, key: key, style: color == null ? muted : muted.copyWith(color: color)),
+        );
+    return Container(
+      key: const Key('export-employee-results'),
+      margin: const EdgeInsets.only(top: 4),
+      constraints: const BoxConstraints(maxHeight: 240),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: async.when(
+        loading: () => note('Searching…', const Key('export-employee-searching')),
+        error: (e, _) => note(userFriendlyMessage(e), const Key('export-employee-error'), color: AppColors.error),
+        data: (options) => options.isEmpty
+            ? note('No matching employees.', const Key('export-employee-none'))
+            // At most 8 rows (web's cap): build them all, scroll if short.
+            : SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final e in options)
+                      InkWell(
+                        key: Key('export-employee-${e.employeeId}'),
+                        onTap: () => onPick(e),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+                          child: Text.rich(TextSpan(children: [
+                            TextSpan(
+                                text: e.fullName,
+                                style: AppTextStyles.bodySmall.copyWith(fontSize: 13, fontWeight: FontWeight.w600)),
+                            TextSpan(
+                                text: '  ${e.employeeId}${e.department.isNotEmpty ? ' · ${e.department}' : ''}',
+                                style: muted.copyWith(fontSize: 11)),
+                          ])),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
       ),
     );
   }

@@ -60,6 +60,7 @@ class LeaveTypeModel extends LeaveTypeEntity {
     super.allowNoticePeriodLeave,
     super.allowLeaveExtension,
     super.allowLeaveCombination,
+    super.eligibleForMe,
   });
 
   // Backend returns LeavePolicy objects — see apps/hrms/serializers.py
@@ -127,6 +128,7 @@ class LeaveTypeModel extends LeaveTypeEntity {
           json['allow_notice_period_leave'] as bool? ?? false,
       allowLeaveExtension: json['allow_leave_extension'] as bool? ?? false,
       allowLeaveCombination: json['allow_leave_combination'] as bool? ?? false,
+      eligibleForMe: json['eligible_for_me'] as bool?,
     );
   }
 }

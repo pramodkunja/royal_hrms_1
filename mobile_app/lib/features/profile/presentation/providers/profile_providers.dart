@@ -18,8 +18,7 @@ final profileDataSourceProvider = Provider<ProfileRemoteDataSource>((ref) {
 
 // ── My profile ─────────────────────────────────────────────────────────────────
 
-final myProfileProvider =
-    AsyncNotifierProvider.autoDispose<MyProfileNotifier, MyProfileModel>(
+final myProfileProvider = AsyncNotifierProvider.autoDispose<MyProfileNotifier, MyProfileModel>(
   MyProfileNotifier.new,
 );
 
@@ -109,8 +108,7 @@ class MyProfileNotifier extends AutoDisposeAsyncNotifier<MyProfileModel> {
 
 // ── Documents (read-only list) ──────────────────────────────────────────────────
 
-final myDocumentsProvider =
-    FutureProvider.autoDispose<List<ProfileDocumentModel>>((ref) {
+final myDocumentsProvider = FutureProvider.autoDispose<List<ProfileDocumentModel>>((ref) {
   return ref.read(profileDataSourceProvider).fetchMyDocuments();
 });
 

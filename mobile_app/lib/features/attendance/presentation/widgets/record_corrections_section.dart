@@ -149,8 +149,8 @@ class _RecordCorrectionsSectionState extends ConsumerState<RecordCorrectionsSect
                   ],
                 ),
           loading: () => const SizedBox(height: 20, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
-          error: (e, _) => Text(friendlyAttendanceError(e),
-              style: AppTextStyles.labelSmall.copyWith(color: AppColors.error)),
+          error: (e, _) =>
+              Text(friendlyAttendanceError(e), style: AppTextStyles.labelSmall.copyWith(color: AppColors.error)),
         ),
       ],
     );
@@ -179,8 +179,7 @@ class _RecordCorrectionsSectionState extends ConsumerState<RecordCorrectionsSect
             ),
             Text(c.status,
                 key: Key('record-correction-status-${c.id}'),
-                style: AppTextStyles.labelSmall
-                    .copyWith(color: _statusColor(c.status), fontWeight: FontWeight.w600)),
+                style: AppTextStyles.labelSmall.copyWith(color: _statusColor(c.status), fontWeight: FontWeight.w600)),
           ]),
           const SizedBox(height: 4),
           Text('Requested In: ${c.requestedInTime ?? '—'} · Requested Out: ${c.requestedOutTime ?? '—'}',

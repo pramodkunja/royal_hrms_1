@@ -20,13 +20,12 @@ import '../widgets/assessment_result_view.dart';
 import '../widgets/my_assessment_card.dart';
 
 /// Opens a video item outside the app. Overridable in tests.
-final assessmentVideoOpenerProvider =
-    Provider<Future<void> Function(String url)>((ref) => (url) async {
-          final uri = Uri.tryParse(url);
-          if (uri != null) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          }
-        });
+final assessmentVideoOpenerProvider = Provider<Future<void> Function(String url)>((ref) => (url) async {
+      final uri = Uri.tryParse(url);
+      if (uri != null) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    });
 
 /// Taking one assessment: instructions → items in order → the server's
 /// result, with retake when allowed (web: app/onboarding/assessments).
@@ -36,8 +35,7 @@ class AssessmentTakeScreen extends ConsumerStatefulWidget {
   const AssessmentTakeScreen({super.key, required this.assignmentId});
 
   @override
-  ConsumerState<AssessmentTakeScreen> createState() =>
-      _AssessmentTakeScreenState();
+  ConsumerState<AssessmentTakeScreen> createState() => _AssessmentTakeScreenState();
 }
 
 class _AssessmentTakeScreenState extends ConsumerState<AssessmentTakeScreen> {
@@ -62,12 +60,10 @@ class _AssessmentTakeScreenState extends ConsumerState<AssessmentTakeScreen> {
     super.dispose();
   }
 
-  AssessmentItemResponse? _responseFor(
-          MyAssessmentAssignment a, String itemId) =>
+  AssessmentItemResponse? _responseFor(MyAssessmentAssignment a, String itemId) =>
       a.responseFor(itemId) ?? _saved[itemId];
 
-  bool _done(MyAssessmentAssignment a, AssessmentPortalItem item) =>
-      a.isItemDone(item) || _saved.containsKey(item.id);
+  bool _done(MyAssessmentAssignment a, AssessmentPortalItem item) => a.isItemDone(item) || _saved.containsKey(item.id);
 
   void _startTimerIfNeeded(MyAssessmentAssignment a) {
     if (_ticker != null || a.isComplete || a.timeRemainingSecs == null) return;
@@ -83,20 +79,16 @@ class _AssessmentTakeScreenState extends ConsumerState<AssessmentTakeScreen> {
     });
   }
 
-  Future<void> _save(
-      MyAssessmentAssignment a, AssessmentPortalItem item) async {
+  Future<void> _save(MyAssessmentAssignment a, AssessmentPortalItem item) async {
     if (_saving) return;
-    final option =
-        item.type == AssessmentItemType.quiz ? _picked[item.id] : null;
+    final option = item.type == AssessmentItemType.quiz ? _picked[item.id] : null;
     if (item.type == AssessmentItemType.quiz && option == null) return;
     setState(() {
       _saving = true;
       _itemError = null;
     });
     try {
-      final r = await ref
-          .read(assessmentActionsProvider)
-          .respond(a.id, item.id, selectedOption: option);
+      final r = await ref.read(assessmentActionsProvider).respond(a.id, item.id, selectedOption: option);
       if (!mounted) return;
       setState(() => _saved[item.id] = AssessmentItemResponse(
             itemId: item.id,
@@ -118,15 +110,10 @@ class _AssessmentTakeScreenState extends ConsumerState<AssessmentTakeScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Submit assessment?'),
-        content: const Text(
-            'Your score will be calculated now. You can\'t change your answers after submitting.'),
+        content: const Text('Your score will be calculated now. You can\'t change your answers after submitting.'),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Submit')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Submit')),
         ],
       ),
     );
@@ -140,9 +127,7 @@ class _AssessmentTakeScreenState extends ConsumerState<AssessmentTakeScreen> {
       _itemError = null;
     });
     try {
-      final r = await ref
-          .read(assessmentActionsProvider)
-          .complete(widget.assignmentId);
+      final r = await ref.read(assessmentActionsProvider).complete(widget.assignmentId);
       if (!mounted) return;
       _ticker?.cancel();
       setState(() => _result = r);
@@ -181,15 +166,13 @@ class _AssessmentTakeScreenState extends ConsumerState<AssessmentTakeScreen> {
     }
   }
 
-  void _leave() =>
-      context.canPop() ? context.pop() : context.go(AppRoutes.myAssessments);
+  void _leave() => context.canPop() ? context.pop() : context.go(AppRoutes.myAssessments);
 
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(myAssessmentsProvider);
     MyAssessmentAssignment? a;
-    for (final x
-        in async.valueOrNull?.assignments ?? const <MyAssessmentAssignment>[]) {
+    for (final x in async.valueOrNull?.assignments ?? const <MyAssessmentAssignment>[]) {
       if (x.id == widget.assignmentId) a = x;
     }
     if (a != null) _startTimerIfNeeded(a);
@@ -199,18 +182,14 @@ class _AssessmentTakeScreenState extends ConsumerState<AssessmentTakeScreen> {
       appBar: AppBar(
         title: Text(a?.title ?? 'Assessment', overflow: TextOverflow.ellipsis),
         actions: [
-          if (_remaining != null &&
-              _result == null &&
-              !(a?.isComplete ?? false))
+          if (_remaining != null && _result == null && !(a?.isComplete ?? false))
             Padding(
               padding: const EdgeInsets.only(right: 16),
               child: Center(
                 child: Text(formatCountdown(_remaining!),
                     key: const Key('assessment-timer'),
-                    style: AppTextStyles.labelLarge.copyWith(
-                        color: (_remaining ?? 0) <= 60
-                            ? AppColors.error
-                            : AppColors.textPrimary)),
+                    style: AppTextStyles.labelLarge
+                        .copyWith(color: (_remaining ?? 0) <= 60 ? AppColors.error : AppColors.textPrimary)),
               ),
             ),
         ],
@@ -226,8 +205,7 @@ class _AssessmentTakeScreenState extends ConsumerState<AssessmentTakeScreen> {
               : async.isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : const AppErrorState(
-                      title: 'Assessment not found',
-                      message: 'This assessment is no longer assigned to you.'),
+                      title: 'Assessment not found', message: 'This assessment is no longer assigned to you.'),
     );
   }
 
@@ -243,9 +221,7 @@ class _AssessmentTakeScreenState extends ConsumerState<AssessmentTakeScreen> {
         passPercentage: r?.passPercentage ?? a.passPercentage,
         passed: r?.passed ?? a.passed,
         attemptNumber: a.attemptCount,
-        completedOn: r == null && a.completedAt != null
-            ? formatAssessmentDate(a.completedAt)
-            : null,
+        completedOn: r == null && a.completedAt != null ? formatAssessmentDate(a.completedAt) : null,
         // Shown once the refreshed list confirms the attempt is complete and
         // the server's attempt count still allows another.
         onRetake: canRetry(a, now, passed: r?.passed) ? _retake : null,
@@ -255,9 +231,7 @@ class _AssessmentTakeScreenState extends ConsumerState<AssessmentTakeScreen> {
         onDone: _leave,
       );
     }
-    final fresh = a.status == MyAssessmentStatus.pending &&
-        a.responses.isEmpty &&
-        _saved.isEmpty;
+    final fresh = a.status == MyAssessmentStatus.pending && a.responses.isEmpty && _saved.isEmpty;
     if (!_started && fresh) {
       return AssessmentInstructionsView(
         assignment: a,
@@ -270,8 +244,7 @@ class _AssessmentTakeScreenState extends ConsumerState<AssessmentTakeScreen> {
     }
     final items = a.orderedItems;
     if (items.isEmpty) {
-      return const AppErrorState(
-          title: 'No items', message: 'This assessment has no items.');
+      return const AppErrorState(title: 'No items', message: 'This assessment has no items.');
     }
     final i = (_index ?? resumeIndex(a)).clamp(0, items.length - 1);
     final item = items[i];

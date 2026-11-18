@@ -281,11 +281,15 @@ class _LateJustificationSheetState extends ConsumerState<LateJustificationSheet>
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(color: AppColors.backgroundLow, borderRadius: BorderRadius.circular(8)),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text.rich(TextSpan(children: [
-                    TextSpan(text: fmtLateDate(_date, withWeekday: true), style: const TextStyle(fontWeight: FontWeight.w700)),
-                    if (clockIn != null && clockIn.isNotEmpty)
-                      TextSpan(text: ' · clocked in at $clockIn', style: TextStyle(color: AppColors.textSecondary)),
-                  ]), style: AppTextStyles.bodySmall),
+                  Text.rich(
+                      TextSpan(children: [
+                        TextSpan(
+                            text: fmtLateDate(_date, withWeekday: true),
+                            style: const TextStyle(fontWeight: FontWeight.w700)),
+                        if (clockIn != null && clockIn.isNotEmpty)
+                          TextSpan(text: ' · clocked in at $clockIn', style: TextStyle(color: AppColors.textSecondary)),
+                      ]),
+                      style: AppTextStyles.bodySmall),
                   const SizedBox(height: 2),
                   Text(
                     "Your punch times stay as recorded. If approved, the day shows as Late (Excused) and doesn't count "
@@ -303,18 +307,22 @@ class _LateJustificationSheetState extends ConsumerState<LateJustificationSheet>
                     color: AppColors.warning.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text.rich(TextSpan(children: [
-                    const TextSpan(text: "Reviewer's note: ", style: TextStyle(fontWeight: FontWeight.w700)),
-                    TextSpan(text: existing.rejectionReason),
-                    if (existing.resubmitBy != null) TextSpan(text: ' — resubmit by ${fmtLateDate(existing.resubmitBy!)}'),
-                  ]), style: AppTextStyles.bodySmall),
+                  child: Text.rich(
+                      TextSpan(children: [
+                        const TextSpan(text: "Reviewer's note: ", style: TextStyle(fontWeight: FontWeight.w700)),
+                        TextSpan(text: existing.rejectionReason),
+                        if (existing.resubmitBy != null)
+                          TextSpan(text: ' — resubmit by ${fmtLateDate(existing.resubmitBy!)}'),
+                      ]),
+                      style: AppTextStyles.bodySmall),
                 ),
               _label('Reason', required: true),
               DropdownButtonFormField<String>(
                 key: const Key('late-reason'),
                 initialValue: _reason,
                 isExpanded: true,
-                decoration: InputDecoration(isDense: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+                decoration:
+                    InputDecoration(isDense: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
                 items: [for (final (v, l) in kLateReasons) DropdownMenuItem(value: v, child: Text(l))],
                 onChanged: _busy
                     ? null
@@ -355,7 +363,9 @@ class _LateJustificationSheetState extends ConsumerState<LateJustificationSheet>
                     child: Row(children: [
                       Expanded(
                         child: Text(_file!.name,
-                            key: const Key('late-proof-name'), overflow: TextOverflow.ellipsis, style: AppTextStyles.bodySmall),
+                            key: const Key('late-proof-name'),
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.bodySmall),
                       ),
                       IconButton(
                         tooltip: 'Remove file',
@@ -440,7 +450,8 @@ class MonthlyLateArrivalsCard extends StatelessWidget {
             Container(
               key: const Key('late-limit-badge'),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(color: badgeColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+              decoration:
+                  BoxDecoration(color: badgeColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
               child: Text(limit.statusLabel ?? limit.status!,
                   style: AppTextStyles.caption.copyWith(color: badgeColor, fontWeight: FontWeight.w600)),
             ),
@@ -530,7 +541,8 @@ class _MyLateJustificationsCardState extends ConsumerState<MyLateJustificationsC
             key: const Key('late-notice'),
             margin: const EdgeInsets.only(top: 10),
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+            decoration:
+                BoxDecoration(color: AppColors.success.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
             child: Text(_notice!, style: AppTextStyles.caption.copyWith(color: AppColors.success)),
           ),
         const SizedBox(height: 8),
@@ -569,12 +581,14 @@ class _MyLateJustificationsCardState extends ConsumerState<MyLateJustificationsC
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Expanded(
-            child: Text.rich(TextSpan(children: [
-              TextSpan(text: fmtLateDate(r.date), style: const TextStyle(fontWeight: FontWeight.w600)),
-              TextSpan(
-                  text: '  ·  clock-in ${r.originalInTime ?? '—'}',
-                  style: TextStyle(color: AppColors.textSecondary, fontFamily: 'monospace', fontSize: 12)),
-            ]), style: AppTextStyles.bodySmall),
+            child: Text.rich(
+                TextSpan(children: [
+                  TextSpan(text: fmtLateDate(r.date), style: const TextStyle(fontWeight: FontWeight.w600)),
+                  TextSpan(
+                      text: '  ·  clock-in ${r.originalInTime ?? '—'}',
+                      style: TextStyle(color: AppColors.textSecondary, fontFamily: 'monospace', fontSize: 12)),
+                ]),
+                style: AppTextStyles.bodySmall),
           ),
           Container(
             key: Key('my-late-status-${r.id}'),
@@ -587,7 +601,8 @@ class _MyLateJustificationsCardState extends ConsumerState<MyLateJustificationsC
         Text(r.reasonLabel.isEmpty ? r.reason : r.reasonLabel, style: AppTextStyles.bodySmall),
         if (r.explanation.isNotEmpty) Text(r.explanation, style: AppTextStyles.caption.copyWith(fontSize: 11)),
         if (r.rejectionReason.isNotEmpty)
-          Text('Reviewer: ${r.rejectionReason}', style: AppTextStyles.caption.copyWith(fontSize: 11, color: AppColors.error)),
+          Text('Reviewer: ${r.rejectionReason}',
+              style: AppTextStyles.caption.copyWith(fontSize: 11, color: AppColors.error)),
         Row(children: [
           if (r.hasDocument && r.canViewDocument)
             TextButton.icon(

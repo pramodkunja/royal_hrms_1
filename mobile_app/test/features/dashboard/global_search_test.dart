@@ -205,7 +205,7 @@ void main() {
       expect(matchingPages(staff, '  ').map((p) => p.label), isEmpty);
       final my = matchingPages(staff, 'MY');
       expect(my, hasLength(kGlobalSearchPageLimit));
-      expect(my.map((p) => p.label), ['My Attendance', 'My Payslips', 'My Assessments', 'My Referrals', 'My Requests']);
+      expect(my.map((p) => p.label), ['My Attendance', 'My Payslips', 'My Assessments', 'My Learning', 'My Referrals']);
       expect(matchingPages(staff, 'employ'), isEmpty); // no employees.view → no Employees page
       expect(matchingPages(hr, 'employ').map((p) => p.path), ['/dashboard/employees']);
     });

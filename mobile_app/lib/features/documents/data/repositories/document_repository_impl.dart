@@ -51,6 +51,5 @@ class DocumentRepositoryImpl implements DocumentRepository {
   Future<AckReport> getAcknowledgementReport(int id) => _ds.fetchAcknowledgementReport(id);
 
   @override
-  Future<DocumentEntity> setRequiresAcknowledgement(int id, bool value) =>
-      _ds.setRequiresAcknowledgement(id, value);
+  Future<DocumentEntity> setRequiresAcknowledgement(int id, bool value) => _ds.setRequiresAcknowledgement(id, value);
 }

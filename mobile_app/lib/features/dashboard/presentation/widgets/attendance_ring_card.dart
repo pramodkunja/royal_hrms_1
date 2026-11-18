@@ -28,8 +28,7 @@ class AttendanceRingCard extends ConsumerStatefulWidget {
   ConsumerState<AttendanceRingCard> createState() => _AttendanceRingCardState();
 }
 
-class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard>
-    with SingleTickerProviderStateMixin {
+class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard> with SingleTickerProviderStateMixin {
   bool _punching = false;
 
   // Seeded from the backend's `totalSeconds` on every fresh fetch, then
@@ -51,8 +50,8 @@ class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard>
   void initState() {
     super.initState();
     _ringCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
-      ..addListener(() => setState(
-          () => _displayedFraction = _ringTween.transform(_ringCurve.transform(_ringCtrl.value))));
+      ..addListener(
+          () => setState(() => _displayedFraction = _ringTween.transform(_ringCurve.transform(_ringCtrl.value))));
 
     // Seed once from whatever's already cached (covers the common case
     // where this provider resolved before this card even mounted) — every
@@ -149,7 +148,8 @@ class _AttendanceRingCardState extends ConsumerState<AttendanceRingCard>
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  AttendanceRing(fraction: _displayedFraction, isClockedIn: today.isClockedIn, elapsedSeconds: _liveTotalSeconds),
+                  AttendanceRing(
+                      fraction: _displayedFraction, isClockedIn: today.isClockedIn, elapsedSeconds: _liveTotalSeconds),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
@@ -309,4 +309,3 @@ class _ActionButton extends StatelessWidget {
     );
   }
 }
-

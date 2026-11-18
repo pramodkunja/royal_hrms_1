@@ -238,7 +238,8 @@ void main() {
       expect(server.sends.single.body, isNull);
       final c = ProviderScope.containerOf(tester.element(find.byType(CandidateCard)));
       expect(c.read(candidateListProvider).value!.items.single.status, 'offer_sent');
-      expect(find.byType(SnackBar), findsNothing);
+      // Task 95: web's success text (interview-list/page.tsx:248).
+      expect(find.text('Portal login sent.'), findsOneWidget);
     });
 
     testWidgets('while sending: "Sending…", disabled, a second tap sends nothing', (tester) async {

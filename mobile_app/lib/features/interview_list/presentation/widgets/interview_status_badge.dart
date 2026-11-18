@@ -5,39 +5,51 @@ import '../../../../core/theme/app_text_styles.dart';
 // ── Status display helpers ─────────────────────────────────────────────────────
 
 const _kStatusLabels = {
-  'pending':              'Pending',
-  'screening':            'Screening',
-  'interview_scheduled':  'Scheduled',
-  'interview_done':       'Done',
-  'selected':             'Selected',
-  'offer_sent':           'Offer Sent',
-  'converted':            'Converted',
-  'rejected':             'Rejected',
+  'pending': 'Pending',
+  'screening': 'Screening',
+  'interview_scheduled': 'Scheduled',
+  'interview_done': 'Done',
+  'selected': 'Selected',
+  'offer_sent': 'Offer Sent',
+  'converted': 'Converted',
+  'rejected': 'Rejected',
 };
 
 Color candidateStatusColor(String status) {
   switch (status) {
-    case 'pending':             return AppColors.warning;
-    case 'screening':           return const Color(0xFF7B61FF);
-    case 'interview_scheduled': return AppColors.info;
-    case 'interview_done':      return const Color(0xFF0E7C86);
-    case 'selected':            return AppColors.success;
-    case 'offer_sent':          return const Color(0xFF2E7D32);
-    case 'converted':           return const Color(0xFF0E7C86);
-    case 'rejected':            return AppColors.error;
-    default:                    return AppColors.textHint;
+    case 'pending':
+      return AppColors.warning;
+    case 'screening':
+      return const Color(0xFF7B61FF);
+    case 'interview_scheduled':
+      return AppColors.info;
+    case 'interview_done':
+      return const Color(0xFF0E7C86);
+    case 'selected':
+      return AppColors.success;
+    case 'offer_sent':
+      return const Color(0xFF2E7D32);
+    case 'converted':
+      return const Color(0xFF0E7C86);
+    case 'rejected':
+      return AppColors.error;
+    default:
+      return AppColors.textHint;
   }
 }
 
-String candidateStatusLabel(String status) =>
-    _kStatusLabels[status] ?? status;
+String candidateStatusLabel(String status) => _kStatusLabels[status] ?? status;
 
 String interviewModeLabel(String mode) {
   switch (mode) {
-    case 'in_person':   return 'In-Person';
-    case 'phone':       return 'Phone';
-    case 'video_call':  return 'Video Call';
-    default:            return mode;
+    case 'in_person':
+      return 'In-Person';
+    case 'phone':
+      return 'Phone';
+    case 'video_call':
+      return 'Video Call';
+    default:
+      return mode;
   }
 }
 

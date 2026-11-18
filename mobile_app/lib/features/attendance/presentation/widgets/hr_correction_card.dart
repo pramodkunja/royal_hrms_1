@@ -141,8 +141,7 @@ class _HrCorrectionCardState extends State<HrCorrectionCard> {
                 Expanded(child: _KV(k: 'Clocked In', v: record.originalIn ?? '—')),
                 Expanded(
                     child: _KV(
-                        k: 'Proof',
-                        v: record.hasDocument ? 'Attached' : (record.proofRequired ? 'Missing' : 'None'))),
+                        k: 'Proof', v: record.hasDocument ? 'Attached' : (record.proofRequired ? 'Missing' : 'None'))),
               ]),
               const SizedBox(height: 8),
               _KV(k: 'Reason', v: record.reasonLabel.isEmpty ? record.reason : record.reasonLabel),

@@ -135,7 +135,9 @@ abstract class AttendanceRepository {
     String? toDate,
     String? branch,
     String? department,
+    String? employee,
   });
+  Future<List<ExportEmployeeOption>> searchExportEmployees(String query);
   Future<ImportPreviewEntity> previewImportCsv(List<int> bytes, String fileName,
       {String? employeeId, String? dateFrom, String? dateTo});
   Future<ImportResultEntity> importCsv(List<int> bytes, String fileName,

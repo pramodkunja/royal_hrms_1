@@ -43,8 +43,8 @@ class _CandidateBulkImportScreenState extends ConsumerState<CandidateBulkImportS
     });
     try {
       final bytes = await ref.read(interviewDataSourceProvider).fetchBulkImportSample(format);
-      final path = await ref.read(candidateSampleSaverProvider)(
-          'candidate_import_sample.$format', Uint8List.fromList(bytes));
+      final path =
+          await ref.read(candidateSampleSaverProvider)('candidate_import_sample.$format', Uint8List.fromList(bytes));
       if (!mounted) return;
       if (path != null) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -72,7 +72,10 @@ class _CandidateBulkImportScreenState extends ConsumerState<CandidateBulkImportS
     final file = result.files.first;
     if (file.size > _kMaxImportBytes) {
       // Web validateFile wording.
-      setState(() { _pickError = 'File is too large. Maximum allowed size is 5 MB.'; _picked = null; });
+      setState(() {
+        _pickError = 'File is too large. Maximum allowed size is 5 MB.';
+        _picked = null;
+      });
       return;
     }
     setState(() {
@@ -86,21 +89,30 @@ class _CandidateBulkImportScreenState extends ConsumerState<CandidateBulkImportS
   Future<void> _upload() async {
     final file = _picked;
     if (file == null || file.bytes == null || !_allowed) return;
-    setState(() { _uploading = true; _uploadError = null; });
+    setState(() {
+      _uploading = true;
+      _uploadError = null;
+    });
     try {
       final result = await ref.read(interviewDataSourceProvider).bulkImport(
             bytes: file.bytes!,
             filename: file.name,
           );
       if (!mounted) return;
-      setState(() { _result = result; _uploading = false; });
+      setState(() {
+        _result = result;
+        _uploading = false;
+      });
       if (result.created > 0) {
         await ref.read(candidateListProvider.notifier).refresh();
         await ref.read(candidateStatsProvider.notifier).refresh();
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() { _uploading = false; _uploadError = _friendly(e); });
+      setState(() {
+        _uploading = false;
+        _uploadError = _friendly(e);
+      });
     }
   }
 
@@ -129,8 +141,7 @@ class _CandidateBulkImportScreenState extends ConsumerState<CandidateBulkImportS
               Icon(Icons.lock_outline, size: 40, color: AppColors.textHint),
               const SizedBox(height: 12),
               Text(kCandidateImportDenied,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.label.copyWith(color: AppColors.textSecondary)),
+                  textAlign: TextAlign.center, style: AppTextStyles.label.copyWith(color: AppColors.textSecondary)),
             ]),
           ),
         ),
@@ -182,7 +193,8 @@ class _CandidateBulkImportScreenState extends ConsumerState<CandidateBulkImportS
                       onPressed: (_picked == null || _uploading) ? null : _upload,
                       icon: _uploading
                           ? const SizedBox(
-                              width: 14, height: 14,
+                              width: 14,
+                              height: 14,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.upload_file_outlined, size: 18),
                       label: Text(_uploading ? 'Importing…' : 'Import',
@@ -340,12 +352,12 @@ class _FilePickerCard extends StatelessWidget {
         child: picked == null
             ? Column(
                 children: [
-                  Icon(Icons.cloud_upload_outlined, size: 36,
-                      color: error != null ? AppColors.error : AppColors.textHint),
+                  Icon(Icons.cloud_upload_outlined,
+                      size: 36, color: error != null ? AppColors.error : AppColors.textHint),
                   const SizedBox(height: 8),
                   Text('Tap to select CSV or XLSX file',
-                      style: AppTextStyles.label.copyWith(
-                          color: error != null ? AppColors.error : AppColors.textSecondary)),
+                      style: AppTextStyles.label
+                          .copyWith(color: error != null ? AppColors.error : AppColors.textSecondary)),
                   if (error != null) ...[
                     const SizedBox(height: 2),
                     Text(error!, style: AppTextStyles.caption.copyWith(color: AppColors.error, fontSize: 10)),
@@ -360,8 +372,10 @@ class _FilePickerCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(picked!.name, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600),
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(picked!.name,
+                            style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
                         Text(_formatSize(picked!.size), style: AppTextStyles.caption.copyWith(fontSize: 10)),
                       ],
                     ),

@@ -14,8 +14,7 @@ class NotificationSettingsScreen extends ConsumerStatefulWidget {
   const NotificationSettingsScreen({super.key});
 
   @override
-  ConsumerState<NotificationSettingsScreen> createState() =>
-      _NotificationSettingsScreenState();
+  ConsumerState<NotificationSettingsScreen> createState() => _NotificationSettingsScreenState();
 }
 
 class _ToggleDef {
@@ -64,7 +63,8 @@ const _kToggles = <_ToggleDef>[
   ),
   _ToggleDef(
     label: 'Approval',
-    description: 'Items awaiting your approval and their outcomes',
+    // Web notifications/page.tsx: locked on — the server forces it on.
+    description: 'Always on - requests waiting for your approval always reach you (in-app and email).',
     icon: Icons.fact_check_outlined,
     getValue: _getApproval,
     setValue: _setApproval,
@@ -93,32 +93,23 @@ const _kToggles = <_ToggleDef>[
 ];
 
 bool _getLeave(NotificationSettingsModel s) => s.isLeaveEnabled;
-NotificationSettingsModel _setLeave(NotificationSettingsModel s, bool v) =>
-    s.copyWith(isLeaveEnabled: v);
+NotificationSettingsModel _setLeave(NotificationSettingsModel s, bool v) => s.copyWith(isLeaveEnabled: v);
 bool _getExpense(NotificationSettingsModel s) => s.isExpenseEnabled;
-NotificationSettingsModel _setExpense(NotificationSettingsModel s, bool v) =>
-    s.copyWith(isExpenseEnabled: v);
+NotificationSettingsModel _setExpense(NotificationSettingsModel s, bool v) => s.copyWith(isExpenseEnabled: v);
 bool _getSeparation(NotificationSettingsModel s) => s.isSeparationEnabled;
-NotificationSettingsModel _setSeparation(NotificationSettingsModel s, bool v) =>
-    s.copyWith(isSeparationEnabled: v);
+NotificationSettingsModel _setSeparation(NotificationSettingsModel s, bool v) => s.copyWith(isSeparationEnabled: v);
 bool _getPayroll(NotificationSettingsModel s) => s.isPayrollEnabled;
-NotificationSettingsModel _setPayroll(NotificationSettingsModel s, bool v) =>
-    s.copyWith(isPayrollEnabled: v);
+NotificationSettingsModel _setPayroll(NotificationSettingsModel s, bool v) => s.copyWith(isPayrollEnabled: v);
 bool _getApproval(NotificationSettingsModel s) => s.isApprovalEnabled;
-NotificationSettingsModel _setApproval(NotificationSettingsModel s, bool v) =>
-    s.copyWith(isApprovalEnabled: v);
+NotificationSettingsModel _setApproval(NotificationSettingsModel s, bool v) => s.copyWith(isApprovalEnabled: v);
 bool _getDocument(NotificationSettingsModel s) => s.isDocumentEnabled;
-NotificationSettingsModel _setDocument(NotificationSettingsModel s, bool v) =>
-    s.copyWith(isDocumentEnabled: v);
+NotificationSettingsModel _setDocument(NotificationSettingsModel s, bool v) => s.copyWith(isDocumentEnabled: v);
 bool _getAttendance(NotificationSettingsModel s) => s.isAttendanceEnabled;
-NotificationSettingsModel _setAttendance(NotificationSettingsModel s, bool v) =>
-    s.copyWith(isAttendanceEnabled: v);
+NotificationSettingsModel _setAttendance(NotificationSettingsModel s, bool v) => s.copyWith(isAttendanceEnabled: v);
 bool _getSystem(NotificationSettingsModel s) => s.isSystemEnabled;
-NotificationSettingsModel _setSystem(NotificationSettingsModel s, bool v) =>
-    s.copyWith(isSystemEnabled: v);
+NotificationSettingsModel _setSystem(NotificationSettingsModel s, bool v) => s.copyWith(isSystemEnabled: v);
 
-class _NotificationSettingsScreenState
-    extends ConsumerState<NotificationSettingsScreen> {
+class _NotificationSettingsScreenState extends ConsumerState<NotificationSettingsScreen> {
   NotificationSettingsModel? _edited;
   bool _saving = false;
 
@@ -134,8 +125,7 @@ class _NotificationSettingsScreenState
 
   Future<void> _save(NotificationSettingsModel current) async {
     setState(() => _saving = true);
-    final error =
-        await ref.read(notificationSettingsProvider.notifier).save(current);
+    final error = await ref.read(notificationSettingsProvider.notifier).save(current);
     if (!mounted) return;
     setState(() {
       _saving = false;
@@ -190,8 +180,8 @@ class _NotificationSettingsScreenState
                               if (i > 0) Divider(height: 1, color: AppColors.border),
                               _ToggleRow(
                                 def: _kToggles[i],
-                                value: _kToggles[i].getValue(current),
-                                enabled: canEdit,
+                                value: _kToggles[i].label == 'Approval' ? true : _kToggles[i].getValue(current),
+                                enabled: canEdit && _kToggles[i].label != 'Approval',
                                 onChanged: (v) => setState(
                                   () => _edited = _kToggles[i].setValue(current, v),
                                 ),
@@ -222,9 +212,7 @@ class _NotificationSettingsScreenState
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: (_saving || _edited == null)
-                              ? null
-                              : () => setState(() => _edited = null),
+                          onPressed: (_saving || _edited == null) ? null : () => setState(() => _edited = null),
                           child: const Text('Discard'),
                         ),
                       ),

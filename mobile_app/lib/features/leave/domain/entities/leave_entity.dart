@@ -58,6 +58,12 @@ class LeaveTypeEntity {
   final bool allowLeaveExtension; // allow_leave_extension
   final bool allowLeaveCombination; // allow_leave_combination
 
+  /// `eligible_for_me` (GET /leave/policy/, backend views/leave.py:602):
+  /// the signed-in employee may apply for this type — active AND the
+  /// policy's gender rule allows them. Null when the server did not send it
+  /// (older backend): treated as eligible, as web `eligible_for_me !== false`.
+  final bool? eligibleForMe;
+
   const LeaveTypeEntity({
     required this.id,
     required this.name,
@@ -100,6 +106,7 @@ class LeaveTypeEntity {
     this.allowNoticePeriodLeave = false,
     this.allowLeaveExtension = false,
     this.allowLeaveCombination = false,
+    this.eligibleForMe,
   });
 }
 

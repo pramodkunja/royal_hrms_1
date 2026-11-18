@@ -196,3 +196,63 @@ So when Face ID is mandatory, an authenticated self-service punch sent with `sou
 - **Install:** `adb install -r` → Success. Installed hash = build; firstInstallTime unchanged; lastUpdateTime 16:32:45.
   - **Code 10 overlap:** debug versionCode 10 is the same code as the user's release AAB. A release build can only replace this debug install after an uninstall (different signer), which needs explicit approval.
 - **Live web session:** expired once (the C2 guard had blocked the token refresh); the user signed in again. The C3 capture scripts allow the `POST /api/token/refresh/` session renewal (it writes no business data) and block every other non-GET call.
+
+## 15. Task 87: debug build, versionCode 11 (18 Nov 2026)
+
+- **Coordination:** Android Studio and its Gradle daemons were running (started 10:18). The user confirmed nobody else was building before this build.
+- **Source drift check:** since the 1.0.2+10-debug manifest, only the 3 Task 87 files changed.
+- **Release AAB:** `build/app/outputs/bundle/release/app-release.aab` (17 Nov 16:06) left untouched; SHA-256 **`e073c6f3fa713927c25ac0a49268f62c1b4f0aef37ed948fd6642bd4badc9125`** now recorded. Its source state is still unknown (HO-32).
+- **Backup:** the installed 1.0.2+10 debug APK was pulled from the phone to `…/scratchpad/apk_backups/royalhrms-1.0.2+10-debug-installed.apk` (SHA-256 `517159eb…` verified).
+- **Version code:** **11** is set with `flutter build apk --debug --build-number=11`. `pubspec.yaml` is unchanged (`1.0.2+10`), so versionCode 11 exists only in this debug artifact. No conflict: the release AAB uses code 10.
+- **Source manifest:** `build_1.0.2+11-debug_source_manifest.txt`, aggregate `630776ce…891c294`.
+- **Build:** 2026-11-18 10:56:29–10:56:54, `app-debug.apk` 271,012,041 bytes, SHA-256 **`a321c6a15aa9246cff12c7e69f88714646607fcf8a098a4f461a292111d37fe7`**; signer `38eabe8f…c128` (unchanged); debuggable; production backend.
+- **Install:** `adb install -r` → Success. versionCode 11; installed hash = build; firstInstallTime unchanged (2026-11-12), so this was an in-place update with data and login kept.
+
+## 16. Task 88: debug build, versionCode 12 (18 Nov 2026)
+
+- **Coordination:** the user approved building and installing before the build.
+- **Source drift check:** compared with the code-11 manifest, only 2 files changed: `leave_carry_forward_tab.dart` (guard) and `api_constants.dart` (comment only).
+- **Release AAB:** untouched (17 Nov 16:06, SHA-256 `e073c6f3…bc9125`, re-checked).
+- **Backup:** the installed code-11 APK was pulled to `…/scratchpad/apk_backups/royal_1.0.2_code11_a321c6a1.apk` (SHA-256 `a321c6a1…` verified).
+- **Version code:** **12**, set with `flutter build apk --debug --build-number=12`. `pubspec.yaml` is unchanged (`1.0.2+10`).
+- **Source manifest:** `build_1.0.2+12-debug_source_manifest.txt`, aggregate `44e5be14…63d4f6`.
+- **Build:** `app-debug.apk` 271,030,821 bytes, SHA-256 **`252dc8b8f0a8ab755eca3c6162f733532d39dcdd183ce8f414ef7cb912a4167d`**; signer `38eabe8f…c128` (unchanged); production backend.
+- **Install:** `adb install -r` succeeded. versionCode 12; the installed hash matches the build; firstInstallTime unchanged (2026-11-12), so the update was in place with data and login kept.
+
+## 17. Task 90 batch 1: debug build, versionCode 13 (18 Nov 2026)
+
+- **Coordination:** the user approved building and installing before the build.
+- **Source drift check:** compared with code 12, 5 files changed (`api_constants`, `access_control`, `app_router`, `nav_config`, `dashboard_shell`) and 8 new Training files under `lib/features/training/`. `pubspec.yaml` / `pubspec.lock` are unchanged.
+- **Release AAB:** untouched (`e073c6f3…`).
+- **Backup:** code 12 was pulled to `…/scratchpad/apk_backups/royal_1.0.2_code12_252dc8b8.apk` (hash verified).
+- **Version code:** **13**, set with `flutter build apk --debug --build-number=13`.
+- **Source manifest:** `build_1.0.2+13-debug_source_manifest.txt`, aggregate `349c8d09…eb6e2`.
+- **Build:** `app-debug.apk` 271,119,693 bytes, SHA-256 **`7cc8f547f08a456333d6005bfd30c007b2724853a0435b36f5ffc6c375b91aec`**; signer `38eabe8f…c128`.
+- **Install:** `adb install -r` succeeded at 11:48:50. versionCode 13; the installed hash matches the build; firstInstallTime unchanged.
+
+## 18. Task 90 batch 2: debug build, versionCode 14 (18 Nov 2026)
+
+- **Coordination:** the user approved building and installing before the build.
+- **Dependency added:** `webview_flutter ^4.14.1`. A dry run showed only additions, with no existing dependency version changed.
+  - Lock entries added: webview_flutter 4.14.1, webview_flutter_android 4.14.1, webview_flutter_platform_interface 2.15.1, webview_flutter_wkwebview 3.26.2.
+  - License: BSD-3 (The Flutter Authors). Plugin minSdk 24, the same as the app.
+  - `aapt2 dump permissions` shows no new Android permissions compared with code 13.
+- **Source drift:** compared with code 13, 12 files changed (including `pubspec.yaml` / `pubspec.lock` and `profile_document_viewer.dart`, which gained `trainingPdfFile()`), plus 6 new Training files.
+- **Release AAB:** untouched (`e073c6f3…`). The `pubspec.yaml` version stays 1.0.2+10.
+- **Backup:** code 13 was pulled to `…/scratchpad/apk_backups/royal_1.0.2_code13_7cc8f547.apk` (hash verified).
+- **Source manifest:** `build_1.0.2+14-debug_source_manifest.txt`, aggregate `4c132d0b…c100f`.
+- **Build:** `app-debug.apk` 271,803,010 bytes, SHA-256 **`53b14942be68aaec6b5cba6dbfbae06b3d195450a186ac1d92332b5c1e97ad0b`**; signer `38eabe8f…c128`.
+- **Install:** `adb install -r` succeeded at 12:19:42. versionCode 14; the installed hash matches the build; firstInstallTime unchanged.
+
+## 19. Task 90 batch 3: debug builds versionCode 15 and 16 (18 Nov 2026)
+
+- **Approvals:** the user approved each build before it was made.
+- **Code 15** (`67b0bd0026d2ab1601428ff6b4634a740bb9b6f0ca58028c90a796632f7d59af`, installed 12:47:58):
+  - batch 3 including native Android code: `MainActivity.kt` method channel, a FileProvider in the manifest, `res/xml/training_file_paths.xml`, and package-visibility queries for the two Office types;
+  - no new permissions.
+  - On the phone the title fix was found not to work.
+- **Code 16** (`e820d54a15f04f7e2e1bf5066cba997fa91faed0bb8c7d320c437622f9222936`, 271,866,487 bytes, installed 12:54:36): code 15 plus the layout-time title fit. Installed hash matches the build; firstInstallTime unchanged; signer `38eabe8f…c128`.
+- **Backups:** code 14 and code 15 APKs are in `…/scratchpad/apk_backups/` (hashes verified).
+- **pubspec:** unchanged since code 14 (version 1.0.2+10; webview_flutter from batch 2).
+- **Release AAB:** untouched (`e073c6f3…`).
+- **Source manifest:** `build_1.0.2+16-debug_source_manifest.txt`, aggregate `d4c0654b…95e83`. It now also lists Kotlin files and `res/xml`. Compared with code 14: 14 changed files and 6 new.

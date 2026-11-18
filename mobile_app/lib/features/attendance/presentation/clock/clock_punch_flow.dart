@@ -17,31 +17,27 @@ import 'face_lockout.dart';
 
 /// Opens the face check and returns the capture, or null if it was
 /// cancelled. A provider so tests can stand in for the camera sheet.
-typedef FaceCapturePresenter = Future<FaceCaptureUiState?> Function(
-    BuildContext context);
+typedef FaceCapturePresenter = Future<FaceCaptureUiState?> Function(BuildContext context);
 
-final faceCapturePresenterProvider =
-    Provider<FaceCapturePresenter>((ref) => (context) async {
-          // No consent text: clock-in verification never collects new biometric
-          // data, so it never needs fresh consent (only registration does).
-          final result = await showFaceCaptureSheet(
-            context,
-            title: 'Face ID Check',
-            subtitle: 'Quick face check before clocking in.',
-          );
-          return result?.captured;
-        });
+final faceCapturePresenterProvider = Provider<FaceCapturePresenter>((ref) => (context) async {
+      // No consent text: clock-in verification never collects new biometric
+      // data, so it never needs fresh consent (only registration does).
+      final result = await showFaceCaptureSheet(
+        context,
+        title: 'Face ID Check',
+        subtitle: 'Quick face check before clocking in.',
+      );
+      return result?.captured;
+    });
 
-const kFaceRegistrationMissingMessage =
-    'Face ID registration is mandatory and you don\'t have one yet. '
+const kFaceRegistrationMissingMessage = 'Face ID registration is mandatory and you don\'t have one yet. '
     'Contact your HR representative or manager to get registered.';
 const kFaceCheckCancelledMessage = 'Face ID check was cancelled.';
 
 /// Face capture, run only when the company's Face ID Verification setting is
 /// mandatory — web's useClockWidget.ts gate. Mandatory without an approved
 /// registration refuses the punch; a cancelled capture refuses it too.
-Future<FaceCaptureUiState?> _captureFaceIfRequired(
-    WidgetRef ref, BuildContext context) async {
+Future<FaceCaptureUiState?> _captureFaceIfRequired(WidgetRef ref, BuildContext context) async {
   final status = await ref.read(faceVerificationStatusProvider.future);
   if (!status.isMandatory) return null;
 
@@ -74,8 +70,7 @@ bool _punchInFlight = false;
 ///  6. the punch, carrying the same mode and the face data.
 /// The face check here is app-side only: the server's own face enforcement
 /// for mobile punches is a separate backend matter.
-Future<String?> runClockPunch(
-    WidgetRef ref, BuildContext context, TodayAttendanceEntity today) async {
+Future<String?> runClockPunch(WidgetRef ref, BuildContext context, TodayAttendanceEntity today) async {
   if (today.dayCompleted) return kDayCompletedMessage;
   // Web: while the server's face-verification lockout lasts, nothing starts —
   // no GPS, no face capture, no punch.
@@ -84,8 +79,7 @@ Future<String?> runClockPunch(
   if (_punchInFlight) return null;
   _punchInFlight = true;
   try {
-    final position =
-        await ref.read(locationServiceProvider).getCurrentPosition();
+    final position = await ref.read(locationServiceProvider).getCurrentPosition();
     final mode = await ref.read(todayAttendanceModeProvider.future);
     final notifier = ref.read(todayAttendanceProvider.notifier);
 

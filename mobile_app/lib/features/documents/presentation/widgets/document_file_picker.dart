@@ -48,17 +48,14 @@ class DocumentFilePicker extends StatelessWidget {
                   Text(
                     'Tap to select file',
                     style: AppTextStyles.label.copyWith(
-                      color: error != null
-                          ? AppColors.error
-                          : AppColors.textSecondary,
+                      color: error != null ? AppColors.error : AppColors.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 2),
                   if (error != null)
                     Text(
                       error!,
-                      style: AppTextStyles.caption
-                          .copyWith(color: AppColors.error, fontSize: 10),
+                      style: AppTextStyles.caption.copyWith(color: AppColors.error, fontSize: 10),
                     )
                   else
                     Text(
@@ -69,8 +66,7 @@ class DocumentFilePicker extends StatelessWidget {
               )
             : Row(
                 children: [
-                  Icon(Icons.insert_drive_file_outlined,
-                      size: 28, color: AppColors.primary),
+                  Icon(Icons.insert_drive_file_outlined, size: 28, color: AppColors.primary),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -78,8 +74,7 @@ class DocumentFilePicker extends StatelessWidget {
                       children: [
                         Text(
                           picked!.name,
-                          style: AppTextStyles.label
-                              .copyWith(fontWeight: FontWeight.w600),
+                          style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -90,8 +85,7 @@ class DocumentFilePicker extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Icon(Icons.check_circle_outline,
-                      color: AppColors.success, size: 20),
+                  Icon(Icons.check_circle_outline, color: AppColors.success, size: 20),
                 ],
               ),
       ),

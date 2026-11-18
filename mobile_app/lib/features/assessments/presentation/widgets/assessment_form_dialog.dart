@@ -37,12 +37,9 @@ class _AssessmentFormDialogState extends State<AssessmentFormDialog> {
     super.initState();
     _titleCtrl = TextEditingController(text: widget.assessment?.title ?? '');
     _descCtrl = TextEditingController(text: widget.assessment?.description ?? '');
-    _passPercentageCtrl =
-        TextEditingController(text: '${widget.assessment?.passPercentage ?? 70}');
-    _maxAttemptsCtrl =
-        TextEditingController(text: widget.assessment?.maxAttempts?.toString() ?? '');
-    _timeLimitCtrl =
-        TextEditingController(text: widget.assessment?.timeLimitMins?.toString() ?? '');
+    _passPercentageCtrl = TextEditingController(text: '${widget.assessment?.passPercentage ?? 70}');
+    _maxAttemptsCtrl = TextEditingController(text: widget.assessment?.maxAttempts?.toString() ?? '');
+    _timeLimitCtrl = TextEditingController(text: widget.assessment?.timeLimitMins?.toString() ?? '');
     _isActive = widget.assessment?.isActive ?? true;
     _isDefault = widget.assessment?.isDefault ?? false;
   }
@@ -73,8 +70,7 @@ class _AssessmentFormDialogState extends State<AssessmentFormDialog> {
             child: Container(
               color: AppColors.background,
               child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                    20, 20, 20, MediaQuery.viewInsetsOf(context).bottom + 24),
+                padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.viewInsetsOf(context).bottom + 24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -186,21 +182,21 @@ class _AssessmentFormDialogState extends State<AssessmentFormDialog> {
   }
 
   InputDecoration _dec(String label, {String? hint}) => InputDecoration(
-    labelText: label,
-    hintText: hint,
-    labelStyle: AppTextStyles.caption,
-    hintStyle: AppTextStyles.body.copyWith(color: AppColors.textHint),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: AppColors.border),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: AppColors.primary, width: 1.5),
-    ),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-  );
+        labelText: label,
+        hintText: hint,
+        labelStyle: AppTextStyles.caption,
+        hintStyle: AppTextStyles.body.copyWith(color: AppColors.textHint),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: AppColors.primary, width: 1.5),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      );
 
   Future<void> _submit() async {
     final form = AssessmentFormData(
@@ -211,12 +207,8 @@ class _AssessmentFormDialogState extends State<AssessmentFormDialog> {
       passPercentage: int.tryParse(_passPercentageCtrl.text.trim()) ?? 0,
       // Blank means "inherit the global default" — mirrors web's
       // `form.max_attempts !== "" ? Number(...) : null` exactly.
-      maxAttempts: _maxAttemptsCtrl.text.trim().isEmpty
-          ? null
-          : int.tryParse(_maxAttemptsCtrl.text.trim()),
-      timeLimitMins: _timeLimitCtrl.text.trim().isEmpty
-          ? null
-          : int.tryParse(_timeLimitCtrl.text.trim()),
+      maxAttempts: _maxAttemptsCtrl.text.trim().isEmpty ? null : int.tryParse(_maxAttemptsCtrl.text.trim()),
+      timeLimitMins: _timeLimitCtrl.text.trim().isEmpty ? null : int.tryParse(_timeLimitCtrl.text.trim()),
     );
     final validationError = form.validate();
     if (validationError != null) {
@@ -228,9 +220,8 @@ class _AssessmentFormDialogState extends State<AssessmentFormDialog> {
       _error = null;
     });
     final notifier = widget.ref.read(assessmentsProvider.notifier);
-    final result = _isAdd
-        ? await notifier.createAssessment(form)
-        : await notifier.editAssessment(widget.assessment!.id, form);
+    final result =
+        _isAdd ? await notifier.createAssessment(form) : await notifier.editAssessment(widget.assessment!.id, form);
     if (!mounted) return;
     if (result == null) {
       Navigator.pop(context);
@@ -279,13 +270,10 @@ class _ToggleRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600, fontSize: 13)),
+                Text(title, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600, fontSize: 13)),
                 const SizedBox(height: 2),
                 Text(subtitle,
-                    style: AppTextStyles.caption.copyWith(fontSize: 11),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis),
+                    style: AppTextStyles.caption.copyWith(fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),

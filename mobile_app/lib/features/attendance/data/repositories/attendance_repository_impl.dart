@@ -262,6 +262,7 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
     String? toDate,
     String? branch,
     String? department,
+    String? employee,
   }) =>
       _ds.exportCsv(
         date: date,
@@ -270,7 +271,11 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
         toDate: toDate,
         branch: branch,
         department: department,
+        employee: employee,
       );
+
+  @override
+  Future<List<ExportEmployeeOption>> searchExportEmployees(String query) => _ds.searchExportEmployees(query);
 
   @override
   Future<ImportPreviewEntity> previewImportCsv(List<int> bytes, String fileName,

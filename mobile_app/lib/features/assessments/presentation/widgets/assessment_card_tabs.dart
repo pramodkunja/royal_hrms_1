@@ -82,9 +82,8 @@ class _TabButton extends StatelessWidget {
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 7),
-          decoration: active
-              ? BoxDecoration(borderRadius: BorderRadius.circular(8), boxShadow: AppColors.cardShadow)
-              : null,
+          decoration:
+              active ? BoxDecoration(borderRadius: BorderRadius.circular(8), boxShadow: AppColors.cardShadow) : null,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,

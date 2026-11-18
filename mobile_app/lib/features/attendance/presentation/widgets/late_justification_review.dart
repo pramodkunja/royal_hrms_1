@@ -38,8 +38,10 @@ List<String> lateReviewTrail(HrCorrectionRowEntity r) {
       };
   String who(String level, String? name) => (name ?? '').isNotEmpty ? '$level ($name)' : level;
   return [
-    if (r.l1Status != null) '${who('Manager', r.l1ApproverName)} ${verb(r.l1Status)}${r.l1Remarks.isNotEmpty ? ': ${r.l1Remarks}' : ''}',
-    if (r.l2Status != null) '${who('HR', r.l2ApproverName)} ${verb(r.l2Status)}${r.l2Remarks.isNotEmpty ? ': ${r.l2Remarks}' : ''}',
+    if (r.l1Status != null)
+      '${who('Manager', r.l1ApproverName)} ${verb(r.l1Status)}${r.l1Remarks.isNotEmpty ? ': ${r.l1Remarks}' : ''}',
+    if (r.l2Status != null)
+      '${who('HR', r.l2ApproverName)} ${verb(r.l2Status)}${r.l2Remarks.isNotEmpty ? ': ${r.l2Remarks}' : ''}',
   ];
 }
 
@@ -174,7 +176,8 @@ class _LateJustificationReviewSheetState extends ConsumerState<LateJustification
                 Expanded(child: Text('Attached — visible to authorised HR only', style: caption)),
               ]))
         : Text(r.proofRequired ? 'Missing (required for medical)' : 'None',
-            style: AppTextStyles.bodySmall.copyWith(color: r.proofRequired ? AppColors.error : AppColors.textSecondary));
+            style:
+                AppTextStyles.bodySmall.copyWith(color: r.proofRequired ? AppColors.error : AppColors.textSecondary));
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -202,7 +205,8 @@ class _LateJustificationReviewSheetState extends ConsumerState<LateJustification
                   key: const Key('late-review-error'),
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
                   child: Text(_error!, style: AppTextStyles.caption.copyWith(color: AppColors.error)),
                 ),
               _row(
@@ -214,10 +218,15 @@ class _LateJustificationReviewSheetState extends ConsumerState<LateJustification
                         style: TextStyle(color: AppColors.textSecondary)),
                   ]))),
               _row('Date', Text(fmtLateDate(r.date, withWeekday: true))),
-              _row('Recorded punches',
-                  Text('${r.originalIn ?? '—'} → ${r.originalOut ?? '—'}', style: const TextStyle(fontFamily: 'monospace'))),
+              _row(
+                  'Recorded punches',
+                  Text('${r.originalIn ?? '—'} → ${r.originalOut ?? '—'}',
+                      style: const TextStyle(fontFamily: 'monospace'))),
               _row('Attendance', Text(r.attendanceStatus ?? '—')),
-              _row('Reason', Text(r.reasonLabel.isEmpty ? r.reason : r.reasonLabel, style: const TextStyle(fontWeight: FontWeight.w700))),
+              _row(
+                  'Reason',
+                  Text(r.reasonLabel.isEmpty ? r.reason : r.reasonLabel,
+                      style: const TextStyle(fontWeight: FontWeight.w700))),
               _row('Explanation', Text(r.explanation)),
               _row('Proof', proof),
               _row(
@@ -227,21 +236,23 @@ class _LateJustificationReviewSheetState extends ConsumerState<LateJustification
                     child: Container(
                       key: const Key('late-review-status'),
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration:
-                          BoxDecoration(color: badge.$2.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                      decoration: BoxDecoration(
+                          color: badge.$2.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
                       child: Text(badge.$1,
                           style: AppTextStyles.caption.copyWith(color: badge.$2, fontWeight: FontWeight.w600)),
                     ),
                   )),
               if (r.resubmissionCount > 0) _row('Resubmissions', Text('${r.resubmissionCount}')),
               if (trail.isNotEmpty)
-                _row('Decisions', Column(crossAxisAlignment: CrossAxisAlignment.start, children: [for (final t in trail) Text(t)])),
+                _row('Decisions',
+                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [for (final t in trail) Text(t)])),
               if (_action == 'approve')
                 Container(
                   key: const Key('late-review-approve-note'),
                   margin: const EdgeInsets.only(top: 12),
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: AppColors.info.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(
+                      color: AppColors.info.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
                   child: Text(
                     r.status == 'pending' && (r.l2ApproverName ?? '').isNotEmpty
                         ? 'Your approval sends this to HR. The day is excused only after the final approval.'
@@ -422,7 +433,8 @@ class _LateJustificationsReviewTabState extends ConsumerState<LateJustifications
               key: const Key('late-review-notice'),
               margin: const EdgeInsets.only(top: 12),
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
               child: Text(_notice!, style: AppTextStyles.caption.copyWith(color: AppColors.success)),
             ),
           const SizedBox(height: 8),
@@ -484,16 +496,20 @@ class _LateJustificationsReviewTabState extends ConsumerState<LateJustifications
             Expanded(child: Text(r.name, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700))),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(color: badge.$2.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-              child: Text(badge.$1, style: AppTextStyles.caption.copyWith(color: badge.$2, fontWeight: FontWeight.w600)),
+              decoration:
+                  BoxDecoration(color: badge.$2.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+              child:
+                  Text(badge.$1, style: AppTextStyles.caption.copyWith(color: badge.$2, fontWeight: FontWeight.w600)),
             ),
           ]),
-          Text('${r.employeeId} · ${r.branch.isEmpty ? '—' : r.branch}', style: AppTextStyles.caption.copyWith(fontSize: 11)),
+          Text('${r.employeeId} · ${r.branch.isEmpty ? '—' : r.branch}',
+              style: AppTextStyles.caption.copyWith(fontSize: 11)),
           const SizedBox(height: 4),
           Text('${fmtLateDate(r.date)} · clock-in ${r.originalIn ?? '—'}', style: AppTextStyles.bodySmall),
           Text(r.reasonLabel.isEmpty ? r.reason : r.reasonLabel, style: AppTextStyles.bodySmall),
           if (r.explanation.isNotEmpty)
-            Text(r.explanation, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.caption.copyWith(fontSize: 11)),
+            Text(r.explanation,
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.caption.copyWith(fontSize: 11)),
           const SizedBox(height: 6),
           Row(children: [
             Text('Proof: $proofText', style: AppTextStyles.caption.copyWith(fontSize: 11, color: proofColor)),

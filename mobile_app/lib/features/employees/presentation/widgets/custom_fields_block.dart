@@ -220,7 +220,10 @@ class _ReadOnlyFiles extends StatelessWidget {
       children: [
         Text(config.required ? '${config.label} *' : config.label,
             style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
-        if (files.isEmpty) Text('—', style: AppTextStyles.body) else for (final f in files) tile(f),
+        if (files.isEmpty)
+          Text('—', style: AppTextStyles.body)
+        else
+          for (final f in files) tile(f),
       ],
     );
   }

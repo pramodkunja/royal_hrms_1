@@ -26,11 +26,9 @@ enum MyAssessmentStatus {
 }
 
 int _int(Object? v) => v is num ? v.toInt() : int.tryParse('$v') ?? 0;
-int? _intOrNull(Object? v) =>
-    v == null ? null : (v is num ? v.toInt() : int.tryParse('$v'));
+int? _intOrNull(Object? v) => v == null ? null : (v is num ? v.toInt() : int.tryParse('$v'));
 String? _str(Object? v) => v is String && v.trim().isNotEmpty ? v : null;
-Iterable<Map<String, dynamic>> _maps(Object? v) =>
-    (v is List ? v : const []).whereType<Map<String, dynamic>>();
+Iterable<Map<String, dynamic>> _maps(Object? v) => (v is List ? v : const []).whereType<Map<String, dynamic>>();
 
 class MyAssessmentAssignment {
   final String id;
@@ -83,8 +81,7 @@ class MyAssessmentAssignment {
     this.responses = const [],
   });
 
-  factory MyAssessmentAssignment.fromJson(Map<String, dynamic> json) =>
-      MyAssessmentAssignment(
+  factory MyAssessmentAssignment.fromJson(Map<String, dynamic> json) => MyAssessmentAssignment(
         id: json['id']?.toString() ?? '',
         title: _str(json['assessment_title']) ?? 'Assessment',
         status: MyAssessmentStatus.fromApi(json['status']),
@@ -102,14 +99,11 @@ class MyAssessmentAssignment {
         startedAt: _str(json['started_at']),
         timeRemainingSecs: _intOrNull(json['time_remaining_secs']),
         items: _maps(json['items']).map(AssessmentPortalItem.fromJson).toList(),
-        responses: _maps(json['responses'])
-            .map(AssessmentItemResponse.fromJson)
-            .toList(),
+        responses: _maps(json['responses']).map(AssessmentItemResponse.fromJson).toList(),
       );
 
   /// Items in the order the assessment defines (web sorts by `order`).
-  List<AssessmentPortalItem> get orderedItems =>
-      [...items]..sort((a, b) => a.order.compareTo(b.order));
+  List<AssessmentPortalItem> get orderedItems => [...items]..sort((a, b) => a.order.compareTo(b.order));
 
   AssessmentItemResponse? responseFor(String itemId) {
     for (final r in responses) {
@@ -122,17 +116,13 @@ class MyAssessmentAssignment {
   bool isItemDone(AssessmentPortalItem item) {
     final r = responseFor(item.id);
     if (r == null) return false;
-    return item.type == AssessmentItemType.video
-        ? r.isWatched
-        : r.selectedOption.isNotEmpty;
+    return item.type == AssessmentItemType.video ? r.isWatched : r.selectedOption.isNotEmpty;
   }
 
   bool get isComplete => status == MyAssessmentStatus.complete;
 
   /// Items done, as a whole percentage (web: round(completed / total * 100)).
-  int get progressPercent => totalItems > 0
-      ? (completedItems / totalItems * 100).round().clamp(0, 100)
-      : 0;
+  int get progressPercent => totalItems > 0 ? (completedItems / totalItems * 100).round().clamp(0, 100) : 0;
 
   /// Score as a whole percentage (web: round(score / max_score * 100)).
   int get scorePercent => maxScore > 0 ? (score / maxScore * 100).round() : 0;
@@ -156,14 +146,10 @@ class MyAssessments {
         .toList();
     return MyAssessments(
       assignments: list,
-      allComplete: map['all_complete'] is bool
-          ? map['all_complete'] as bool
-          : list.every((a) => a.isComplete),
+      allComplete: map['all_complete'] is bool ? map['all_complete'] as bool : list.every((a) => a.isComplete),
     );
   }
 
-  List<MyAssessmentAssignment> get pending =>
-      assignments.where((a) => !a.isComplete).toList();
-  List<MyAssessmentAssignment> get completed =>
-      assignments.where((a) => a.isComplete).toList();
+  List<MyAssessmentAssignment> get pending => assignments.where((a) => !a.isComplete).toList();
+  List<MyAssessmentAssignment> get completed => assignments.where((a) => a.isComplete).toList();
 }

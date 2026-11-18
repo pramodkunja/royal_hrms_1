@@ -8,6 +8,7 @@ import '../../../../shared/widgets/app_error_state.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/models/company_contact.dart';
 import '../providers/contacts_providers.dart';
+import '../widgets/contact_approvers_section.dart';
 import '../widgets/contact_form_sheet.dart';
 
 /// Opens a tel:/mailto: link. A provider so tests need no platform channel.
@@ -118,6 +119,7 @@ class _ContactMatrixScreenState extends ConsumerState<ContactMatrixScreen> {
         color: AppColors.primary,
         onRefresh: () async {
           ref.invalidate(contactMatrixProvider);
+          ref.invalidate(contactApproversProvider);
           await ref.read(contactMatrixProvider.future).catchError((_) => const ContactMatrix());
         },
         child: matrixAsync.when(
@@ -153,6 +155,10 @@ class _ContactMatrixScreenState extends ConsumerState<ContactMatrixScreen> {
                     ),
                   const SizedBox(height: 8),
                 ],
+                // Web contacts/page.tsx: ApproversSection below the contacts
+                // (HO-42).
+                const SizedBox(height: 8),
+                ContactApproversSection(onLaunch: _launch),
               ],
             );
           },

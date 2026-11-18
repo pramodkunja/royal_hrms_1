@@ -1217,7 +1217,8 @@ class _HrDropdown extends ConsumerWidget {
             for (final o in options)
               DropdownMenuItem(
                 value: o.id,
-                child: Text('${o.fullName} (${o.department})', style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+                child:
+                    Text('${o.fullName} (${o.department})', style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
               ),
           ];
           return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1236,8 +1237,7 @@ class _HrDropdown extends ConsumerWidget {
                 if (opt != null) onSelected(opt);
               },
             ),
-            if (options.isEmpty)
-              _note('No options available.', const Key('edit-hr-empty')),
+            if (options.isEmpty) _note('No options available.', const Key('edit-hr-empty')),
           ]);
         },
       );

@@ -28,6 +28,9 @@ class _AddLeaveTypeDialogState extends State<AddLeaveTypeDialog> {
   final _noteCtrl = TextEditingController();
   bool _canCarryForward = false;
   bool _isActive = true;
+  /// Web PolicyTab createForm.applicable_gender: all | female | male.
+  String _gender = 'all';
+  String? _createError;
   bool _saving = false;
   String? _nameError;
   String? _annualDaysError;
@@ -66,12 +69,17 @@ class _AddLeaveTypeDialogState extends State<AddLeaveTypeDialog> {
       maxCarryForwardDays: int.tryParse(_carryFwdLimitCtrl.text) ?? 0,
       policyNote: _noteCtrl.text.trim(),
       isActive: _isActive,
+      applicableGender: _gender,
     );
     final errors = form.validate();
     final name = _nameCtrl.text.trim();
     final nameError = FormValidators.leaveTypeName(name);
     if (nameError != null) {
       errors['name'] = nameError;
+    }
+    // Web validateCreate: at least 1 day when carry forward is on.
+    if (_canCarryForward && (int.tryParse(_carryFwdLimitCtrl.text) ?? 0) < 1) {
+      errors['maxCarryForwardDays'] = 'Must be at least 1 when carry forward is enabled.';
     }
     if (errors.isNotEmpty) {
       setState(() {
@@ -82,7 +90,10 @@ class _AddLeaveTypeDialogState extends State<AddLeaveTypeDialog> {
       return;
     }
 
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _createError = null;
+    });
     final notifier = widget.ref.read(leavePoliciesProvider.notifier);
     final result = await notifier.createPolicy(form, leaveTypeLabel: name);
     if (!mounted) return;
@@ -90,10 +101,8 @@ class _AddLeaveTypeDialogState extends State<AddLeaveTypeDialog> {
     if (result == null) {
       Navigator.pop(context);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result),
-        backgroundColor: AppColors.error,
-      ));
+      // Web: the error is shown inside the Add Leave Type modal.
+      setState(() => _createError = result);
     }
   }
 
@@ -174,8 +183,20 @@ class _AddLeaveTypeDialogState extends State<AddLeaveTypeDialog> {
                           }
                           setState(() => _nameError = null);
                         },
-                        decoration: _dec('Leave Type Name *', _nameError),
+                        decoration: _dec('Display Name *', _nameError)
+                            .copyWith(hintText: 'e.g. Compensatory Off'),
                       ),
+                      // Web: the key the server will derive, once a valid
+                      // name is typed.
+                      if (_nameError == null && _nameCtrl.text.trim().isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4, left: 4),
+                          child: Text(
+                            'Key: ${leaveTypeKeyPreview(_nameCtrl.text)}',
+                            key: const Key('add-leave-type-key'),
+                            style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                          ),
+                        ),
                       const SizedBox(height: 14),
                       TextFormField(
                         controller: _annualDaysCtrl,
@@ -217,16 +238,39 @@ class _AddLeaveTypeDialogState extends State<AddLeaveTypeDialog> {
                           onChanged: (_) =>
                               setState(() => _carryFwdLimitError = null),
                           decoration: _dec(
-                              'Max Carry Forward Days *', _carryFwdLimitError),
+                              'Max Carry Fwd (days)', _carryFwdLimitError),
                         ),
                       ],
+                      const SizedBox(height: 14),
+                      // Web PolicyTab "Applicable to *" (create only): balances
+                      // are given out as soon as the type is created.
+                      DropdownButtonFormField<String>(
+                        key: const Key('add-leave-type-gender'),
+                        initialValue: _gender,
+                        isExpanded: true,
+                        decoration: _dec('Applicable to *'),
+                        items: const [
+                          DropdownMenuItem(value: 'all', child: Text('All employees')),
+                          DropdownMenuItem(value: 'female', child: Text('Female employees only')),
+                          DropdownMenuItem(value: 'male', child: Text('Male employees only')),
+                        ],
+                        onChanged: (v) => setState(() => _gender = v ?? 'all'),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, left: 4),
+                        child: Text(
+                          'Balances are given out as soon as the leave type is created — choose this now '
+                          '(e.g. Female only for Pink Leave).',
+                          style: AppTextStyles.caption.copyWith(fontSize: 11, color: AppColors.textSecondary),
+                        ),
+                      ),
                       const SizedBox(height: 14),
                       TextFormField(
                         controller: _noteCtrl,
                         style: AppTextStyles.body,
                         maxLines: 3,
-                        maxLength: 300,
-                        decoration: _dec('Policy Note'),
+                        decoration: _dec('Policy Note')
+                            .copyWith(hintText: 'Visible to employees when applying for leave'),
                       ),
                       const SizedBox(height: 6),
                       _ToggleRow(
@@ -238,6 +282,19 @@ class _AddLeaveTypeDialogState extends State<AddLeaveTypeDialog> {
                         value: _isActive,
                         onChanged: (v) => setState(() => _isActive = v),
                       ),
+                      if (_createError != null) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          key: const Key('add-leave-type-error'),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.errorContainer,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(_createError!,
+                              style: AppTextStyles.body.copyWith(color: AppColors.error)),
+                        ),
+                      ],
                       const SizedBox(height: 20),
                       FilledButton(
                         onPressed: _saving ? null : _submit,
@@ -342,3 +399,9 @@ class _ToggleRow extends StatelessWidget {
     );
   }
 }
+
+/// Web PolicyTab key preview: lower case, runs of spaces / hyphens → "_".
+/// (The server derives the key with lower().replace(' ', '_').replace('-', '_'),
+/// which differs only for repeated separators — reported to the backend/web.)
+String leaveTypeKeyPreview(String name) =>
+    name.trim().toLowerCase().replaceAll(RegExp(r'[\s-]+'), '_');

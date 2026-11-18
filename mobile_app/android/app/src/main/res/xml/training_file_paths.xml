@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only the app-private cache folder that holds temporary document copies
+     (ProfileDocumentTempStore.folderName). Nothing else is shareable. -->
+<paths>
+    <cache-path name="docs" path="profile_docs/"/>
+</paths>

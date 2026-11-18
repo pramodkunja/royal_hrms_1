@@ -80,8 +80,10 @@ class _SendAllBirthdayWishesSheetState extends ConsumerState<SendAllBirthdayWish
   final _outcomes = <String, ({WishOutcome outcome, String? message})>{};
 
   bool get _finished => _outcomes.length == widget.entries.length && widget.entries.isNotEmpty && !_sending;
-  Set<String> get _sentIds =>
-      {for (final e in _outcomes.entries) if (e.value.outcome == WishOutcome.sent) e.key};
+  Set<String> get _sentIds => {
+        for (final e in _outcomes.entries)
+          if (e.value.outcome == WishOutcome.sent) e.key
+      };
 
   Future<void> _sendAll(EmailTemplateModel template, String companyName) async {
     if (_sending || _outcomes.isNotEmpty || widget.entries.isEmpty) return;
@@ -121,9 +123,8 @@ class _SendAllBirthdayWishesSheetState extends ConsumerState<SendAllBirthdayWish
     final companyAsync = ref.watch(companyProvider);
     final loadingTemplates = templatesAsync.isLoading && !templatesAsync.hasValue;
     final active = (templatesAsync.valueOrNull ?? []).where((t) => t.isActive).toList();
-    final preferred = active.isEmpty
-        ? null
-        : active.firstWhere((t) => t.name.contains('birthday'), orElse: () => active.first);
+    final preferred =
+        active.isEmpty ? null : active.firstWhere((t) => t.name.contains('birthday'), orElse: () => active.first);
     final selected = _manual != null && active.any((t) => t.name == _manual!.name) ? _manual : preferred;
     final company = companyAsync.valueOrNull;
     final companyName = (company?.companyName.isNotEmpty ?? false) ? company!.companyName : '[Company]';
@@ -142,8 +143,7 @@ class _SendAllBirthdayWishesSheetState extends ConsumerState<SendAllBirthdayWish
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Send Birthday Wishes — All ($n)',
-                  style: AppTextStyles.h4.copyWith(fontWeight: FontWeight.w700)),
+              Text('Send Birthday Wishes — All ($n)', style: AppTextStyles.h4.copyWith(fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
               if (n == 0)
                 Text('No birthdays today — nothing to send.',
@@ -184,9 +184,7 @@ class _SendAllBirthdayWishesSheetState extends ConsumerState<SendAllBirthdayWish
                       for (final t in active)
                         DropdownMenuItem(value: t.name, child: Text(t.displayName, overflow: TextOverflow.ellipsis)),
                     ],
-                    onChanged: _sending
-                        ? null
-                        : (v) => setState(() => _manual = active.firstWhere((t) => t.name == v)),
+                    onChanged: _sending ? null : (v) => setState(() => _manual = active.firstWhere((t) => t.name == v)),
                   ),
               ],
               if (_sending || _outcomes.isNotEmpty) ...[
@@ -247,7 +245,8 @@ class _SendAllBirthdayWishesSheetState extends ConsumerState<SendAllBirthdayWish
     final names = {for (final e in widget.entries) e.employeeId: e.fullName};
     final failed = [
       for (final e in _outcomes.entries)
-        if (e.value.outcome == WishOutcome.failed) '${names[e.key]}${e.value.message == null ? '' : ' (${e.value.message})'}'
+        if (e.value.outcome == WishOutcome.failed)
+          '${names[e.key]}${e.value.message == null ? '' : ' (${e.value.message})'}'
     ];
     final unconfirmed = [
       for (final e in _outcomes.entries)

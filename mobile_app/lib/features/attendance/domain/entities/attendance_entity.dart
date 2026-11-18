@@ -769,3 +769,39 @@ class ImportPreviewEntity {
   /// Web `importable` — rows the real import would write.
   int get importable => toCreate + toUpdate;
 }
+
+/// One employee offered by the attendance export's "Single Employee" search
+/// (web AttendanceTab ExportEmployeeOption).
+class ExportEmployeeOption {
+  const ExportEmployeeOption({
+    required this.id,
+    required this.employeeId,
+    required this.fullName,
+    this.department = '',
+    this.status = '',
+  });
+
+  factory ExportEmployeeOption.fromJson(Map<String, dynamic> j) {
+    String str(Object? v) => switch (v) {
+          null => '',
+          Map m => (m['name'] ?? '').toString(),
+          _ => v.toString(),
+        };
+    return ExportEmployeeOption(
+      id: str(j['id']),
+      employeeId: str(j['employee_id']),
+      fullName: str(j['full_name']),
+      department: str(j['department']),
+      status: str(j['status']),
+    );
+  }
+
+  final String id;
+  final String employeeId;
+  final String fullName;
+  final String department;
+  final String status;
+
+  /// Web: the search box shows "Name (ID)" once an employee is picked.
+  String get label => '$fullName ($employeeId)';
+}

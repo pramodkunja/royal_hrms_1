@@ -58,52 +58,49 @@ class DocumentCard extends StatelessWidget {
                       children: [
                         Text(
                           document.title,
-                          style: AppTextStyles.label
-                              .copyWith(fontWeight: FontWeight.w700),
+                          style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
                         Row(children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: typeColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            document.fileType,
-                            style: AppTextStyles.caption.copyWith(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              color: typeColor,
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: typeColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(4),
                             ),
-                          ),
-                        ),
-                        // Web: "Please acknowledge" on documents the
-                        // signed-in user still has to acknowledge.
-                        if (document.requiresAcknowledgement &&
-                            document.myAcknowledgedAt == null) ...[
-                          const SizedBox(width: 4),
-                          Flexible(
-                            child: Container(
-                              key: Key('doc-ack-pending-${document.id}'),
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                              decoration: BoxDecoration(
-                                color: AppColors.warning.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                'Please acknowledge',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.caption.copyWith(
-                                    fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.warning),
+                            child: Text(
+                              document.fileType,
+                              style: AppTextStyles.caption.copyWith(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: typeColor,
                               ),
                             ),
                           ),
-                        ],
+                          // Web: "Please acknowledge" on documents the
+                          // signed-in user still has to acknowledge.
+                          if (document.requiresAcknowledgement && document.myAcknowledgedAt == null) ...[
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Container(
+                                key: Key('doc-ack-pending-${document.id}'),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: AppColors.warning.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'Please acknowledge',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.caption
+                                      .copyWith(fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.warning),
+                                ),
+                              ),
+                            ),
+                          ],
                         ]),
                       ],
                     ),
@@ -119,15 +116,11 @@ class DocumentCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  Icon(Icons.data_usage_outlined,
-                      size: 11, color: AppColors.textHint),
+                  Icon(Icons.data_usage_outlined, size: 11, color: AppColors.textHint),
                   const SizedBox(width: 3),
-                  Text(document.fileSizeDisplay,
-                      style:
-                          AppTextStyles.caption.copyWith(fontSize: 10)),
+                  Text(document.fileSizeDisplay, style: AppTextStyles.caption.copyWith(fontSize: 10)),
                   const SizedBox(width: 8),
-                  Icon(Icons.calendar_today_outlined,
-                      size: 11, color: AppColors.textHint),
+                  Icon(Icons.calendar_today_outlined, size: 11, color: AppColors.textHint),
                   const SizedBox(width: 3),
                   Expanded(
                     child: Text(
@@ -147,8 +140,7 @@ class DocumentCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  Icon(Icons.person_outline,
-                      size: 11, color: AppColors.textHint),
+                  Icon(Icons.person_outline, size: 11, color: AppColors.textHint),
                   const SizedBox(width: 3),
                   Expanded(
                     child: Text(
@@ -167,16 +159,13 @@ class DocumentCard extends StatelessWidget {
             // ── Category badge ─────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-              child: _CategoryBadge(
-                  category: document.category,
-                  label: document.categoryDisplay),
+              child: _CategoryBadge(category: document.category, label: document.categoryDisplay),
             ),
           ],
         ),
       ),
     );
   }
-
 }
 
 class _CategoryBadge extends StatelessWidget {

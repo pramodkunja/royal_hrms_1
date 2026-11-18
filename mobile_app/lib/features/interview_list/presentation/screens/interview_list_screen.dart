@@ -22,8 +22,7 @@ class InterviewListScreen extends ConsumerStatefulWidget {
   const InterviewListScreen({super.key});
 
   @override
-  ConsumerState<InterviewListScreen> createState() =>
-      _InterviewListScreenState();
+  ConsumerState<InterviewListScreen> createState() => _InterviewListScreenState();
 }
 
 class _InterviewListScreenState extends ConsumerState<InterviewListScreen> {
@@ -82,9 +81,7 @@ class _InterviewListScreenState extends ConsumerState<InterviewListScreen> {
                 // ── List ─────────────────────────────────────────────────
                 listAsync.when(
                   loading: () => SliverFillRemaining(
-                    child: Center(
-                        child: CircularProgressIndicator(
-                            color: AppColors.primary)),
+                    child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
                   ),
                   error: (e, _) => SliverFillRemaining(
                     child: AppErrorState.forError(
@@ -126,31 +123,31 @@ class _InterviewListScreenState extends ConsumerState<InterviewListScreen> {
       floatingActionButton: !canCreateCandidates(ref.watch(authStateProvider).valueOrNull?.user)
           ? null
           : ExpandableFab(
-        heroTag: 'interview_list_fab',
-        expanded: _fabExpanded,
-        onToggle: () => setState(() => _fabExpanded = !_fabExpanded),
-        actions: [
-          ExpandableFabAction(
-            icon: Icons.upload_file_outlined,
-            label: 'Bulk Import',
-            onTap: () {
-              setState(() => _fabExpanded = false);
-              context.push(AppRoutes.candidateBulkImport);
-            },
-          ),
-          ExpandableFabAction(
-            icon: Icons.person_add_outlined,
-            label: 'Add Candidate',
-            onTap: () {
-              setState(() => _fabExpanded = false);
-              showDialog(
-                context: context,
-                builder: (_) => const AddCandidateDialog(),
-              );
-            },
-          ),
-        ],
-      ),
+              heroTag: 'interview_list_fab',
+              expanded: _fabExpanded,
+              onToggle: () => setState(() => _fabExpanded = !_fabExpanded),
+              actions: [
+                ExpandableFabAction(
+                  icon: Icons.upload_file_outlined,
+                  label: 'Bulk Import',
+                  onTap: () {
+                    setState(() => _fabExpanded = false);
+                    context.push(AppRoutes.candidateBulkImport);
+                  },
+                ),
+                ExpandableFabAction(
+                  icon: Icons.person_add_outlined,
+                  label: 'Add Candidate',
+                  onTap: () {
+                    setState(() => _fabExpanded = false);
+                    showDialog(
+                      context: context,
+                      builder: (_) => const AddCandidateDialog(),
+                    );
+                  },
+                ),
+              ],
+            ),
     );
   }
 }

@@ -103,6 +103,21 @@ class EmployeeCard extends StatelessWidget {
                     style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontSize: 11.5),
                   ),
                 ],
+                // HO-30 (Task 87): web's list shows department and branch per
+                // employee; the card now does too, from the same list
+                // response. Up to three lines so it wraps at large text (and for long
+                // department names) instead of clipping; omitted when both are blank.
+                if (employeeOrgLine(employee).isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    employeeOrgLine(employee),
+                    key: const Key('employee-card-org'),
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.caption.copyWith(color: AppColors.textHint, fontSize: 11),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 _StatusBadge(status: employee.status),
                 const SizedBox(height: 14),
@@ -235,3 +250,7 @@ class _SquareIconButton extends StatelessWidget {
     );
   }
 }
+
+/// "Department · Branch" for an employee card, skipping blank parts (HO-30).
+String employeeOrgLine(EmployeeModel e) =>
+    [e.department.trim(), e.branch.trim()].where((s) => s.isNotEmpty).join(' · ');

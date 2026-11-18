@@ -231,7 +231,8 @@ void main() {
         expect(find.text(t), findsWidgets, reason: t);
       }
       expect(find.text('Reporting Manager'), findsWidgets);
-      expect(find.text('HR Contact'), findsOneWidget);
+      // Task 94: web's label (employees/_data.ts:164).
+      expect(find.text('Branch HR'), findsOneWidget);
     });
   });
 

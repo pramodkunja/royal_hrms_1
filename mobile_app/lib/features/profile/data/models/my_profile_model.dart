@@ -50,9 +50,7 @@ class MyProfileDetailModel extends MyProfileDetailEntity {
       permanentAddress: json['permanent_address'] as String? ?? '',
       highestQualification: json['highest_qualification'] as String? ?? '',
       institution: json['institution'] as String? ?? '',
-      yearOfPassing: yearRaw is int
-          ? yearRaw
-          : (yearRaw == null ? null : int.tryParse(yearRaw.toString())),
+      yearOfPassing: yearRaw is int ? yearRaw : (yearRaw == null ? null : int.tryParse(yearRaw.toString())),
       specialization: json['specialization'] as String? ?? '',
       totalExperienceYears: json['total_experience_years']?.toString(),
       previousEmployer: json['previous_employer'] as String? ?? '',
@@ -200,8 +198,7 @@ class MyProfileModel extends MyProfileEntity {
   /// immediately without waiting on a second GET — the backend's PATCH
   /// response carries no body other than a success message.
   MyProfileModel applyUpdate(MyProfileUpdateData data) {
-    final detailModel =
-        detail is MyProfileDetailModel ? detail as MyProfileDetailModel : MyProfileDetailModel.empty;
+    final detailModel = detail is MyProfileDetailModel ? detail as MyProfileDetailModel : MyProfileDetailModel.empty;
     return MyProfileModel(
       id: id,
       fullName: fullName,

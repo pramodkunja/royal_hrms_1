@@ -7,7 +7,9 @@
 String experienceFrom(String isoDate, {DateTime? now}) {
   final parts = isoDate.split('-');
   if (isoDate.isEmpty || parts.length < 3) return '—';
-  final y = int.tryParse(parts[0]), m = int.tryParse(parts[1]), d = int.tryParse(parts[2].substring(0, parts[2].length.clamp(0, 2)));
+  final y = int.tryParse(parts[0]),
+      m = int.tryParse(parts[1]),
+      d = int.tryParse(parts[2].substring(0, parts[2].length.clamp(0, 2)));
   if (y == null || m == null || d == null) return '—';
   final n = now ?? DateTime.now();
   var months = (n.year - y) * 12 + (n.month - m);

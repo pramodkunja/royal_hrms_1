@@ -86,11 +86,17 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
 
                 // Page title
+                // HO-46 / HO-07: a title slightly too long for the bar (e.g.
+                // "Training & Learning" next to four actions) is scaled down to
+                // fit instead of being cut to "Training & Learni…". Short titles
+                // are unchanged; very long ones still ellipsize below 75%.
                 Expanded(
-                  child: Text(
-                    title,
-                    style: AppTextStyles.h4.copyWith(color: titleColor, fontWeight: FontWeight.w700),
-                    overflow: TextOverflow.ellipsis,
+                  child: LayoutBuilder(
+                    builder: (context, box) => _FittedTitle(
+                      title: title,
+                      style: AppTextStyles.h4.copyWith(color: titleColor, fontWeight: FontWeight.w700),
+                      maxWidth: box.maxWidth,
+                    ),
                   ),
                 ),
 
@@ -126,6 +132,35 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The page title: full size when it fits; otherwise scaled down at
+/// layout time — so it is correct even after a web font (Poppins via
+/// google_fonts) finishes loading and changes the text width — but never
+/// below 75%: the text is laid out in at most maxWidth / 0.75 and ellipsizes
+/// beyond that, so large accessibility text is not shrunk away.
+class _FittedTitle extends StatelessWidget {
+  const _FittedTitle({required this.title, required this.style, required this.maxWidth});
+  final String title;
+  final TextStyle style;
+  final double maxWidth;
+
+  static const minScale = 0.75;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Text(title, style: style, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis);
+    if (!maxWidth.isFinite || maxWidth <= 0) return text;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: FittedBox(
+        key: const Key('app-top-bar-title-fit'),
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: ConstrainedBox(constraints: BoxConstraints(maxWidth: maxWidth / minScale), child: text),
       ),
     );
   }

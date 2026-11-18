@@ -15,10 +15,10 @@ class AssessmentAssignStatus {
   static const String complete = 'complete';
 
   static String label(String status) => switch (status) {
-    complete => 'Completed',
-    inProgress => 'In Progress',
-    _ => 'Pending',
-  };
+        complete => 'Completed',
+        inProgress => 'In Progress',
+        _ => 'Pending',
+      };
 }
 
 DateTime? _parseDate(dynamic v) {
@@ -48,8 +48,7 @@ class AssessmentAssigneeType {
   static const String employee = 'employee';
   static const String candidate = 'candidate';
 
-  static String label(String type) =>
-      type == employee ? 'Employee' : 'Candidate';
+  static String label(String type) => type == employee ? 'Employee' : 'Candidate';
 }
 
 @immutable
@@ -93,8 +92,7 @@ class AssessmentCandidateModel {
   factory AssessmentCandidateModel.fromJson(Map<String, dynamic> json) {
     return AssessmentCandidateModel(
       id: json['id']?.toString() ?? '',
-      assigneeType:
-          json['assignee_type'] as String? ?? AssessmentAssigneeType.candidate,
+      assigneeType: json['assignee_type'] as String? ?? AssessmentAssigneeType.candidate,
       assigneeId: json['assignee_id']?.toString() ?? '',
       assigneeName: json['assignee_name'] as String? ?? '',
       assigneeEmail: json['assignee_email'] as String? ?? '',
@@ -171,9 +169,7 @@ class AssessmentModel {
       pendingCount: json['pending_count'] as int? ?? 0,
       inProgressCount: json['in_progress_count'] as int? ?? 0,
       completedCount: json['completed_count'] as int? ?? 0,
-      candidates: candidatesJson
-          .map((e) => AssessmentCandidateModel.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      candidates: candidatesJson.map((e) => AssessmentCandidateModel.fromJson(e as Map<String, dynamic>)).toList(),
       createdAt: _parseDate(json['created_at']),
     );
   }
@@ -317,24 +313,24 @@ class AssessmentFormData {
   });
 
   factory AssessmentFormData.fromModel(AssessmentModel model) => AssessmentFormData(
-    title: model.title,
-    description: model.description,
-    isActive: model.isActive,
-    isDefault: model.isDefault,
-    passPercentage: model.passPercentage,
-    maxAttempts: model.maxAttempts,
-    timeLimitMins: model.timeLimitMins,
-  );
+        title: model.title,
+        description: model.description,
+        isActive: model.isActive,
+        isDefault: model.isDefault,
+        passPercentage: model.passPercentage,
+        maxAttempts: model.maxAttempts,
+        timeLimitMins: model.timeLimitMins,
+      );
 
   Map<String, dynamic> toJson() => {
-    'title': title.trim(),
-    'description': description.trim(),
-    'is_active': isActive,
-    'is_default': isDefault,
-    'pass_percentage': passPercentage,
-    'max_attempts': maxAttempts,
-    'time_limit_mins': timeLimitMins,
-  };
+        'title': title.trim(),
+        'description': description.trim(),
+        'is_active': isActive,
+        'is_default': isDefault,
+        'pass_percentage': passPercentage,
+        'max_attempts': maxAttempts,
+        'time_limit_mins': timeLimitMins,
+      };
 
   /// Mirrors the backend's own validators (AssessmentCreateSerializer) so a
   /// bad value fails fast client-side with the same message the API would
@@ -392,20 +388,20 @@ class AssessmentItemFormData {
   });
 
   factory AssessmentItemFormData.fromModel(AssessmentItemModel model) => AssessmentItemFormData(
-    itemType: model.itemType,
-    order: model.order,
-    title: model.title,
-    videoUrl: model.videoUrl,
-    durationSecs: model.durationSecs,
-    question: model.question,
-    optionA: model.optionA,
-    optionB: model.optionB,
-    optionC: model.optionC,
-    optionD: model.optionD,
-    correctOption: model.correctOption,
-    sectionId: model.sectionId,
-    sendSection: model.sectionKnown,
-  );
+        itemType: model.itemType,
+        order: model.order,
+        title: model.title,
+        videoUrl: model.videoUrl,
+        durationSecs: model.durationSecs,
+        question: model.question,
+        optionA: model.optionA,
+        optionB: model.optionB,
+        optionC: model.optionC,
+        optionD: model.optionD,
+        correctOption: model.correctOption,
+        sectionId: model.sectionId,
+        sendSection: model.sectionKnown,
+      );
 
   bool get isVideo => itemType == AssessmentItemType.video;
 

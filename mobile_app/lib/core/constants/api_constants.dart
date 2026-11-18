@@ -280,6 +280,8 @@ class ApiConstants {
   // Company Contact Matrix (accounts/urls.py → views_policy.py).
   static const String companyContacts = '/company-contacts/';
   static String companyContactDetail(int id) => '/company-contacts/$id/';
+  /// Read-only L1 / L2 approvers (web API.companyPolicy.contactApprovers).
+  static const String companyContactApprovers = '/company-contacts/approvers/';
   static String branchDetail(int id) => '/branch/branches/$id/';
   // Web API.branches.reassignAdmin (BranchReassignAdminView, branches.edit).
   static String branchReassignAdmin(int id) => '/branch/branches/$id/reassign-admin/';
@@ -371,11 +373,11 @@ class ApiConstants {
   static const String leaveMonthlyCreditsBulk = '/leave/monthly-credits/bulk/';
 
   // Carry Forward execution (year-range batch job) — matches web's
-  // API.leave.carryForward.*. NOTE: as of this writing these routes do not
-  // exist in the backend (apps/hrms/urls.py has no carry-forward paths at
-  // all), so calls here 404 on the real server exactly as they do on web —
-  // this mirrors web's own (currently non-functional) feature, not a mobile
-  // gap. See LeaveCarryForwardTab's doc comment.
+  // API.leave.carryForward.*. The local backend copy has no carry-forward
+  // routes, but that copy is behind production (QA HO-31): on production the
+  // two GETs (years, history) succeed (device-verified, Task 88). The POSTs
+  // (preview, run) were not called and remain unverified; run writes leave
+  // balances. See LeaveCarryForwardTab's doc comment.
   static const String carryForwardYears = '/leave/carry-forward/years/';
   static const String carryForwardPreview = '/leave/carry-forward/preview/';
   static const String carryForwardRun = '/leave/carry-forward/run/';
@@ -585,4 +587,31 @@ class ApiConstants {
   static const String faceRegistrationEmployees = '/attendance/face-registration/employees/';
   static String faceRegistrationEmployeeStatus(String employeeUuid) =>
       '/attendance/face-registration/employees/$employeeUuid/status/';
+
+  // Training & Learning (backend apps/training/urls.py, module 'training';
+  // web lib/api/endpoints.ts API.training). Admin side (Task 90 batch 1).
+  static const String trainingCourses = '/training/courses/';
+  static String trainingCourse(String id) => '/training/courses/$id/';
+  static String trainingCourseAssign(String id) => '/training/courses/$id/assign/';
+  static String trainingCourseProgress(String id) => '/training/courses/$id/progress/';
+  static String trainingMaterialFile(String id) => '/training/materials/$id/file/';
+  static String trainingAssignment(String id) => '/training/assignments/$id/';
+  static String trainingResetAssessment(String id) => '/training/assignments/$id/reset-assessment/';
+  static const String trainingEmployees = '/training/employees/';
+  static const String trainingDashboard = '/training/dashboard/';
+  static const String trainingReports = '/training/reports/';
+  // My Learning (employee, own assignments only; no permission needed).
+  static const String trainingMy = '/training/my/';
+  static String trainingMyDetail(String id) => '/training/my/$id/';
+  static String trainingMyMaterial(String id, String materialId, String action) =>
+      '/training/my/$id/materials/$materialId/$action/';
+  static String trainingMyAssessment(String id, String action) => '/training/my/$id/assessment/$action/';
+  static String trainingVideoSource(String materialId) => '/training/materials/$materialId/video-source/';
+  static String trainingThumbnailFile(String courseId) => '/training/courses/$courseId/thumbnail/file/';
+  // Training admin authoring (Task 90 batch 3).
+  static String trainingCourseThumbnail(String id) => '/training/courses/$id/thumbnail/';
+  static String trainingCourseMaterials(String id) => '/training/courses/$id/materials/';
+  static String trainingCourseReorder(String id) => '/training/courses/$id/materials/reorder/';
+  static String trainingMaterial(String id) => '/training/materials/$id/';
+  static const String trainingAssessmentOptions = '/training/assessments/';
 }

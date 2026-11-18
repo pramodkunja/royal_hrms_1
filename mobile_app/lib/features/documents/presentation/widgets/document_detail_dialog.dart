@@ -14,12 +14,10 @@ class DocumentDetailDialog extends ConsumerStatefulWidget {
   const DocumentDetailDialog({super.key, required this.document});
 
   @override
-  ConsumerState<DocumentDetailDialog> createState() =>
-      _DocumentDetailDialogState();
+  ConsumerState<DocumentDetailDialog> createState() => _DocumentDetailDialogState();
 }
 
-class _DocumentDetailDialogState
-    extends ConsumerState<DocumentDetailDialog> {
+class _DocumentDetailDialogState extends ConsumerState<DocumentDetailDialog> {
   bool _deleting = false;
   // Updated in place after an acknowledgement, a requirement change, or a
   // reload of a newer version (409).
@@ -39,14 +37,12 @@ class _DocumentDetailDialogState
             decoration: BoxDecoration(color: AppColors.primary),
             child: Row(
               children: [
-                const Icon(Icons.folder_open_outlined,
-                    color: Colors.white, size: 22),
+                const Icon(Icons.folder_open_outlined, color: Colors.white, size: 22),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     doc.title,
-                    style: AppTextStyles.label.copyWith(
-                        color: Colors.white, fontWeight: FontWeight.w700),
+                    style: AppTextStyles.label.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -69,8 +65,7 @@ class _DocumentDetailDialogState
                   // ── File preview area ─────────────────────────────────────
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 24, horizontal: 16),
+                    padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
                     decoration: BoxDecoration(
                       color: AppColors.surface,
                       borderRadius: BorderRadius.circular(14),
@@ -82,8 +77,7 @@ class _DocumentDetailDialogState
                           width: 64,
                           height: 64,
                           decoration: BoxDecoration(
-                            color: documentTypeColor(doc.fileType)
-                                .withValues(alpha: 0.12),
+                            color: documentTypeColor(doc.fileType).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: Icon(
@@ -95,8 +89,7 @@ class _DocumentDetailDialogState
                         const SizedBox(height: 10),
                         Text(
                           doc.fileName,
-                          style: AppTextStyles.label
-                              .copyWith(fontWeight: FontWeight.w600),
+                          style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600),
                           textAlign: TextAlign.center,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -121,25 +114,19 @@ class _DocumentDetailDialogState
                     ),
                     child: Column(
                       children: [
-                        _MetaRow(
-                            icon: Icons.category_outlined,
-                            label: 'Category',
-                            value: doc.categoryDisplay),
+                        _MetaRow(icon: Icons.category_outlined, label: 'Category', value: doc.categoryDisplay),
                         Divider(height: 1, color: AppColors.border),
-                        _MetaRow(
-                            icon: Icons.person_outline,
-                            label: 'Uploaded by',
-                            value: doc.uploadedByName),
+                        _MetaRow(icon: Icons.person_outline, label: 'Uploaded by', value: doc.uploadedByName),
                         Divider(height: 1, color: AppColors.border),
                         _MetaRow(
                             icon: Icons.calendar_today_outlined,
                             label: 'Upload date',
                             value: formatDocDate(doc.uploadedAt)),
                         Divider(height: 1, color: AppColors.border),
-                        const _MetaRow(
+                        _MetaRow(
                             icon: Icons.groups_outlined,
                             label: 'Access',
-                            value: 'All Employees'),
+                            value: (doc.branchName ?? '').isNotEmpty ? 'Branch: ${doc.branchName}' : 'All Employees'),
                       ],
                     ),
                   ),
@@ -169,39 +156,36 @@ class _DocumentDetailDialogState
   }
 
   Widget _actionButtons(String fileUrl, {required bool canDelete}) {
-    final btnShape = RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10));
+    final btnShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(10));
     return Row(
       children: [
         if (canDelete)
-        SizedBox(
-          height: 42,
-          child: FilledButton.icon(
-            key: const Key('document-delete'),
-            onPressed: _deleting ? null : _confirmDelete,
-            icon: _deleting
-                ? const SizedBox(
-                    width: 14, height: 14,
-                    child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2))
-                : const Icon(Icons.delete_outline, size: 16),
-            label: const Text('Delete'),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.error,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              textStyle: AppTextStyles.labelSmall,
-              shape: btnShape,
+          SizedBox(
+            height: 42,
+            child: FilledButton.icon(
+              key: const Key('document-delete'),
+              onPressed: _deleting ? null : _confirmDelete,
+              icon: _deleting
+                  ? const SizedBox(
+                      width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.delete_outline, size: 16),
+              label: const Text('Delete'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.error,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                textStyle: AppTextStyles.labelSmall,
+                shape: btnShape,
+              ),
             ),
           ),
-        ),
         const Spacer(),
         SizedBox(
           height: 42,
           child: OutlinedButton.icon(
             key: const Key('document-preview'),
             // Web documents/page.tsx: Preview shows the file inside the app.
-            onPressed: () => previewDocumentInApp(context, ref,
-                url: fileUrl, title: _doc.title, fileName: _doc.fileName),
+            onPressed: () =>
+                previewDocumentInApp(context, ref, url: fileUrl, title: _doc.title, fileName: _doc.fileName),
             icon: const Icon(Icons.visibility_outlined, size: 16),
             label: const Text('Preview'),
             style: OutlinedButton.styleFrom(
@@ -256,9 +240,7 @@ class _DocumentDetailDialogState
     );
     if (ok != true || !mounted) return;
     setState(() => _deleting = true);
-    final error = await ref
-        .read(documentListProvider.notifier)
-        .remove(widget.document.id);
+    final error = await ref.read(documentListProvider.notifier).remove(widget.document.id);
     if (!mounted) return;
     setState(() => _deleting = false);
     if (error == null) {
@@ -273,16 +255,13 @@ class _DocumentDetailDialogState
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ));
   }
-
-
 }
 
 class _MetaRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  const _MetaRow(
-      {required this.icon, required this.label, required this.value});
+  const _MetaRow({required this.icon, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -294,15 +273,12 @@ class _MetaRow extends StatelessWidget {
           const SizedBox(width: 8),
           SizedBox(
             width: 90,
-            child: Text(label,
-                style: AppTextStyles.caption
-                    .copyWith(color: AppColors.textSecondary)),
+            child: Text(label, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
           ),
           Expanded(
             child: Text(
               value,
-              style: AppTextStyles.labelSmall
-                  .copyWith(fontWeight: FontWeight.w600),
+              style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w600),
               textAlign: TextAlign.end,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

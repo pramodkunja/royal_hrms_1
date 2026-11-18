@@ -22,12 +22,10 @@ class AddCandidateDialog extends ConsumerStatefulWidget {
   const AddCandidateDialog({super.key, this.existing});
 
   @override
-  ConsumerState<AddCandidateDialog> createState() =>
-      _AddCandidateDialogState();
+  ConsumerState<AddCandidateDialog> createState() => _AddCandidateDialogState();
 }
 
-class _AddCandidateDialogState
-    extends ConsumerState<AddCandidateDialog> {
+class _AddCandidateDialogState extends ConsumerState<AddCandidateDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
@@ -94,11 +92,9 @@ class _AddCandidateDialogState
   Future<void> _loadBranches() async {
     try {
       final dio = ref.read(dioProvider);
-      final res = await dio.get(ApiConstants.branches,
-          queryParameters: {'status': 'active', 'page_size': 100});
+      final res = await dio.get(ApiConstants.branches, queryParameters: {'status': 'active', 'page_size': 100});
       final data = res.data is Map ? res.data['data'] : res.data;
-      final results =
-          (data is Map ? data['results'] : data) as List<dynamic>;
+      final results = (data is Map ? data['results'] : data) as List<dynamic>;
       if (!mounted) return;
       final branches = results
           .map((e) => {
@@ -114,8 +110,7 @@ class _AddCandidateDialogState
       final locked = _branchLocked;
       if (locked && user != null && (!_isEdit || _selectedBranch == null)) {
         final own = branches.firstWhere(
-          (b) => (b['name'] as String).toLowerCase() ==
-              (user.branch ?? '').toLowerCase(),
+          (b) => (b['name'] as String).toLowerCase() == (user.branch ?? '').toLowerCase(),
           orElse: () => const {},
         );
         if (own.isNotEmpty) _selectedBranch = own['id'] as int;
@@ -175,15 +170,13 @@ class _AddCandidateDialogState
       'interview_mode': _mode,
       // As web EditCandidateModal: an edit always sends the date, null when
       // cleared (the backend then sends no invitation); Add omits it.
-      if (_isEdit || _interviewDate != null)
-        'interview_date': _interviewDate?.toIso8601String().split('T').first,
+      if (_isEdit || _interviewDate != null) 'interview_date': _interviewDate?.toIso8601String().split('T').first,
       // As web: Edit sends null to clear an empty time/interviewer; Add
       // simply leaves an unset time out.
       if (_isEdit || time != null) 'interview_time': time,
       'meeting_link': link,
       'interviewer': _interviewer?.uuid,
-      if (_notesCtrl.text.trim().isNotEmpty)
-        'notes': _notesCtrl.text.trim(),
+      if (_notesCtrl.text.trim().isNotEmpty) 'notes': _notesCtrl.text.trim(),
     };
     // The backend emails the interview details itself (queued) when a save
     // leaves a date set and the date, time or link changed — mirror that
@@ -205,16 +198,14 @@ class _AddCandidateDialogState
       Navigator.pop(context);
       if (willEmail) {
         messenger.showSnackBar(SnackBar(
-          content: const Text(
-              'Interview details saved. An interview invitation email will be sent to the candidate.'),
+          content: const Text('Interview details saved. An interview invitation email will be sent to the candidate.'),
           backgroundColor: AppColors.success,
         ));
       }
     } else {
       // The dialog stays open with every value as entered, for a retry.
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(err), backgroundColor: AppColors.error),
+        SnackBar(content: Text(err), backgroundColor: AppColors.error),
       );
     }
   }
@@ -229,9 +220,7 @@ class _AddCandidateDialogState
 
   Future<String?> _addCandidate(Map<String, dynamic> data) async {
     try {
-      await ref
-          .read(candidateListProvider.notifier)
-          .addCandidate(data);
+      await ref.read(candidateListProvider.notifier).addCandidate(data);
       return null;
     } catch (e) {
       // Surface the backend's real {status, message, data} envelope instead
@@ -243,9 +232,7 @@ class _AddCandidateDialogState
   }
 
   Future<String?> _updateCandidate(Map<String, dynamic> data) {
-    return ref
-        .read(candidateListProvider.notifier)
-        .updateCandidate(widget.existing!.id, data);
+    return ref.read(candidateListProvider.notifier).updateCandidate(widget.existing!.id, data);
   }
 
   @override
@@ -264,8 +251,7 @@ class _AddCandidateDialogState
     // Popup dialog box (centered), not a bottom sheet — the form's own
     // ListView scrolls internally, and maxHeight is recomputed against the
     // keyboard inset so opening a text field doesn't overflow the dialog.
-    final maxHeight =
-        (mq.size.height - mq.viewInsets.bottom - 80).clamp(320.0, mq.size.height * 0.85);
+    final maxHeight = (mq.size.height - mq.viewInsets.bottom - 80).clamp(320.0, mq.size.height * 0.85);
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -282,8 +268,7 @@ class _AddCandidateDialogState
                 children: [
                   Expanded(
                     child: Text(_isEdit ? 'Edit Candidate' : 'Add Candidate to Interview List',
-                        style: AppTextStyles.label
-                            .copyWith(fontWeight: FontWeight.w700)),
+                        style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
@@ -314,12 +299,9 @@ class _AddCandidateDialogState
                 loading: _loading,
                 onSubmit: _submit,
                 onCancel: () => Navigator.pop(context),
-                onBranchChanged: (v) =>
-                    setState(() => _selectedBranch = v),
-                onModeChanged: (v) =>
-                    setState(() => _mode = v ?? 'in_person'),
-                onDateChanged: (v) =>
-                    setState(() => _interviewDate = v),
+                onBranchChanged: (v) => setState(() => _selectedBranch = v),
+                onModeChanged: (v) => setState(() => _mode = v ?? 'in_person'),
+                onDateChanged: (v) => setState(() => _interviewDate = v),
                 interviewTime: _interviewTime,
                 onTimeChanged: (v) => setState(() => _interviewTime = v),
                 meetingLinkCtrl: _meetingLinkCtrl,

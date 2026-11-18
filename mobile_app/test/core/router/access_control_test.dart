@@ -21,7 +21,9 @@ import 'package:mobile_app/features/dashboard/presentation/widgets/quick_access.
 //    role; 0088 mirrors wfh.view/create/approve from leave.view/create/approve;
 //  - 0052 seeds branch_admin (0070 revokes its settings.edit);
 //  - 0077 revokes settings.edit from hr; 0094 grants facial_recognition.approve
-//    to hr_admin and branch_admin.
+//    to hr_admin and branch_admin;
+//  - training 0002 grants every training.* codename to hr_admin and
+//    view / assign / view_all_progress / view_reports to branch_admin.
 
 const _allRoles = ['payroll.view_own', 'org_chart.view'];
 
@@ -65,7 +67,9 @@ final hr = _user('hr_admin', [
   'announcements.view', 'announcements.create', 'announcements.edit', 'announcements.delete',
   'documents.view', 'documents.create', 'documents.edit', 'documents.delete',
   'settings.view', 'reports.view', 'reports.export', 'audit.view',
-  'wfh.view', 'wfh.create', 'wfh.approve', 'facial_recognition.approve', ..._allRoles,
+  'wfh.view', 'wfh.create', 'wfh.approve', 'facial_recognition.approve',
+  'training.view', 'training.create', 'training.edit', 'training.delete', 'training.assign',
+  'training.view_all_progress', 'training.manage_assessments', 'training.view_reports', ..._allRoles,
 ]);
 
 final branchAdmin = _user('branch_admin', [
@@ -80,7 +84,8 @@ final branchAdmin = _user('branch_admin', [
   'assessments.view', 'assessments.create', 'assessments.edit', 'assessments.delete',
   'reports.view', 'reports.export', 'audit.view', 'payroll.view', 'payroll.export',
   'branches.view', 'settings.view', 'wfh.view', 'wfh.create', 'wfh.approve',
-  'facial_recognition.approve', ..._allRoles,
+  'facial_recognition.approve',
+  'training.view', 'training.assign', 'training.view_all_progress', 'training.view_reports', ..._allRoles,
 ], canManageBranch: true);
 
 // system_admin holds settings.edit, so login sets is_superuser — the backend
@@ -92,7 +97,8 @@ final noPermissions = _user('custom_role', const []);
 Set<String> _navIds(UserEntity? user) => buildNav(user).whereType<NavItem>().map((e) => e.id).toSet();
 
 const _alwaysVisible = {
-  'dashboard', 'announcements', 'separation', 'my-attendance', 'my-payslip', 'my-assessments', 'referrals',
+  // my-learning: self-service like web navConfig (module 'training'; Task 90).
+  'dashboard', 'announcements', 'separation', 'my-attendance', 'my-payslip', 'my-assessments', 'my-learning', 'referrals',
   'my-requests', 'contacts', 'profile',
 };
 final _allNavIds = kAllNav.whereType<NavItem>().map((e) => e.id).toSet();

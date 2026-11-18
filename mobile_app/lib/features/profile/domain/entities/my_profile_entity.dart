@@ -105,6 +105,7 @@ class MyProfileEntity {
   final String assessmentStatus;
   final String? photoUrl;
   final MyProfileDetailEntity detail;
+
   /// Assigned notice period in days (Settings → Notice Period), or null.
   final int? noticePeriodDays;
   final AssignedPersonEntity? reportingManager;

@@ -84,17 +84,19 @@ class _DashboardShellState extends ConsumerState<DashboardShell> {
         // a separation request) bring their own AppBar with a back arrow,
         // title and actions — drawing the shell's bar too stacked two headers
         // with two notification bells (device audit HO-05).
-        appBar: shellDetailRouteHasOwnAppBar(currentPath) ? null : AppTopBar(
-          title: title,
-          // Every route except the Dashboard home screen gets the blue app
-          // bar theme — Dashboard keeps its original plain white bar.
-          isBlueTheme: currentPath != AppRoutes.dashboard,
-          onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
-          onThemeToggleTap: () => ref.read(themeModeProvider.notifier).toggle(),
-          isDarkMode: isDarkMode,
-          onLogoutTap: _handleLogout,
-          onSearchTap: () => showGlobalSearch(context),
-        ),
+        appBar: shellDetailRouteHasOwnAppBar(currentPath)
+            ? null
+            : AppTopBar(
+                title: title,
+                // Every route except the Dashboard home screen gets the blue app
+                // bar theme — Dashboard keeps its original plain white bar.
+                isBlueTheme: currentPath != AppRoutes.dashboard,
+                onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+                onThemeToggleTap: () => ref.read(themeModeProvider.notifier).toggle(),
+                isDarkMode: isDarkMode,
+                onLogoutTap: _handleLogout,
+                onSearchTap: () => showGlobalSearch(context),
+              ),
         body: widget.child,
       ),
     );
@@ -146,4 +148,6 @@ class _DashboardShellState extends ConsumerState<DashboardShell> {
 /// The shell leaves its own top bar off for these.
 bool shellDetailRouteHasOwnAppBar(String path) =>
     RegExp(r'^/dashboard/employees/[^/]+(/id-card)?/?$').hasMatch(path) ||
-    RegExp(r'^/dashboard/separation/[^/]+/?$').hasMatch(path);
+    RegExp(r'^/dashboard/separation/[^/]+/?$').hasMatch(path) ||
+    RegExp(r'^/dashboard/training/[^/]+/?$').hasMatch(path) ||
+    RegExp(r'^/dashboard/my-learning/[^/]+/?$').hasMatch(path);

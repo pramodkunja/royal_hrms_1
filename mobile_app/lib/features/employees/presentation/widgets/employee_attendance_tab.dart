@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../../shared/widgets/stat_card.dart';
 import '../../../attendance/domain/entities/attendance_entity.dart';
 import '../../../attendance/presentation/providers/attendance_providers.dart';
 import '../../data/models/employee_model.dart';
@@ -118,36 +117,65 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
   Widget _buildStatCards(AsyncValue<AttendanceStatsEntity> statsAsync) {
     return statsAsync.when(
       data: (stats) {
+        // Web employees/[id]/_components/AttendanceTab.tsx:26-94: value,
+        // sub-line and a progress bar per card; numbers shown as the server
+        // sends them (not rounded).
+        final wd = stats.workingDays;
+        double pct(num part) => wd > 0 ? (part / wd * 100).clamp(0, 100).toDouble() : 0;
         final cards = [
-          StatCard(
+          EmployeeStatCard(
+            key: const Key('emp-att-present'),
             icon: Icons.person_outline,
-            count: stats.daysPresent,
             label: 'Days Present',
+            value: '${stats.daysPresent}',
+            sub: 'of $wd working days',
+            progress: pct(stats.daysPresent),
             color: AppColors.success,
           ),
-          StatCard(
+          EmployeeStatCard(
+            key: const Key('emp-att-late'),
             icon: Icons.access_alarm_outlined,
-            count: stats.lateArrivals,
             label: 'Late Arrivals',
+            value: '${stats.lateArrivals}',
+            sub: '${stats.lopPending} LOP pending',
+            progress: pct(stats.lateArrivals),
             color: AppColors.warning,
           ),
-          StatCard(
+          EmployeeStatCard(
+            key: const Key('emp-att-hours'),
             icon: Icons.access_time_outlined,
-            count: stats.avgHoursPerDay.round(),
-            valueText: stats.avgHoursPerDay.toStringAsFixed(1),
             label: 'Avg Hours / Day',
+            value: webNumber(stats.avgHoursPerDay),
+            sub: 'Required: 9.0 hrs',
+            progress: (stats.avgHoursPerDay / 9 * 100).clamp(0, 100).toDouble(),
             color: AppColors.info,
           ),
-          StatCard(
+          EmployeeStatCard(
+            key: const Key('emp-att-pct'),
             icon: Icons.bar_chart_outlined,
-            count: stats.attendancePercentage.round(),
-            valueText: '${stats.attendancePercentage.round()}%',
             label: 'Attendance %',
+            value: '${webNumber(stats.attendancePercentage)}%',
+            // Deliberate difference: web's "Above threshold" is hard-coded
+            // (shown even at 10%), so it is left out here (reported WEB-2).
+            sub: null,
+            progress: stats.attendancePercentage.clamp(0, 100).toDouble(),
             color: AppColors.success,
           ),
         ];
 
-        return StatCardRow(cards: cards, padding: EdgeInsets.zero);
+        return Column(children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: cards[0]),
+            const SizedBox(width: 10),
+            Expanded(child: cards[1]),
+          ]),
+          const SizedBox(height: 10),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: cards[2]),
+            const SizedBox(width: 10),
+            Expanded(child: cards[3]),
+          ]),
+        ]);
       },
       loading: () => const SizedBox(
         height: 88,
@@ -789,4 +817,68 @@ class _DetailRow extends StatelessWidget {
           ],
         ),
       );
+}
+
+/// A number as web prints it (JavaScript): 8.0 → "8", 7.5 → "7.5".
+String webNumber(double v) => v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
+
+/// Web `.stat-card`: label, value, sub-line, icon, and a progress bar.
+class EmployeeStatCard extends StatelessWidget {
+  const EmployeeStatCard({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.sub,
+    required this.progress,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final String? sub;
+
+  /// 0–100.
+  final double progress;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(label, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+                const SizedBox(height: 4),
+                Text(value, style: AppTextStyles.h3.copyWith(color: color, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 2),
+                Text(sub ?? ' ', style: AppTextStyles.caption.copyWith(fontSize: 11, color: AppColors.textSecondary)),
+              ]),
+            ),
+            Icon(icon, size: 18, color: color),
+          ]),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress / 100,
+              minHeight: 5,
+              color: color,
+              backgroundColor: color.withValues(alpha: 0.12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

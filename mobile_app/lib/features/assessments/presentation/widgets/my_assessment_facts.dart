@@ -12,8 +12,7 @@ class MyAssessmentFacts extends StatelessWidget {
 
   /// Hide the title row when the host screen already shows it.
   final bool showHeader;
-  const MyAssessmentFacts(
-      {super.key, required this.assignment, this.showHeader = true});
+  const MyAssessmentFacts({super.key, required this.assignment, this.showHeader = true});
 
   @override
   Widget build(BuildContext context) {
@@ -22,19 +21,13 @@ class MyAssessmentFacts extends StatelessWidget {
       ('Status', a.status.label),
       ('Progress', '${a.completedItems} of ${a.totalItems} items'),
       ('Pass mark', '${a.passPercentage}%'),
-      if (a.isComplete && a.maxScore > 0)
-        ('Score', '${a.scorePercent}% (${a.score}/${a.maxScore})'),
+      if (a.isComplete && a.maxScore > 0) ('Score', '${a.scorePercent}% (${a.score}/${a.maxScore})'),
       ('Attempts used', '${a.attemptCount}'),
-      (
-        'Attempts allowed',
-        a.effectiveMaxAttempts == 0 ? 'Unlimited' : '${a.effectiveMaxAttempts}'
-      ),
-      if (a.attemptsRemaining != null)
-        ('Attempts remaining', '${a.attemptsRemaining}'),
+      ('Attempts allowed', a.effectiveMaxAttempts == 0 ? 'Unlimited' : '${a.effectiveMaxAttempts}'),
+      if (a.attemptsRemaining != null) ('Attempts remaining', '${a.attemptsRemaining}'),
       if (a.timeLimitMins != null) ('Time limit', '${a.timeLimitMins} min'),
       if (a.deadline != null) ('Due', formatAssessmentDate(a.deadline)),
-      if (a.completedAt != null)
-        ('Completed', formatAssessmentDate(a.completedAt)),
+      if (a.completedAt != null) ('Completed', formatAssessmentDate(a.completedAt)),
     ];
 
     return Column(
@@ -56,9 +49,7 @@ class MyAssessmentFacts extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Row(children: [
               Expanded(child: Text(label, style: AppTextStyles.bodySecondary)),
-              Text(value,
-                  style:
-                      AppTextStyles.body.copyWith(fontWeight: FontWeight.w600)),
+              Text(value, style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600)),
             ]),
           ),
       ],

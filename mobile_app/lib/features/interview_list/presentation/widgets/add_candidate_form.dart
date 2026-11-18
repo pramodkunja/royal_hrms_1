@@ -6,21 +6,16 @@ InputDecoration _inputDec(String? hint) => InputDecoration(
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
       filled: true,
       fillColor: AppColors.surface,
-      border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppColors.border)),
-      enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppColors.border)),
+      border:
+          OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
+      enabledBorder:
+          OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
       focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppColors.primary, width: 1.5)),
-      errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppColors.error)),
-      focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppColors.error)),
+          borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.primary, width: 1.5)),
+      errorBorder:
+          OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.error)),
+      focusedErrorBorder:
+          OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.error)),
     );
 
 class _AddCandidateFormContent extends StatelessWidget {
@@ -33,6 +28,7 @@ class _AddCandidateFormContent extends StatelessWidget {
   final int? selectedBranch;
   final List<Map<String, dynamic>> branches;
   final bool branchLocked;
+
   /// Web: a locked user sees their own branch name (effectiveBranch).
   final String? lockedBranchName;
   final String mode;
@@ -131,8 +127,7 @@ class _AddCandidateFormContent extends StatelessWidget {
             ]),
           ],
           const SizedBox(height: 14),
-          _row(_modePicker(),
-              mode == 'video_call' ? _meetingLinkField() : const SizedBox.shrink()),
+          _row(_modePicker(), mode == 'video_call' ? _meetingLinkField() : const SizedBox.shrink()),
           const SizedBox(height: 14),
           _interviewerPicker(),
           const SizedBox(height: 14),
@@ -153,8 +148,8 @@ class _AddCandidateFormContent extends StatelessWidget {
         ],
       );
 
-  static TextStyle get _labelStyle => AppTextStyles.labelSmall
-      .copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600);
+  static TextStyle get _labelStyle =>
+      AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600);
 
   Widget _field(String label, TextEditingController ctrl,
       {String? hint,
@@ -171,10 +166,7 @@ class _AddCandidateFormContent extends StatelessWidget {
         keyboardType: keyboardType,
         enabled: enabled,
         style: AppTextStyles.bodySmall,
-        validator: validator ??
-            (required
-                ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null
-                : null),
+        validator: validator ?? (required ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null : null),
         onChanged: sanitize == null
             ? null
             : (v) {
@@ -216,24 +208,23 @@ class _AddCandidateFormContent extends StatelessWidget {
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
         )
       else
-      IgnorePointer(
-        ignoring: branchLocked,
-        child: Opacity(
-          opacity: branchLocked ? 0.6 : 1,
-          child: _DropdownField<int>(
-            value: selectedBranch,
-            hint: '— Select branch —',
-            items: branches
-                .map((b) => DropdownMenuItem<int>(
-                      value: b['id'] as int,
-                      child: Text(b['name'] as String,
-                          style: AppTextStyles.bodySmall),
-                    ))
-                .toList(),
-            onChanged: onBranchChanged,
+        IgnorePointer(
+          ignoring: branchLocked,
+          child: Opacity(
+            opacity: branchLocked ? 0.6 : 1,
+            child: _DropdownField<int>(
+              value: selectedBranch,
+              hint: '— Select branch —',
+              items: branches
+                  .map((b) => DropdownMenuItem<int>(
+                        value: b['id'] as int,
+                        child: Text(b['name'] as String, style: AppTextStyles.bodySmall),
+                      ))
+                  .toList(),
+              onChanged: onBranchChanged,
+            ),
           ),
         ),
-      ),
     ]);
   }
 
@@ -269,18 +260,15 @@ class _AddCandidateFormContent extends StatelessWidget {
             color: AppColors.surface,
           ),
           child: Row(children: [
-            Icon(Icons.calendar_today_outlined,
-                size: 14, color: AppColors.textHint),
+            Icon(Icons.calendar_today_outlined, size: 14, color: AppColors.textHint),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 interviewDate == null
                     ? 'dd/mm/yyyy'
                     : '${interviewDate!.day}/${interviewDate!.month}/${interviewDate!.year}',
-                style: AppTextStyles.bodySmall.copyWith(
-                    color: interviewDate == null
-                        ? AppColors.textHint
-                        : AppColors.textPrimary),
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: interviewDate == null ? AppColors.textHint : AppColors.textPrimary),
               ),
             ),
             // Web's date input can be emptied; an edit then sends null.
@@ -323,8 +311,7 @@ class _AddCandidateFormContent extends StatelessWidget {
             Expanded(
               child: Text(
                 t == null ? '--:--' : formatInterviewTime(t),
-                style: AppTextStyles.bodySmall.copyWith(
-                    color: t == null ? AppColors.textHint : AppColors.textPrimary),
+                style: AppTextStyles.bodySmall.copyWith(color: t == null ? AppColors.textHint : AppColors.textPrimary),
               ),
             ),
             if (t != null)
@@ -416,8 +403,8 @@ class _AddCandidateFormContent extends StatelessWidget {
           child: FilledButton.icon(
             onPressed: loading ? null : onSubmit,
             icon: loading
-                ? const SizedBox(width: 14, height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.check, size: 16),
             label: Text(isEdit ? 'Save Changes' : 'Add to List'),
             style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
@@ -455,11 +442,7 @@ class _DropdownField<T> extends StatelessWidget {
         value: value,
         isExpanded: true,
         underline: const SizedBox.shrink(),
-        hint: hint != null
-            ? Text(hint!,
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textHint))
-            : null,
+        hint: hint != null ? Text(hint!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint)) : null,
         items: items,
         onChanged: onChanged,
       ),

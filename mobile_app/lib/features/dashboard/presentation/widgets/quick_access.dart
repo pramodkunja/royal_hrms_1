@@ -87,8 +87,7 @@ class QuickItem {
   /// [path] (and, for the few tiles where the same path means different
   /// things per role, [label] too) — falls back to the plain Material icon
   /// (null) for every module without a provided image.
-  String? get imageAsset =>
-      _kQuickItemImageByPathAndLabel['$path|$label'] ?? _kQuickItemImageByPath[path];
+  String? get imageAsset => _kQuickItemImageByPathAndLabel['$path|$label'] ?? _kQuickItemImageByPath[path];
 }
 
 // Mirrors each web dashboard's own "Quick actions" array exactly (icons
@@ -331,9 +330,8 @@ class QuickTile extends StatelessWidget {
       // shell and use their own AppBar with a back button that calls
       // context.pop() — they must be pushed, not go()'d to, or there's
       // nothing on the stack for that back button to pop.
-      onTap: () => item.path.startsWith('/settings/')
-          ? context.push(item.path)
-          : goToDashboardSection(context, item.path),
+      onTap: () =>
+          item.path.startsWith('/settings/') ? context.push(item.path) : goToDashboardSection(context, item.path),
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(

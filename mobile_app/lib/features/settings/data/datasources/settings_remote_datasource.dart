@@ -346,10 +346,23 @@ class SettingsRemoteDataSource {
   }
 
   Future<LeavePolicyModel> updateLeavePolicy(
+          String leaveType, LeavePolicyFormData form) async =>
+      (await updateLeavePolicyWithMessage(leaveType, form)).policy;
+
+  /// PUT /leave/policy/<type>/ keeping the server's message — e.g. "Policy
+  /// updated. Removed N unused balance(s) from employees this leave type no
+  /// longer applies to." when the gender rule changed (backend
+  /// LeavePolicyView.put); web LeavePoliciesTab shows it as is.
+  Future<({LeavePolicyModel policy, String message})> updateLeavePolicyWithMessage(
       String leaveType, LeavePolicyFormData form) async {
     final res = await _dio.put(ApiConstants.leavePolicyDetail(leaveType),
         data: form.toJson());
-    return LeavePolicyModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+    final body = res.data;
+    final msg = body is Map && body['message'] is String ? body['message'] as String : '';
+    return (
+      policy: LeavePolicyModel.fromJson(_unwrap(res.data) as Map<String, dynamic>),
+      message: msg,
+    );
   }
 
   // POST /api/leave/policy/ — matches LeavePolicyCreateSerializer: requires

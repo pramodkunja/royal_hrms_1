@@ -142,9 +142,10 @@ class FormValidators {
 
   static String? leaveTypeName(String? value) {
     final v = (value ?? '').trim();
-    if (v.isEmpty) return 'Leave type name is required.';
+    // Web PolicyTab validateCreate / validateEdit messages.
+    if (v.isEmpty) return 'Display name is required.';
     if (!leaveTypeNameRe.hasMatch(v)) {
-      return 'Leave type name can only contain letters, spaces, and hyphens.';
+      return 'Display name can only contain letters, spaces, and hyphens — no numbers or special characters.';
     }
     return null;
   }

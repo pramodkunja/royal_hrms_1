@@ -84,6 +84,8 @@ const Map<String, List<String>> kRoutePermissions = {
   // are part of the Team Approvals inbox.
   '/dashboard/approvals': ['leave.approve', 'expenses.approve', 'wfh.approve', 'separation.approve'],
   '/dashboard/documents': ['documents.view'],
+  // Training & Learning admin (web navConfig/proxy: training.view).
+  '/dashboard/training': ['training.view'],
   '/dashboard/reports': ['reports.view'],
   '/dashboard/settings': ['settings.view'],
   '/settings': ['settings.view'],
@@ -185,6 +187,7 @@ abstract final class AppModules {
   static const documents = 'documents';
   static const assets = 'assets';
   static const wfh = 'wfh';
+  static const training = 'training';
 }
 
 /// Route prefix → module. Longest matching prefix wins (web moduleForPath).
@@ -207,6 +210,9 @@ const Map<String, String> kRouteModules = {
   '/dashboard/separation': AppModules.separation,
   '/dashboard/announcements': AppModules.announcements,
   '/dashboard/documents': AppModules.documents,
+  '/dashboard/training': AppModules.training,
+  // Self-service (no permission, as web proxy.ts), module only.
+  '/dashboard/my-learning': AppModules.training,
   '/dashboard/contacts': AppModules.documents,
   '/settings/attendance-rules': AppModules.attendance, // web settings/attendance-config
   '/settings/leave-policy': AppModules.leave, // includes import-balances

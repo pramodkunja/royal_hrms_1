@@ -279,16 +279,17 @@ class _LeavePolicyRulesTabState extends ConsumerState<LeavePolicyRulesTab> {
     });
     final result = await ref
         .read(leavePoliciesProvider.notifier)
-        .updatePolicy(current.leaveType, base);
+        .updatePolicyWithMessage(current.leaveType, base);
     if (!mounted) return;
     setState(() => _saving = false);
-    if (result == null) {
+    if (result.error == null) {
+      // Web: the server's own message (incl. "Removed N unused balance(s)…").
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Leave policy updated.'),
+        content: Text(result.message),
         backgroundColor: AppColors.success,
       ));
     } else {
-      setState(() => _saveError = result);
+      setState(() => _saveError = result.error);
     }
   }
 

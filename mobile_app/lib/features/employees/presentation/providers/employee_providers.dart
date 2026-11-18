@@ -1,3 +1,4 @@
+import '../../../settings/data/models/onboarding_field_config_model.dart' show DocumentTypeConfigModel;
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +19,16 @@ import '../../data/models/promotion_record_model.dart';
 
 final employeesDataSourceProvider = Provider<EmployeesRemoteDataSource>((ref) {
   return EmployeesRemoteDataSource(ref.watch(dioProvider));
+});
+
+/// Settings → Document Types, for the profile's Documents slots. A failed
+/// load falls back to web's built-in list (empty here → built-in), as web.
+final employeeDocumentTypesProvider = FutureProvider.autoDispose<List<DocumentTypeConfigModel>>((ref) async {
+  try {
+    return await ref.watch(employeesDataSourceProvider).fetchDocumentTypes();
+  } catch (_) {
+    return const [];
+  }
 });
 
 // ── Filters (search / status / department) ─────────────────────────────────────

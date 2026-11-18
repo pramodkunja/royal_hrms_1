@@ -50,6 +50,20 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Training PowerPoint / Word files (Task 90 batch 3, HO-47): opened in
+             another app through this provider only. It exposes nothing but
+             the app-private cache folder profile_docs/ (cleared at app start,
+             before each view and at sign-out), is not exported, and grants a
+             temporary read-only permission per file. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.trainingfiles"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/training_file_paths"/>
+        </provider>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -70,6 +84,16 @@
              speech recognition service (package visibility). -->
         <intent>
             <action android:name="android.speech.RecognitionService"/>
+        </intent>
+        <!-- Android 11+ package visibility: which apps can open a training
+             PowerPoint / Word file (HO-47). -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:mimeType="application/vnd.openxmlformats-officedocument.presentationml.presentation"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document"/>
         </intent>
     </queries>
 </manifest>

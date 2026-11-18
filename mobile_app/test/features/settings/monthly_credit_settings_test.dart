@@ -248,7 +248,7 @@ void main() {
       expect(body['monthly_carry_forward'], true);
       expect(body['annual_days'], 12.0); // the rest of the policy goes with it, unchanged
       expect(body.containsKey('monthly_rules_from'), isFalse); // server-set only
-      expect(find.text('Leave policy updated.'), findsOneWidget);
+      expect(find.text('Policy updated.'), findsOneWidget); // the server's message, as web (Task 93)
       await showSection(tester);
       expect(rulesFromText(tester), endsWith('Current rules apply from 1 Dec 2026.')); // from the saved response
     });
@@ -278,7 +278,7 @@ void main() {
       server.refuseNext = (status: 403, message: 'Permission denied.');
       await save(tester);
       expect(find.text('Permission denied.'), findsOneWidget);
-      expect(find.text('Leave policy updated.'), findsNothing);
+      expect(find.text('Policy updated.'), findsNothing);
       await showSection(tester);
       expect(selected(tester, 'monthly'), isTrue);
       expect(find.byKey(const Key('monthly-carry-forward')), findsOneWidget);

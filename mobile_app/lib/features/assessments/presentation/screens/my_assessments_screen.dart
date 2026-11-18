@@ -29,9 +29,7 @@ class MyAssessmentsScreen extends ConsumerWidget {
       body: RefreshIndicator(
         color: AppColors.primary,
         // A failed refresh is shown by the screen itself (error state).
-        onRefresh: () => ref
-            .refresh(myAssessmentsProvider.future)
-            .then((_) {}, onError: (_) {}),
+        onRefresh: () => ref.refresh(myAssessmentsProvider.future).then((_) {}, onError: (_) {}),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.zero,
@@ -41,13 +39,11 @@ class MyAssessmentsScreen extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('My Assessments',
-                      style: AppTextStyles.h4.copyWith(color: Colors.white)),
+                  Text('My Assessments', style: AppTextStyles.h4.copyWith(color: Colors.white)),
                   const SizedBox(height: 2),
                   Text(
                     'Your assigned assessments and their completion status.',
-                    style: AppTextStyles.caption
-                        .copyWith(color: Colors.white.withValues(alpha: 0.85)),
+                    style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.85)),
                   ),
                 ],
               ),
@@ -67,8 +63,7 @@ class MyAssessmentsScreen extends ConsumerWidget {
                   ? const AppEmptyState(
                       icon: Icons.assignment_turned_in_outlined,
                       title: 'No assessments assigned',
-                      message:
-                          'You have no assessments assigned at the moment. Check back later.',
+                      message: 'You have no assessments assigned at the moment. Check back later.',
                     )
                   : _MyAssessmentsBody(data: data),
             ),
@@ -93,31 +88,20 @@ class _MyAssessmentsBody extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(children: [
-            _Stat(
-                label: 'Total',
-                value: data.assignments.length,
-                color: AppColors.primary),
+            _Stat(label: 'Total', value: data.assignments.length, color: AppColors.primary),
             const SizedBox(width: 10),
-            _Stat(
-                label: 'Pending',
-                value: pending.length,
-                color: AppColors.warning),
+            _Stat(label: 'Pending', value: pending.length, color: AppColors.warning),
             const SizedBox(width: 10),
-            _Stat(
-                label: 'Completed',
-                value: completed.length,
-                color: AppColors.success),
+            _Stat(label: 'Completed', value: completed.length, color: AppColors.success),
           ]),
           if (pending.isNotEmpty) ...[
             const SizedBox(height: 20),
-            _SectionTitle('Pending (${pending.length})', Icons.schedule,
-                AppColors.warning),
+            _SectionTitle('Pending (${pending.length})', Icons.schedule, AppColors.warning),
             for (final a in pending) _cardFor(context, a),
           ],
           if (completed.isNotEmpty) ...[
             const SizedBox(height: 20),
-            _SectionTitle('Completed (${completed.length})',
-                Icons.check_circle_outline, AppColors.success),
+            _SectionTitle('Completed (${completed.length})', Icons.check_circle_outline, AppColors.success),
             for (final a in completed) _cardFor(context, a),
           ],
         ],
@@ -150,11 +134,8 @@ class _Stat extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.border),
           ),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('$value',
-                style: AppTextStyles.h3
-                    .copyWith(color: color, fontWeight: FontWeight.w800)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('$value', style: AppTextStyles.h3.copyWith(color: color, fontWeight: FontWeight.w800)),
             const SizedBox(height: 2),
             Text(label, style: AppTextStyles.caption),
           ]),
@@ -175,10 +156,8 @@ class _SectionTitle extends StatelessWidget {
           Icon(icon, size: 15, color: color),
           const SizedBox(width: 6),
           Text(text.toUpperCase(),
-              style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.6)),
+              style: AppTextStyles.labelSmall
+                  .copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600, letterSpacing: 0.6)),
         ]),
       );
 }

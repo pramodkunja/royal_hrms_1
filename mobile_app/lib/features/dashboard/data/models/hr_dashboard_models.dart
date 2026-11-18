@@ -27,14 +27,10 @@ class HrKpis {
       totalWorkforce: (json['total_workforce'] as num? ?? 0).toInt(),
       pendingActions: (json['pending_actions'] as num? ?? 0).toInt(),
       activeInterviews: (json['active_interviews'] as num? ?? 0).toInt(),
-      employeesOnProbation:
-          (json['employees_on_probation'] as num? ?? 0).toInt(),
+      employeesOnProbation: (json['employees_on_probation'] as num? ?? 0).toInt(),
       clockedIn: json['clocked_in'] as bool? ?? false,
-      todayAttendance: today is Map<String, dynamic>
-          ? TodayAttendanceSnapshot.fromJson(today)
-          : null,
-      attendanceCorrectionPending:
-          (json['attendance_correction_pending'] as num? ?? 0).toInt(),
+      todayAttendance: today is Map<String, dynamic> ? TodayAttendanceSnapshot.fromJson(today) : null,
+      attendanceCorrectionPending: (json['attendance_correction_pending'] as num? ?? 0).toInt(),
     );
   }
 }
@@ -100,8 +96,7 @@ class HrActionQueue {
       totalPending: (json['total_pending'] as num? ?? 0).toInt(),
       candidateReviews: (json['candidate_reviews'] as num? ?? 0).toInt(),
       leaveApprovals: (json['leave_approvals'] as num? ?? 0).toInt(),
-      attendanceCorrections:
-          (json['attendance_corrections'] as num? ?? 0).toInt(),
+      attendanceCorrections: (json['attendance_corrections'] as num? ?? 0).toInt(),
       expenseClaims: (json['expense_claims'] as num? ?? 0).toInt(),
       onboardingReviews: (json['onboarding_reviews'] as num? ?? 0).toInt(),
       separationRequests: (json['separation_requests'] as num? ?? 0).toInt(),
@@ -218,10 +213,7 @@ class HrLifecycleGroup {
     final list = json['employees'] as List<dynamic>? ?? [];
     return HrLifecycleGroup(
       count: (json['count'] as num? ?? 0).toInt(),
-      employees: list
-          .whereType<Map<String, dynamic>>()
-          .map(HrLifecycleEmployee.fromJson)
-          .toList(),
+      employees: list.whereType<Map<String, dynamic>>().map(HrLifecycleEmployee.fromJson).toList(),
     );
   }
 }

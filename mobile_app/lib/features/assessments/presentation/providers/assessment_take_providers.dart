@@ -7,8 +7,7 @@ import 'assessments_providers.dart';
 import 'my_assessments_providers.dart';
 
 /// The current time. Overridable in tests.
-final assessmentClockProvider =
-    Provider<DateTime Function()>((ref) => DateTime.now);
+final assessmentClockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
 
 /// Server actions while taking an assessment. Each one throws on failure
 /// (callers show [friendlyAssessmentError]) and refreshes the employee's
@@ -17,8 +16,7 @@ class AssessmentActions {
   AssessmentActions(this._ref);
   final Ref _ref;
 
-  Future<AssessmentRespondResult> respond(String assignmentId, String itemId,
-      {String? selectedOption}) async {
+  Future<AssessmentRespondResult> respond(String assignmentId, String itemId, {String? selectedOption}) async {
     final result = await _ref
         .read(assessmentsDataSourceProvider)
         .respondToItem(assignmentId, itemId, selectedOption: selectedOption);
@@ -27,23 +25,18 @@ class AssessmentActions {
   }
 
   Future<AssessmentCompleteResult> complete(String assignmentId) async {
-    final result = await _ref
-        .read(assessmentsDataSourceProvider)
-        .completeAssessment(assignmentId);
+    final result = await _ref.read(assessmentsDataSourceProvider).completeAssessment(assignmentId);
     _ref.invalidate(myAssessmentsProvider);
     return result;
   }
 
   Future<void> retry(String assignmentId) async {
-    await _ref
-        .read(assessmentsDataSourceProvider)
-        .retryAssessment(assignmentId);
+    await _ref.read(assessmentsDataSourceProvider).retryAssessment(assignmentId);
     _ref.invalidate(myAssessmentsProvider);
   }
 }
 
-final assessmentActionsProvider =
-    Provider<AssessmentActions>((ref) => AssessmentActions(ref));
+final assessmentActionsProvider = Provider<AssessmentActions>((ref) => AssessmentActions(ref));
 
 /// Lifts the onboarding assessment gate once — and only once — the server
 /// confirms the employee has no assessment left: either /employees/me/
@@ -59,12 +52,10 @@ Future<bool> syncAssessmentGate(Ref ref, {MyAssessments? list}) async {
   if (user == null) return false;
   if (user.assessmentStatus != 'pending') return true;
 
-  var confirmed =
-      list != null && list.allComplete && list.assignments.isNotEmpty;
+  var confirmed = list != null && list.allComplete && list.assignments.isNotEmpty;
   if (!confirmed) {
     try {
-      final profile =
-          await ref.read(profileDataSourceProvider).fetchMyProfile();
+      final profile = await ref.read(profileDataSourceProvider).fetchMyProfile();
       confirmed = profile.assessmentStatus == 'complete';
     } catch (_) {
       confirmed = false; // keep the gate; the screen offers Retry and Log out
@@ -75,7 +66,6 @@ Future<bool> syncAssessmentGate(Ref ref, {MyAssessments? list}) async {
 }
 
 /// [syncAssessmentGate] for widgets.
-final assessmentGateSyncProvider =
-    Provider<Future<bool> Function({MyAssessments? list})>(
+final assessmentGateSyncProvider = Provider<Future<bool> Function({MyAssessments? list})>(
   (ref) => ({MyAssessments? list}) => syncAssessmentGate(ref, list: list),
 );

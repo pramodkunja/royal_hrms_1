@@ -33,8 +33,7 @@ class _DocumentFilterBarState extends ConsumerState<DocumentFilterBar> {
           child: TextField(
             controller: _searchCtrl,
             style: AppTextStyles.bodySmall,
-            onChanged: (val) =>
-                ref.read(documentSearchProvider.notifier).state = val,
+            onChanged: (val) => ref.read(documentSearchProvider.notifier).state = val,
             decoration: heroSearchFieldDecoration(
               hintText: 'Search documents...',
               showClear: _searchCtrl.text.isNotEmpty,
@@ -54,25 +53,13 @@ class _DocumentFilterBarState extends ConsumerState<DocumentFilterBar> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _FilterChip(
-                    label: 'All Documents',
-                    value: 'all',
-                    active: activeFilter == 'all'),
+                _FilterChip(label: 'All Documents', value: 'all', active: activeFilter == 'all'),
                 const SizedBox(width: 8),
-                _FilterChip(
-                    label: 'Policies',
-                    value: 'policy',
-                    active: activeFilter == 'policy'),
+                _FilterChip(label: 'Policies', value: 'policy', active: activeFilter == 'policy'),
                 const SizedBox(width: 8),
-                _FilterChip(
-                    label: 'Forms',
-                    value: 'form',
-                    active: activeFilter == 'form'),
+                _FilterChip(label: 'Forms', value: 'form', active: activeFilter == 'form'),
                 const SizedBox(width: 8),
-                _FilterChip(
-                    label: 'Templates',
-                    value: 'template',
-                    active: activeFilter == 'template'),
+                _FilterChip(label: 'Templates', value: 'template', active: activeFilter == 'template'),
               ],
             ),
           ),
@@ -86,8 +73,7 @@ class _FilterChip extends ConsumerWidget {
   final String label;
   final String value;
   final bool active;
-  const _FilterChip(
-      {required this.label, required this.value, required this.active});
+  const _FilterChip({required this.label, required this.value, required this.active});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -95,8 +81,7 @@ class _FilterChip extends ConsumerWidget {
       onTap: () => ref.read(documentFilterProvider.notifier).state = value,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           color: active ? AppColors.primary : AppColors.surface,
           borderRadius: BorderRadius.circular(20),

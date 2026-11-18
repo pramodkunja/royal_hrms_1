@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../auth/domain/entities/user_entity.dart';
@@ -10,6 +11,7 @@ import '../../../../shared/widgets/app_button.dart';
 import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
 import 'apply_leave_type_selector.dart';
+import 'leave_document_rule.dart';
 import 'leave_number_format.dart';
 import 'leave_preview_panel.dart';
 
@@ -49,6 +51,15 @@ LeaveTypeEntity _resolveLeaveEntity(
     description: '',
     policy: '',
   );
+}
+
+/// The loaded policy for [code], or null when the policies haven't loaded or
+/// the type has no policy row (web `policyMap[form.leave_type]`).
+LeaveTypeEntity? _loadedPolicy(List<LeaveTypeEntity> entities, String code) {
+  for (final e in entities) {
+    if (e.code.toLowerCase() == code.toLowerCase()) return e;
+  }
+  return null;
 }
 
 /// Formats a day count trimming a trailing `.0` (e.g. `2` not `2.0`, but
@@ -228,7 +239,8 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
     final file = result.files.first;
     if (file.path == null) return;
     if (file.size > _kMaxDocBytes) {
-      setState(() => _docError = 'File exceeds 5 MB.');
+      // Backend LeaveRequestCreateSerializer.validate_document's own message.
+      setState(() => _docError = 'Document must be under 5 MB.');
       return;
     }
     setState(() {
@@ -360,11 +372,11 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
   ) async {
     if (!_formKey.currentState!.validate()) return;
     if (_fromDate == null) {
-      setState(() => _error = 'Please select a start date.');
+      setState(() => _error = 'Start date is required.');
       return;
     }
     if (!_isHalfDay && _toDate == null) {
-      setState(() => _error = 'Please select an end date.');
+      setState(() => _error = 'End date is required.');
       return;
     }
     final lt = typeOptions.firstWhere((t) => t.key == _selectedType,
@@ -403,9 +415,12 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
           'Exceeds balance by ${_fmtDays(balanceCheck!.excess)}d. Only ${_fmtDays(balanceCheck.available)}d available.');
       return;
     }
-    if (lt.docRequired && _pickedDoc == null) {
-      setState(() =>
-          _docError = 'Supporting document is required for this leave type.');
+    // HO-40: web documentRule — attachment always; medical certificate from
+    // N days (server preview's actual_leave_days); else optional.
+    final policy = _loadedPolicy(typeEntities, lt.code);
+    final doc = leaveDocumentRule(policy, days, fallback: leaveDocFallback(lt.code, policy));
+    if (doc.required && _pickedDoc == null) {
+      setState(() => _docError = leaveDocumentRequiredMessage(doc.hint));
       return;
     }
 
@@ -600,20 +615,21 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
     final balancesAsync = ref.watch(myLeaveBalancesProvider);
     final authAsync = ref.watch(authStateProvider);
 
-    // auto-select first type once data loads
-    ref.listen(leaveTypesProvider, (_, next) {
-      if (_selectedType.isEmpty && next.hasValue && next.value!.isNotEmpty) {
-        setState(() => _selectedType = next.value!.first.code);
-      }
-    });
-
     final typeEntities = typesAsync.valueOrNull ?? [];
     final balances = balancesAsync.valueOrNull ?? [];
-    final typeOptions =
-        LeaveTypeOption.listFromEntities(typeEntities, balances);
+    // HO-39: web buildApplicableLeaveTypes — only the types this employee
+    // may apply for (active + eligible_for_me), empty until loaded.
+    final typeOptions = LeaveTypeOption.applicableFromEntities(
+      typeEntities,
+      balances,
+      policiesLoaded: typesAsync.hasValue,
+    );
 
-    // ensure _selectedType valid when types reload
-    if (_selectedType.isEmpty && typeOptions.isNotEmpty) {
+    // Keep the selection on a type the employee may actually apply for
+    // (first applicable when none / the selected one is no longer offered).
+    // Web keeps its hard-coded default "casual" even when it is filtered
+    // out, which the server then refuses; mobile never submits a hidden type.
+    if (typeOptions.isNotEmpty && !typeOptions.any((t) => t.key == _selectedType)) {
       _selectedType = typeOptions.first.key;
     }
 
@@ -643,6 +659,12 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
     final preview = previewAsync.valueOrNull;
 
     final days = _effectiveDays(localDays, preview);
+
+    // HO-40: web documentRule for the selected type and day count.
+    final selectedPolicy = lt == null ? null : _loadedPolicy(typeEntities, lt.code);
+    final doc = lt == null
+        ? (required: false, hint: '')
+        : leaveDocumentRule(selectedPolicy, days, fallback: leaveDocFallback(lt.code, selectedPolicy));
 
     final localBalanceCheck = lt == null
         ? null
@@ -685,7 +707,7 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
 
             // Leave type selector
             _Card(
-              child: typesAsync.isLoading
+              child: typesAsync.isLoading && !typesAsync.hasValue
                   ? Center(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 24),
@@ -693,7 +715,20 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
                             CircularProgressIndicator(color: AppColors.primary),
                       ),
                     )
-                  : LeaveTypeSelector(
+                  : typesAsync.hasError && !typesAsync.hasValue
+                      ? _LeaveTypesError(
+                          key: const Key('apply-leave-types-error'),
+                          message: userFriendlyMessage(typesAsync.error!),
+                          onRetry: () => ref.invalidate(leaveTypesProvider),
+                        )
+                      : typeOptions.isEmpty
+                          ? Padding(
+                              key: const Key('apply-leave-types-empty'),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Text('No leave types are available to you.',
+                                  style: AppTextStyles.bodySecondary),
+                            )
+                          : LeaveTypeSelector(
                       types: typeOptions,
                       selectedKey: _selectedType,
                       onSelect: (k) => setState(() {
@@ -844,10 +879,10 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
                     ),
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) {
-                        return 'Reason is required.';
+                        return 'Please provide a reason.';
                       }
                       if (v.trim().length < 10) {
-                        return 'Minimum 10 characters.';
+                        return 'Reason must be at least 10 characters.';
                       }
                       return null;
                     },
@@ -858,17 +893,23 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
                       const FieldLabel(text: 'Supporting Document'),
                       const SizedBox(width: 4),
                       Text(
-                        (lt?.docRequired ?? false)
-                            ? '(Required)'
-                            : '(Optional)',
+                        doc.required ? '(Required)' : '(Optional)',
+                        key: const Key('apply-leave-doc-required'),
                         style: AppTextStyles.caption.copyWith(
                             fontSize: 10,
-                            color: (lt?.docRequired ?? false)
+                            color: doc.required
                                 ? AppColors.error
                                 : AppColors.textHint),
                       ),
                     ],
                   ),
+                  // Web: the medical-certificate rule's hint under the label.
+                  if (doc.hint.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(doc.hint,
+                        key: const Key('apply-leave-doc-hint'),
+                        style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+                  ],
                   const SizedBox(height: 6),
                   DocumentFilePicker(
                     picked: _pickedDoc,
@@ -965,7 +1006,7 @@ class _ApplyLeaveTabState extends ConsumerState<ApplyLeaveTab> {
               employeeName: user?.fullName ?? '',
             ),
             const SizedBox(height: 10),
-            _LeaveBalanceSideCard(lt: lt, balanceCheck: balanceCheck),
+            _LeaveBalanceSideCard(lt: lt, balanceCheck: balanceCheck, loading: !typesAsync.hasValue && !typesAsync.hasError),
             const SizedBox(height: 10),
             const _ApprovalChainSideCard(),
             const SizedBox(height: 10),
@@ -1764,7 +1805,11 @@ class _RequestSummarySideCard extends StatelessWidget {
 class _LeaveBalanceSideCard extends StatelessWidget {
   final LeaveTypeOption? lt;
   final _BalanceCheck? balanceCheck;
-  const _LeaveBalanceSideCard({required this.lt, this.balanceCheck});
+
+  /// The leave types are still loading (spinner); otherwise no type can be
+  /// selected (failed / none offered) and the card shows a dash.
+  final bool loading;
+  const _LeaveBalanceSideCard({required this.lt, this.balanceCheck, this.loading = true});
 
   @override
   Widget build(BuildContext context) {
@@ -1775,7 +1820,9 @@ class _LeaveBalanceSideCard extends StatelessWidget {
         child: SizedBox(
           height: 40,
           child: Center(
-              child: CircularProgressIndicator(color: AppColors.primary)),
+              child: loading
+                  ? CircularProgressIndicator(color: AppColors.primary)
+                  : Text('—', style: AppTextStyles.bodySecondary)),
         ),
       );
     }
@@ -2094,4 +2141,26 @@ class _MyLeaveRequestsSideCard extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// The leave types could not be loaded (web shows an empty picker; mobile
+/// says why and offers Retry).
+class _LeaveTypesError extends StatelessWidget {
+  const _LeaveTypesError({super.key, required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Leave types could not be loaded. $message',
+                style: AppTextStyles.bodySecondary.copyWith(color: AppColors.error)),
+            const SizedBox(height: 6),
+            TextButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh, size: 16), label: const Text('Retry')),
+          ],
+        ),
+      );
 }

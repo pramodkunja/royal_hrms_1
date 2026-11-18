@@ -18,6 +18,7 @@ import '../../domain/employee_profile_sections.dart';
 import '../providers/employee_providers.dart';
 import '../widgets/add_employee_sheet.dart';
 import '../widgets/approval_override_sheet.dart';
+import '../../../contacts/presentation/screens/contact_matrix_screen.dart' show contactLauncherProvider;
 import '../widgets/custom_fields_block.dart';
 import '../widgets/employee_assets_tab.dart';
 import '../widgets/employee_salary_payroll_tabs.dart' show EmployeePayrollTab, EmployeeSalaryTab;
@@ -60,8 +61,35 @@ class EmployeeProfileScreen extends ConsumerWidget {
           title: Text('Employee Profile', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
         ),
         body: detailAsync.isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : const Center(child: Text('Employee not found')),
+            ? Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 12),
+                  Text('Loading employee…', style: AppTextStyles.bodySecondary),
+                ]),
+              )
+            // Web employees/[id]/page.tsx:381-396.
+            : Center(
+                child: Padding(
+                  key: const Key('employee-not-found'),
+                  padding: const EdgeInsets.all(24),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.person_search_outlined, size: 48, color: AppColors.textHint),
+                    const SizedBox(height: 12),
+                    Text('Employee not found', style: AppTextStyles.h4.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    Text('No employee exists with code $employeeId.',
+                        textAlign: TextAlign.center, style: AppTextStyles.bodySecondary),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      key: const Key('employee-not-found-back'),
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.arrow_back, size: 16),
+                      label: const Text('Back to Employees'),
+                    ),
+                  ]),
+                ),
+              ),
       );
     }
 
@@ -103,8 +131,10 @@ class _ProfileShellState extends ConsumerState<_ProfileShell> with TickerProvide
   bool _toggling = false;
   bool _confirmingStatus = false;
 
-  List<String> _keysFor(UserEntity? user) =>
-      [for (final k in _kAllTabs) if (userHasModule(user, _kTabModules[k])) k];
+  List<String> _keysFor(UserEntity? user) => [
+        for (final k in _kAllTabs)
+          if (userHasModule(user, _kTabModules[k])) k
+      ];
 
   @override
   void initState() {
@@ -188,8 +218,9 @@ class _ProfileShellState extends ConsumerState<_ProfileShell> with TickerProvide
       ref.invalidate(employeeListProvider);
       ref.invalidate(employeeStatsProvider);
       if (mounted) {
+        // Web employees/[id]/page.tsx:635.
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('Employee updated successfully.'),
+          content: const Text('Changes saved successfully.'),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
         ));
@@ -666,9 +697,12 @@ class _ProfileCard extends StatelessWidget {
                 VerticalDivider(width: 1, thickness: 1, color: AppColors.border),
                 Expanded(
                   child: _InfoCell(
+                    key: const Key('employee-header-phone'),
                     label: 'PHONE',
                     value: emp.phone.isEmpty ? '—' : emp.phone,
                     icon: Icons.phone_outlined,
+                    // Web ProfileHeader.tsx:145: a tel: link.
+                    onTap: emp.phone.isEmpty ? null : () => _callPhone(context, emp.phone),
                   ),
                 ),
               ],
@@ -736,16 +770,23 @@ class _InfoCell extends StatelessWidget {
   final String label;
   final String value;
   final IconData icon;
+  final VoidCallback? onTap;
 
   const _InfoCell({
     super.key,
     required this.label,
     required this.value,
     required this.icon,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final cell = _buildCell();
+    return onTap == null ? cell : InkWell(onTap: onTap, child: cell);
+  }
+
+  Widget _buildCell() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
       child: Column(
@@ -772,7 +813,8 @@ class _InfoCell extends StatelessWidget {
             style: AppTextStyles.label.copyWith(
               fontWeight: FontWeight.w700,
               fontSize: 12,
-              color: AppColors.textPrimary,
+              color: onTap == null ? AppColors.textPrimary : AppColors.primary,
+              decoration: onTap == null ? null : TextDecoration.underline,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -1002,78 +1044,91 @@ class _EmployeeCustomFields extends ConsumerWidget {
 
 // ── Personal section ──────────────────────────────────────────────────────────
 
-class _PersonalContent extends StatelessWidget {
+/// Web PROFILE_SECTIONS "personal" (employees/_data.ts:144-176), in web's
+/// order and with web's labels; read-only identity / approver fields are
+/// shown locked. Personal-details fields hidden in Settings → Onboarding
+/// Fields (step 0) are left out, as web applyFieldConfig.
+class _PersonalContent extends ConsumerWidget {
   final EmployeeModel emp;
   final bool canEdit;
   const _PersonalContent({required this.emp, this.canEdit = false});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final config = ref.watch(profileFieldConfigProvider).valueOrNull;
+    String assigned(String? v) => v == null || v.isEmpty ? 'Not assigned' : v;
+    final pairs = <({String? key, String label, String value, bool locked, Key? id})>[
+      (key: null, label: 'Employee ID', value: _s(emp.employeeId), locked: true, id: null),
+      (key: null, label: 'First Name', value: _s(emp.firstName), locked: true, id: const Key('personal-first-name')),
+      (key: null, label: 'Last Name', value: _s(emp.lastName), locked: true, id: const Key('personal-last-name')),
+      (key: null, label: 'Login Email', value: _s(emp.email), locked: false, id: const Key('personal-login-email')),
+      (key: null, label: 'Phone', value: _s(emp.phone), locked: false, id: null),
+      (
+        key: null,
+        label: 'Date of Joining',
+        value: _fmtDate(emp.dateOfJoining),
+        locked: false,
+        id: const Key('personal-doj')
+      ),
+      (key: null, label: 'Department', value: _s(emp.department), locked: false, id: null),
+      (key: null, label: 'Designation', value: _s(emp.designation), locked: false, id: null),
+      (key: null, label: 'Role', value: _s(emp.roleDisplay), locked: false, id: null),
+      (key: null, label: 'Branch', value: _s(emp.branch), locked: false, id: const Key('personal-branch')),
+      (key: null, label: 'Reporting Manager', value: assigned(emp.reportingManagerName), locked: true, id: null),
+      (
+        key: null,
+        label: 'Reporting Approver',
+        value: assigned(emp.reportingApproverName),
+        locked: true,
+        id: const Key('personal-reporting-approver')
+      ),
+      (key: null, label: 'Branch HR', value: assigned(emp.hrName), locked: true, id: const Key('personal-branch-hr')),
+      // Read-only; set on Settings → Notice Period.
+      (
+        key: null,
+        label: 'Notice Period',
+        value: formatNoticePeriod(emp.noticePeriodDays),
+        locked: true,
+        id: const Key('employee-notice-period')
+      ),
+      (key: 'date_of_birth', label: 'Date of Birth', value: _fmtDate(emp.dateOfBirth), locked: false, id: null),
+      (key: 'gender', label: 'Gender', value: _s(emp.gender), locked: false, id: null),
+      (key: 'marital_status', label: 'Marital Status', value: _s(emp.maritalStatus), locked: false, id: null),
+      (key: 'father_name', label: "Father's Name", value: _s(emp.fatherName), locked: false, id: null),
+      (key: 'blood_group', label: 'Blood Group', value: _s(emp.bloodGroup), locked: false, id: null),
+    ].where((f) => f.key == null || isPersonalFieldVisible(f.key!, config)).toList();
+
     return Column(
+      key: const Key('employee-personal-fields'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _FieldRow(
-          label1: 'Employee ID',
-          value1: _s(emp.employeeId),
-          locked1: true,
-          label2: 'Role',
-          value2: _s(emp.roleDisplay),
-        ),
-        _FieldRow(
-          label1: 'Department',
-          value1: _s(emp.department),
-          label2: 'Designation',
-          value2: _s(emp.designation),
-        ),
-        _FieldRow(
-          label1: 'Date of Birth',
-          value1: _fmtDate(emp.dateOfBirth),
-          label2: 'Gender',
-          value2: _s(emp.gender),
-        ),
-        _FieldRow(
-          label1: 'Marital Status',
-          value1: _s(emp.maritalStatus),
-          label2: "Father's Name",
-          value2: _s(emp.fatherName),
-        ),
-        _FieldRow(
-          label1: 'Blood Group',
-          value1: _s(emp.bloodGroup),
-          label2: 'Phone',
-          value2: _s(emp.phone),
-          locked2: true,
-        ),
-        _FieldRow(
-          label1: 'Reporting Manager',
-          value1: emp.reportingManagerName == null || emp.reportingManagerName!.isEmpty
-              ? 'Not assigned'
-              : emp.reportingManagerName!,
-          locked1: true,
-          label2: 'HR Contact',
-          value2: emp.hrName == null || emp.hrName!.isEmpty ? 'Not assigned' : emp.hrName!,
-          locked2: true,
-        ),
-        // Web Personal card: "Notice Period" (read-only; set on Settings →
-        // Notice Period), "Not assigned" / "1 day" / "N days".
-        _DisplayField(
-          key: const Key('employee-notice-period'),
-          label: 'Notice Period',
-          value: formatNoticePeriod(emp.noticePeriodDays),
-          locked: true,
-        ),
-        _DisplayField(label: 'Work Email', value: _s(emp.email), locked: true),
-        _DisplayField(
-          label: 'Current Address',
-          value: _s(emp.currentAddress),
-          maxLines: 3,
-        ),
-        _DisplayField(
-          label: 'Permanent Address',
-          value: _s(emp.permanentAddress),
-          maxLines: 3,
-          padBottom: false,
-        ),
+        for (var i = 0; i < pairs.length; i += 2)
+          if (i + 1 < pairs.length)
+            _FieldRow(
+              label1: pairs[i].label,
+              value1: pairs[i].value,
+              locked1: pairs[i].locked,
+              key1: pairs[i].id,
+              label2: pairs[i + 1].label,
+              value2: pairs[i + 1].value,
+              locked2: pairs[i + 1].locked,
+              key2: pairs[i + 1].id,
+            )
+          else
+            _DisplayField(key: pairs[i].id, label: pairs[i].label, value: pairs[i].value, locked: pairs[i].locked),
+        if (isPersonalFieldVisible('current_address', config))
+          _DisplayField(
+            label: 'Current Address',
+            value: _s(emp.currentAddress),
+            maxLines: 3,
+          ),
+        if (isPersonalFieldVisible('permanent_address', config))
+          _DisplayField(
+            label: 'Permanent Address',
+            value: _s(emp.permanentAddress),
+            maxLines: 3,
+            padBottom: false,
+          ),
         _EmployeeCustomFields(emp: emp, step: 0, canEdit: canEdit),
       ],
     );
@@ -1174,18 +1229,13 @@ class _ProfileSectionView extends ConsumerWidget {
 }
 
 // ── Documents section ─────────────────────────────────────────────────────────
-// Real documents only — only pan_card, aadhaar_card, degree_certificate,
-// experience_letter, other exist server-side, so there is no fixed slot list
-// to show as "Not uploaded" placeholders; just render whatever came back.
-
-// Matches EmployeeDocument.TYPE_CHOICES server-side.
-const List<Map<String, String>> _kEmployeeDocTypes = [
-  {'value': 'pan_card', 'label': 'PAN Card'},
-  {'value': 'aadhaar_card', 'label': 'Aadhaar Card'},
-  {'value': 'degree_certificate', 'label': 'Degree Certificate'},
-  {'value': 'experience_letter', 'label': 'Experience Letter'},
-  {'value': 'other', 'label': 'Other'},
-];
+// Web ProfileForm DocsCards (ProfileForm.tsx:411-519) + page.tsx
+// buildDocEntries: one card per configured visible document type (Settings →
+// Document Types, in order; web's built-in list until it loads), "Not
+// uploaded" or "{date} · {size}", Upload / Replace and Preview per card. The
+// server accepts only configured types ("Invalid document type."), so there
+// is no free type picker. Uploads of a type no card shows are listed below
+// the cards (web hides them — deliberate difference).
 
 class _DocumentsContent extends ConsumerStatefulWidget {
   final EmployeeModel emp;
@@ -1196,16 +1246,12 @@ class _DocumentsContent extends ConsumerStatefulWidget {
 }
 
 class _DocumentsContentState extends ConsumerState<_DocumentsContent> {
-  bool _uploading = false;
+  /// The type being uploaded (web uploadingDocType); one at a time.
+  String? _uploadingType;
+  String? _uploadError;
 
   Future<void> _pickAndUpload(String documentType) async {
-    // The top-level "Upload Document" button already disabled itself via
-    // `_uploading`, but each existing document's "Replace" icon button
-    // (_DocCard.onReplace) called straight into this method with no guard
-    // of its own — a user could tap Upload, then immediately tap Replace
-    // on a different document, firing two concurrent uploads. Both entry
-    // points now share this one guard.
-    if (_uploading) return;
+    if (_uploadingType != null) return;
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
@@ -1214,12 +1260,17 @@ class _DocumentsContentState extends ConsumerState<_DocumentsContent> {
     if (result == null || result.files.isEmpty) return;
     final file = result.files.first;
     if (file.bytes == null) return;
+    // The server's own limit (EmployeeDocument.MAX_FILE_SIZE); checked first
+    // so a large file isn't sent only to be refused.
     if (file.size > 5 * 1024 * 1024) {
-      _showMessage('File must be under 5 MB.', isError: true);
+      setState(() => _uploadError = 'File must be under 5 MB.');
       return;
     }
 
-    setState(() => _uploading = true);
+    setState(() {
+      _uploadingType = documentType;
+      _uploadError = null;
+    });
     final err = await ref.read(employeesProvider.notifier).uploadDocument(
           widget.emp.employeeId,
           documentType: documentType,
@@ -1227,107 +1278,126 @@ class _DocumentsContentState extends ConsumerState<_DocumentsContent> {
           filename: file.name,
         );
     if (!mounted) return;
-    setState(() => _uploading = false);
-    if (err != null) {
-      _showMessage(err, isError: true);
-    } else {
-      _showMessage('Document uploaded.');
+    setState(() {
+      _uploadingType = null;
+      // Web: the server's message, else "Failed to upload document. Please try again."
+      _uploadError = err == null ? null : (err.trim().isEmpty ? 'Failed to upload document. Please try again.' : err);
+    });
+    if (err == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Document uploaded.'),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+      ));
     }
-  }
-
-  void _showMessage(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message),
-      backgroundColor: isError ? AppColors.error : AppColors.success,
-      behavior: SnackBarBehavior.floating,
-    ));
-  }
-
-  Future<void> _showDocTypePicker() async {
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text('Select Document Type', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
-            ),
-            ..._kEmployeeDocTypes.map((t) => ListTile(
-                  title: Text(t['label']!, style: AppTextStyles.body),
-                  onTap: () => Navigator.pop(context, t['value']),
-                )),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-    if (selected != null) await _pickAndUpload(selected);
   }
 
   @override
   Widget build(BuildContext context) {
     final emp = widget.emp;
+    final config = ref.watch(employeeDocumentTypesProvider).valueOrNull ?? const [];
+    final slots = buildEmployeeDocSlots(config, emp.documents);
+    final extra = unslottedEmployeeDocs(slots, emp.documents);
+    final busy = _uploadingType != null;
+
     return Column(
+      key: const Key('employee-doc-slots'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: OutlinedButton.icon(
-            onPressed: _uploading ? null : _showDocTypePicker,
-            icon: _uploading
-                ? SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-                  )
-                : Icon(Icons.upload_outlined, size: 16, color: AppColors.primary),
-            label: Text(_uploading ? 'Uploading…' : 'Upload Document'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primary,
-              side: BorderSide(color: AppColors.border),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-          ),
+        Text.rich(
+          TextSpan(children: [
+            const TextSpan(text: 'All documents uploaded by the employee or '),
+            TextSpan(text: 'HR', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.primary)),
+          ]),
+          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
         ),
+        if (_uploadError != null) ...[
+          const SizedBox(height: 6),
+          Text(_uploadError!,
+              key: const Key('employee-doc-upload-error'),
+              style: AppTextStyles.caption.copyWith(color: AppColors.error, fontWeight: FontWeight.w500)),
+        ],
         const SizedBox(height: 14),
-        if (emp.documents.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 18),
-            child: Center(
-              child: Column(
-                children: [
-                  Icon(Icons.folder_off_outlined, size: 28, color: AppColors.textHint),
-                  const SizedBox(height: 10),
-                  Text('No documents uploaded yet.', style: AppTextStyles.bodySecondary),
-                ],
-              ),
+        for (final slot in slots)
+          if (slot.doc != null)
+            _DocCard(
+              key: ValueKey('doc-${slot.doc!.id}'),
+              employeeId: emp.employeeId,
+              doc: slot.doc!,
+              title: slot.label,
+              uploading: _uploadingType == slot.typeKey,
+              onReplace: busy ? null : () => _pickAndUpload(slot.typeKey),
+            )
+          else
+            _EmptyDocSlot(
+              key: Key('employee-doc-slot-${slot.typeKey}'),
+              label: slot.label,
+              uploading: _uploadingType == slot.typeKey,
+              onUpload: busy ? null : () => _pickAndUpload(slot.typeKey),
             ),
-          )
-        else
-          ...emp.documents.map((doc) => _DocCard(
-                key: ValueKey('doc-${doc.id}'),
-                employeeId: emp.employeeId,
-                doc: doc,
-                onReplace: _uploading ? null : () => _pickAndUpload(doc.documentType),
-              )),
+        for (final doc in extra)
+          _DocCard(
+            key: ValueKey('doc-${doc.id}'),
+            employeeId: emp.employeeId,
+            doc: doc,
+            onReplace: null,
+            showReplace: false,
+          ),
       ],
     );
   }
 }
 
-String _fmtFileSize(int bytes) {
-  if (bytes <= 0) return '';
-  const kb = 1024;
-  const mb = kb * 1024;
-  if (bytes >= mb) return '${(bytes / mb).toStringAsFixed(1)} MB';
-  if (bytes >= kb) return '${(bytes / kb).toStringAsFixed(0)} KB';
-  return '$bytes B';
+/// A configured type with nothing uploaded (web: ti-file-off, "Not
+/// uploaded", Upload, Preview disabled).
+class _EmptyDocSlot extends StatelessWidget {
+  const _EmptyDocSlot({super.key, required this.label, required this.uploading, required this.onUpload});
+  final String label;
+  final bool uploading;
+  final VoidCallback? onUpload;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(color: AppColors.backgroundLow, borderRadius: BorderRadius.circular(8)),
+          child: uploading
+              ? const Padding(padding: EdgeInsets.all(9), child: CircularProgressIndicator(strokeWidth: 2))
+              : Icon(Icons.file_present_outlined, size: 18, color: AppColors.textSecondary),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 2),
+            Text(uploading ? 'Uploading…' : 'Not uploaded', style: AppTextStyles.caption),
+          ]),
+        ),
+        IconButton(
+          icon: Icon(Icons.upload_outlined, size: 18, color: AppColors.textSecondary),
+          tooltip: 'Upload document',
+          onPressed: uploading ? null : onUpload,
+          visualDensity: VisualDensity.compact,
+        ),
+        const IconButton(
+          icon: Icon(Icons.visibility_outlined, size: 18),
+          tooltip: 'Not uploaded',
+          onPressed: null,
+          visualDensity: VisualDensity.compact,
+        ),
+      ]),
+    );
+  }
 }
 
 class _DocCard extends ConsumerStatefulWidget {
@@ -1338,7 +1408,22 @@ class _DocCard extends ConsumerStatefulWidget {
   // taps, so the user sees the same "can't act right now" feedback the
   // top-level Upload Document button already gives.
   final VoidCallback? onReplace;
-  const _DocCard({super.key, required this.employeeId, required this.doc, required this.onReplace});
+
+  /// The slot's configured name; defaults to the server's type label.
+  final String? title;
+  final bool uploading;
+  const _DocCard({
+    super.key,
+    required this.employeeId,
+    required this.doc,
+    required this.onReplace,
+    this.title,
+    this.uploading = false,
+    this.showReplace = true,
+  });
+
+  /// False for uploads outside the configured slots (no type to replace into).
+  final bool showReplace;
 
   @override
   ConsumerState<_DocCard> createState() => _DocCardState();
@@ -1387,10 +1472,14 @@ class _DocCardState extends ConsumerState<_DocCard> {
   @override
   Widget build(BuildContext context) {
     final doc = widget.doc;
-    final meta = [
-      if (doc.uploadedAt.isNotEmpty) _fmtDate(doc.uploadedAt),
-      if (doc.fileSize > 0) _fmtFileSize(doc.fileSize),
-    ].join(' · ');
+    // Web DocsCards: "{Nov 18, 2026} · {size}" / "Uploading…".
+    final meta = widget.uploading
+        ? 'Uploading…'
+        : [
+            if (doc.uploadedAt.isNotEmpty) webShortDate(doc.uploadedAt),
+            if (doc.fileSize > 0) webFileSize(doc.fileSize),
+          ].join(' · ');
+    final title = widget.title ?? (doc.documentTypeDisplay.isEmpty ? doc.fileName : doc.documentTypeDisplay);
 
     return Container(
       key: Key('employee-doc-${doc.id}'),
@@ -1420,22 +1509,20 @@ class _DocCardState extends ConsumerState<_DocCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      doc.documentTypeDisplay.isEmpty ? doc.fileName : doc.documentTypeDisplay,
-                      style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600),
-                    ),
+                    Text(title, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 2),
                     Text(meta.isEmpty ? doc.fileName : meta,
                         style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
                   ],
                 ),
               ),
-              IconButton(
-                icon: Icon(Icons.refresh_outlined, size: 18, color: AppColors.textSecondary),
-                tooltip: 'Replace',
-                onPressed: widget.onReplace,
-                visualDensity: VisualDensity.compact,
-              ),
+              if (widget.showReplace)
+                IconButton(
+                  icon: Icon(Icons.refresh_outlined, size: 18, color: AppColors.textSecondary),
+                  tooltip: 'Replace document',
+                  onPressed: widget.uploading ? null : widget.onReplace,
+                  visualDensity: VisualDensity.compact,
+                ),
               if (_opening)
                 const Padding(
                   key: Key('employee-doc-opening'),
@@ -1446,7 +1533,7 @@ class _DocCardState extends ConsumerState<_DocCard> {
                 IconButton(
                   key: Key('employee-doc-view-${doc.id}'),
                   icon: Icon(Icons.visibility_outlined, size: 18, color: AppColors.primary),
-                  tooltip: doc.fileUrl.isEmpty ? 'No file to view' : 'View',
+                  tooltip: doc.fileUrl.isEmpty ? 'No file to view' : 'Preview document',
                   onPressed: doc.fileUrl.isEmpty ? null : _open,
                   visualDensity: VisualDensity.compact,
                 ),
@@ -1489,6 +1576,8 @@ class _FieldRow extends StatelessWidget {
   // Work Email) render with a tinted "locked" style instead of the plain one.
   final bool locked1;
   final bool locked2;
+  final Key? key1;
+  final Key? key2;
 
   const _FieldRow({
     required this.label1,
@@ -1497,6 +1586,8 @@ class _FieldRow extends StatelessWidget {
     required this.value2,
     this.locked1 = false,
     this.locked2 = false,
+    this.key1,
+    this.key2,
   });
 
   @override
@@ -1508,6 +1599,7 @@ class _FieldRow extends StatelessWidget {
         children: [
           Expanded(
             child: _DisplayField(
+              key: key1,
               label: label1,
               value: value1,
               padBottom: false,
@@ -1517,6 +1609,7 @@ class _FieldRow extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: _DisplayField(
+              key: key2,
               label: label2,
               value: value2,
               padBottom: false,
@@ -1607,7 +1700,15 @@ class _ApprovalMatrixTab extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       children: [
         _ReportingRelationshipsCard(employee: employee, canEdit: canEdit),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
+        // Web ApprovalMatrixTab.tsx:442-446: the matrix's own heading.
+        Text('Approval Matrix',
+            key: const Key('approval-matrix-heading'),
+            style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 2),
+        Text('By default the global role rules apply. Override below to assign a specific person for this employee.',
+            style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+        const SizedBox(height: 10),
         matrixAsync.when(
           skipLoadingOnRefresh: false,
           data: (rows) {
@@ -1616,7 +1717,7 @@ class _ApprovalMatrixTab extends ConsumerWidget {
                 key: const Key('approval-matrix-empty'),
                 padding: const EdgeInsets.symmetric(vertical: 24),
                 child: Center(
-                  child: Text('No approval workflows configured.', style: AppTextStyles.bodySecondary),
+                  child: Text('No approval matrix configured.', style: AppTextStyles.bodySecondary),
                 ),
               );
             }
@@ -1706,7 +1807,7 @@ class _ReportingRelationshipsCard extends StatelessWidget {
           Text('Reporting Relationships', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
           Text(
-            'Reporting manager and branch HR assigned to this employee',
+            'Used as the default approvers for all workflows unless overridden below',
             style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 12),
@@ -1936,11 +2037,14 @@ class _RelationshipEditDialogState extends ConsumerState<_RelationshipEditDialog
             Text(_error!, style: TextStyle(color: AppColors.error, fontSize: 12)),
             const SizedBox(height: 10),
           ],
-          Text('Select a specific person, or leave as "— Global default —" to revert.',
-              style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<String?>(
-            initialValue: _selectedId,
+          // Web RelationshipEditorModal (ApprovalMatrixTab.tsx:47-115):
+          // "Select person", "— Select —" placeholder, no way to clear the
+          // relationship, Save disabled until someone is picked.
+          Text('Select person', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          DropdownButtonFormField<String>(
+            key: ValueKey('relationship-picker-${options.length}'),
+            initialValue: options.any((o) => o.id == _selectedId) ? _selectedId : null,
             isExpanded: true,
             decoration: InputDecoration(
               filled: true,
@@ -1951,16 +2055,13 @@ class _RelationshipEditDialogState extends ConsumerState<_RelationshipEditDialog
                 borderSide: BorderSide(color: AppColors.border),
               ),
             ),
-            hint: Text(loading ? 'Loading…' : '— Global default —'),
+            hint: Text(loading ? 'Loading…' : '— Select —'),
             items: [
-              const DropdownMenuItem<String?>(
-                value: null,
-                child: Text('— Global default —'),
-              ),
-              ...options.map((o) => DropdownMenuItem<String?>(
-                    value: o.id,
-                    child: Text('${o.fullName} (${o.employeeId})', overflow: TextOverflow.ellipsis),
-                  )),
+              for (final o in options)
+                DropdownMenuItem<String>(
+                  value: o.id,
+                  child: Text('${o.fullName} (${o.employeeId})', overflow: TextOverflow.ellipsis),
+                ),
             ],
             onChanged: loading ? null : (v) => setState(() => _selectedId = v),
           ),
@@ -1972,7 +2073,8 @@ class _RelationshipEditDialogState extends ConsumerState<_RelationshipEditDialog
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: _saving ? null : _save,
+          key: const Key('relationship-save'),
+          onPressed: _saving || loading || _selectedId == null || _selectedId!.isEmpty ? null : _save,
           child: _saving
               ? const SizedBox(
                   width: 16,
@@ -2192,7 +2294,8 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   // A new controller or tab list (module change) must reach the header.
-  bool shouldRebuild(_TabBarDelegate old) => old.tabBar.controller != tabBar.controller || old.tabBar.tabs.length != tabBar.tabs.length;
+  bool shouldRebuild(_TabBarDelegate old) =>
+      old.tabBar.controller != tabBar.controller || old.tabBar.tabs.length != tabBar.tabs.length;
 }
 
 /// Web employees/page.tsx Activate/Deactivate confirm modal: title
@@ -2246,4 +2349,21 @@ Future<bool> confirmEmployeeStatusChange(
     },
   );
   return ok ?? false;
+}
+
+/// Opens the dialer for [phone] (web's `tel:` link); says so when it can't.
+Future<void> _callPhone(BuildContext context, String phone) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final launcher = ProviderScope.containerOf(context).read(contactLauncherProvider);
+  var opened = false;
+  try {
+    opened = await launcher(Uri(scheme: 'tel', path: phone));
+  } catch (_) {}
+  if (!opened) {
+    messenger.showSnackBar(SnackBar(
+      content: const Text('Could not open the dialer.'),
+      backgroundColor: AppColors.error,
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
 }

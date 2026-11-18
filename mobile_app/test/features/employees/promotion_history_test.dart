@@ -192,7 +192,7 @@ Finder byKey(String k) => find.byKey(Key(k));
 String text(WidgetTester tester, String key) => tester.widget<Text>(byKey(key)).data!;
 
 Future<void> openPromote(WidgetTester tester) async {
-  await tester.tap(find.text('Promote'));
+  await tester.tap(find.text('Promote Employee'));
   await tester.pumpAndSettle();
 }
 
@@ -204,8 +204,8 @@ Future<void> chooseDesignation(WidgetTester tester, String name) async {
 }
 
 Future<void> submit(WidgetTester tester) async {
-  await tester.ensureVisible(find.text('Submit Promotion'));
-  await tester.tap(find.text('Submit Promotion'));
+  await tester.ensureVisible(find.text('Update Employee'));
+  await tester.tap(find.text('Update Employee'));
   await tester.pumpAndSettle();
 }
 
@@ -283,7 +283,7 @@ void main() {
     testWidgets('without employees.edit: history visible, no Promote', (tester) async {
       await pumpTab(tester, as: viewer);
       expect(byKey('promotion-3'), findsOneWidget);
-      expect(find.text('Promote'), findsNothing);
+      expect(find.text('Promote Employee'), findsNothing);
     });
 
     testWidgets('history is read-only: no edit or delete actions on records', (tester) async {
@@ -349,12 +349,12 @@ void main() {
       await chooseDesignation(tester, 'Senior Engineer');
       await submit(tester);
       expect(find.text('Designation "Senior Engineer" does not exist.'), findsOneWidget);
-      expect(find.text('Submit Promotion'), findsOneWidget, reason: 'sheet still open');
+      expect(find.text('Update Employee'), findsOneWidget, reason: 'sheet still open');
       s.refusePut = null;
       await submit(tester);
       expect(s.puts, hasLength(2));
       expect(s.puts.last['designation'], 'Senior Engineer');
-      expect(find.text('Submit Promotion'), findsNothing);
+      expect(find.text('Update Employee'), findsNothing);
     });
 
     testWidgets('a second tap while submitting sends nothing more', (tester) async {
@@ -362,10 +362,10 @@ void main() {
       await pumpTab(tester, with_: s);
       await openPromote(tester);
       await chooseDesignation(tester, 'Senior Engineer');
-      await tester.ensureVisible(find.text('Submit Promotion'));
-      await tester.tap(find.text('Submit Promotion'));
+      await tester.ensureVisible(find.text('Update Employee'));
+      await tester.tap(find.text('Update Employee'));
       await tester.pump();
-      expect(find.text('Submit Promotion'), findsNothing, reason: 'loading indicator while submitting');
+      expect(find.text('Update Employee'), findsNothing, reason: 'loading indicator while submitting');
       await tester.tap(find.byType(AppButton).last, warnIfMissed: false);
       await tester.pump();
       s.holdPut!.complete();

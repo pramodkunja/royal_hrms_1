@@ -729,7 +729,9 @@ class EmployeeUpdateFormData {
       errors['phone'] = 'Enter a valid mobile number (digits, spaces, +, -, ( ) allowed; 7–20 characters).';
     }
     if (role.isEmpty) errors['role'] = 'Role is required.';
-    if (department.isEmpty) errors['department'] = 'Department is required.';
+    // Web's edit form has no client-side required check on Department and
+    // the server accepts it empty (a Branch Admin employee has none), so it
+    // is not required here either.
     if (designation.isEmpty) errors['designation'] = 'Designation is required.';
     if (branch.isEmpty) errors['branch'] = 'Branch is required.';
     if (dateOfBirth.isEmpty) {

@@ -2,21 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../data/models/leave_credit_rule_model.dart';
 import '../providers/settings_providers.dart';
-import 'widgets/credit_rule_form_sheet.dart';
 
 // Tab body shown inside LeavePolicyScreen's "Credit Rules" tab.
 //
-// Two distinct halves:
-// 1. "Credit Annual Leave" — a REAL, working backend action (POST
-//    /leave/balance/credit/, see LeavePoliciesNotifier.creditAnnualLeave).
-// 2. "Accrual Rules" list below — local-only preview. No backend model or
-//    endpoint exists for per-type accrual schedules yet (confirmed against
-//    apps/hrms/ — no accrual/credit_rule/encash anywhere), so this mirrors
-//    the web's own leave-credit-rules/page.tsx, which is also seed-data-only
-//    with a fake save. Clearly labelled "Preview" so it isn't mistaken for a
-//    saved setting.
+// "Credit Leave Balances" is a REAL, working backend action (POST
+// /leave/balance/credit/, see LeavePoliciesNotifier.creditAnnualLeave) and
+// is unchanged.
+//
+// HO-35 (Task 87): the "Accrual Rules" list that used to sit below it was
+// seed data (kSeedCreditRules) with add / edit / delete that only changed
+// local state — no backend model or endpoint exists for per-type accrual
+// schedules, so every edit was silently discarded when the screen closed.
+// Those controls are removed; an explicit "not available" notice takes their
+// place. Nothing here pretends to persist.
 class CreditRulesTab extends ConsumerStatefulWidget {
   const CreditRulesTab({super.key});
 
@@ -25,91 +24,6 @@ class CreditRulesTab extends ConsumerStatefulWidget {
 }
 
 class CreditRulesTabState extends ConsumerState<CreditRulesTab> {
-  List<LeaveCreditRuleModel> _rules = List.of(kSeedCreditRules);
-
-  // Called by the parent screen's FAB via a GlobalKey.
-  void openAdd() {
-    _openSheet(null, (form) {
-      setState(() {
-        _rules = [
-          ..._rules,
-          LeaveCreditRuleModel(
-            id: DateTime.now().millisecondsSinceEpoch,
-            leaveType: form.leaveType,
-            accrualDays: form.accrualDays,
-            frequency: form.frequency,
-            maxBalance: form.maxBalance,
-            encashable: form.encashable,
-            encashLimit: form.encashLimit,
-            minServiceMonths: form.minServiceMonths,
-            isActive: form.isActive,
-          ),
-        ];
-      });
-    });
-  }
-
-  void _openEdit(LeaveCreditRuleModel rule) {
-    _openSheet(rule, (form) {
-      setState(() {
-        _rules = _rules.map((r) {
-          if (r.id != rule.id) return r;
-          return LeaveCreditRuleModel(
-            id: r.id,
-            leaveType: form.leaveType,
-            accrualDays: form.accrualDays,
-            frequency: form.frequency,
-            maxBalance: form.maxBalance,
-            encashable: form.encashable,
-            encashLimit: form.encashLimit,
-            minServiceMonths: form.minServiceMonths,
-            isActive: form.isActive,
-          );
-        }).toList();
-      });
-    });
-  }
-
-  Future<void> _openSheet(
-      LeaveCreditRuleModel? rule, CreditRuleSubmit onSubmit) {
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 80),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        child: CreditRuleFormSheet(
-            rule: rule, existingRules: _rules, onSubmit: onSubmit),
-      ),
-    );
-  }
-
-  Future<void> _confirmDelete(LeaveCreditRuleModel rule) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: const Text('Delete Credit Rule'),
-        content: Text(
-            'Delete the rule for "${rule.leaveType}"? This cannot be undone.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) {
-      setState(() => _rules = _rules.where((r) => r.id != rule.id).toList());
-    }
-  }
-
   final _yearCtrl = TextEditingController(text: '${DateTime.now().year}');
   bool _crediting = false;
 
@@ -167,7 +81,7 @@ class CreditRulesTabState extends ConsumerState<CreditRulesTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
         _CreditAnnualLeaveCard(
           yearCtrl: _yearCtrl,
@@ -175,39 +89,7 @@ class CreditRulesTabState extends ConsumerState<CreditRulesTab> {
           onCredit: _creditAllEmployees,
         ),
         const SizedBox(height: 20),
-        Row(
-          children: [
-            Text('ACCRUAL RULES',
-                style: AppTextStyles.caption.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.6)),
-            const SizedBox(width: 8),
-            const _AutomationBadge(),
-            const Spacer(),
-            Text('${_rules.length} rules',
-                style: AppTextStyles.caption.copyWith(fontSize: 11)),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Auto-accrual schedules, carry-forward limits and encashment policy. '
-          'Not yet connected to a backend — changes here reset when you leave this screen.',
-          style: AppTextStyles.caption
-              .copyWith(color: AppColors.textHint, height: 1.4, fontSize: 11),
-        ),
-        const SizedBox(height: 12),
-        if (_rules.isEmpty)
-          const _EmptyView()
-        else
-          ..._rules.map((r) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _RuleCard(
-                  rule: r,
-                  onEdit: () => _openEdit(r),
-                  onDelete: () => _confirmDelete(r),
-                ),
-              )),
+        const AccrualRulesUnavailableNotice(),
       ],
     );
   }
@@ -323,188 +205,44 @@ class _CreditAnnualLeaveCard extends StatelessWidget {
   }
 }
 
-class _AutomationBadge extends StatelessWidget {
-  const _AutomationBadge();
+/// Shown where the unsupported accrual-rule editor used to be (HO-35):
+/// read-only, no values, no actions.
+class AccrualRulesUnavailableNotice extends StatelessWidget {
+  const AccrualRulesUnavailableNotice({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppColors.textHint.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text('AUTOMATION COMING SOON',
-          style: AppTextStyles.caption.copyWith(
-              fontSize: 8,
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.4)),
-    );
-  }
-}
-
-// ── Rule card ─────────────────────────────────────────────────────────────────
-
-class _RuleCard extends StatelessWidget {
-  final LeaveCreditRuleModel rule;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  const _RuleCard(
-      {required this.rule, required this.onEdit, required this.onDelete});
-
-  static String _fmt(double v) =>
-      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.cardShadow,
-      ),
+      key: const Key('accrual-rules-unavailable'),
       padding: const EdgeInsets.all(14),
-      child: Column(
+      decoration: BoxDecoration(
+        color: AppColors.backgroundLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(rule.leaveType,
-                    style: AppTextStyles.label
-                        .copyWith(fontWeight: FontWeight.w700),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-              ),
-              _StatusPill(isActive: rule.isActive),
-              const SizedBox(width: 6),
-              IconButton(
-                onPressed: onEdit,
-                icon: Icon(Icons.edit_outlined,
-                    size: 18, color: AppColors.textSecondary),
-                visualDensity: VisualDensity.compact,
-                style: IconButton.styleFrom(
-                  backgroundColor: AppColors.backgroundLow,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
+          Icon(Icons.info_outline, size: 18, color: AppColors.textSecondary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Automatic accrual rules — not available',
+                    style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                Text(
+                  'Scheduled accrual, carry-forward limits and encashment rules '
+                  "aren't supported by the server yet, so they can't be set here. "
+                  'Use Credit All Employees above to credit annual balances from the '
+                  'Leave Policy.',
+                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, height: 1.4),
                 ),
-              ),
-              const SizedBox(width: 6),
-              IconButton(
-                onPressed: onDelete,
-                icon: Icon(Icons.delete_outline,
-                    size: 18, color: AppColors.error),
-                visualDensity: VisualDensity.compact,
-                style: IconButton.styleFrom(
-                  backgroundColor: AppColors.error.withValues(alpha: 0.06),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Text(_fmt(rule.accrualDays),
-                  style: AppTextStyles.h3
-                      .copyWith(color: AppColors.primary, fontSize: 20)),
-              const SizedBox(width: 4),
-              Text('days',
-                  style: AppTextStyles.caption
-                      .copyWith(fontSize: 11, color: AppColors.textHint)),
-              const SizedBox(width: 8),
-              _Chip(label: rule.frequency.label, color: AppColors.info),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              _Chip(
-                  label: 'Max ${rule.maxBalance}d',
-                  color: AppColors.textSecondary),
-              _Chip(
-                label: rule.encashable
-                    ? 'Encash up to ${rule.encashLimit}d'
-                    : 'No Encashment',
-                color: rule.encashable ? AppColors.success : AppColors.textHint,
-              ),
-              if (rule.minServiceMonths > 0)
-                _Chip(
-                    label: '${rule.minServiceMonths}mo service',
-                    color: AppColors.warning),
-            ],
+              ],
+            ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  final bool isActive;
-  const _StatusPill({required this.isActive});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isActive ? AppColors.success : AppColors.textHint;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Text(isActive ? 'Active' : 'Inactive',
-          style: AppTextStyles.caption.copyWith(
-              fontSize: 10, fontWeight: FontWeight.w700, color: color)),
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  final String label;
-  final Color color;
-  const _Chip({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(label,
-          style: AppTextStyles.caption.copyWith(
-              fontSize: 10, color: color, fontWeight: FontWeight.w600)),
-    );
-  }
-}
-
-// ── Empty state ───────────────────────────────────────────────────────────────
-
-class _EmptyView extends StatelessWidget {
-  const _EmptyView();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 40),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.paid_outlined,
-                size: 40, color: AppColors.textHint),
-            const SizedBox(height: 10),
-            Text('No credit rules yet.', style: AppTextStyles.bodySecondary),
-          ],
-        ),
       ),
     );
   }

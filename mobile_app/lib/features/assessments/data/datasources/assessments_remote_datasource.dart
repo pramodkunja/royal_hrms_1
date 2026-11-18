@@ -44,12 +44,9 @@ class AssessmentsRemoteDataSource {
   // ── Assessments ────────────────────────────────────────────────────────────
 
   Future<List<AssessmentModel>> fetchAssessments() async {
-    final res = await _dio
-        .get(ApiConstants.assessments, queryParameters: {'page_size': 100});
+    final res = await _dio.get(ApiConstants.assessments, queryParameters: {'page_size': 100});
     final data = _unwrap(res.data);
-    return _toList(data)
-        .map((e) => AssessmentModel.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return _toList(data).map((e) => AssessmentModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<AssessmentModel> createAssessment(AssessmentFormData form) async {
@@ -57,10 +54,8 @@ class AssessmentsRemoteDataSource {
     return AssessmentModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
-  Future<AssessmentModel> updateAssessment(
-      String id, AssessmentFormData form) async {
-    final res =
-        await _dio.put(ApiConstants.assessmentDetail(id), data: form.toJson());
+  Future<AssessmentModel> updateAssessment(String id, AssessmentFormData form) async {
+    final res = await _dio.put(ApiConstants.assessmentDetail(id), data: form.toJson());
     return AssessmentModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
@@ -73,25 +68,17 @@ class AssessmentsRemoteDataSource {
   Future<List<AssessmentItemModel>> fetchItems(String assessmentId) async {
     final res = await _dio.get(ApiConstants.assessmentItems(assessmentId));
     final data = _unwrap(res.data);
-    return _toList(data)
-        .map((e) => AssessmentItemModel.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return _toList(data).map((e) => AssessmentItemModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<AssessmentItemModel> createItem(
-      String assessmentId, AssessmentItemFormData form) async {
-    final res = await _dio.post(ApiConstants.assessmentItems(assessmentId),
-        data: form.toJson());
-    return AssessmentItemModel.fromJson(
-        _unwrap(res.data) as Map<String, dynamic>);
+  Future<AssessmentItemModel> createItem(String assessmentId, AssessmentItemFormData form) async {
+    final res = await _dio.post(ApiConstants.assessmentItems(assessmentId), data: form.toJson());
+    return AssessmentItemModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
-  Future<AssessmentItemModel> updateItem(
-      String itemId, AssessmentItemFormData form) async {
-    final res = await _dio.put(ApiConstants.assessmentItemDetail(itemId),
-        data: form.toJson());
-    return AssessmentItemModel.fromJson(
-        _unwrap(res.data) as Map<String, dynamic>);
+  Future<AssessmentItemModel> updateItem(String itemId, AssessmentItemFormData form) async {
+    final res = await _dio.put(ApiConstants.assessmentItemDetail(itemId), data: form.toJson());
+    return AssessmentItemModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
   Future<void> deleteItem(String itemId) async {
@@ -139,20 +126,15 @@ class AssessmentsRemoteDataSource {
   // what's requested — matches web's own (unavoidable) limitation exactly.
 
   Future<List<AssignableEmployeeModel>> fetchAssignableEmployees() async {
-    final res = await _dio
-        .get(ApiConstants.employees, queryParameters: {'page_size': 50});
+    final res = await _dio.get(ApiConstants.employees, queryParameters: {'page_size': 50});
     final data = _unwrap(res.data);
-    return _toList(data)
-        .map((e) => AssignableEmployeeModel.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return _toList(data).map((e) => AssignableEmployeeModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<List<EmailTemplateOptionModel>> fetchEmailTemplateOptions() async {
     final res = await _dio.get(ApiConstants.assessmentEmailTemplateOptions);
     final data = _unwrap(res.data);
-    return _toList(data)
-        .map((e) => EmailTemplateOptionModel.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return _toList(data).map((e) => EmailTemplateOptionModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/network/api_client.dart';
 import '../models/company_contact.dart';
+import '../models/contact_approvers.dart';
 
 /// The Contact Matrix endpoints (see company_contact.dart for the contract).
 /// Failures are rethrown as the app's typed exceptions carrying the server's
@@ -50,5 +51,12 @@ class ContactsRemoteDatasource {
           for (final b in (rows is List ? rows : const []).whereType<Map>())
             if (b['id'] is num) ContactBranchOption((b['id'] as num).toInt(), '${b['branch_name'] ?? ''}'),
         ];
+      });
+
+  /// GET /company-contacts/approvers/?workflow= (read-only; every signed-in
+  /// user — the server decides whether `team` is included).
+  Future<ApproversResponse> fetchApprovers(String workflow) => _call(() async {
+        final res = await _dio.get(ApiConstants.companyContactApprovers, queryParameters: {'workflow': workflow});
+        return ApproversResponse.fromJson(_data(res.data));
       });
 }

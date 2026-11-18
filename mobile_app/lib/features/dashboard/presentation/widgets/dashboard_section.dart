@@ -121,8 +121,7 @@ class SectionMessage extends StatelessWidget {
           children: [
             iconWidget ?? Icon(icon, color: AppColors.textHint, size: 28),
             const SizedBox(height: 8),
-            Text(label,
-                style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
+            Text(label, style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
           ],
         ),
       ),
@@ -142,8 +141,7 @@ class _SectionSkeleton extends StatefulWidget {
   State<_SectionSkeleton> createState() => _SectionSkeletonState();
 }
 
-class _SectionSkeletonState extends State<_SectionSkeleton>
-    with SingleTickerProviderStateMixin {
+class _SectionSkeletonState extends State<_SectionSkeleton> with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 900),
@@ -366,7 +364,18 @@ class InitialsAvatar extends StatelessWidget {
 // plugged into the white strip vary per role.
 
 const kConsoleMonthNames = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 /// "11 Aug 2026" — no `intl` package in this app, so a small hand-rolled
@@ -657,8 +666,7 @@ class ConsoleStatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget cell(ConsoleStatData s) =>
-        LightStatCell(icon: s.icon, value: s.value, label: s.label, color: s.color);
+    Widget cell(ConsoleStatData s) => LightStatCell(icon: s.icon, value: s.value, label: s.label, color: s.color);
     final scale = MediaQuery.textScalerOf(context).scale(1);
     if (scale > twoColumnTextScale && stats.length > 2) {
       // Two per row, full words, at large text.

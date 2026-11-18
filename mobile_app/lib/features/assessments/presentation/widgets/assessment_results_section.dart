@@ -4,7 +4,18 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../data/models/assessment_model.dart';
 
 const _kMonthShort = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 String _fmtDate(DateTime? d) {
@@ -83,11 +94,8 @@ class CandidateResultCard extends StatelessWidget {
     };
     final pct = candidate.scorePercentage;
     final isComplete = candidate.status == AssessmentAssignStatus.complete;
-    final pctColor = !isComplete
-        ? AppColors.textHint
-        : (candidate.passed ? AppColors.success : AppColors.error);
-    final scoreText =
-        isComplete ? '${candidate.achievedScore} / ${candidate.totalQuestions}' : '—';
+    final pctColor = !isComplete ? AppColors.textHint : (candidate.passed ? AppColors.success : AppColors.error);
+    final scoreText = isComplete ? '${candidate.achievedScore} / ${candidate.totalQuestions}' : '—';
 
     return Container(
       padding: const EdgeInsets.all(10),
@@ -119,9 +127,7 @@ class CandidateResultCard extends StatelessWidget {
                       ],
                     ),
                     Text(candidate.assigneeEmail,
-                        style: AppTextStyles.caption,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
+                        style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
                   ],
                 ),
               ),
@@ -130,7 +136,8 @@ class CandidateResultCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(20)),
                 child: Text(AssessmentAssignStatus.label(candidate.status),
-                    style: AppTextStyles.labelSmall.copyWith(color: statusColor, fontWeight: FontWeight.w700, fontSize: 10.5)),
+                    style: AppTextStyles.labelSmall
+                        .copyWith(color: statusColor, fontWeight: FontWeight.w700, fontSize: 10.5)),
               ),
             ],
           ),
@@ -145,8 +152,7 @@ class CandidateResultCard extends StatelessWidget {
               _MetaField(label: 'Attempts', value: '${candidate.attemptCount}'),
               _MetaField(label: 'Assigned', value: _fmtDate(candidate.createdAt)),
               _MetaField(label: 'Completed', value: _fmtDate(candidate.completedAt)),
-              if (candidate.deadline != null)
-                _MetaField(label: 'Deadline', value: _fmtDate(candidate.deadline)),
+              if (candidate.deadline != null) _MetaField(label: 'Deadline', value: _fmtDate(candidate.deadline)),
             ],
           ),
         ],
@@ -175,12 +181,10 @@ class _AssigneeTypeBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(isEmployee ? Icons.badge_outlined : Icons.person_outline,
-              size: 10, color: AppColors.textSecondary),
+          Icon(isEmployee ? Icons.badge_outlined : Icons.person_outline, size: 10, color: AppColors.textSecondary),
           const SizedBox(width: 3),
           Text(AssessmentAssigneeType.label(type),
-              style: AppTextStyles.caption
-                  .copyWith(fontSize: 9, fontWeight: FontWeight.w600)),
+              style: AppTextStyles.caption.copyWith(fontSize: 9, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -201,8 +205,8 @@ class _MetaField extends StatelessWidget {
       children: [
         Text(label, style: AppTextStyles.caption.copyWith(fontSize: 9.5)),
         Text(value,
-            style: AppTextStyles.labelSmall.copyWith(
-                color: valueColor ?? AppColors.textPrimary, fontWeight: FontWeight.w700)),
+            style: AppTextStyles.labelSmall
+                .copyWith(color: valueColor ?? AppColors.textPrimary, fontWeight: FontWeight.w700)),
       ],
     );
   }
