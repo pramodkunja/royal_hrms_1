@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../shared/formatters/en_in_format.dart';
 import '../../../attendance/domain/entities/attendance_entity.dart';
 import '../../../attendance/presentation/providers/attendance_providers.dart'
     show attendanceRepositoryProvider, hrCorrectionsProvider, kLateJustificationNeedsReview;
@@ -143,7 +144,7 @@ class UnifiedApprovalItem {
         secondaryText: r.requestRef,
         typeLabel: 'Separation',
         primaryLine: r.separationTypeDisplay,
-        secondaryLine: 'Last day: ${r.proposedLastWorkingDay}',
+        secondaryLine: 'Last day: ${approvalsDate(r.proposedLastWorkingDay)}',
         tertiaryLine: r.reasonDisplay,
         reason: r.comments,
         // Both open stages (pending, stage2_pending) are "pending" in the
@@ -153,6 +154,23 @@ class UnifiedApprovalItem {
         canAction: r.canApprove,
         separation: r,
       );
+
+  /// The label/value facts the card shows under the request-type row — only
+  /// what the web row / drawer carries for this kind (no invented fields).
+  List<(String, String)> get facts => switch (kind) {
+        UnifiedApprovalKind.leave => [('Dates', secondaryLine), ('Duration', tertiaryLine)],
+        UnifiedApprovalKind.wfh => [('Dates', secondaryLine), ('Duration', tertiaryLine)],
+        UnifiedApprovalKind.expense => [('Amount', secondaryLine), if (tertiaryLine.isNotEmpty) ('Category', tertiaryLine)],
+        UnifiedApprovalKind.attendanceCorrection => [
+            ('Date', tertiaryLine),
+            (isLateJustification ? 'Details' : 'Time change', secondaryLine),
+          ],
+        UnifiedApprovalKind.separation => [
+            ('Last working day', secondaryLine.replaceFirst('Last day: ', '')),
+            if (tertiaryLine.isNotEmpty) ('Reason', tertiaryLine),
+          ],
+        UnifiedApprovalKind.payslip => [('Query', secondaryLine)],
+      };
 
   /// Web approvals/_data.ts toDisplayStatus: the status the inbox filters,
   /// counts and gates actions on. Both approval levels read as pending.
@@ -164,9 +182,9 @@ class UnifiedApprovalItem {
   bool get isPending => displayStatus == 'pending';
 
   factory UnifiedApprovalItem.fromLeave(LeaveRequestEntity r) {
-    final tertiary = StringBuffer('${r.days}d');
+    final tertiary = StringBuffer(_days(r.days));
     if (r.lopDays > 0) {
-      tertiary.write(', ${r.lopDays} LOP');
+      tertiary.write(' · ${approvalsNumber(r.lopDays)} LOP');
     }
     return UnifiedApprovalItem(
       kind: UnifiedApprovalKind.leave,
@@ -175,11 +193,11 @@ class UnifiedApprovalItem {
       employeeCode: r.employeeCode,
       department: r.department,
       secondaryText: r.department,
-      typeLabel: r.leaveType.isNotEmpty ? r.leaveType : 'Leave',
+      typeLabel: 'Leave',
       primaryLine: [r.leaveType, r.durationDisplay]
           .where((s) => s.isNotEmpty)
           .join(' · '),
-      secondaryLine: '${r.from} – ${r.to}',
+      secondaryLine: '${approvalsDate(r.from)} - ${approvalsDate(r.to)}',
       tertiaryLine: tertiary.toString(),
       reason: r.reason,
       status: r.status,
@@ -198,9 +216,9 @@ class UnifiedApprovalItem {
       department: '',
       secondaryText: e.branchName,
       typeLabel: 'Expense',
-      primaryLine: e.title,
-      secondaryLine: e.category,
-      tertiaryLine: '₹${e.amount.toStringAsFixed(2)}',
+      primaryLine: e.title.isNotEmpty ? e.title : 'Expense',
+      secondaryLine: formatMoney(e.amount),
+      tertiaryLine: e.category,
       reason: e.description,
       status: e.status,
       submittedAt: _parseDate(e.createdAt),
@@ -222,8 +240,8 @@ class UnifiedApprovalItem {
         secondaryText: c.department,
         typeLabel: 'Attendance Correction',
         primaryLine: 'Late Arrival Justification',
-        secondaryLine: '$reason${c.hasDocument ? ' · proof attached' : ''} · clocked in ${c.originalIn ?? '—'}',
-        tertiaryLine: c.date,
+        secondaryLine: '$reason${c.hasDocument ? ' · proof attached' : ''} · clocked in ${approvalsTime12(c.originalIn)}',
+        tertiaryLine: approvalsDate(c.date),
         reason: c.explanation.isNotEmpty ? c.explanation : reason,
         status: c.status,
         submittedAt: _parseDate(c.createdAt),
@@ -239,9 +257,12 @@ class UnifiedApprovalItem {
       department: c.department,
       secondaryText: c.department,
       typeLabel: 'Attendance Correction',
-      primaryLine: '${c.punchType} correction',
-      secondaryLine: c.date,
-      tertiaryLine: '${c.requestedInTime ?? '—'} → ${c.requestedOutTime ?? '—'}',
+      primaryLine: approvalsPunchLabel(c.punchType),
+      secondaryLine: [
+        if (c.punchType != 'OUT') '${approvalsTime12(c.originalIn)} → ${approvalsTime12(c.requestedInTime)}',
+        if (c.punchType != 'IN') '${approvalsTime12(c.originalOut)} → ${approvalsTime12(c.requestedOutTime)}',
+      ].join('  ·  '),
+      tertiaryLine: approvalsDate(c.date),
       reason: c.reason,
       status: c.status,
       submittedAt: _parseDate(c.createdAt),
@@ -259,10 +280,10 @@ class UnifiedApprovalItem {
       employeeCode: r.employeeCode,
       department: r.employeeDept,
       secondaryText: r.employeeBranch,
-      typeLabel: 'WFH',
-      primaryLine: r.locationLabel.isNotEmpty ? r.locationLabel : 'Work From Home',
-      secondaryLine: '${r.startDate} – ${r.endDate}',
-      tertiaryLine: '$days day${days == 1 ? '' : 's'}',
+      typeLabel: 'Work From Home',
+      primaryLine: 'Work From Home',
+      secondaryLine: '${approvalsDate(r.startDate)} - ${approvalsDate(r.endDate)}',
+      tertiaryLine: _days(days),
       reason: r.reason,
       status: r.status,
       submittedAt: _parseDate(r.createdAt),
@@ -278,6 +299,39 @@ int _inclusiveDays(String startIso, String endIso) {
   if (start == null || end == null) return 0;
   return end.difference(start).inDays + 1;
 }
+
+/// Web leave/_data.ts fmtDate (en-IN, numeric day): "5 Sept 2026"; "—" when empty.
+String approvalsDate(String? iso) {
+  if (iso == null || iso.isEmpty) return '—';
+  final d = DateTime.tryParse(iso);
+  return d == null ? iso : formatEnInDate(d);
+}
+
+/// Web approvals/_data.ts fmtSubmitted (en-IN, 2-digit day): "05 Sept 2026".
+String approvalsSubmitted(DateTime d) => d.millisecondsSinceEpoch == 0 ? '—' : formatEnInDate(d, padDay: true);
+
+/// Web approvals/_data.ts fmtTime12h: "09:30 AM"; "—" when empty.
+String approvalsTime12(String? hhmm) {
+  if (hhmm == null || hhmm.isEmpty) return '—';
+  final parts = hhmm.split(':');
+  final h = int.tryParse(parts.first);
+  if (h == null) return hhmm;
+  final h12 = h % 12 == 0 ? 12 : h % 12;
+  return '${h12.toString().padLeft(2, '0')}:${parts.length > 1 ? parts[1] : '00'} ${h >= 12 ? 'PM' : 'AM'}';
+}
+
+/// 1.0 → "1", 0.5 → "0.5" (how JS prints a number).
+String approvalsNumber(num n) => n == n.roundToDouble() ? '${n.toInt()}' : '$n';
+
+String _days(int n) => '$n Day${n == 1 ? '' : 's'}';
+
+/// Web PUNCH_LABEL.
+String approvalsPunchLabel(String punchType) => switch (punchType) {
+      'IN' => 'Check-in Correction',
+      'OUT' => 'Check-out Correction',
+      'BOTH' => 'Check-in & Check-out Correction',
+      _ => 'Attendance Correction',
+    };
 
 DateTime _parseDate(String? iso) {
   if (iso == null || iso.isEmpty) return DateTime.fromMillisecondsSinceEpoch(0);
@@ -388,10 +442,18 @@ class UnifiedTeamApprovalsNotifier
     return [...leaveItems, ...expenseItems, ...correctionItems, ...wfhItems, ...separationItems, ...payslipItems];
   }
 
+  /// Reloads the inbox. The rows already on screen stay put while it loads (and
+  /// after a failed reload, with the error alongside) — nothing is blanked or
+  /// guessed before the server answers.
   Future<void> refresh() async {
     ref.invalidate(hrCorrectionsProvider);
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(build);
+    final previous = state;
+    state = const AsyncLoading<List<UnifiedApprovalItem>>().copyWithPrevious(previous);
+    try {
+      state = AsyncData(await build());
+    } catch (e, st) {
+      state = AsyncError<List<UnifiedApprovalItem>>(e, st).copyWithPrevious(previous);
+    }
   }
 
   Future<void> _dispatchApprove(UnifiedApprovalItem item, {String? remarks}) async {
@@ -521,7 +583,9 @@ class UnifiedTeamApprovalsNotifier
 
 // ── Screen-local filter / UI state ──────────────────────────────────────────────
 
-enum ApprovalsTypeTab { all, leave, expense, attendanceCorrection, wfh, separation, payslip }
+/// Web TYPE_TABS order: All, Leave, Work From Home, Expense, Attendance Correction,
+/// Payslip Requests, Separation.
+enum ApprovalsTypeTab { all, leave, wfh, expense, attendanceCorrection, payslip, separation }
 
 /// Web KIND_MODULES: the module a type tab belongs to (All → none).
 String? moduleForApprovalsTab(ApprovalsTypeTab tab) => switch (tab) {
@@ -545,6 +609,14 @@ UnifiedApprovalKind? _kindForTab(ApprovalsTypeTab tab) => switch (tab) {
       ApprovalsTypeTab.payslip => UnifiedApprovalKind.payslip,
     };
 
+/// Mobile selection mode for bulk actions: on, every selectable card shows a
+/// checkbox and tapping a card selects it; off, cards open their details.
+/// Long-pressing a card turns it on. Switching type tab turns it off.
+final approvalsSelectionModeProvider = StateProvider.autoDispose<bool>((ref) {
+  ref.watch(approvalsTypeTabProvider);
+  return false;
+});
+
 final approvalsSearchQueryProvider = StateProvider.autoDispose<String>((ref) => '');
 
 // Matches web's default ("pending"). 'all' means no status filter.
@@ -554,6 +626,46 @@ final approvalsTypeTabProvider =
     StateProvider.autoDispose<ApprovalsTypeTab>((ref) => ApprovalsTypeTab.all);
 
 final approvalsDateFromProvider = StateProvider.autoDispose<DateTime?>((ref) => null);
+
+/// Web ApprovalsTable sort: Employee / Submitted Date / Status, default
+/// Submitted Date, newest first.
+enum ApprovalsSortKey { employee, submitted, status }
+
+final approvalsSortKeyProvider = StateProvider.autoDispose<ApprovalsSortKey>((ref) => ApprovalsSortKey.submitted);
+final approvalsSortDescProvider = StateProvider.autoDispose<bool>((ref) => true);
+
+/// Back to the default view: Pending, no search, no dates, newest first.
+void clearApprovalsFilters(WidgetRef ref) {
+  ref.read(approvalsStatusFilterProvider.notifier).state = 'pending';
+  ref.read(approvalsSearchQueryProvider.notifier).state = '';
+  ref.read(approvalsDateFromProvider.notifier).state = null;
+  ref.read(approvalsDateToProvider.notifier).state = null;
+  ref.read(approvalsSortKeyProvider.notifier).state = ApprovalsSortKey.submitted;
+  ref.read(approvalsSortDescProvider.notifier).state = true;
+}
+
+/// Web handleSort: the same key flips the direction; a new key starts ascending.
+void approvalsSortBy(WidgetRef ref, ApprovalsSortKey key) {
+  if (ref.read(approvalsSortKeyProvider) == key) {
+    ref.read(approvalsSortDescProvider.notifier).state = !ref.read(approvalsSortDescProvider);
+  } else {
+    ref.read(approvalsSortKeyProvider.notifier).state = key;
+    ref.read(approvalsSortDescProvider.notifier).state = false;
+  }
+}
+
+/// Current page (1-based). Back to 1 whenever the tab, status, search, dates or
+/// sort change (web ApprovalsTable resetKey).
+final approvalsPageProvider = StateProvider.autoDispose<int>((ref) {
+  ref.watch(approvalsTypeTabProvider);
+  ref.watch(approvalsStatusFilterProvider);
+  ref.watch(approvalsSearchQueryProvider);
+  ref.watch(approvalsDateFromProvider);
+  ref.watch(approvalsDateToProvider);
+  ref.watch(approvalsSortKeyProvider);
+  ref.watch(approvalsSortDescProvider);
+  return 1;
+});
 final approvalsDateToProvider = StateProvider.autoDispose<DateTime?>((ref) => null);
 
 // Bulk-select set of UnifiedApprovalItem.sourceId (kind-qualified — see
@@ -597,7 +709,9 @@ final filteredApprovalItemsProvider =
   final dateFrom = ref.watch(approvalsDateFromProvider);
   final dateTo = ref.watch(approvalsDateToProvider);
 
-  return raw.whenData((items) {
+  // The rows already loaded stay available while a reload runs or after one
+  // fails (the error rides alongside) — AsyncValue.whenData would drop them.
+  List<UnifiedApprovalItem> filterItems(List<UnifiedApprovalItem> items) {
     final kindFilter = _kindForTab(typeTab);
     final from = dateFrom == null ? null : DateTime(dateFrom.year, dateFrom.month, dateFrom.day);
     final to = dateTo == null
@@ -618,9 +732,29 @@ final filteredApprovalItemsProvider =
       return true;
     }).toList();
 
-    filtered.sort((a, b) => b.submittedAt.compareTo(a.submittedAt));
+    final key = ref.watch(approvalsSortKeyProvider);
+    final desc = ref.watch(approvalsSortDescProvider);
+    filtered.sort((a, b) {
+      final cmp = switch (key) {
+        ApprovalsSortKey.employee => a.employeeName.toLowerCase().compareTo(b.employeeName.toLowerCase()),
+        ApprovalsSortKey.status => a.displayStatus.compareTo(b.displayStatus),
+        ApprovalsSortKey.submitted => a.submittedAt.compareTo(b.submittedAt),
+      };
+      return desc ? -cmp : cmp;
+    });
     return filtered;
-  });
+  }
+
+  final loaded = raw.valueOrNull;
+  if (loaded == null) {
+    return raw.whenData(filterItems); // loading / error with nothing to show yet
+  }
+  final data = AsyncData(filterItems(loaded));
+  if (raw.hasError) {
+    return AsyncError<List<UnifiedApprovalItem>>(raw.error!, raw.stackTrace ?? StackTrace.empty).copyWithPrevious(data);
+  }
+  if (raw.isLoading) return const AsyncLoading<List<UnifiedApprovalItem>>().copyWithPrevious(data);
+  return data;
 });
 
 // ── Derived: summary counts (always from the RAW unfiltered fetch) ─────────────
@@ -679,6 +813,23 @@ final approvalsTypeTabCountsProvider =
     ApprovalsTypeTab.payslip: counts.payslipPending,
   };
 });
+
+/// Web TeamApprovalsSection toast for a single approve / reject.
+String approvalSuccessMessage(UnifiedApprovalItem item, {required bool approve}) => switch (item.kind) {
+      UnifiedApprovalKind.attendanceCorrection =>
+        approve ? 'Correction approved. Attendance record updated.' : 'Correction rejected.',
+      UnifiedApprovalKind.wfh =>
+        approve ? 'Work from home request approved.' : 'Work from home request rejected.',
+      _ => approve ? 'Request approved.' : 'Request rejected.',
+    };
+
+/// Web handleBulkConfirm toast.
+String approvalsBulkMessage({required int succeeded, required int failed, required bool approve}) {
+  final verb = approve ? 'approved' : 'rejected';
+  return failed == 0
+      ? '$succeeded request${succeeded == 1 ? '' : 's'} $verb.'
+      : '$succeeded $verb, $failed failed — please retry those individually.';
+}
 
 /// Web ResolveQueryModal's message for an empty note.
 const kResolutionNoteRequired = 'Please enter a resolution note.';

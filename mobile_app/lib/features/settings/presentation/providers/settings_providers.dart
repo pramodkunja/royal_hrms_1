@@ -10,6 +10,7 @@ import '../../data/models/assessment_config_model.dart';
 import '../../data/models/attendance_settings_model.dart';
 import '../../data/models/audit_model.dart';
 import '../../data/models/company_model.dart';
+import '../../data/models/company_plan_model.dart';
 import '../../data/models/departments_model.dart';
 import '../../data/models/email_template_model.dart';
 import '../../data/models/employee_code_model.dart';
@@ -73,6 +74,13 @@ class CompanyNotifier extends AutoDisposeAsyncNotifier<CompanyModel> {
     }
   }
 }
+
+// ── Company — Plan Details (read-only) ───────────────────────────────────────
+// Only watched by the Plan Details tab, which only settings.edit users see;
+// the server is the real gate (403 for anyone else).
+final companyPlanProvider = FutureProvider.autoDispose<PlanDetails>(
+  (ref) => ref.read(settingsDataSourceProvider).fetchCompanyPlan(),
+);
 
 // ── Company — Financial Year ─────────────────────────────────────────────────
 // Saved independently of the company info form (matches web) — its own

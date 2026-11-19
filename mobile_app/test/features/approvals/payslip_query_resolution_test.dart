@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mobile_app/features/approvals/presentation/widgets/approval_detail_sheet.dart' show ApprovalDetailSheet;
 import 'package:mobile_app/core/network/api_client.dart';
 import 'package:mobile_app/core/router/app_router.dart';
 import 'package:mobile_app/core/security/secure_storage.dart';
@@ -237,10 +238,10 @@ void main() {
       expect(find.text('Asha Rao'), findsOneWidget);
       expect(find.text('EMP-2'), findsOneWidget);
       expect(find.text('Ravi Kumar'), findsOneWidget);
-      expect(find.text('Payslip Request'), findsNWidgets(2));
+      expect(find.text('Payslip Query'), findsNWidgets(2)); // card headline
       expect(find.text('HRA looks wrong this month.'), findsNWidgets(2));
       expect(find.text('Raised 2026-11-03'), findsNWidgets(2));
-      expect(find.text('Payslip Query · pay period from 2026-10-01'), findsNWidgets(2));
+      expect(find.text('Pay period from 2026-10-01'), findsNWidgets(2)); // chip
       expect(resolveButton('q1'), findsOneWidget);
       // The type tab counts them, and filters to them.
       await tester.tap(find.text('Payslip Requests'));
@@ -253,7 +254,7 @@ void main() {
       expect(find.text('Payslip Request'), findsNothing);
       await tester.tap(find.text('Payslip Requests'));
       await tester.pumpAndSettle();
-      expect(find.text('No requests match the current filters.'), findsOneWidget);
+      expect(find.text('You’re all caught up!'), findsOneWidget); // web empty state (default filters)
     });
 
     testWidgets('3. while loading: a spinner, no stale rows', (tester) async {
@@ -373,9 +374,10 @@ void main() {
       await tester.tap(find.text('Ravi Kumar'));
       await tester.pumpAndSettle();
       expect(find.text('Payslip Request Request'), findsNothing);
-      expect(find.text('Payslip Query'), findsOneWidget); // web detailPrimary
-      expect(find.text('QUERY'), findsOneWidget);
-      expect(find.text('Pay period from'), findsOneWidget);
+      final sheet = find.byType(ApprovalDetailSheet);
+      expect(find.descendant(of: sheet, matching: find.text('Payslip Query')), findsWidgets); // web detailPrimary
+      expect(find.descendant(of: sheet, matching: find.text('Query')), findsOneWidget); // section title
+      expect(find.descendant(of: sheet, matching: find.text('Pay period from')), findsOneWidget);
       await tester.tap(find.byKey(const Key('detail-resolve')));
       await tester.pumpAndSettle();
       await enterNote(tester, 'Explained the deduction.');
@@ -388,9 +390,9 @@ void main() {
 
     testWidgets('payslip queries are not bulk-selectable', (tester) async {
       await pumpApprovals(tester, hrEditor);
-      final boxes = tester.widgetList<Checkbox>(find.byType(Checkbox));
-      expect(boxes, isNotEmpty);
-      expect(boxes.every((b) => b.onChanged == null), isTrue);
+      // Nothing here can be selected: no Select button, no checkbox anywhere.
+      expect(find.byKey(const Key('approvals-select-mode')), findsNothing);
+      expect(find.byType(Checkbox), findsNothing);
     });
   });
 

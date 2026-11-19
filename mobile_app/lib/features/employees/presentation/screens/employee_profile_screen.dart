@@ -122,7 +122,8 @@ class _ProfileShellState extends ConsumerState<_ProfileShell> with TickerProvide
     'assets': AppModules.assets,
   };
   static const _kAllTabs = [
-    'profile', 'salary', 'payroll', 'leave', 'attendance', 'approval', 'promotion', 'assets', 'wishes', //
+    'profile', 'salary', 'payroll', 'leave', 'attendance', 'approval',
+    'promotion', 'assets', 'wishes', //
   ];
 
   late TabController _tabCtrl;

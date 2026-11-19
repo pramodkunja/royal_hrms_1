@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
@@ -89,11 +90,6 @@ class EmployeePageResult {
   });
 }
 
-// Org-wide Total/Active/Onboarding counts, sourced from the `count` field of
-// three lightweight page_size=1 requests rather than downloading every
-// employee — see fetchEmployeeStatusCounts().
-typedef EmployeeStatusCounts = ({int total, int active, int onboarding});
-
 class EmployeesRemoteDataSource {
   final Dio _dio;
   EmployeesRemoteDataSource(this._dio);
@@ -176,30 +172,19 @@ class EmployeesRemoteDataSource {
     return const EmployeePageResult(items: [], page: 1, totalPages: 1, count: 0);
   }
 
-  // ── Lightweight status counts (for the stats grid) ──────────────────────────
+  // ── Stats ──────────────────────────────────────────────────────────────────
   //
-  // Reuses the same endpoint + `status` param as fetchEmployeesPage, but with
-  // `page_size: 1` and only reads the `count` field from each response — this
-  // gets accurate org-wide Total/Active/Onboarding counts without downloading
-  // every employee record, which the stats grid previously required.
+  // GET /employees/stats/ (web employees/page.tsx fetchStats): scoped
+  // total/active/onboarding/departments plus branch_names/department_names,
+  // with `branch` only when a branch filter is set.
 
-  Future<EmployeeStatusCounts> fetchEmployeeStatusCounts() async {
-    Future<int> countFor(String? status) async {
-      final res = await _dio.get(ApiConstants.employees, queryParameters: {
-        'page': 1,
-        'page_size': 1,
-        if (status != null) 'status': status,
-      });
-      final raw = _unwrap(res.data);
-      return raw is Map<String, dynamic> ? (raw['count'] as int? ?? 0) : 0;
-    }
-
-    final results = await Future.wait([
-      countFor(null),
-      countFor('active'),
-      countFor('onboarding'),
-    ]);
-    return (total: results[0], active: results[1], onboarding: results[2]);
+  Future<EmployeeStats> fetchEmployeeStats({String branch = ''}) async {
+    final res = await _dio.get(
+      ApiConstants.employeeStats,
+      queryParameters: {if (branch.isNotEmpty) 'branch': branch},
+    );
+    final raw = _unwrap(res.data);
+    return EmployeeStats.fromJson(raw is Map<String, dynamic> ? raw : const {});
   }
 
   // ── Detail ─────────────────────────────────────────────────────────────────
@@ -551,6 +536,36 @@ class EmployeesRemoteDataSource {
       options: Options(contentType: 'multipart/form-data'),
     );
     return BulkImportResult.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  /// The import template, built by the server exactly as web downloads it:
+  /// GET /employees/bulk-import/sample/?format=csv|xlsx (employees.create) →
+  /// the file bytes. A refusal arrives as bytes too; it is decoded so its
+  /// message (e.g. the 403 text) is shown.
+  Future<List<int>> fetchBulkImportSample(String format) async {
+    try {
+      final res = await _dio.get(ApiConstants.employeeBulkImportSample,
+          queryParameters: {'format': format}, options: Options(responseType: ResponseType.bytes));
+      return res.data as List<int>;
+    } on DioException catch (e) {
+      final res = e.response;
+      final data = res?.data;
+      if (res != null && data is List<int>) {
+        Object? decoded;
+        try {
+          decoded = jsonDecode(utf8.decode(data, allowMalformed: true));
+        } catch (_) {}
+        if (decoded is Map) {
+          throw DioException(
+            requestOptions: e.requestOptions,
+            response: Response(requestOptions: res.requestOptions, statusCode: res.statusCode, data: decoded),
+            type: e.type,
+            error: e.error,
+          );
+        }
+      }
+      rethrow;
+    }
   }
 
   // ── Helper ─────────────────────────────────────────────────────────────────

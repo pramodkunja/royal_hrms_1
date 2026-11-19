@@ -4,10 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/formatters/en_in_format.dart';
 import '../../../auth/domain/entities/user_entity.dart';
 import '../../../my_requests/presentation/providers/my_requests_providers.dart' show myRequestsProvider;
 import '../../domain/entities/leave_entity.dart';
 import '../providers/leave_providers.dart';
+import '../../../approvals/presentation/widgets/approvals_kit.dart';
+import '../../../approvals/presentation/widgets/approvals_ui.dart';
 import '../../../../core/router/access_control.dart' show userHasPermission;
 
 // Cancelling an APPROVED leave — web leave/_components/LeaveCancellationPanel
@@ -103,6 +106,7 @@ class _LeaveCancellationPanelState extends ConsumerState<LeaveCancellationPanel>
   final _text = TextEditingController();
   bool _busy = false;
   String? _error;
+  String? _notice;
 
   @override
   void dispose() {
@@ -114,6 +118,7 @@ class _LeaveCancellationPanelState extends ConsumerState<LeaveCancellationPanel>
         _mode = m;
         _text.clear();
         _error = null;
+        _notice = null;
       });
 
   Future<void> _submit(String action) async {
@@ -121,6 +126,7 @@ class _LeaveCancellationPanelState extends ConsumerState<LeaveCancellationPanel>
     setState(() {
       _busy = true;
       _error = null;
+      _notice = null;
     });
     final ds = ref.read(leaveDataSourceProvider);
     final id = widget.request.id;
@@ -135,6 +141,11 @@ class _LeaveCancellationPanelState extends ConsumerState<LeaveCancellationPanel>
         _busy = false;
         _mode = _Mode.none;
         _text.clear();
+        _notice = switch (action) {
+          'request' => 'Cancellation requested. You will be notified once it is decided.',
+          'approve' => 'Cancellation approved — the days are back in the balance.',
+          _ => 'Cancellation rejected.',
+        };
       });
       refreshAfterCancellationChange(ref, id);
     } catch (e) {
@@ -172,14 +183,16 @@ class _LeaveCancellationPanelState extends ConsumerState<LeaveCancellationPanel>
                     fontWeight: FontWeight.w700, letterSpacing: 0.6, color: AppColors.textSecondary)),
           ),
           if (badge != null)
-            Container(
+            Flexible(
+              child: Container(
               key: const Key('leave-cancellation-badge'),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
               decoration: BoxDecoration(
                 color: badge.$2.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(20),
               ),
               child: Text(badge.$1, style: AppTextStyles.caption.copyWith(color: badge.$2, fontWeight: FontWeight.w600)),
+            ),
             ),
         ]),
         if (r.cancellationReason.isNotEmpty)
@@ -191,6 +204,13 @@ class _LeaveCancellationPanelState extends ConsumerState<LeaveCancellationPanel>
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text('Decision note: “${r.cancellationRemarks}”', style: caption),
+          ),
+        if (_notice != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(_notice!,
+                key: const Key('leave-cancellation-notice'),
+                style: AppTextStyles.caption.copyWith(color: AppColors.success)),
           ),
         if (_error != null)
           Padding(
@@ -261,13 +281,12 @@ class _LeaveCancellationPanelState extends ConsumerState<LeaveCancellationPanel>
               ),
             ),
           const SizedBox(height: 8),
-          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+          Wrap(alignment: WrapAlignment.end, spacing: 8, runSpacing: 8, children: [
             TextButton(
               key: const Key('leave-cancellation-back'),
               onPressed: _busy ? null : () => setState(() => _mode = _Mode.none),
               child: const Text('Back'),
             ),
-            const SizedBox(width: 8),
             FilledButton(
               key: const Key('leave-cancellation-submit'),
               onPressed: _busy || inputError != null ? null : () => _submit(_mode == _Mode.request ? 'request' : 'reject'),
@@ -282,11 +301,11 @@ class _LeaveCancellationPanelState extends ConsumerState<LeaveCancellationPanel>
 
 // ── Approvals → Leave Cancellations ─────────────────────────────────────────
 
+// Web leave _data fmtDate: { day: "numeric", month: "short", year: "numeric" }, "—" if empty.
 String _fmtDay(String iso) {
+  if (iso.isEmpty) return '—';
   final d = DateTime.tryParse(iso);
-  if (d == null) return iso;
-  const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return '${d.day} ${m[d.month - 1]} ${d.year}';
+  return d == null ? iso : formatEnInDate(d);
 }
 
 /// Web LeaveCancellationsSection.
@@ -301,6 +320,7 @@ class _LeaveCancellationsTabState extends ConsumerState<LeaveCancellationsTab> {
   String? _rejecting;
   final _remarks = TextEditingController();
   String? _busy;
+  bool _confirming = false;
   (bool, String)? _msg;
 
   @override
@@ -311,7 +331,9 @@ class _LeaveCancellationsTabState extends ConsumerState<LeaveCancellationsTab> {
 
   Future<void> _decide(LeaveRequestEntity r, bool approve) async {
     if (!approve && rejectRemarksError(_remarks.text) != null) return;
+    if (_busy != null || _confirming) return;
     if (approve) {
+      _confirming = true;
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -323,6 +345,7 @@ class _LeaveCancellationsTabState extends ConsumerState<LeaveCancellationsTab> {
           ],
         ),
       );
+      _confirming = false;
       if (ok != true || !mounted) return;
     }
     setState(() {
@@ -375,21 +398,16 @@ class _LeaveCancellationsTabState extends ConsumerState<LeaveCancellationsTab> {
                   style: AppTextStyles.caption.copyWith(color: _msg!.$1 ? AppColors.success : AppColors.error)),
             ),
           if (async.isLoading)
-            Text('Loading…', style: AppTextStyles.caption.copyWith(fontSize: 13))
+            const Center(child: ApprovalsLoading(label: 'Loading…'))
           else if (async.hasError)
-            Column(key: const Key('leave-cancellations-error'), crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(cancellationApiMessage(async.error!, 'Could not load cancellation requests.'),
-                  style: AppTextStyles.caption.copyWith(color: AppColors.error)),
-              TextButton(
-                key: const Key('leave-cancellations-retry'),
-                onPressed: () => ref.invalidate(leaveCancellationsProvider),
-                child: const Text('Retry'),
-              ),
-            ])
+            ApprovalsEmptyState.forError(async.error!,
+                key: const Key('leave-cancellations-error'), onRetry: () => ref.invalidate(leaveCancellationsProvider))
           else if (rows.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text('No cancellation requests waiting for you.', style: AppTextStyles.caption.copyWith(fontSize: 13)),
+            const ApprovalsEmptyState(
+              kind: ApprovalsStateKind.empty,
+              title: 'No cancellation requests',
+              message: 'No cancellation requests waiting for you.',
+              icon: Icons.event_available_outlined,
             ),
           if (!async.isLoading && !async.hasError)
             for (final r in rows) _row(r),
@@ -400,68 +418,94 @@ class _LeaveCancellationsTabState extends ConsumerState<LeaveCancellationsTab> {
 
   Widget _row(LeaveRequestEntity r) {
     final busy = _busy == r.id;
-    return Container(
-      key: Key('leave-cancellation-row-${r.id}'),
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text.rich(TextSpan(children: [
-          TextSpan(text: r.employee, style: const TextStyle(fontWeight: FontWeight.w600)),
-          if (r.employeeCode.isNotEmpty)
-            TextSpan(text: ' (${r.employeeCode})', style: TextStyle(color: AppColors.textSecondary)),
-        ]), style: AppTextStyles.body.copyWith(fontSize: 13)),
-        Text('${r.leaveType} · ${_fmtDay(r.from)} – ${_fmtDay(r.to)} · ${r.days} day(s)',
-            style: AppTextStyles.caption.copyWith(fontSize: 12)),
-        Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text('Reason: “${r.cancellationReason}”', style: AppTextStyles.bodySmall),
-        ),
-        if (_rejecting != r.id)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              OutlinedButton(
-                key: Key('leave-cancellation-row-reject-${r.id}'),
-                onPressed: busy
-                    ? null
-                    : () => setState(() {
-                          _rejecting = r.id;
-                          _remarks.clear();
-                        }),
-                child: const Text('Reject'),
-              ),
-              const SizedBox(width: 8),
-              FilledButton(
-                key: Key('leave-cancellation-row-approve-${r.id}'),
-                onPressed: busy ? null : () => _decide(r, true),
-                child: const Text('Approve cancellation'),
-              ),
-            ]),
-          )
-        else ...[
-          const SizedBox(height: 10),
-          Text('Reason for rejecting *', style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 4),
-          TextField(
-            key: Key('leave-cancellation-row-remarks-${r.id}'),
-            controller: _remarks,
-            minLines: 2,
-            maxLines: 4,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(isDense: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+    final btn = ButtonStyle(minimumSize: WidgetStateProperty.all(const Size(88, 44)));
+    final badge = cancellationBadge(r.cancellationStatus);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: ApprovalsCardShell(
+        key: Key('leave-cancellation-row-${r.id}'),
+        name: r.employee,
+        idText: r.employeeCode.isEmpty ? null : r.employeeCode,
+        badge: badge == null
+            ? const ApprovalsBadge('Cancellation pending', ApprovalsTone.warning)
+            : ApprovalsBadge(
+                badge.$1,
+                badge.$2 == AppColors.success
+                    ? ApprovalsTone.success
+                    : (badge.$2 == AppColors.error ? ApprovalsTone.error : ApprovalsTone.warning)),
+        footer: _rejecting != r.id
+            // Same button styles as the kit's ApprovalsActionRow; a Wrap, because the
+            // long "Approve cancellation" label does not fit the kit's one-line Row at 360 dp.
+            ? Wrap(alignment: WrapAlignment.end, spacing: 8, runSpacing: 8, children: [
+                OutlinedButton(
+                  key: Key('leave-cancellation-row-reject-${r.id}'),
+                  onPressed: busy
+                      ? null
+                      : () => setState(() {
+                            _rejecting = r.id;
+                            _remarks.clear();
+                          }),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    side: BorderSide(color: AppColors.error.withValues(alpha: 0.55)),
+                    minimumSize: const Size(96, 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    textStyle: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  child: const Text('Reject'),
+                ),
+                FilledButton(
+                  key: Key('leave-cancellation-row-approve-${r.id}'),
+                  onPressed: busy ? null : () => _decide(r, true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    minimumSize: const Size(96, 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    textStyle: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  child: busy
+                      ? const SizedBox(
+                          width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Approve cancellation'),
+                ),
+              ])
+            : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Text('Reason for rejecting *', style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                TextField(
+                  key: Key('leave-cancellation-row-remarks-${r.id}'),
+                  controller: _remarks,
+                  minLines: 2,
+                  maxLines: 4,
+                  onChanged: (_) => setState(() {}),
+                  decoration:
+                      InputDecoration(isDense: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+                ),
+                const SizedBox(height: 8),
+                Wrap(alignment: WrapAlignment.end, spacing: 8, runSpacing: 8, children: [
+                  TextButton(style: btn, onPressed: () => setState(() => _rejecting = null), child: const Text('Back')),
+                  FilledButton(
+                    key: Key('leave-cancellation-row-confirm-reject-${r.id}'),
+                    style: btn,
+                    onPressed: busy || rejectRemarksError(_remarks.text) != null ? null : () => _decide(r, false),
+                    child: const Text('Reject cancellation', textAlign: TextAlign.center),
+                  ),
+                ]),
+              ]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          ApprovalsHeadline(
+            icon: Icons.event_busy_outlined,
+            title: r.leaveType,
+            chips: [ApprovalsChip('${r.days} day(s)', icon: Icons.timelapse_outlined)],
           ),
-          const SizedBox(height: 8),
-          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            TextButton(onPressed: () => setState(() => _rejecting = null), child: const Text('Back')),
-            const SizedBox(width: 8),
-            FilledButton(
-              key: Key('leave-cancellation-row-confirm-reject-${r.id}'),
-              onPressed: busy || rejectRemarksError(_remarks.text) != null ? null : () => _decide(r, false),
-              child: const Text('Reject cancellation'),
-            ),
-          ]),
-        ],
-      ]),
+          const SizedBox(height: 12),
+          ApprovalsInfoRow(Icons.calendar_today_outlined, '${_fmtDay(r.from)} – ${_fmtDay(r.to)}', strong: true),
+          if (r.cancellationReason.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ApprovalsQuote('Reason: “${r.cancellationReason}”', maxLines: 3),
+          ],
+        ]),
+      ),
     );
   }
 }

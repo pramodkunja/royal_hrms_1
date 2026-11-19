@@ -102,17 +102,7 @@ class _TrainingCourseEditorState extends ConsumerState<TrainingCourseEditor> {
     _set(deadline ? _f.copyWith(deadline: iso) : _f.copyWith(startDate: iso));
   }
 
-  InputDecoration _dec(String label, {String? error, String? helper}) => InputDecoration(
-        labelText: label,
-        errorText: error,
-        helperText: helper,
-        helperMaxLines: 3,
-        errorMaxLines: 3,
-        isDense: true,
-        filled: true,
-        fillColor: AppColors.surface,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      );
+  InputDecoration _dec(String label, {String? error, String? helper}) => trainingInput(label, error: error, helper: helper);
 
   Widget _dateField(String label, String value, {required bool deadline, String? error, String? warning}) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -122,6 +112,7 @@ class _TrainingCourseEditorState extends ConsumerState<TrainingCourseEditor> {
               Expanded(
                 child: OutlinedButton.icon(
                   key: Key('course-form-${deadline ? 'deadline' : 'start'}'),
+                  style: trainingOutlinedStyle(),
                   onPressed: () => _pickDate(deadline: deadline),
                   icon: const Icon(Icons.event_outlined, size: 16),
                   label: Align(
@@ -143,12 +134,12 @@ class _TrainingCourseEditorState extends ConsumerState<TrainingCourseEditor> {
         ],
       );
 
-  Widget _section(String title, List<Widget> children) => TrainingCard(
+  Widget _section(String title, List<Widget> children, {IconData icon = Icons.article_outlined}) => TrainingCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-            const SizedBox(height: 10),
+            TrainingSectionHeader(icon, title),
+            const SizedBox(height: 14),
             ...children,
           ],
         ),
@@ -189,6 +180,10 @@ class _TrainingCourseEditorState extends ConsumerState<TrainingCourseEditor> {
               for (final v in all)
                 FilterChip(
                   label: Text(v),
+                  selectedColor: AppColors.primary.withValues(alpha: 0.12),
+                  checkmarkColor: AppColors.primary,
+                  backgroundColor: AppColors.surface,
+                  side: BorderSide(color: chosen.contains(v) ? AppColors.primary : AppColors.border),
                   selected: chosen.contains(v),
                   onSelected: (on) => set(on ? {...chosen, v}.toList() : chosen.where((x) => x != v).toList()),
                 ),
@@ -224,6 +219,7 @@ class _TrainingCourseEditorState extends ConsumerState<TrainingCourseEditor> {
               Expanded(
                 child: OutlinedButton.icon(
                   key: const Key('course-form-thumbnail'),
+                  style: trainingOutlinedStyle(),
                   onPressed: _uploading ? null : _uploadThumbnail,
                   icon: const Icon(Icons.upload_outlined, size: 16),
                   label: Text(_uploading ? 'Uploading…' : 'Thumbnail (PNG/JPG, 2 MB)'),
@@ -298,7 +294,7 @@ class _TrainingCourseEditorState extends ConsumerState<TrainingCourseEditor> {
             value: _f.isActive,
             onChanged: (v) => _set(_f.copyWith(isActive: v)),
           ),
-        ]),
+        ], icon: Icons.menu_book_outlined),
         _section('Assessment', [
           Text(
             'An existing MCQ assessment from the Assessments module. It unlocks after the required materials; '
@@ -357,7 +353,7 @@ class _TrainingCourseEditorState extends ConsumerState<TrainingCourseEditor> {
             Text(errors['videos_optional']!,
                 key: const Key('course-form-videos-optional-error'),
                 style: TextStyle(fontSize: 12, color: AppColors.error)),
-        ]),
+        ], icon: Icons.fact_check_outlined),
         _section('New joiners', [
           SwitchListTile.adaptive(
             key: const Key('course-form-new-joiners'),
@@ -386,7 +382,7 @@ class _TrainingCourseEditorState extends ConsumerState<TrainingCourseEditor> {
             group('Departments', picker?.departments ?? const [], _f.newJoinerDepartments,
                 (v) => _set(_f.copyWith(newJoinerDepartments: v))),
           ],
-        ]),
+        ], icon: Icons.person_add_alt_outlined),
         const SizedBox(height: 4),
         Wrap(
           alignment: WrapAlignment.end,
@@ -395,12 +391,14 @@ class _TrainingCourseEditorState extends ConsumerState<TrainingCourseEditor> {
           children: [
             OutlinedButton.icon(
               key: const Key('course-form-save'),
+              style: trainingOutlinedStyle(),
               onPressed: _saving || errors.isNotEmpty ? null : () => _save(next: false),
               icon: const Icon(Icons.save_outlined, size: 16),
               label: const Text('Save'),
             ),
             FilledButton(
               key: const Key('course-form-save-continue'),
+              style: trainingFilledStyle(),
               onPressed: _saving || errors.isNotEmpty ? null : () => _save(next: true),
               child: Text(_saving ? 'Saving…' : 'Save & Continue'),
             ),

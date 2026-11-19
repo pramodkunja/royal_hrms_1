@@ -151,7 +151,7 @@ List<QuickItem> managerQuickItems(List<ManagerQuickAction> actions) {
 String _date(String iso) {
   final d = DateTime.tryParse(iso);
   if (d == null) return iso;
-  const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
   return '${d.day} ${m[d.month - 1]}';
 }
 

@@ -15,6 +15,7 @@ import '../../features/dashboard/presentation/screens/home_screen.dart';
 import '../../features/dashboard/presentation/screens/placeholder_screen.dart';
 import '../../features/settings/presentation/settings_hub/settings_screen.dart';
 import '../../features/settings/presentation/company/company_screen.dart';
+import '../../features/settings/presentation/company/widgets/company_widgets.dart' show CompanyTab;
 import '../../features/settings/presentation/smtp/smtp_screen.dart';
 import '../../features/settings/presentation/email_templates/email_templates_screen.dart';
 import '../../features/settings/presentation/departments/departments_screen.dart';
@@ -427,7 +428,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // ── Settings sub-screens (outside shell — own AppBar + back button) ──
       GoRoute(
         path: AppRoutes.settingsCompany,
-        builder: (_, __) => const CompanyScreen(),
+        // Web `?tab=plan` opens Plan Details (shown to settings.edit users only).
+        builder: (_, state) => CompanyScreen(
+          initialTab: state.uri.queryParameters['tab'] == 'plan' ? CompanyTab.plan : CompanyTab.info,
+        ),
       ),
       GoRoute(
         path: AppRoutes.settingsDepartments,

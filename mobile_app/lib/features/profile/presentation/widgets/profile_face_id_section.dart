@@ -132,16 +132,9 @@ class _ProfileFaceIdSectionState extends ConsumerState<ProfileFaceIdSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _InfoRow(icon: Icons.face_outlined, iconColor: iconColor, title: title, subtitle: subtitle),
-              ),
-              const SizedBox(width: 8),
-              FaceStatusBadge(status: regState.registration?.status),
-            ],
-          ),
+          _InfoRow(icon: Icons.face_outlined, iconColor: iconColor, title: title, subtitle: subtitle),
+          const SizedBox(height: 10),
+          Align(alignment: Alignment.centerLeft, child: FaceStatusBadge(status: regState.registration?.status)),
           if (showActionButton) ...[
             const SizedBox(height: 14),
             SizedBox(
@@ -158,9 +151,14 @@ class _ProfileFaceIdSectionState extends ConsumerState<ProfileFaceIdSection> {
                 icon: busy
                     ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.camera_alt_outlined, size: 16),
-                label: Text(busy
-                    ? (isRegisterMode ? 'Registering…' : 'Updating…')
-                    : (isRegisterMode ? 'Register My Face' : 'Update My Face')),
+                // Wraps instead of overflowing on a narrow screen / large text.
+                label: Text(
+                  busy
+                      ? (isRegisterMode ? 'Registering…' : 'Updating…')
+                      : (isRegisterMode ? 'Register My Face' : 'Update My Face'),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                ),
               ),
             ),
           ],

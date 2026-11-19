@@ -76,6 +76,23 @@ class CompanyModel {
     'official_phone': officialPhone,
   };
 
+  /// What web's Save sends (`FormData`): every value trimmed, the four
+  /// statutory identifiers upper-cased, the state as selected.
+  Map<String, String> toSavePayload() => {
+    'company_name':   companyName.trim(),
+    'trade_name':     tradeName.trim(),
+    'gstin':          gstin.trim().toUpperCase(),
+    'cin':            cin.trim().toUpperCase(),
+    'pan':            pan.trim().toUpperCase(),
+    'tan':            tan.trim().toUpperCase(),
+    'address':        address.trim(),
+    'city':           city.trim(),
+    'state':          state,
+    'pin_code':       pinCode.trim(),
+    'website':        website.trim(),
+    'official_phone': officialPhone.trim(),
+  };
+
   CompanyModel copyWith({
     int? id,
     String? companyName,

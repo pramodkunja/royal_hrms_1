@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mobile_app/features/approvals/presentation/widgets/approvals_ui.dart' show ApprovalsTabLabel;
 import 'package:mobile_app/core/network/api_client.dart';
 import 'package:mobile_app/core/security/secure_storage.dart';
 import 'package:mobile_app/features/approvals/presentation/screens/approvals_screen.dart';
@@ -491,9 +492,10 @@ void main() {
       expect(find.text('Approved leave the employee wants to cancel before it starts.'), findsOneWidget);
       final row = byKey('leave-cancellation-row-l1');
       expect(find.descendant(of: row, matching: find.text('Reason: “Plans changed”')), findsOneWidget);
-      expect(find.descendant(of: row, matching: find.textContaining('Casual Leave · ')), findsOneWidget);
+      expect(find.descendant(of: row, matching: find.text('Casual Leave')), findsOneWidget);
       expect(find.descendant(of: row, matching: find.textContaining('2 day(s)')), findsOneWidget);
-      expect(find.text('Esha Test (EMP-1)', findRichText: true), findsNWidgets(2));
+      expect(find.text('Esha Test'), findsNWidgets(2));
+      expect(find.text('EMP-1'), findsNWidgets(2));
     });
 
     testWidgets('7/9/10. approve asks first (Cancel sends nothing), then sends; message; list refreshed',
@@ -543,7 +545,8 @@ void main() {
       await pumpTab(tester, approver);
       expect(byKey('leave-cancellations-error'), findsOneWidget);
       server.listStatus = null;
-      await tapKey(tester, 'leave-cancellations-retry');
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
       expect(find.text('No cancellation requests waiting for you.'), findsOneWidget);
     });
   });
@@ -556,7 +559,7 @@ void main() {
         child: const MaterialApp(home: ApprovalsScreen()),
       ));
       await tester.pumpAndSettle();
-      final labels = tester.widgetList<Tab>(find.byType(Tab)).map((t) => t.text ?? '').toList();
+      final labels = tester.widgetList<Tab>(find.byType(Tab)).map((t) => (t.child as ApprovalsTabLabel).label).toList();
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 1));
       return labels;

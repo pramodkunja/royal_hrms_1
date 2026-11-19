@@ -248,9 +248,10 @@ class ActionItemsResponse {
     // Production (EmployeeActionItemsView → paginated_data): `results` +
     // `count` (+ page / page_size / total_pages). The older `action_items` /
     // `total` names are still accepted.
-    final list = (json['results'] ?? json['action_items']) as List<dynamic>? ?? [];
+    final raw = json['results'] ?? json['action_items'];
+    final list = raw is List ? raw : const [];
     return ActionItemsResponse(
-      total: ((json['count'] ?? json['total']) as num? ?? 0).toInt(),
+      total: num.tryParse('${json['count'] ?? json['total'] ?? 0}')?.toInt() ?? 0,
       actionItems: list.whereType<Map<String, dynamic>>().map(ActionItem.fromJson).toList(),
     );
   }
@@ -300,9 +301,10 @@ class RecentRequestsResponse {
   factory RecentRequestsResponse.fromJson(Map<String, dynamic> json) {
     // Production (EmployeeRecentRequestsView → paginated_data): `results` +
     // `count`; the older `requests` / `total` names are still accepted.
-    final list = (json['results'] ?? json['requests']) as List<dynamic>? ?? [];
+    final raw = json['results'] ?? json['requests'];
+    final list = raw is List ? raw : const [];
     return RecentRequestsResponse(
-      total: ((json['count'] ?? json['total']) as num? ?? 0).toInt(),
+      total: num.tryParse('${json['count'] ?? json['total'] ?? 0}')?.toInt() ?? 0,
       requests: list.whereType<Map<String, dynamic>>().map(RecentRequest.fromJson).toList(),
     );
   }

@@ -26,10 +26,7 @@ class PayrollRemoteDataSource {
       Map<String, dynamic> d => (d['results'] as List<dynamic>? ?? []),
       _ => [],
     };
-    return list
-        .whereType<Map<String, dynamic>>()
-        .map(PayslipModel.fromJson)
-        .toList();
+    return list.whereType<Map<String, dynamic>>().map(PayslipModel.fromJson).toList();
   }
 
   // Only valid while the payslip's status is 'sent' — the backend rejects
@@ -42,10 +39,7 @@ class PayrollRemoteDataSource {
   Future<List<PayslipQueryModel>> fetchMyQueries() async {
     final res = await _dio.get(ApiConstants.payslipQueries, queryParameters: {'mine': 1});
     final data = _unwrap(res.data);
-    return (data is List ? data : const [])
-        .whereType<Map<String, dynamic>>()
-        .map(PayslipQueryModel.fromJson)
-        .toList();
+    return (data is List ? data : const []).whereType<Map<String, dynamic>>().map(PayslipQueryModel.fromJson).toList();
   }
 
   /// HR queue: the open queries in the caller's scope. Only call this for a
@@ -54,25 +48,21 @@ class PayrollRemoteDataSource {
   Future<List<PayslipQueryModel>> fetchTeamQueries() async {
     final res = await _dio.get(ApiConstants.payslipQueries);
     final data = _unwrap(res.data);
-    return (data is List ? data : const [])
-        .whereType<Map<String, dynamic>>()
-        .map(PayslipQueryModel.fromJson)
-        .toList();
+    return (data is List ? data : const []).whereType<Map<String, dynamic>>().map(PayslipQueryModel.fromJson).toList();
   }
 
   /// Resolves an open query with [resolutionNote] (payroll.edit). Returns
   /// the resolved query as the server sends it.
   Future<PayslipQueryModel> resolveQuery(String id, {required String resolutionNote}) async {
-    final res = await _dio.post(ApiConstants.resolvePayslipQuery(id),
-        data: {'resolution_note': resolutionNote.trim()});
+    final res = await _dio.post(ApiConstants.resolvePayslipQuery(id), data: {'resolution_note': resolutionNote.trim()});
     final data = _unwrap(res.data);
     return PayslipQueryModel.fromJson(data is Map ? data.cast<String, dynamic>() : const <String, dynamic>{});
   }
 
   /// Raises a query on one of the employee's own payslips.
   Future<PayslipQueryModel> raiseQuery({required String payslipId, required String description}) async {
-    final res = await _dio.post(ApiConstants.payslipQueries,
-        data: {'payslip': payslipId, 'description': description.trim()});
+    final res =
+        await _dio.post(ApiConstants.payslipQueries, data: {'payslip': payslipId, 'description': description.trim()});
     return PayslipQueryModel.fromJson((_unwrap(res.data) as Map).cast<String, dynamic>());
   }
 }

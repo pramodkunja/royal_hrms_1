@@ -29,6 +29,9 @@ Future<String?> showRemarksDialog(
       builder: (context, setState) {
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: AppColors.surface,
+          surfaceTintColor: Colors.transparent,
+          scrollable: true,
           title: Row(
             children: [
               Container(
@@ -65,10 +68,8 @@ Future<String?> showRemarksDialog(
                 maxLines: 3,
                 maxLength: 300,
                 autofocus: true,
-                decoration: InputDecoration(
-                  hintText: forReject
-                      ? 'Explain why this request is being rejected…'
-                      : 'Add an optional note…',
+                decoration: _fieldDecoration(
+                  forReject ? 'Explain why this request is being rejected…' : 'Add an optional note…',
                   errorText: error,
                 ),
               ),
@@ -76,6 +77,7 @@ Future<String?> showRemarksDialog(
           ),
           actions: [
             TextButton(
+              style: TextButton.styleFrom(foregroundColor: AppColors.primary),
               onPressed: () => Navigator.pop(context),
               child: const Text('Cancel'),
             ),
@@ -114,6 +116,8 @@ Future<bool> showConfirmDialog(
     context: context,
     builder: (context) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: AppColors.surface,
+          surfaceTintColor: Colors.transparent,
       title: Text(
         title ?? (forReject ? 'Reject Expense Claim?' : 'Approve Expense Claim?'),
         style: AppTextStyles.label,
@@ -127,6 +131,7 @@ Future<bool> showConfirmDialog(
       ),
       actions: [
         TextButton(
+          style: TextButton.styleFrom(foregroundColor: AppColors.primary),
           onPressed: () => Navigator.pop(context, false),
           child: const Text('Cancel'),
         ),
@@ -139,4 +144,96 @@ Future<bool> showConfirmDialog(
     ),
   );
   return result ?? false;
+}
+
+/// Web BulkConfirmModal. Returns the remarks (possibly '' for an approval) when
+/// confirmed, null when cancelled. Rejecting needs a reason: the button stays
+/// disabled until one is typed.
+Future<String?> showBulkConfirmDialog(
+  BuildContext context, {
+  required bool approve,
+  required int count,
+}) {
+  final ctrl = TextEditingController();
+  final color = approve ? AppColors.success : AppColors.error;
+  final plural = count == 1 ? '' : 's';
+  return showDialog<String>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) {
+        final canConfirm = approve || ctrl.text.trim().isNotEmpty;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: AppColors.surface,
+          surfaceTintColor: Colors.transparent,
+          scrollable: true,
+          title: Text('${approve ? 'Approve' : 'Reject'} $count request$plural', style: AppTextStyles.label),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: (approve ? AppColors.info : AppColors.warning).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  approve
+                      ? "You're about to approve $count selected request$plural. Employees will be notified."
+                      : "You're about to reject $count selected request$plural. Employees will be notified.",
+                  style: AppTextStyles.bodySmall,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                approve ? 'Remarks' : 'Remarks *',
+                style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                key: const Key('bulk-remarks'),
+                controller: ctrl,
+                maxLines: 3,
+                autofocus: true,
+                onChanged: (_) => setState(() {}),
+                decoration: _fieldDecoration(approve ? 'Optional notes for the record…' : 'Reason for rejection (required)'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+            FilledButton(
+              key: const Key('bulk-confirm'),
+              style: FilledButton.styleFrom(backgroundColor: color),
+              onPressed: canConfirm ? () => Navigator.pop(context, ctrl.text.trim()) : null,
+              child: Text(approve ? 'Approve $count' : 'Reject $count'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+/// The outlined input My Profile uses (radius 10, hairline, primary when focused).
+InputDecoration _fieldDecoration(String hint, {String? errorText}) {
+  OutlineInputBorder b(Color c, [double w = 1]) =>
+      OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c, width: w));
+  return InputDecoration(
+    hintText: hint,
+    hintStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
+    errorText: errorText,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+    filled: true,
+    fillColor: AppColors.surface,
+    border: b(AppColors.border),
+    enabledBorder: b(AppColors.border),
+    focusedBorder: b(AppColors.primary, 1.5),
+    errorBorder: b(AppColors.error),
+    focusedErrorBorder: b(AppColors.error, 1.5),
+  );
 }

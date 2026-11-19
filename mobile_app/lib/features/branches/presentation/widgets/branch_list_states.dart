@@ -26,10 +26,10 @@ class BranchEmptyView extends StatelessWidget {
                   size: 36, color: AppColors.primary),
             ),
             const SizedBox(height: 16),
-            Text('No branches found', style: AppTextStyles.h4),
+            Text('No Branches Found', style: AppTextStyles.h4),
             const SizedBox(height: 6),
             Text(
-              'Add your first branch to get started.',
+              "You haven't added any branches yet.",
               style: AppTextStyles.bodySecondary,
               textAlign: TextAlign.center,
             ),

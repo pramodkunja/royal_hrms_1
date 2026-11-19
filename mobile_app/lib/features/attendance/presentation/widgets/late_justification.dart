@@ -106,7 +106,7 @@ void refreshAfterLateJustification(WidgetRef ref) {
   ref.invalidate(myRequestsProvider);
 }
 
-const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
 const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 /// Web fmtDate: "Wed, 12 Nov 2026" ([withWeekday]) or "12 Nov 2026".

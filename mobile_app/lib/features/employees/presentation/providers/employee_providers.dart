@@ -244,47 +244,45 @@ class EmployeeListNotifier extends AutoDisposeAsyncNotifier<EmployeeListState> {
 
 // ── Stats ──────────────────────────────────────────────────────────────────────
 //
-// Previously derived from the complete employee list (`employeesProvider`),
-// which meant simply opening the Employees screen forced a full-roster
-// download just to compute these four numbers. Total/Active/Onboarding now
-// come from three lightweight `count`-only requests (same endpoint, same
-// `status` param, page_size=1), and Departments reuses the org's master
-// department list (already fetched elsewhere in the app for the Add/Edit
-// Employee form) rather than deriving "distinct departments seen so far"
-// from a partially-loaded roster.
+// Web employees/page.tsx fetchStats: GET /employees/stats/ (scoped to the
+// viewer by the server), `branch` passed only when a branch filter is set,
+// refetched whenever that filter changes. Counts are the server's — never
+// derived from the paginated list. Like web (which keeps the previous cards
+// when the request fails rather than zeroing them), a failed load is not
+// surfaced as an error card: the screen reads `valueOrNull`, and a retry is
+// a pull-to-refresh / invalidate.
 
-final employeeStatsProvider = FutureProvider.autoDispose<EmployeeStats>((ref) async {
-  final departments = await ref.watch(departmentsProvider.future);
-  final counts = await ref.watch(employeesDataSourceProvider).fetchEmployeeStatusCounts();
-  return EmployeeStats(
-    total: counts.total,
-    active: counts.active,
-    onboarding: counts.onboarding,
-    departments: departments.where((d) => d.employeeCount > 0).length,
-  );
+final employeeStatsProvider = FutureProvider.autoDispose<EmployeeStats>((ref) {
+  final branch = ref.watch(employeeFiltersProvider.select((f) => f.branch));
+  return ref.watch(employeesDataSourceProvider).fetchEmployeeStats(branch: branch);
 });
 
 // ── Filter dropdown options for the Employees list screen ──────────────────────
 //
-// Deliberately separate from employeeDepartmentListProvider/
-// employeeBranchNameListProvider below (which other screens, e.g.
-// Attendance's HR filters, still read from the complete employee roster) —
-// these instead reuse the org's master department/branch lists so the
-// Employees screen's own filter chips never need that roster fetched at
-// all. Returns a plain (not AsyncValue-wrapped) `List<String>`, same as the
-// providers they're replacing here, so the screen's existing
-// `if (list.isNotEmpty)` checks keep working unchanged — it's just empty
-// until the underlying master-data fetch resolves.
+// Web: `branchOptions = empStats.branch_names`, `deptOptions =
+// empStats.department_names` (scoped over all employees, independent of the
+// branch filter). Empty until the stats response arrives.
 
 final employeeListDepartmentOptionsProvider = Provider.autoDispose<List<String>>((ref) {
-  final departments = ref.watch(departmentsProvider).valueOrNull ?? [];
-  return (departments.map((d) => d.name).where((n) => n.isNotEmpty).toSet().toList())..sort();
+  return ref.watch(employeeStatsProvider).valueOrNull?.departmentNames ?? const [];
 });
 
 final employeeListBranchOptionsProvider = Provider.autoDispose<List<String>>((ref) {
-  final branches = ref.watch(employeeBranchesProvider).valueOrNull ?? [];
-  return (branches.map((b) => b.name).where((n) => n.isNotEmpty).toSet().toList())..sort();
+  return ref.watch(employeeStatsProvider).valueOrNull?.branchNames ?? const [];
 });
+
+// ── Add Employee: who may be assigned / which branch ───────────────────────────
+
+/// Web lib/auth.ts isUnrestrictedUser: `is_superuser` or the `settings.edit`
+/// permission (the backend's org-wide bypass). Everyone else is scoped to
+/// their own branch.
+bool isUnrestrictedEmployeeUser(UserEntity? user) =>
+    user != null && (user.isSuperuser || user.permissions.contains('settings.edit'));
+
+/// Web AddEmployeeModal role dropdown: every role that does not carry
+/// `settings.edit` — matched by permission, never by role name.
+List<RoleModel> assignableEmployeeRoles(Iterable<RoleModel> roles) =>
+    roles.where((r) => !r.permissions.contains('settings.edit')).toList();
 
 // ── Unique value lists for filter dropdowns ────────────────────────────────────
 

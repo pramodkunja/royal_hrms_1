@@ -480,16 +480,21 @@ void main() {
       child: const MaterialApp(home: ProfileScreen()),
     ));
     await tester.pumpAndSettle();
-    for (final title in [
-      'Personal Information',
-      'Address',
-      'Education & Experience',
-      'Bank Details',
-      'Emergency Contact',
-      'Change Password',
-      'Documents'
+    // Web's tabs: every section is reachable, Documents last of the data tabs.
+    for (final (tab, titles) in [
+      ('personal', ['Personal Information', 'Address', 'Emergency Contact']),
+      ('work', ['Work Information']),
+      ('education', ['Education & Experience']),
+      ('bank', ['Bank Details']),
+      ('security', ['Change Password']),
+      ('documents', ['Documents']),
     ]) {
-      expect(find.text(title), findsWidgets, reason: title);
+      await tester.ensureVisible(find.byKey(ValueKey('profile-tab-$tab')));
+      await tester.tap(find.byKey(ValueKey('profile-tab-$tab')));
+      await tester.pumpAndSettle();
+      for (final title in titles) {
+        expect(find.text(title), findsWidgets, reason: '$tab → $title');
+      }
     }
     expect(rowOf('pan_card'), findsOneWidget);
     expect(find.text('Test User'), findsWidgets);

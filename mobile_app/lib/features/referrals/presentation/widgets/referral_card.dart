@@ -18,7 +18,7 @@ class ReferralCard extends StatelessWidget {
 
   static const _months = [
     '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec',
   ];
 
   String get _fmtCreatedAt {

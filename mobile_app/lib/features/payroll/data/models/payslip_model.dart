@@ -5,7 +5,14 @@ import 'package:flutter/foundation.dart';
 // (e.g. "50000.00"), not a JSON number. Parse defensively throughout: a
 // malformed/missing value should render as ₹0.00, never crash the screen.
 
-double _money(dynamic value) => double.tryParse(value?.toString() ?? '') ?? 0.0;
+double _money(dynamic value) {
+  final v = double.tryParse(value?.toString() ?? '') ?? 0.0;
+  return v.isFinite ? v : 0.0; // web num(): NaN / Infinity → 0
+}
+
+/// Web `num()` of payslipLayout.ts: a saved amount (string or number) as a
+/// number; anything unreadable is 0.
+double payslipMoney(dynamic value) => _money(value);
 
 /// Web `INR` (components/payroll/PayslipDocument.tsx):
 /// `"₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 0 })` —
@@ -64,18 +71,19 @@ String formatPayslipCurrency(dynamic value) {
   return '${negative ? '-' : ''}₹$buf.${parts[1]}';
 }
 
-// Hand-copied from apps/payroll/models.py's EmployeePayslip.STATUS_CHOICES —
-// there's no API endpoint that hands back this label mapping (same approach
-// already used by the voice-command payslip summary card). Falls back to a
+// The employee's own labels, as web's My Payslips STATUS_BADGE
+// (app/dashboard/my-payslip/page.tsx:96-104). (HR's profile Payroll tab has
+// its own, different wording: kEmployeePayslipStatusLabel.) Falls back to a
 // title-cased raw value so an unrecognized future status still shows
 // something reasonable instead of a blank chip.
 const _kStatusLabels = {
-  'draft': 'Draft',
-  'sent': 'Sent',
-  'acknowledged': 'Acknowledged',
-  'queried': 'Query Raised',
-  'resolved': 'Query Resolved',
   'paid': 'Paid',
+  'sent': 'Received',
+  'acknowledged': 'Acknowledged',
+  'queried': 'Query open',
+  'resolved': 'Query resolved',
+  'draft': 'Processing',
+  'closed': 'Closed',
 };
 
 String payslipStatusLabel(String raw) {
@@ -88,6 +96,63 @@ String payslipStatusLabel(String raw) {
       .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
       .join(' ');
 }
+
+/// One saved one-time adjustment (`adjustment_items`): web AdjustmentItem.
+/// [type] is "addition", "arrear" or "deduction"; the server stores the
+/// amount as a string.
+@immutable
+class PayslipAdjustmentItem {
+  const PayslipAdjustmentItem({required this.type, required this.label, required this.amount});
+  final String type;
+  final String label;
+  final double amount;
+
+  static List<PayslipAdjustmentItem> listFrom(Object? raw) => [
+        for (final m in (raw is List ? raw : const []).whereType<Map>())
+          PayslipAdjustmentItem(
+            type: m['type']?.toString() ?? '',
+            label: m['label']?.toString() ?? '',
+            amount: _money(m['amount']),
+          ),
+      ];
+}
+
+/// The letterhead saved with the payslip (`company_header`); its fields are
+/// laid over the live company record, as web does.
+@immutable
+class PayslipCompanyHeader {
+  const PayslipCompanyHeader({
+    this.companyName,
+    this.address,
+    this.city,
+    this.state,
+    this.pinCode,
+    this.cin,
+  });
+  final String? companyName;
+  final String? address;
+  final String? city;
+  final String? state;
+  final String? pinCode;
+  final String? cin;
+
+  static PayslipCompanyHeader? from(Object? raw) {
+    if (raw is! Map) return null;
+    String? s(String k) => raw[k]?.toString();
+    return PayslipCompanyHeader(
+      companyName: s('company_name'),
+      address: s('address'),
+      city: s('city'),
+      state: s('state'),
+      pinCode: s('pin_code'),
+      cin: s('cin'),
+    );
+  }
+}
+
+/// Payslip layouts the server saves (`payslip_template`): web "standard" and
+/// "wage_slip". Anything else renders as standard, as web does.
+const kPayslipTemplateWageSlip = 'wage_slip';
 
 @immutable
 class PayslipModel {
@@ -130,6 +195,29 @@ class PayslipModel {
   /// Until when a query may be raised on this payslip (null: no limit).
   final String? queryDeadline;
 
+  /// One-time adjustments (web `adjustment_items`, `adjustments_earning`,
+  /// `adjustments_deduction`): itemised when the payslip saved the items,
+  /// else only the saved totals.
+  final List<PayslipAdjustmentItem> adjustmentItems;
+  final double adjustmentsEarning;
+  final double adjustmentsDeduction;
+
+  /// Details printed with the payslip when it was processed.
+  final String designation;
+  final String principalEmployerName;
+  final PayslipCompanyHeader? companyHeader;
+  final String payslipTemplate;
+
+  /// UAN / ESIC as the server shows them (masked or hidden per payroll
+  /// settings): null = hidden, a string = show (possibly empty → "—").
+  final String? uanDisplay;
+  final String? esicDisplay;
+
+  /// Wage-slip layout settings: deduction rows always listed, and the signed
+  /// stamp image link (short-lived; never logged or printed in messages).
+  final List<String> fixedDeductionRows;
+  final String? stampUrl;
+
   const PayslipModel({
     required this.id,
     required this.cycleStart,
@@ -158,7 +246,20 @@ class PayslipModel {
     required this.status,
     this.payslipPdfUrl,
     this.queryDeadline,
+    this.adjustmentItems = const [],
+    this.adjustmentsEarning = 0,
+    this.adjustmentsDeduction = 0,
+    this.designation = '',
+    this.principalEmployerName = '',
+    this.companyHeader,
+    this.payslipTemplate = 'standard',
+    this.uanDisplay,
+    this.esicDisplay,
+    this.fixedDeductionRows = const [],
+    this.stampUrl,
   });
+
+  bool get isWageSlip => payslipTemplate == kPayslipTemplateWageSlip;
 
   factory PayslipModel.fromJson(Map<String, dynamic> json) {
     final otherEarningsRaw = json['other_earnings'];
@@ -174,9 +275,7 @@ class PayslipModel {
       basic: _money(json['basic']),
       hra: _money(json['hra']),
       specialAllowance: _money(json['special_allowance']),
-      otherEarnings: otherEarningsRaw is Map
-          ? Map<String, dynamic>.from(otherEarningsRaw)
-          : const {},
+      otherEarnings: otherEarningsRaw is Map ? Map<String, dynamic>.from(otherEarningsRaw) : const {},
       otherDeductions: otherDeductionsRaw is Map ? Map<String, dynamic>.from(otherDeductionsRaw) : const {},
       reimbursements: _money(json['reimbursements']),
       bonus: _money(json['bonus']),
@@ -193,38 +292,64 @@ class PayslipModel {
       status: json['status'] as String? ?? 'draft',
       payslipPdfUrl: json['payslip_pdf'] as String?,
       queryDeadline: json['query_deadline'] as String?,
+      adjustmentItems: PayslipAdjustmentItem.listFrom(json['adjustment_items']),
+      adjustmentsEarning: _money(json['adjustments_earning']),
+      adjustmentsDeduction: _money(json['adjustments_deduction']),
+      designation: json['designation']?.toString() ?? '',
+      principalEmployerName: json['principal_employer_name']?.toString() ?? '',
+      companyHeader: PayslipCompanyHeader.from(json['company_header']),
+      payslipTemplate:
+          (json['payslip_template']?.toString() ?? '').isEmpty ? 'standard' : json['payslip_template'].toString(),
+      uanDisplay: json['uan_display']?.toString(),
+      esicDisplay: json['esic_display']?.toString(),
+      fixedDeductionRows: [
+        for (final r in (json['fixed_deduction_rows'] is List ? json['fixed_deduction_rows'] as List : const []))
+          r.toString(),
+      ],
+      stampUrl: json['stamp_url']?.toString(),
     );
   }
 
   double get paidDays => totalWorkingDays - lopDays;
 
   PayslipModel copyWith({String? status}) => PayslipModel(
-    id: id,
-    cycleStart: cycleStart,
-    cycleEnd: cycleEnd,
-    payDate: payDate,
-    employeeName: employeeName,
-    employeeIdCode: employeeIdCode,
-    department: department,
-    basic: basic,
-    hra: hra,
-    specialAllowance: specialAllowance,
-    otherEarnings: otherEarnings,
-    otherDeductions: otherDeductions,
-    reimbursements: reimbursements,
-    bonus: bonus,
-    grossEarnings: grossEarnings,
-    totalWorkingDays: totalWorkingDays,
-    lopDays: lopDays,
-    lopDeduction: lopDeduction,
-    pfEmployee: pfEmployee,
-    esiEmployee: esiEmployee,
-    ptDeduction: ptDeduction,
-    lwfEmployee: lwfEmployee,
-    totalDeductions: totalDeductions,
-    netPay: netPay,
-    status: status ?? this.status,
-    payslipPdfUrl: payslipPdfUrl,
-    queryDeadline: queryDeadline,
-  );
+        id: id,
+        cycleStart: cycleStart,
+        cycleEnd: cycleEnd,
+        payDate: payDate,
+        employeeName: employeeName,
+        employeeIdCode: employeeIdCode,
+        department: department,
+        basic: basic,
+        hra: hra,
+        specialAllowance: specialAllowance,
+        otherEarnings: otherEarnings,
+        otherDeductions: otherDeductions,
+        reimbursements: reimbursements,
+        bonus: bonus,
+        grossEarnings: grossEarnings,
+        totalWorkingDays: totalWorkingDays,
+        lopDays: lopDays,
+        lopDeduction: lopDeduction,
+        pfEmployee: pfEmployee,
+        esiEmployee: esiEmployee,
+        ptDeduction: ptDeduction,
+        lwfEmployee: lwfEmployee,
+        totalDeductions: totalDeductions,
+        netPay: netPay,
+        status: status ?? this.status,
+        payslipPdfUrl: payslipPdfUrl,
+        queryDeadline: queryDeadline,
+        adjustmentItems: adjustmentItems,
+        adjustmentsEarning: adjustmentsEarning,
+        adjustmentsDeduction: adjustmentsDeduction,
+        designation: designation,
+        principalEmployerName: principalEmployerName,
+        companyHeader: companyHeader,
+        payslipTemplate: payslipTemplate,
+        uanDisplay: uanDisplay,
+        esicDisplay: esicDisplay,
+        fixedDeductionRows: fixedDeductionRows,
+        stampUrl: stampUrl,
+      );
 }

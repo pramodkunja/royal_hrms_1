@@ -18,7 +18,7 @@ import 'leave_number_format.dart';
 // The policy warning and web's insufficient-balance notice are separate
 // widgets below, placed after the panel as on web.
 
-const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
 
 /// Web leave/_data.ts fmtDate: en-IN `{day: numeric, month: short, year:
 /// numeric}` → "16 Nov 2026". Anything that isn't an ISO date is shown as-is.

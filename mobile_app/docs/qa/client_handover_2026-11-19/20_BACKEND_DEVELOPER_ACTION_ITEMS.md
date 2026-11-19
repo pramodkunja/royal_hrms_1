@@ -22,8 +22,9 @@
 | 11 | **HO-68b** (Task 95) | P3 | Expense approve/reject: `remarks` never saved (B audit) and the leave email template is ignored | expenses / leave approval views | Confirm and persist / honour | none |
 | 12 | **HO-68c** (Task 95) | P3 | Attendance-approval endpoints require `payroll.edit` while web shows the tab for `payroll.view` | attendance approval views | Align the codename | Mobile follows the backend |
 | 13 | **HO-68d** (Task 95) | P3 | Seeded `system_admin` lacks many codenames (leave.approve, wfh.*, training.* …) so raw-permission web nav hides items the wildcard lets the API allow | seed migrations | Seed the codenames or drop the wildcard consistently | Mobile uses the wildcard (see doc 22 §3) |
+| 14 | **HO-74** (Task 98) | P2 | `EmployeeDetailView.put` refuses any role that holds `settings.edit` even when the submitted role equals the employee's current role, and web and mobile always send `role` — saving an employee whose role holds `settings.edit` returns 400 (verified by code reading only) | `accounts/views.py:3601-3616` | Skip the check when the role is unchanged (or confirm the intended behaviour) | None — mobile does not work around it |
 
-_Items 10–13 come from the Task 95 audit of source only; confirm against the production revision before acting._
+_Items 10–14 come from the Task 95 audit of source only; confirm against the production revision before acting._
 
 ## Web (frontend) note — not backend
 - **WEB-1:** Apply Leave's form default `leave_type: "casual"` (`ApplyLeaveForm.tsx:28`) is kept even when Casual is not offered to the employee (inactive, or gender), so a submit is refused by the server. Mobile selects the first offered type instead. Suggest: select the first applicable type once policies load.

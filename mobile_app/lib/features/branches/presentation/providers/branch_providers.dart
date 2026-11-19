@@ -179,7 +179,8 @@ class BranchListNotifier
   }
 
   Future<String?> create({
-    required int cityId,
+    int? cityId,
+    String? newCityName,
     required int stateId,
     required String branchName,
     required String address,
@@ -191,6 +192,7 @@ class BranchListNotifier
     try {
       final created = await _repo.createBranch(
         cityId: cityId,
+        newCityName: newCityName,
         stateId: stateId,
         branchName: branchName,
         address: address,
@@ -207,7 +209,8 @@ class BranchListNotifier
 
   Future<String?> edit({
     required int id,
-    required int cityId,
+    int? cityId,
+    String? newCityName,
     required int stateId,
     required String branchName,
     required String address,
@@ -220,6 +223,7 @@ class BranchListNotifier
       final updated = await _repo.updateBranch(
         id: id,
         cityId: cityId,
+        newCityName: newCityName,
         stateId: stateId,
         branchName: branchName,
         address: address,

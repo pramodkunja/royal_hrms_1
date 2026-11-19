@@ -46,7 +46,7 @@ class PromotionRecordModel {
       );
 }
 
-const _kMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const _kMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
 
 /// Web fmtDate (en-IN, 2-digit day, short month, numeric year): "05 Nov 2026".
 String formatPromotionDate(String iso) {

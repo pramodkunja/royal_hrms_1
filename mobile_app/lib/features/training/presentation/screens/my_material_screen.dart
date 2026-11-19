@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/blue_app_bar.dart';
+import '../../../approvals/presentation/widgets/approvals_ui.dart';
 import '../../data/models/training_models.dart';
 import '../providers/training_office_opener.dart';
 import '../providers/training_providers.dart';
@@ -205,6 +208,7 @@ class _MyMaterialScreenState extends ConsumerState<MyMaterialScreen> {
           const SizedBox(height: 8),
           OutlinedButton.icon(
             key: const Key('my-material-open-office'),
+            style: trainingOutlinedStyle(),
             onPressed: _officeBusy ? null : _openOffice,
             icon: const Icon(Icons.open_in_new, size: 16),
             label: Text(_officeBusy ? 'Opening…' : 'Open in another app'),
@@ -213,11 +217,12 @@ class _MyMaterialScreenState extends ConsumerState<MyMaterialScreen> {
       );
     }
     if (_videoError != null) {
-      return Container(
+      return TrainingBanner(
         key: const Key('my-material-video-error'),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: AppColors.errorContainer, borderRadius: BorderRadius.circular(12)),
-        child: Text(_videoError!, style: TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+        text: _videoError!,
+        icon: Icons.error_outline,
+        color: AppColors.error,
+        background: AppColors.errorContainer,
       );
     }
     if (_m.isUploadedVideo && (_sourceLoading || _sourceUrl == null)) {
@@ -247,79 +252,107 @@ class _MyMaterialScreenState extends ConsumerState<MyMaterialScreen> {
     final done = _m.isCompleted;
     final wait = trainingSecondsUntilConfirm(_m, DateTime.now());
     final showConfirm = !done && !_disabled && trainingCanConfirm(_m);
+    final icon = _m.isDocument
+        ? Icons.description_outlined
+        : (_m.isUploadedVideo ? Icons.videocam_outlined : Icons.smart_display_outlined);
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: Text(_m.title, overflow: TextOverflow.ellipsis)),
+      appBar: BlueAppBar(title: _m.title),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              TrainingBadge(
-                key: const Key('my-material-hint'),
-                label: trainingMaterialHint(_m),
-                color: done ? AppColors.success : AppColors.info,
-              ),
-              Text('${_m.kindLabel}${_m.isRequired ? '' : ' · optional'}',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            ],
+          TrainingCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (!trainingCompact(context)) ...[
+                      ApprovalsIconBox(icon, color: done ? AppColors.success : AppColors.primary, size: 40),
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_m.title, style: AppTextStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.w700, height: 1.3)),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              TrainingBadge(
+                                key: const Key('my-material-hint'),
+                                label: trainingMaterialHint(_m),
+                                color: done ? AppColors.success : AppColors.info,
+                              ),
+                              Text('${_m.kindLabel}${_m.isRequired ? '' : ' · optional'}',
+                                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (_m.description.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(_m.description, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary, height: 1.45)),
+                ],
+              ],
+            ),
           ),
-          if (_m.description.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(_m.description, style: TextStyle(fontSize: 13, color: AppColors.textPrimary)),
-          ],
-          if (_disabled) ...[
-            const SizedBox(height: 10),
-            Text('This training is closed — progress is not recorded. HR can reset your attempts.',
-                key: const Key('my-material-closed'), style: TextStyle(fontSize: 12, color: AppColors.error)),
-          ],
-          if (_openError != null) ...[
-            const SizedBox(height: 10),
-            Text(_openError!,
-                key: const Key('my-material-open-error'), style: TextStyle(fontSize: 12, color: AppColors.error)),
-          ],
-          const SizedBox(height: 14),
+          if (_disabled)
+            TrainingBanner(
+              key: const Key('my-material-closed'),
+              text: 'This training is closed — progress is not recorded. HR can reset your attempts.',
+              icon: Icons.block,
+              color: AppColors.error,
+              background: AppColors.errorContainer,
+            ),
+          if (_openError != null)
+            TrainingBanner(
+              key: const Key('my-material-open-error'),
+              text: _openError!,
+              icon: Icons.error_outline,
+              color: AppColors.error,
+              background: AppColors.errorContainer,
+            ),
           _content(context),
           if (_m.isExternal) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                key: const Key('my-material-open-original'),
-                onPressed: _openOriginal,
-                icon: const Icon(Icons.open_in_new, size: 16),
-                label: Text(
-                  _m.isTracked
-                      ? 'Video not playing? Open the original (progress is only recorded here)'
-                      : 'Video not playing? Open the original',
-                ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              key: const Key('my-material-open-original'),
+              style: trainingOutlinedStyle(),
+              onPressed: _openOriginal,
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: Text(
+                _m.isTracked
+                    ? 'Video not playing? Open the original (progress is only recorded here)'
+                    : 'Video not playing? Open the original',
+                textAlign: TextAlign.center,
               ),
             ),
           ],
           if (showConfirm) ...[
-            const SizedBox(height: 14),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (wait > 0)
-                  Flexible(
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: Text('Available in ${formatTrainingDuration(wait)}',
-                          key: const Key('my-material-wait'),
-                          style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                    ),
-                  ),
-                FilledButton(
-                  key: const Key('my-material-confirm'),
-                  onPressed: _busy || wait > 0 ? null : _confirm,
-                  child: Text(_m.isDocument ? 'I have read this' : 'I have watched this'),
-                ),
-              ],
+            const SizedBox(height: 16),
+            if (wait > 0)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text('Available in ${formatTrainingDuration(wait)}',
+                    key: const Key('my-material-wait'),
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+              ),
+            FilledButton.icon(
+              key: const Key('my-material-confirm'),
+              style: trainingFilledStyle(),
+              onPressed: _busy || wait > 0 ? null : _confirm,
+              icon: const Icon(Icons.check_circle_outline, size: 18),
+              label: Text(_m.isDocument ? 'I have read this' : 'I have watched this'),
             ),
           ],
         ],

@@ -155,7 +155,7 @@ class _Body extends ConsumerWidget {
     final parsed = DateTime.tryParse(iso);
     if (parsed == null) return iso;
     final dt = parsed.toLocal();
-    const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
     final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
     final ampm = dt.hour >= 12 ? 'PM' : 'AM';
     return '${dt.day} ${m[dt.month]} ${dt.year}, ${h.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} $ampm';

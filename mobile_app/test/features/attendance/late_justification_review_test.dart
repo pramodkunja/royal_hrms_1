@@ -640,14 +640,14 @@ void main() {
       final l = UnifiedApprovalItem.fromCorrection(entity(late('l1', hasDocument: true)));
       expect(l.isLateJustification, isTrue);
       expect(l.primaryLine, 'Late Arrival Justification');
-      expect(l.secondaryLine, 'Transport · proof attached · clocked in 10:05');
-      expect(l.tertiaryLine, '2026-11-10');
+      expect(l.secondaryLine, 'Transport · proof attached · clocked in 10:05 AM'); // web fmtTime12h
+      expect(l.tertiaryLine, '10 Nov 2026'); // web fmtDateOnly
       expect(l.selectable, isFalse);
-      expect(UnifiedApprovalItem.fromCorrection(entity(late('l2'))).secondaryLine, 'Transport · clocked in 10:05');
+      expect(UnifiedApprovalItem.fromCorrection(entity(late('l2'))).secondaryLine, 'Transport · clocked in 10:05 AM');
       final p = UnifiedApprovalItem.fromCorrection(entity(punch('p1')));
       expect(p.isLateJustification, isFalse);
       expect(p.selectable, isTrue);
-      expect(p.primaryLine, 'IN correction');
+      expect(p.primaryLine, 'Check-in Correction'); // web PUNCH_LABEL
     });
 
     testWidgets('quick / bulk approve of a late row is refused without a request', (tester) async {

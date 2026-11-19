@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../../core/network/api_client.dart' show userFriendlyMessage;
+import '../../../../../core/permissions/permission_providers.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
-import '../../../../../core/permissions/permission_providers.dart';
+import '../../../../profile/presentation/widgets/profile_widgets.dart';
 import '../../../data/models/company_model.dart';
 import '../../providers/settings_providers.dart';
 
-// Financial Year Configuration — shown on the Company Info screen, saved
-// independently of the company form (matches web). Leave Allocation, Carry
-// Forward, Attendance, Payroll and Reports all derive their current /
-// previous / next year from this one setting instead of assuming a
-// January–December calendar year.
+// Financial Year Configuration — shown on the Company Information tab, saved
+// independently of the company form (web FinancialYearSection.tsx). Leave
+// Allocation, Carry Forward, Attendance, Payroll and Reports all derive their
+// current / previous / next year from this one setting.
 class FinancialYearSection extends ConsumerStatefulWidget {
   const FinancialYearSection({super.key});
 
@@ -25,84 +26,77 @@ class _FinancialYearSectionState extends ConsumerState<FinancialYearSection> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(financialYearProvider);
-    // The server's PUT requires settings.edit (CompanyFinancialYearView); it
-    // decides, never the role name. This only controls whether the edit
-    // control renders at all.
-    final isSystemAdmin = ref.watch(permissionProvider('settings.edit'));
+    // The server's PUT requires settings.edit; it decides, never the role
+    // name. This only controls whether the edit control renders at all.
+    final canEdit = ref.watch(permissionProvider('settings.edit'));
 
-    return _Card(
+    return ProfileSectionCard(
+      icon: Icons.calendar_month_outlined,
+      title: 'Financial Year Configuration',
       child: async.when(
-        loading: () => const Padding(
-          padding: EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              SizedBox(width: 10),
-              Text('Loading financial year configuration…'),
-            ],
-          ),
+        loading: () => const Row(
+          children: [
+            SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+            SizedBox(width: 10),
+            Expanded(child: Text('Loading financial year configuration…')),
+          ],
         ),
-        error: (err, _) => Text(
-          'Could not load financial year configuration.',
-          style: AppTextStyles.bodySecondary.copyWith(color: AppColors.error),
+        error: (err, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              userFriendlyMessage(err),
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.error),
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () => ref.invalidate(financialYearProvider),
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Retry'),
+            ),
+          ],
         ),
         data: (data) {
           _draftMonth ??= data.startMonth;
           final dirty = _draftMonth != data.startMonth;
-
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Configure the financial year once, here. Leave Allocation, Carry '
-                'Forward, Attendance, Payroll and Reports all derive their current, '
-                'previous and next year from this single setting.',
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.textSecondary,
-                  height: 1.5,
-                ),
+                'Configure the financial year once, here. Leave Allocation, Carry Forward, Attendance, Payroll, '
+                'and Reports all derive their current / previous / next year from this single setting instead of '
+                'each assuming a January–December calendar year.',
+                style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, height: 1.5),
               ),
               const SizedBox(height: 14),
-              if (isSystemAdmin) ...[
-                Text('Financial Year Starts In', style: AppTextStyles.label),
-                const SizedBox(height: 6),
+              Text(
+                'Financial Year Starts In',
+                style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              if (canEdit)
                 DropdownButtonFormField<String>(
                   initialValue: _draftMonth,
                   isExpanded: true,
-                  style: AppTextStyles.body,
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
                   decoration: InputDecoration(
                     filled: true,
-                    fillColor: AppColors.background,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    fillColor: AppColors.surface,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppColors.border)),
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: AppColors.border),
-                    ),
+                        borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppColors.border)),
                     focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: AppColors.primary, width: 1.5),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: AppColors.primary, width: 1.5)),
                   ),
-                  items: kMonthNames
-                      .map((m) => DropdownMenuItem(value: m, child: Text(m, style: AppTextStyles.body)))
-                      .toList(),
+                  items: [for (final m in kMonthNames) DropdownMenuItem(value: m, child: Text(m))],
                   onChanged: (val) => setState(() => _draftMonth = val),
-                ),
-                const SizedBox(height: 16),
-              ] else ...[
-                Text('Financial Year Starts In', style: AppTextStyles.label),
-                const SizedBox(height: 4),
-                Text(
-                  data.startMonth,
-                  style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 16),
-              ],
+                )
+              else
+                Text(data.startMonth, style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 14),
               Wrap(
                 spacing: 10,
                 runSpacing: 10,
@@ -112,41 +106,34 @@ class _FinancialYearSectionState extends ConsumerState<FinancialYearSection> {
                   _YearChip(label: 'Next Year', value: data.nextFinancialYear, active: false),
                 ],
               ),
-              if (isSystemAdmin) ...[
-                const SizedBox(height: 16),
-                Row(
+              if (canEdit) ...[
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    SizedBox(
-                      height: 38,
-                      child: FilledButton.icon(
-                        onPressed: (!dirty || _saving) ? null : _save,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        icon: _saving
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                            : const Icon(Icons.save_outlined, size: 16, color: Colors.white),
-                        label: Text(
-                          _saving ? 'Saving…' : 'Save',
-                          style: AppTextStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
-                        ),
+                    FilledButton.icon(
+                      onPressed: (!dirty || _saving) ? null : _save,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        minimumSize: const Size(0, 40),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
+                      icon: _saving
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.save_outlined, size: 16),
+                      label: Text(_saving ? 'Saving…' : 'Save'),
                     ),
-                    if (!dirty) ...[
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Pick a different month to change it.',
-                          style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                    if (!dirty && !_saving)
+                      Text(
+                        'Pick a different month to change it.',
+                        style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
                       ),
-                    ],
                   ],
                 ),
               ],
@@ -173,63 +160,6 @@ class _FinancialYearSectionState extends ConsumerState<FinancialYearSection> {
   }
 }
 
-// ── Card shell ────────────────────────────────────────────────────────────────
-
-class _Card extends StatelessWidget {
-  final Widget child;
-  const _Card({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.cardShadow,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-            color: AppColors.info,
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.calendar_month_outlined, color: Colors.white, size: 17),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Financial Year Configuration',
-                    style: AppTextStyles.label.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-            child: child,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Year chip ─────────────────────────────────────────────────────────────────
-
 class _YearChip extends StatelessWidget {
   final String label;
   final String value;
@@ -252,12 +182,7 @@ class _YearChip extends StatelessWidget {
         children: [
           Text(label, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontSize: 11)),
           const SizedBox(height: 3),
-          Text(
-            value.isEmpty ? '—' : value,
-            style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w800),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          Text(value.isEmpty ? '—' : value, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w800)),
         ],
       ),
     );

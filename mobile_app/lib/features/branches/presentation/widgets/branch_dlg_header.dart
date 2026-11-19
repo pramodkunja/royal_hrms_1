@@ -4,14 +4,14 @@ import '../../../../core/theme/app_colors.dart';
 class BranchDlgHeader extends StatelessWidget {
   final IconData icon;
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final VoidCallback onClose;
 
   const BranchDlgHeader({
     super.key,
     required this.icon,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
     required this.onClose,
   });
 
@@ -49,11 +49,13 @@ class BranchDlgHeader extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!,
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
               ],
             ),
           ),

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -7,12 +9,15 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/models/bulk_import_result.dart';
 import '../../../../shared/widgets/bulk_import_result_view.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
+import '../providers/employee_bulk_import_support.dart';
 import '../providers/employee_providers.dart';
 
-const _kMaxImportBytes = 5 * 1024 * 1024;
-
 class EmployeeBulkImportScreen extends ConsumerStatefulWidget {
-  const EmployeeBulkImportScreen({super.key});
+  /// Tests only: show this import result without picking and uploading a file.
+  @visibleForTesting
+  final BulkImportResult? initialResult;
+  const EmployeeBulkImportScreen({super.key, this.initialResult});
 
   @override
   ConsumerState<EmployeeBulkImportScreen> createState() => _EmployeeBulkImportScreenState();
@@ -22,8 +27,61 @@ class _EmployeeBulkImportScreenState extends ConsumerState<EmployeeBulkImportScr
   PlatformFile? _picked;
   String? _pickError;
   bool _uploading = false;
-  BulkImportResult? _result;
+  late BulkImportResult? _result = widget.initialResult;
   String? _uploadError;
+
+  // Web BulkImportModal: "Sample CSV" / "Sample XLSX" are both disabled while
+  // either downloads; a failure is shown under them.
+  String? _sampleDownloading;
+  String? _sampleError;
+  bool _reportSaving = false;
+
+  bool get _allowed => canOpenEmployeeBulkImport(ref.read(authStateProvider).valueOrNull?.user);
+
+  void _toast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      backgroundColor: AppColors.success,
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+
+  Future<void> _downloadSample(String format) async {
+    if (_sampleDownloading != null || !_allowed) return;
+    setState(() {
+      _sampleDownloading = format;
+      _sampleError = null;
+    });
+    try {
+      final bytes = await ref.read(employeesDataSourceProvider).fetchBulkImportSample(format);
+      final path = await ref.read(employeeFileSaverProvider)(
+          'employee_import_sample.$format', Uint8List.fromList(bytes));
+      if (mounted && path != null) _toast('Sample downloaded.');
+    } catch (e) {
+      if (!mounted) return;
+      final msg = _friendly(e);
+      setState(() => _sampleError = msg.isEmpty ? kEmployeeSampleFailed : msg);
+    } finally {
+      if (mounted) setState(() => _sampleDownloading = null);
+    }
+  }
+
+  Future<void> _downloadErrorReport() async {
+    final result = _result;
+    if (result == null || result.errors.isEmpty || _reportSaving) return;
+    setState(() => _reportSaving = true);
+    try {
+      final path = await ref.read(employeeFileSaverProvider)(
+          kEmployeeErrorReportFileName, employeeImportErrorReportBytes(result.errors));
+      if (mounted && path != null) _toast('Error report downloaded.');
+    } catch (_) {
+      if (mounted) {
+        setState(() => _uploadError = 'Could not save the error report.');
+      }
+    } finally {
+      if (mounted) setState(() => _reportSaving = false);
+    }
+  }
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
@@ -33,10 +91,13 @@ class _EmployeeBulkImportScreenState extends ConsumerState<EmployeeBulkImportScr
     );
     if (result == null || result.files.isEmpty) return;
     final file = result.files.first;
-    if (file.size > _kMaxImportBytes) {
+    final problem = checkEmployeeImportFile(file.name, file.size);
+    if (problem != null) {
       setState(() {
-        _pickError = 'File exceeds 5 MB.';
+        _pickError = problem;
         _picked = null;
+        _result = null;
+        _uploadError = null;
       });
       return;
     }
@@ -90,6 +151,26 @@ class _EmployeeBulkImportScreenState extends ConsumerState<EmployeeBulkImportScr
 
   @override
   Widget build(BuildContext context) {
+    // Reached without web's employees.create (e.g. a link): nothing to pick,
+    // download or import.
+    if (!canOpenEmployeeBulkImport(ref.watch(authStateProvider).valueOrNull?.user)) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(title: const Text('Bulk Import Employees')),
+        body: Center(
+          key: const Key('employee-import-denied'),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.lock_outline, size: 40, color: AppColors.textHint),
+              const SizedBox(height: 12),
+              Text(kEmployeeImportDenied,
+                  textAlign: TextAlign.center, style: AppTextStyles.label.copyWith(color: AppColors.textSecondary)),
+            ]),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Bulk Import Employees')),
@@ -99,25 +180,32 @@ class _EmployeeBulkImportScreenState extends ConsumerState<EmployeeBulkImportScr
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const _InfoCard(
-                requiredCols: [
-                  'first_name',
-                  'last_name',
-                  'email',
-                  'role',
-                  'department',
-                  'designation',
-                  'branch',
-                  'date_of_joining',
+              _InfoCard(
+                requiredCols: const [
+                  'First Name',
+                  'Last Name',
+                  'Work Email',
+                  'Role',
+                  'Department',
+                  'Designation',
+                  'Branch',
+                  'Date of Joining',
                 ],
-                optionalCols: [
-                  'phone',
-                  'employee_type',
-                  'gender',
-                  'date_of_birth',
-                  'blood_group',
-                  'address',
-                ],
+                optionalCols: const ['Phone', 'Employee Type', 'Gender', 'DOB', 'Blood Group', 'Address'],
+                samples: Row(children: [
+                  for (final format in const ['csv', 'xlsx']) ...[
+                    OutlinedButton.icon(
+                      key: Key('employee-sample-$format'),
+                      onPressed: _sampleDownloading != null ? null : () => _downloadSample(format),
+                      icon: _sampleDownloading == format
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.download_outlined, size: 16),
+                      label: Text(_sampleDownloading == format ? 'Downloading…' : 'Sample ${format.toUpperCase()}'),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+                ]),
+                sampleError: _sampleError,
               ),
               const SizedBox(height: 16),
               _FilePickerCard(
@@ -148,7 +236,7 @@ class _EmployeeBulkImportScreenState extends ConsumerState<EmployeeBulkImportScr
                               height: 14,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.upload_file_outlined, size: 18),
-                      label: Text(_uploading ? 'Importing…' : 'Import',
+                      label: Text(_uploading ? 'Uploading…' : 'Upload & Import',
                           style: const TextStyle(fontWeight: FontWeight.w600)),
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.primary,
@@ -169,8 +257,18 @@ class _EmployeeBulkImportScreenState extends ConsumerState<EmployeeBulkImportScr
                     border: Border.all(color: AppColors.border),
                     boxShadow: AppColors.cardShadow,
                   ),
-                  child: BulkImportResultView(result: _result!),
+                  // Material under the decorated box so the expansion tiles can paint ink.
+                  child: Material(color: Colors.transparent, child: BulkImportResultView(result: _result!)),
                 ),
+                if (_result!.errors.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    key: const Key('employee-error-report'),
+                    onPressed: _reportSaving ? null : _downloadErrorReport,
+                    icon: const Icon(Icons.download_outlined, size: 16),
+                    label: const Text('Download Error Report'),
+                  ),
+                ],
               ],
             ],
           ),
@@ -183,7 +281,14 @@ class _EmployeeBulkImportScreenState extends ConsumerState<EmployeeBulkImportScr
 class _InfoCard extends StatelessWidget {
   final List<String> requiredCols;
   final List<String> optionalCols;
-  const _InfoCard({required this.requiredCols, required this.optionalCols});
+  final Widget samples;
+  final String? sampleError;
+  const _InfoCard({
+    required this.requiredCols,
+    required this.optionalCols,
+    required this.samples,
+    this.sampleError,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -216,6 +321,14 @@ class _InfoCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text('Max 1000 rows, 5 MB. Existing emails are skipped, not failed — safe to re-upload a corrected file.',
               style: AppTextStyles.caption.copyWith(fontSize: 10.5, color: AppColors.textHint)),
+          const SizedBox(height: 10),
+          samples,
+          if (sampleError != null)
+            Padding(
+              key: const Key('employee-sample-error'),
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(sampleError!, style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+            ),
         ],
       ),
     );

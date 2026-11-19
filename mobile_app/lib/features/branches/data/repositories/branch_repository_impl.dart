@@ -15,8 +15,8 @@ class BranchRepositoryImpl implements BranchRepository {
       _dataSource.fetchCities(stateId);
 
   @override
-  Future<String> previewBranchCode(int cityId) =>
-      _dataSource.fetchPreviewCode(cityId);
+  Future<String> previewBranchCode({int? cityId, String? cityName}) =>
+      _dataSource.fetchPreviewCode(cityId: cityId, cityName: cityName);
 
   @override
   Future<BranchStatsEntity> getStats() => _dataSource.fetchStats();
@@ -34,7 +34,8 @@ class BranchRepositoryImpl implements BranchRepository {
 
   @override
   Future<BranchEntity> createBranch({
-    required int cityId,
+    int? cityId,
+    String? newCityName,
     required int stateId,
     required String branchName,
     required String address,
@@ -43,7 +44,8 @@ class BranchRepositoryImpl implements BranchRepository {
     BranchGeofence? geofence,
   }) =>
       _dataSource.createBranch({
-        'city': cityId,
+        // Web doSave: city, or new_city_name for the Other option — never both.
+        if (newCityName != null) 'new_city_name': newCityName else 'city': cityId,
         'state': stateId,
         'branch_name': branchName,
         'address': address,
@@ -55,7 +57,8 @@ class BranchRepositoryImpl implements BranchRepository {
   @override
   Future<BranchEntity> updateBranch({
     required int id,
-    required int cityId,
+    int? cityId,
+    String? newCityName,
     required int stateId,
     required String branchName,
     required String address,
@@ -64,7 +67,8 @@ class BranchRepositoryImpl implements BranchRepository {
     BranchGeofence? geofence,
   }) =>
       _dataSource.updateBranch(id, {
-        'city': cityId,
+        // Web doSave: city, or new_city_name for the Other option — never both.
+        if (newCityName != null) 'new_city_name': newCityName else 'city': cityId,
         'state': stateId,
         'branch_name': branchName,
         'address': address,

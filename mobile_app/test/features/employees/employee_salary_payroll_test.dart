@@ -393,7 +393,7 @@ void main() {
       expect(find.text('Payslip History'), findsOneWidget);
       expect(find.text('Oct 2026'), findsOneWidget);
       expect(find.text('Pay date 28 Oct 2026 · Standard'), findsOneWidget);
-      expect(find.text('Pay date 28 Sep 2026 · Default'), findsOneWidget);
+      expect(find.text('Pay date 28 Sept 2026 · Default'), findsOneWidget);
       expect(tester.widget<Text>(byKey('payslip-net-p2')).data, 'Net ₹47,800');
       expect(find.text('Gross ₹52,000'), findsWidgets);
       expect(tester.widget<Text>(byKey('payslip-status-p2')).data, 'Paid');

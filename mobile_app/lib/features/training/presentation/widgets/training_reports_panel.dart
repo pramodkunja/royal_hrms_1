@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../shared/widgets/app_error_state.dart';
+import '../../../../core/theme/app_text_styles.dart';
+import '../../../approvals/presentation/widgets/approvals_kit.dart';
 import '../../data/models/training_models.dart';
 import '../providers/training_file_io.dart';
 import '../providers/training_providers.dart';
@@ -75,6 +76,7 @@ class _TrainingReportsPanelState extends ConsumerState<TrainingReportsPanel> wit
     final courses = ref.watch(trainingCoursesProvider(false)).valueOrNull ?? const <TrainingCourse>[];
     final picker = ref.watch(trainingPickerProvider('')).valueOrNull;
     final rowsAsync = ref.watch(trainingReportProvider(_f));
+    final filtered = _f != const TrainingReportFilter();
 
     Widget select(String key, String label, String value, List<(String, String)> options, ValueChanged<String> set) {
       final valid = value.isEmpty || options.any((o) => o.$1 == value);
@@ -86,13 +88,8 @@ class _TrainingReportsPanelState extends ConsumerState<TrainingReportsPanel> wit
           key: ValueKey('training-report-$key=$value'),
           isExpanded: true,
           initialValue: valid ? value : '',
-          decoration: InputDecoration(
-            labelText: label,
-            isDense: true,
-            filled: true,
-            fillColor: AppColors.surface,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
+          iconEnabledColor: AppColors.textSecondary,
+          decoration: trainingInput(label),
           items: [
             const DropdownMenuItem(value: '', child: Text('All')),
             for (final (v, l) in options) DropdownMenuItem(value: v, child: Text(l, overflow: TextOverflow.ellipsis)),
@@ -105,9 +102,73 @@ class _TrainingReportsPanelState extends ConsumerState<TrainingReportsPanel> wit
     Widget dateButton(String label, String value, bool from) => OutlinedButton.icon(
           key: Key('training-report-${from ? 'from' : 'to'}'),
           onPressed: () => _pickDate(from: from),
+          style: trainingOutlinedStyle(),
           icon: const Icon(Icons.event_outlined, size: 16),
-          label: Text(value.isEmpty ? label : '$label: $value', overflow: TextOverflow.ellipsis),
+          label: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(value.isEmpty ? label : '$label: $value', overflow: TextOverflow.ellipsis),
+          ),
         );
+
+    final selects = [
+      select('course', 'Course', _f.course, [for (final c in courses) (c.id, c.title)], (v) => _f = _f.copyWith(course: v)),
+      select(
+          'status',
+          'Status',
+          _f.status,
+          [
+            for (final s in [
+              TrainingStatus.assigned,
+              TrainingStatus.inProgress,
+              TrainingStatus.completed,
+              TrainingStatus.overdue,
+              TrainingStatus.failed,
+            ])
+              (s.api, s.label),
+          ],
+          (v) => _f = _f.copyWith(status: v)),
+      select('department', 'Department', _f.department, [for (final d in picker?.departments ?? const []) (d, d)],
+          (v) => _f = _f.copyWith(department: v)),
+      select('branch', 'Branch', _f.branch, [for (final b in picker?.branches ?? const []) (b, b)],
+          (v) => _f = _f.copyWith(branch: v)),
+    ];
+
+    final filterCard = Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: LayoutBuilder(builder: (context, box) {
+        final scale = MediaQuery.textScalerOf(context).scale(10) / 10;
+        final cols = (box.maxWidth < 330 || scale > 1.4) ? 1 : 2;
+        final w = (box.maxWidth - (cols - 1) * 10) / cols;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(child: TrainingSectionHeader(Icons.tune, 'Filters', subtitle: filtered ? 'Filters applied' : null)),
+                if (filtered)
+                  TextButton(
+                    key: const Key('training-report-clear'),
+                    style: trainingTextStyle(),
+                    onPressed: () => setState(() => _f = const TrainingReportFilter()),
+                    child: const Text('Clear filters'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(spacing: 10, runSpacing: 10, children: [
+              for (final s in selects) SizedBox(width: w, child: s),
+              SizedBox(width: w, child: dateButton('Assigned from', _f.from, true)),
+              SizedBox(width: w, child: dateButton('Assigned to', _f.to, false)),
+            ]),
+          ],
+        );
+      }),
+    );
 
     return RefreshIndicator(
       color: AppColors.primary,
@@ -118,76 +179,55 @@ class _TrainingReportsPanelState extends ConsumerState<TrainingReportsPanel> wit
       child: ListView(
         key: const Key('training-reports'),
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 96),
         children: [
-          select('course', 'Course', _f.course, [for (final c in courses) (c.id, c.title)],
-              (v) => _f = _f.copyWith(course: v)),
-          const SizedBox(height: 10),
-          select(
-              'status',
-              'Status',
-              _f.status,
-              [
-                for (final s in [
-                  TrainingStatus.assigned,
-                  TrainingStatus.inProgress,
-                  TrainingStatus.completed,
-                  TrainingStatus.overdue,
-                  TrainingStatus.failed,
-                ])
-                  (s.api, s.label),
-              ],
-              (v) => _f = _f.copyWith(status: v)),
-          const SizedBox(height: 10),
-          select('department', 'Department', _f.department, [for (final d in picker?.departments ?? const []) (d, d)],
-              (v) => _f = _f.copyWith(department: v)),
-          const SizedBox(height: 10),
-          select('branch', 'Branch', _f.branch, [for (final b in picker?.branches ?? const []) (b, b)],
-              (v) => _f = _f.copyWith(branch: v)),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              dateButton('Assigned from', _f.from, true),
-              dateButton('Assigned to', _f.to, false),
-              if (_f != const TrainingReportFilter())
-                TextButton(
-                  key: const Key('training-report-clear'),
-                  onPressed: () => setState(() => _f = const TrainingReportFilter()),
-                  child: const Text('Clear filters'),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
+          filterCard,
+          const SizedBox(height: 14),
           ...rowsAsync.when(
             skipLoadingOnRefresh: true,
-            loading: () => [
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
-              ),
+            loading: () => [const ApprovalsLoading(label: 'Loading report…')],
+            error: (e, _) => [
+              TrainingStateView.error(e, what: 'the report', onRetry: () => ref.invalidate(trainingReportProvider(_f))),
             ],
-            error: (e, _) => [AppErrorState.forError(e, onRetry: () => ref.invalidate(trainingReportProvider(_f)))],
             data: (rows) => [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text('${rows.length} record(s)',
-                        key: const Key('training-report-count'),
-                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                  ),
-                  OutlinedButton.icon(
-                    key: const Key('training-report-export'),
-                    onPressed: _exporting || rows.isEmpty ? null : _export,
-                    icon: const Icon(Icons.download_outlined, size: 16),
-                    label: Text(_exporting ? 'Exporting…' : 'Export CSV'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (rows.isEmpty) const TrainingNote('No matching records.', icon: Icons.search_off),
+              LayoutBuilder(builder: (context, c) {
+                final count = Text('${rows.length} record(s)',
+                    key: const Key('training-report-count'),
+                    style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary));
+                final export = OutlinedButton.icon(
+                  key: const Key('training-report-export'),
+                  style: trainingOutlinedStyle(),
+                  onPressed: _exporting || rows.isEmpty ? null : _export,
+                  icon: const Icon(Icons.download_outlined, size: 16),
+                  label: Text(_exporting ? 'Exporting…' : 'Export CSV'),
+                );
+                final oneLine =
+                    trainingActionsFit(context, c.maxWidth, ['Exporting…', '${rows.length} record(s)'], chrome: 40, extra: 24);
+                return oneLine
+                    ? Row(children: [Expanded(child: count), export])
+                    : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        count,
+                        const SizedBox(height: 8),
+                        export,
+                      ]);
+              }),
+              const SizedBox(height: 10),
+              if (rows.isEmpty)
+                filtered
+                    ? TrainingStateView.noMatch(
+                        key: const Key('training-report-no-match'),
+                        title: 'No matching records.',
+                        message: 'No assignments fit these filters.',
+                        actionLabel: 'Clear filters',
+                        onClear: () => setState(() => _f = const TrainingReportFilter()),
+                      )
+                    : TrainingStateView.empty(
+                        key: const Key('training-report-empty'),
+                        title: 'No matching records.',
+                        message: 'Assignments in your scope will be reported here.',
+                        icon: Icons.assessment_outlined,
+                        compact: true,
+                      ),
               for (final r in rows) TrainingAssignmentCard(row: r, showCourse: true),
             ],
           ),

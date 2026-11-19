@@ -90,9 +90,6 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
             title: _isAdd
                 ? 'Add New Branch'
                 : 'Edit Branch: ${branch!.branchName}',
-            subtitle: _isAdd
-                ? 'Create a new office location'
-                : 'Update branch details',
             onClose: () => Navigator.pop(context),
           ),
           Flexible(
@@ -111,6 +108,7 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
                   children: [
                     BranchLocationSelector(
                       key: _locationKey,
+                      isAdd: _isAdd,
                       initialState: branch != null
                           ? StateEntity(
                               id: branch.stateId,
@@ -140,14 +138,14 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
                       style: AppTextStyles.body,
                       maxLines: 3,
                       onChanged: (_) => setState(() => _addressError = null),
-                      decoration: _dec('Address *', _addressError),
+                      decoration: _dec('Branch Address *', _addressError),
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       key: ValueKey('status-$_status'),
                       initialValue: _status,
                       style: AppTextStyles.body,
-                      decoration: _dec('Status'),
+                      decoration: _dec('Status *'),
                       items: const [
                         DropdownMenuItem(
                             value: 'active', child: Text('Active')),
@@ -174,10 +172,6 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
                             setState(() => _isHeadquarter = val ?? false),
                         title: Text('Mark as Headquarter',
                             style: AppTextStyles.label),
-                        subtitle: Text(
-                          'Only one branch can be the headquarter',
-                          style: AppTextStyles.caption,
-                        ),
                         activeColor: AppColors.primary,
                         controlAffinity: ListTileControlAffinity.leading,
                         contentPadding:
@@ -236,15 +230,21 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: _checking
-                          ? Text('Checking…', style: AppTextStyles.label.copyWith(color: Colors.white))
-                          : _saving
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2),
-                            )
+                      child: _checking || _saving
+                          ? Row(mainAxisSize: MainAxisSize.min, children: [
+                              const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              ),
+                              const SizedBox(width: 8),
+                              // Web footer button text while busy.
+                              Text(
+                                _saving ? (_isAdd ? 'Creating…' : 'Saving…') : 'Checking…',
+                                key: const Key('branch-form-submit-busy'),
+                                style: AppTextStyles.label.copyWith(color: Colors.white),
+                              ),
+                            ])
                           : Text(
                               _isAdd ? 'Create Branch' : 'Save Changes',
                               style: AppTextStyles.label
@@ -339,7 +339,7 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
       // the same on Add and Edit, on the trimmed name.
       _nameError = validateBranchName(_nameCtrl.text);
       _addressError = _addressCtrl.text.trim().isEmpty
-          ? 'Address is required'
+          ? 'Address is required.'
           : null;
       if (_nameError != null || _addressError != null) fieldsOk = false;
     });
@@ -404,7 +404,8 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
     final String? result;
     if (_isAdd) {
       result = await notifier.create(
-        cityId: locState.selectedCity!.id,
+        cityId: locState.isOtherCity ? null : locState.selectedCity!.id,
+        newCityName: locState.isOtherCity ? locState.newCityName : null,
         stateId: locState.selectedState!.id,
         branchName: _nameCtrl.text.trim(),
         address: _addressCtrl.text.trim(),
@@ -415,7 +416,8 @@ class _BranchFormDialogState extends ConsumerState<BranchFormDialog> {
     } else {
       result = await notifier.edit(
         id: widget.branch!.id,
-        cityId: locState.selectedCity!.id,
+        cityId: locState.isOtherCity ? null : locState.selectedCity!.id,
+        newCityName: locState.isOtherCity ? locState.newCityName : null,
         stateId: locState.selectedState!.id,
         branchName: _nameCtrl.text.trim(),
         address: _addressCtrl.text.trim(),

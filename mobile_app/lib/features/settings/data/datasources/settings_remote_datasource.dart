@@ -6,6 +6,7 @@ import '../models/assessment_config_model.dart';
 import '../models/attendance_settings_model.dart';
 import '../models/audit_model.dart';
 import '../models/company_model.dart';
+import '../models/company_plan_model.dart';
 import '../models/departments_model.dart';
 import '../models/email_template_model.dart';
 import '../models/employee_code_model.dart';
@@ -28,30 +29,27 @@ class SettingsRemoteDataSource {
     return CompanyModel.fromJson(data as Map<String, dynamic>);
   }
 
-  /// PUT /settings/company/. As web's company form: a new [logoFile] is sent
-  /// as multipart `logo`; otherwise [removeLogo] sends multipart
-  /// `remove_logo=true` (the backend then clears the logo); a save with
-  /// neither leaves the logo untouched (no logo keys at all).
+  /// PUT /settings/company/. As web's company form, always multipart with
+  /// the trimmed fields: a new [logoFile] goes as `logo`; otherwise
+  /// [removeLogo] sends `remove_logo=true` (the backend then clears the
+  /// logo); a save with neither leaves the logo untouched (no logo keys).
   Future<CompanyModel> saveCompany(CompanyModel model, {File? logoFile, bool removeLogo = false}) async {
-    Response res;
-    if (logoFile != null) {
-      final formData = FormData.fromMap({
-        ...model.toJson(),
-        'logo': await MultipartFile.fromFile(
-          logoFile.path,
-          filename: logoFile.path.split('/').last,
-        ),
-      });
-      res = await _dio.put(ApiConstants.settingsCompany, data: formData);
-    } else if (removeLogo) {
-      res = await _dio.put(
-        ApiConstants.settingsCompany,
-        data: FormData.fromMap({...model.toJson(), 'remove_logo': 'true'}),
-      );
-    } else {
-      res = await _dio.put(ApiConstants.settingsCompany, data: model.toJson());
-    }
+    final formData = FormData.fromMap({
+      ...model.toSavePayload(),
+      if (logoFile != null)
+        'logo': await MultipartFile.fromFile(logoFile.path, filename: logoFile.path.split('/').last)
+      else if (removeLogo)
+        'remove_logo': 'true',
+    });
+    final res = await _dio.put(ApiConstants.settingsCompany, data: formData);
     return CompanyModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+  }
+
+  /// GET /settings/company/plan/ — read-only; settings.edit only (the server
+  /// answers 403 to anyone else).
+  Future<PlanDetails> fetchCompanyPlan() async {
+    final res = await _dio.get(ApiConstants.settingsCompanyPlan);
+    return PlanDetails.fromJson(_unwrap(res.data) as Map<String, dynamic>);
   }
 
   // ── Company — Financial Year ──────────────────────────────────────────────

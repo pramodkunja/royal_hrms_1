@@ -53,7 +53,7 @@ String fmtInr(Object? value) {
   return '${n.round() < 0 ? '-' : ''}₹$grouped';
 }
 
-const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
 
 /// Web fmtMonth: "Nov 2026".
 String fmtPayMonth(String iso) {

@@ -125,7 +125,7 @@ const _monthNames = [
   'Jun',
   'Jul',
   'Aug',
-  'Sep',
+  'Sept',
   'Oct',
   'Nov',
   'Dec',

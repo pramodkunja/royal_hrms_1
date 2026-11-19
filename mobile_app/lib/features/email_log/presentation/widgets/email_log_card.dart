@@ -11,7 +11,7 @@ String fmtEmailDateTime(String? iso) {
   final local = d.toLocal();
   const months = [
     '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec',
   ];
   final hour12 = local.hour % 12 == 0 ? 12 : local.hour % 12;
   final minute = local.minute.toString().padLeft(2, '0');

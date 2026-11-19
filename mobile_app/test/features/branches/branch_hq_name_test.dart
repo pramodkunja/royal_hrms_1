@@ -209,16 +209,16 @@ Future<void> pumpList(WidgetTester tester, {Server? with_}) async {
 Future<void> openAdd(WidgetTester tester) async {
   await tester.tap(byKey('open-add'));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Select state'));
+  await tester.tap(find.text('Select State'));
   await tester.pumpAndSettle();
   await tester.tap(find.text('Test State').last);
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Select city'));
+  await tester.tap(find.text('Select City'));
   await tester.pumpAndSettle();
   await tester.tap(find.text('Test City').last);
   await tester.pumpAndSettle();
   await tester.enterText(find.widgetWithText(TextFormField, 'Branch Name *'), 'New Branch');
-  await tester.enterText(find.widgetWithText(TextFormField, 'Address *'), '2 Test Road');
+  await tester.enterText(find.widgetWithText(TextFormField, 'Branch Address *'), '2 Test Road');
   await tester.pump();
 }
 

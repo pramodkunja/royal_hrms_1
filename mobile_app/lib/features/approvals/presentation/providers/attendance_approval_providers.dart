@@ -73,7 +73,13 @@ Future<String?> approveCycleAttendance(
     ref.invalidate(pendingApprovalCyclesProvider);
     return null;
   } catch (e) {
-    return friendlyPayrollError(e);
+    // Web: response.data.message, else "Approval failed. Please try again."
+    if (e is DioException) {
+      final body = e.response?.data;
+      final m = body is Map ? body['message'] : null;
+      if (m is String && m.trim().isNotEmpty) return m;
+    }
+    return 'Approval failed. Please try again.';
   }
 }
 

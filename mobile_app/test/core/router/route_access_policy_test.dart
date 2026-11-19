@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mobile_app/features/approvals/presentation/widgets/approvals_ui.dart' show ApprovalsTabLabel;
 import 'package:mobile_app/core/network/api_client.dart';
 import 'package:mobile_app/core/router/access_control.dart';
 import 'package:mobile_app/core/router/app_router.dart';
@@ -173,7 +174,7 @@ Future<void> settle(WidgetTester tester) async {
 }
 
 List<String> tabs(WidgetTester tester) => [
-      for (final t in tester.widgetList<Tab>(find.byType(Tab))) t.text ?? '',
+      for (final t in tester.widgetList<Tab>(find.byType(Tab))) (t.child as ApprovalsTabLabel).label,
     ];
 
 void main() {

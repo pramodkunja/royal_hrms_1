@@ -6,6 +6,9 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../data/approval_workflows.dart';
 import '../providers/approvals_providers.dart' show unifiedTeamApprovalsProvider;
+import '../../../../shared/formatters/en_in_format.dart';
+import 'approvals_kit.dart';
+import 'approvals_ui.dart';
 
 // Approvals → Delegation — web approvals/_components/DelegationsSection.tsx:
 // hand my leave / attendance approvals to a colleague for a period. The
@@ -53,6 +56,7 @@ class _DelegationsTabState extends ConsumerState<DelegationsTab> {
   String? _apiError;
   String? _notice;
   final _revoking = <String>{};
+  bool _confirming = false;
   int _generation = 0;
 
   String get _today => isoDay(ref.read(approvalsTodayProvider)());
@@ -97,7 +101,8 @@ class _DelegationsTabState extends ConsumerState<DelegationsTab> {
   }
 
   Future<void> _revoke(Delegation d) async {
-    if (_revoking.contains(d.id)) return;
+    if (_revoking.contains(d.id) || _confirming) return;
+    _confirming = true;
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
@@ -111,6 +116,7 @@ class _DelegationsTabState extends ConsumerState<DelegationsTab> {
         ],
       ),
     );
+    _confirming = false;
     if (ok != true || !mounted) return;
     setState(() {
       _revoking.add(d.id);
@@ -171,7 +177,15 @@ class _DelegationsTabState extends ConsumerState<DelegationsTab> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Delegate my approvals', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, fontSize: 15)),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Delegate my approvals', style: AppTextStyles.h4),
           const SizedBox(height: 4),
           Text(
             'While you are away, a colleague in your branch who can approve the same requests acts on requests waiting '
@@ -193,18 +207,22 @@ class _DelegationsTabState extends ConsumerState<DelegationsTab> {
               items: [
                 for (final p in eligible)
                   DropdownMenuItem(
-                      value: p.id, child: Text(p.employeeId.isNotEmpty ? '${p.name} (${p.employeeId})' : p.name)),
+                      value: p.id,
+                      child: Text(p.employeeId.isNotEmpty ? '${p.name} (${p.employeeId})' : p.name,
+                          overflow: TextOverflow.ellipsis)),
               ],
               onChanged: (v) => setState(() => _form = _form.copyWith(delegate: v ?? '')),
             ),
           ),
           ..._err(errors, 'delegate'),
           const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: _dateField('From *', _form.startDate, 'delegation-start', () => _pickDate(true))),
-            const SizedBox(width: 10),
-            Expanded(child: _dateField('To *', _form.endDate, 'delegation-end', () => _pickDate(false))),
-          ]),
+          LayoutBuilder(builder: (context, c) {
+            final from = _dateField('From *', _form.startDate, 'delegation-start', () => _pickDate(true));
+            final to = _dateField('To *', _form.endDate, 'delegation-end', () => _pickDate(false));
+            final stacked = c.maxWidth < 340 || MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3;
+            if (stacked) return Column(children: [from, const SizedBox(height: 12), to]);
+            return Row(children: [Expanded(child: from), const SizedBox(width: 10), Expanded(child: to)]);
+          }),
           ..._err(errors, 'start_date'),
           ..._err(errors, 'end_date'),
           const SizedBox(height: 12),
@@ -217,7 +235,7 @@ class _DelegationsTabState extends ConsumerState<DelegationsTab> {
             onChanged: (v) => setState(() => _form = _form.copyWith(reason: v)),
           ),
           ..._err(errors, 'reason'),
-          Wrap(spacing: 8, children: [
+          Wrap(spacing: 8, runSpacing: 8, children: [
             for (final w in kWorkflows)
               FilterChip(
                 key: Key('delegation-workflow-$w'),
@@ -236,29 +254,24 @@ class _DelegationsTabState extends ConsumerState<DelegationsTab> {
             child: FilledButton(
               key: const Key('delegation-create'),
               onPressed: _saving ? null : _create,
+              style: FilledButton.styleFrom(minimumSize: const Size(120, 48)),
               child: Text(_saving ? 'Saving…' : 'Delegate'),
             ),
           ),
+            ]),
+          ),
           const SizedBox(height: 16),
           ...rowsAsync.when(
-            loading: () => [Text('Loading delegations…', style: caption)],
+            loading: () => [const ApprovalsLoading(label: 'Loading delegations…')],
             error: (e, _) => [
-              _banner(
-                  approvalWorkflowError(e, "Couldn't load delegations."), AppColors.error, 'delegations-load-error'),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  key: const Key('delegations-retry'),
-                  onPressed: () => ref.invalidate(delegationsProvider),
-                  child: const Text('Retry'),
-                ),
-              ),
+              ApprovalsEmptyState.forError(e,
+                  key: const Key('delegations-load-error'), compact: true, onRetry: () => ref.invalidate(delegationsProvider)),
             ],
             data: (rows) => [
-              Text('Delegated by me', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
+              _heading('Delegated by me'),
               ..._list(rows.where((d) => d.given).toList(), true, "You haven't delegated your approvals.", today),
               const SizedBox(height: 14),
-              Text('Delegated to me', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
+              _heading('Delegated to me'),
               ..._list(rows.where((d) => d.received).toList(), false, 'No one has delegated approvals to you.', today),
             ],
           ),
@@ -272,8 +285,12 @@ class _DelegationsTabState extends ConsumerState<DelegationsTab> {
         width: double.infinity,
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
-        child: Text(text, style: AppTextStyles.caption.copyWith(color: color)),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Text(text, style: AppTextStyles.label.copyWith(color: color)),
       );
 
   Widget _dateField(String label, String value, String key, VoidCallback onTap) => InkWell(
@@ -289,64 +306,101 @@ class _DelegationsTabState extends ConsumerState<DelegationsTab> {
         ),
       );
 
+  Widget _heading(String t) => Padding(
+        padding: const EdgeInsets.only(left: 2, bottom: 2),
+        child: Text(t, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, fontSize: 15)),
+      );
+
   List<Widget> _list(List<Delegation> list, bool given, String empty, String today) {
     if (list.isEmpty) {
       return [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Text(empty, style: AppTextStyles.caption.copyWith(fontSize: 13)),
+        // A quiet inline block: two of these sit on one screen under the form, so the
+        // full-height illustration of ApprovalsEmptyState would drown the page.
+        Container(
+          margin: const EdgeInsets.only(top: 10),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            ApprovalsIconBox(given ? Icons.outbox_outlined : Icons.move_to_inbox_outlined, color: AppColors.success),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(given ? 'No delegations given' : 'No delegations received',
+                    style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text(empty, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+              ]),
+            ),
+          ]),
         ),
       ];
     }
+    String day(String iso) {
+      final d = DateTime.tryParse(iso);
+      return d == null ? iso : formatEnInDate(d);
+    }
+
     return [
       for (final d in list)
-        Container(
-          key: Key('delegation-row-${d.id}'),
-          margin: const EdgeInsets.only(top: 8),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(given ? d.delegate.name : d.delegator.name,
-                    style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w700)),
-                if (d.reason.isNotEmpty) Text(d.reason, style: AppTextStyles.caption.copyWith(fontSize: 11)),
-                Text('${d.startDate} → ${d.endDate}', style: AppTextStyles.caption.copyWith(fontSize: 12)),
-                Text(d.workflows.map((w) => kWorkflowLabel[w] ?? w).join(', '),
-                    style: AppTextStyles.caption.copyWith(fontSize: 12)),
-              ]),
-            ),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              _stateBadge(delegationState(d, today), d.id),
-              if (d.canRevoke)
-                TextButton(
-                  key: Key('delegation-revoke-${d.id}'),
-                  onPressed: _revoking.contains(d.id) ? null : () => _revoke(d),
-                  child: const Text('Revoke'),
-                ),
+        Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: ApprovalsCardShell(
+            key: Key('delegation-row-${d.id}'),
+            name: given ? d.delegate.name : d.delegator.name,
+            idText: (given ? d.delegate.employeeId : d.delegator.employeeId).isEmpty
+                ? null
+                : (given ? d.delegate.employeeId : d.delegator.employeeId),
+            badge: _stateBadge(delegationState(d, today), d.id),
+            footer: d.canRevoke
+                ? Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton.icon(
+                      key: Key('delegation-revoke-${d.id}'),
+                      onPressed: _revoking.contains(d.id) ? null : () => _revoke(d),
+                      icon: const Icon(Icons.block_outlined, size: 16),
+                      label: const Text('Revoke'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.error,
+                        side: BorderSide(color: AppColors.error.withValues(alpha: 0.5)),
+                        minimumSize: const Size(0, 44),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        textStyle: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  )
+                : null,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              ApprovalsHeadline(
+                icon: Icons.swap_horiz_rounded,
+                title: given ? '${d.delegate.name} covers for you' : 'You cover for ${d.delegator.name}',
+                chips: [for (final w in d.workflows) ApprovalsChip(kWorkflowLabel[w] ?? w)],
+              ),
+              const SizedBox(height: 12),
+              ApprovalsInfoRow(Icons.date_range_outlined, '${day(d.startDate)} – ${day(d.endDate)}', strong: true),
+              if (d.reason.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                ApprovalsQuote(d.reason, maxLines: 3),
+              ],
             ]),
-          ]),
+          ),
         ),
     ];
   }
 
   Widget _stateBadge(String state, String id) {
-    final color = switch (state) {
-      'active' => AppColors.success,
-      'scheduled' => AppColors.info,
-      'revoked' => AppColors.error,
-      _ => AppColors.textSecondary,
+    final tone = switch (state) {
+      'active' => ApprovalsTone.success,
+      'scheduled' => ApprovalsTone.info,
+      'revoked' => ApprovalsTone.error,
+      _ => ApprovalsTone.neutral,
     };
-    return Container(
+    return KeyedSubtree(
       key: Key('delegation-state-$id'),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-      child: Text(kDelegationStateLabel[state] ?? state,
-          style: AppTextStyles.caption.copyWith(color: color, fontWeight: FontWeight.w600)),
+      child: ApprovalsBadge(kDelegationStateLabel[state] ?? state, tone),
     );
   }
 }

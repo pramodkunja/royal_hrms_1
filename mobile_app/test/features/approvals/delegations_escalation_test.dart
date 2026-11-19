@@ -369,7 +369,7 @@ void main() {
       expect(state('c'), 'Ended');
       expect(state('d'), 'Revoked');
       expect(find.text('Annual leave'), findsOneWidget);
-      expect(find.text('Leave, Attendance'), findsOneWidget);
+      expect(find.text('Attendance'), findsOneWidget); // workflow chips: Leave, Attendance
       expect(byKey('delegation-revoke-a'), findsOneWidget);
       expect(byKey('delegation-revoke-c'), findsNothing);
       expect(byKey('delegation-revoke-d'), findsNothing);
@@ -495,7 +495,8 @@ void main() {
       expect(find.text('Delegated by me'), findsNothing);
       server.listStatus = 200;
       server.rows = [delegation('a', delegator: me, delegate: asha)];
-      await tapKey(tester, 'delegations-retry');
+      await tester.tap(find.text('Retry'));
+      await settle(tester);
       expect(byKey('delegation-row-a'), findsOneWidget);
     });
   });

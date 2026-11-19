@@ -227,9 +227,9 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
       builder: (dialogContext) => AlertDialog(
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: const Text('Confirm Delete'),
+        title: const Text('Delete Branch?'),
         content: Text(
-          'Are you sure you want to delete "${branch.branchName}"? '
+          'Are you sure you want to delete ${branch.branchName}? '
           'This action cannot be undone.',
         ),
         actions: [
@@ -241,7 +241,7 @@ class _BranchesScreenState extends ConsumerState<BranchesScreen> {
             style:
                 FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('OK'),
+            child: const Text('Yes, Delete'),
           ),
         ],
       ),

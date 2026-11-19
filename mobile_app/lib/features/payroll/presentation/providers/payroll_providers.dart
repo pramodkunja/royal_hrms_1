@@ -11,8 +11,7 @@ final payrollDataSourceProvider = Provider<PayrollRemoteDataSource>((ref) {
 
 // ── My Payslips ───────────────────────────────────────────────────────────────
 
-final myPayslipsProvider =
-    AsyncNotifierProvider.autoDispose<MyPayslipsNotifier, List<PayslipModel>>(
+final myPayslipsProvider = AsyncNotifierProvider.autoDispose<MyPayslipsNotifier, List<PayslipModel>>(
   MyPayslipsNotifier.new,
 );
 
@@ -32,9 +31,7 @@ class MyPayslipsNotifier extends AutoDisposeAsyncNotifier<List<PayslipModel>> {
     try {
       await _ds.acknowledgePayslip(id);
       state = AsyncData(
-        (state.valueOrNull ?? [])
-            .map((p) => p.id == id ? p.copyWith(status: 'acknowledged') : p)
-            .toList(),
+        (state.valueOrNull ?? []).map((p) => p.id == id ? p.copyWith(status: 'acknowledged') : p).toList(),
       );
       return null;
     } catch (e) {

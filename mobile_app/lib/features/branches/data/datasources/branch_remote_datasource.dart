@@ -27,10 +27,13 @@ class BranchRemoteDataSource {
 
   // ── Preview Code ────────────────────────────────────────────────────────────
 
-  Future<String> fetchPreviewCode(int cityId) async {
+  Future<String> fetchPreviewCode({int? cityId, String? cityName}) async {
     final res = await _dio.get(
       ApiConstants.branchPreviewCode,
-      queryParameters: {'city_id': cityId},
+      // Web: city_id for a listed city, city_name for a not-yet-created one.
+      queryParameters: {
+        if (cityId != null) 'city_id': cityId else 'city_name': cityName,
+      },
     );
     final data = _unwrap(res.data);
     if (data is Map<String, dynamic>) {

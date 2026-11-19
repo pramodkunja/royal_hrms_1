@@ -1,366 +1,136 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../data/models/my_profile_model.dart';
-import '../providers/profile_providers.dart';
-import 'profile_widgets.dart';
-import '../../domain/entities/my_profile_entity.dart';
+import '../../../employees/domain/employee_profile_sections.dart'
+    show EmployeeProfileSection, isPersonalFieldVisible, isProfileFieldVisible;
 import '../../../separation/presentation/notice_period.dart' show formatNoticePeriod;
+import '../../../settings/data/models/onboarding_field_config_model.dart';
+import '../../../../shared/formatters/en_in_format.dart';
+import '../../data/models/my_profile_model.dart';
+import '../../domain/entities/my_profile_entity.dart';
+import 'profile_widgets.dart';
 
-// Mirrors backend's User.PROFILE_PHOTO_MIN_SIZE/MAX_SIZE (accounts/models.py)
-// so an out-of-range file is caught here instead of round-tripping to the
-// API for a 422.
-const int _kPhotoMinBytes = 100 * 1024;
-const int _kPhotoMaxBytes = 200 * 1024;
+/// Settings → Onboarding Fields visibility by step (null while loading — web
+/// shows every field until the config says otherwise).
+typedef ProfileFieldConfig = Map<int, List<OnboardingFieldConfigModel>>?;
 
 String _s(String? v) => (v == null || v.isEmpty) ? '—' : v;
 
-String _fmtDate(String? raw) {
+/// Web `fmtDate` (en-IN, "5 Nov 2026"); a value that can't be parsed shows
+/// as stored, an empty one as "—".
+String formatProfileDate(String? raw) {
   if (raw == null || raw.isEmpty) return '—';
-  try {
-    final dt = DateTime.parse(raw);
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
-  } catch (_) {
-    return raw;
+  final dt = DateTime.tryParse(raw);
+  return dt == null ? raw : formatEnInDate(dt);
+}
+
+/// Bank account number as web shows it: only the last 4 digits.
+String maskedAccountNumber(String number) =>
+    number.isEmpty ? '—' : '••••${number.substring(number.length > 4 ? number.length - 4 : 0)}';
+
+/// Lays [children] out two per row (stacking on narrow screens / large text),
+/// so a hidden field closes the gap instead of leaving a hole.
+class ProfileFieldGrid extends StatelessWidget {
+  final List<Widget> children;
+  const ProfileFieldGrid({super.key, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    for (var i = 0; i < children.length; i += 2) {
+      final pair = i + 1 < children.length
+          ? ProfileTwoUp(left: children[i], right: children[i + 1])
+          : ProfileTwoUp(left: children[i], right: const SizedBox.shrink());
+      rows.add(Padding(padding: EdgeInsets.only(bottom: i + 2 < children.length ? 14 : 0), child: pair));
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows);
   }
 }
 
 // ── Personal information ─────────────────────────────────────────────────────────
 
-class ProfilePersonalSection extends ConsumerStatefulWidget {
+class ProfilePersonalSection extends StatelessWidget {
   final MyProfileModel profile;
   final TextEditingController phoneCtrl;
+  final ProfileFieldConfig config;
 
-  const ProfilePersonalSection({
-    super.key,
-    required this.profile,
-    required this.phoneCtrl,
-  });
-
-  @override
-  ConsumerState<ProfilePersonalSection> createState() => _ProfilePersonalSectionState();
-}
-
-class _ProfilePersonalSectionState extends ConsumerState<ProfilePersonalSection> {
-  bool _showMore = false;
-  bool _uploadingPhoto = false;
-
-  void _showSnack(String message, {bool isError = false}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message),
-      backgroundColor: isError ? AppColors.error : null,
-      behavior: SnackBarBehavior.floating,
-    ));
-  }
-
-  Future<void> _pickAndUploadPhoto(ImageSource source) async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: source, imageQuality: 90);
-    if (picked == null) return;
-
-    final file = File(picked.path);
-    final ext = picked.path.split('.').last.toLowerCase();
-    if (ext != 'jpg' && ext != 'jpeg' && ext != 'png') {
-      _showSnack('Only JPG and PNG files are allowed.', isError: true);
-      return;
-    }
-    final size = await file.length();
-    if (size < _kPhotoMinBytes) {
-      _showSnack(
-        'Image is too small (${(size / 1024).toStringAsFixed(0)} KB). Minimum size is 100 KB.',
-        isError: true,
-      );
-      return;
-    }
-    if (size > _kPhotoMaxBytes) {
-      _showSnack(
-        'Image is too large (${(size / 1024).toStringAsFixed(0)} KB). Maximum size is 200 KB.',
-        isError: true,
-      );
-      return;
-    }
-
-    setState(() => _uploadingPhoto = true);
-    final error = await ref.read(myProfileProvider.notifier).uploadPhoto(file);
-    if (!mounted) return;
-    setState(() => _uploadingPhoto = false);
-    _showSnack(error ?? 'Profile photo updated.', isError: error != null);
-  }
-
-  Future<void> _removePhoto() async {
-    setState(() => _uploadingPhoto = true);
-    final error = await ref.read(myProfileProvider.notifier).removePhoto();
-    if (!mounted) return;
-    setState(() => _uploadingPhoto = false);
-    _showSnack(error ?? 'Profile photo removed.', isError: error != null);
-  }
-
-  Future<void> _showPhotoOptions() async {
-    final hasPhoto = (widget.profile.photoUrl ?? '').isNotEmpty;
-    await showModalBottomSheet<void>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Take Photo'),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                _pickAndUploadPhoto(ImageSource.camera);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Choose from Gallery'),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                _pickAndUploadPhoto(ImageSource.gallery);
-              },
-            ),
-            if (hasPhoto)
-              ListTile(
-                leading: Icon(Icons.delete_outline, color: AppColors.error),
-                title: Text('Remove Photo', style: TextStyle(color: AppColors.error)),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  _removePhoto();
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+  const ProfilePersonalSection({super.key, required this.profile, required this.phoneCtrl, this.config});
 
   @override
   Widget build(BuildContext context) {
-    final p = widget.profile;
+    final p = profile;
+    bool vis(String k) => isPersonalFieldVisible(k, config);
+    final readOnly = <Widget>[
+      if (vis('date_of_birth'))
+        ProfileDisplayField(label: 'Date of Birth', value: formatProfileDate(p.detail.dateOfBirth), padBottom: false),
+      if (vis('gender')) ProfileDisplayField(label: 'Gender', value: _s(p.detail.gender), padBottom: false),
+      if (vis('marital_status'))
+        ProfileDisplayField(label: 'Marital Status', value: _s(p.detail.maritalStatus), padBottom: false),
+      if (vis('blood_group'))
+        ProfileDisplayField(label: 'Blood Group', value: _s(p.detail.bloodGroup), padBottom: false),
+      if (vis('father_name'))
+        ProfileDisplayField(label: "Father's Name", value: _s(p.detail.fatherName), padBottom: false),
+    ];
     return ProfileSectionCard(
       icon: Icons.manage_accounts_outlined,
       title: 'Personal Information',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Avatar + name row
-          Row(
-            children: [
-              GestureDetector(
-                onTap: _uploadingPhoto ? null : _showPhotoOptions,
-                child: Stack(
-                  children: [
-                    CircleAvatar(
-                      radius: 30,
-                      backgroundColor: p.avatarColor,
-                      backgroundImage: (p.photoUrl ?? '').isNotEmpty ? NetworkImage(p.photoUrl!) : null,
-                      child: (p.photoUrl ?? '').isEmpty
-                          ? Text(
-                              p.initials,
-                              style: AppTextStyles.h3.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            )
-                          : null,
-                    ),
-                    if (_uploadingPhoto)
-                      Positioned.fill(
-                        child: CircleAvatar(
-                          radius: 30,
-                          backgroundColor: Colors.black.withValues(alpha: 0.4),
-                          child: const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation(Colors.white),
-                            ),
-                          ),
-                        ),
-                      )
-                    else
-                      Positioned(
-                        right: 0,
-                        bottom: 0,
-                        child: Container(
-                          width: 20,
-                          height: 20,
-                          decoration: BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: AppColors.surface, width: 2),
-                          ),
-                          child: const Icon(Icons.camera_alt, size: 11, color: Colors.white),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(_s(p.fullName), style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 2),
-                    Text(
-                      p.roleDisplay.isNotEmpty ? p.roleDisplay : p.roleName,
-                      style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          ProfileFieldGrid(children: [
+            ProfileDisplayField(label: 'Full Name', value: _s(p.fullName), padBottom: false),
+            ProfileDisplayField(label: 'Email', value: _s(p.email), padBottom: false),
+          ]),
+          const SizedBox(height: 14),
+          ProfileField(
+            label: 'Phone',
+            controller: phoneCtrl,
+            keyboardType: TextInputType.phone,
+            hint: '+91 98765 43210',
           ),
-          const SizedBox(height: 16),
-          ProfileFieldRow(
-            left: ProfileField(
-              label: 'Phone',
-              controller: widget.phoneCtrl,
-              keyboardType: TextInputType.phone,
-              hint: 'e.g. +91 98765 43210',
-            ),
-            right: ProfileDisplayField(label: 'Email', value: _s(p.email)),
-          ),
-          const SizedBox(height: 12),
-          ProfileDisplayFieldRow(
-            label1: 'Employee ID',
-            value1: _s(p.employeeId),
-            label2: 'Role',
-            value2: _s(p.roleDisplay.isNotEmpty ? p.roleDisplay : p.roleName),
-          ),
-          ProfileDisplayFieldRow(
-            label1: 'Department',
-            value1: _s(p.department),
-            label2: 'Designation',
-            value2: _s(p.designation),
-          ),
-          ProfileDisplayFieldRow(
-            label1: 'Branch',
-            value1: _s(p.branch),
-            label2: 'Date of Joining',
-            value2: _fmtDate(p.dateOfJoining),
-          ),
-          // Web My Profile → Work Information: assigned people (name only,
-          // "Not assigned" when none) and the notice period, read-only.
-          ProfileDisplayFieldRow(
-            label1: 'Reporting Manager',
-            value1: assignedName(p.reportingManager),
-            label2: 'Reporting Approver',
-            value2: assignedName(p.reportingApprover),
-          ),
-          ProfileDisplayFieldRow(
-            label1: 'HR',
-            value1: assignedName(p.hr),
-            label2: 'Notice Period',
-            value2: formatNoticePeriod(p.noticePeriodDays),
-          ),
-          _StatusBadgeRow(
-            label1: 'Onboarding Status',
-            status1: p.onboardingStatus,
-            label2: 'Assessment Status',
-            status2: p.assessmentStatus,
-          ),
-          const SizedBox(height: 6),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: () => setState(() => _showMore = !_showMore),
-              icon: Icon(
-                _showMore ? Icons.expand_less : Icons.expand_more,
-                size: 16,
-              ),
-              label: Text(_showMore ? 'Show less' : 'Show more details'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                textStyle: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-          ),
-          if (_showMore) ...[
-            const SizedBox(height: 8),
-            Divider(height: 1, color: AppColors.border),
-            const SizedBox(height: 14),
-            ProfileDisplayFieldRow(
-              label1: 'Date of Birth',
-              value1: _fmtDate(p.detail.dateOfBirth),
-              label2: 'Gender',
-              value2: _s(p.detail.gender),
-            ),
-            ProfileDisplayFieldRow(
-              label1: 'Marital Status',
-              value1: _s(p.detail.maritalStatus),
-              label2: 'Blood Group',
-              value2: _s(p.detail.bloodGroup),
-            ),
-            ProfileDisplayField(
-              label: "Father's Name",
-              value: _s(p.detail.fatherName),
-              padBottom: false,
-            ),
-          ],
+          if (readOnly.isNotEmpty) ...[const SizedBox(height: 14), ProfileFieldGrid(children: readOnly)],
         ],
       ),
     );
   }
 }
 
-// Onboarding/assessment status pill row — matches web's colored badge
-// treatment (green when 'complete', amber otherwise) rather than a plain
-// bordered display field, since these are state indicators, not text values.
-class _StatusBadgeRow extends StatelessWidget {
-  final String label1;
-  final String status1;
-  final String label2;
-  final String status2;
+// ── Work information (read-only) ──────────────────────────────────────────────
 
-  const _StatusBadgeRow({
-    required this.label1,
-    required this.status1,
-    required this.label2,
-    required this.status2,
-  });
+class ProfileWorkSection extends StatelessWidget {
+  final MyProfileModel profile;
+  const ProfileWorkSection({super.key, required this.profile});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: _StatusBadge(label: label1, status: status1)),
-          const SizedBox(width: 12),
-          Expanded(child: _StatusBadge(label: label2, status: status2)),
-        ],
-      ),
+    final p = profile;
+    return ProfileSectionCard(
+      icon: Icons.work_outline,
+      title: 'Work Information',
+      child: ProfileFieldGrid(children: [
+        ProfileDisplayField(label: 'Employee ID', value: _s(p.employeeId), padBottom: false),
+        ProfileDisplayField(
+            label: 'Role', value: _s(p.roleDisplay.isNotEmpty ? p.roleDisplay : p.roleName), padBottom: false),
+        ProfileDisplayField(label: 'Department', value: _s(p.department), padBottom: false),
+        ProfileDisplayField(label: 'Designation', value: _s(p.designation), padBottom: false),
+        ProfileDisplayField(label: 'Branch', value: _s(p.branch), padBottom: false),
+        ProfileDisplayField(
+            label: 'Date of Joining', value: formatProfileDate(p.dateOfJoining ?? p.dateJoined), padBottom: false),
+        // Web: assigned people (name only, "Not assigned" when none) and the
+        // notice period, read-only.
+        ProfileDisplayField(label: 'Reporting Manager', value: assignedName(p.reportingManager), padBottom: false),
+        ProfileDisplayField(label: 'Reporting Approver', value: assignedName(p.reportingApprover), padBottom: false),
+        ProfileDisplayField(label: 'HR', value: assignedName(p.hr), padBottom: false),
+        ProfileDisplayField(label: 'Notice Period', value: formatNoticePeriod(p.noticePeriodDays), padBottom: false),
+        _StatusBadge(label: 'Onboarding Status', status: p.onboardingStatus),
+        _StatusBadge(label: 'Assessment Status', status: p.assessmentStatus),
+      ]),
     );
   }
 }
 
+// Onboarding/assessment status pill — web's colored badge (green when
+// 'complete', amber otherwise), a state indicator rather than a text value.
 class _StatusBadge extends StatelessWidget {
   final String label;
   final String status;
@@ -376,28 +146,16 @@ class _StatusBadge extends StatelessWidget {
       children: [
         Text(
           label,
-          style: AppTextStyles.caption.copyWith(
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w600,
-            fontSize: 11,
-          ),
+          style:
+              AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600, fontSize: 11),
         ),
         const SizedBox(height: 5),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(20),
-          ),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
           child: Text(
             text,
-            style: AppTextStyles.caption.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-              fontSize: 11,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.caption.copyWith(color: color, fontWeight: FontWeight.w700, fontSize: 11),
           ),
         ),
       ],
@@ -410,33 +168,44 @@ class _StatusBadge extends StatelessWidget {
 class ProfileAddressSection extends StatelessWidget {
   final TextEditingController currentAddressCtrl;
   final TextEditingController permanentAddressCtrl;
+  final ProfileFieldConfig config;
 
   const ProfileAddressSection({
     super.key,
     required this.currentAddressCtrl,
     required this.permanentAddressCtrl,
+    this.config,
   });
+
+  /// Whether any address field is shown (web renders the card regardless; an
+  /// empty card is noise on a phone, so the screen skips it).
+  static bool anyVisible(ProfileFieldConfig config) =>
+      isPersonalFieldVisible('current_address', config) || isPersonalFieldVisible('permanent_address', config);
 
   @override
   Widget build(BuildContext context) {
+    final fields = <Widget>[
+      if (isPersonalFieldVisible('current_address', config))
+        ProfileField(
+          label: 'Current Address',
+          controller: currentAddressCtrl,
+          hint: 'Current residential address',
+          maxLines: 3,
+        ),
+      if (isPersonalFieldVisible('permanent_address', config))
+        ProfileField(
+          label: 'Permanent Address',
+          controller: permanentAddressCtrl,
+          hint: 'Permanent / home town address',
+          maxLines: 3,
+        ),
+    ];
     return ProfileSectionCard(
       icon: Icons.location_on_outlined,
       title: 'Address',
       child: Column(
         children: [
-          ProfileField(
-            label: 'Current Address',
-            controller: currentAddressCtrl,
-            hint: 'e.g. 42, 3rd Cross, HSR Layout, Bengaluru',
-            maxLines: 2,
-          ),
-          const SizedBox(height: 12),
-          ProfileField(
-            label: 'Permanent Address',
-            controller: permanentAddressCtrl,
-            hint: 'e.g. 42, 3rd Cross, HSR Layout, Bengaluru',
-            maxLines: 2,
-          ),
+          for (var i = 0; i < fields.length; i++) ...[if (i > 0) const SizedBox(height: 14), fields[i]],
         ],
       ),
     );
@@ -447,105 +216,77 @@ class ProfileAddressSection extends StatelessWidget {
 
 class ProfileEducationSection extends StatelessWidget {
   final MyProfileModel profile;
-  const ProfileEducationSection({super.key, required this.profile});
+  final ProfileFieldConfig config;
+  const ProfileEducationSection({super.key, required this.profile, this.config});
 
   @override
   Widget build(BuildContext context) {
     final d = profile.detail;
+    bool vis(String k) => isProfileFieldVisible(EmployeeProfileSection.education, k, config);
+    Widget f(String label, String value) => ProfileDisplayField(label: label, value: value, padBottom: false);
+    // Web order and labels (ProfileClient.tsx "Education & Experience").
     return ProfileSectionCard(
       icon: Icons.school_outlined,
       title: 'Education & Experience',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ProfileDisplayFieldRow(
-            label1: 'Highest Qualification',
-            value1: _s(d.highestQualification),
-            label2: 'Specialization',
-            value2: _s(d.specialization),
-          ),
-          ProfileDisplayField(label: 'Institution / University', value: _s(d.institution)),
-          ProfileDisplayFieldRow(
-            label1: 'Year of Passing',
-            value1: _s(d.yearOfPassing?.toString()),
-            label2: 'Total Experience (yrs)',
-            value2: _s(d.totalExperienceYears),
-          ),
-          ProfileDisplayFieldRow(
-            label1: 'Previous Employer',
-            value1: _s(d.previousEmployer),
-            label2: 'Previous Designation',
-            value2: _s(d.previousDesignation),
-          ),
-          ProfileDisplayField(
-            label: 'Reason for Leaving',
-            value: _s(d.leavingReason),
-            maxLines: 3,
-            padBottom: false,
-          ),
-        ],
-      ),
+      child: ProfileFieldGrid(children: [
+        if (vis('highest_qualification')) f('Qualification', _s(d.highestQualification)),
+        if (vis('institution')) f('Institution', _s(d.institution)),
+        if (vis('year_of_passing')) f('Year of Passing', _s(d.yearOfPassing?.toString())),
+        if (vis('specialization')) f('Specialization', _s(d.specialization)),
+        if (vis('total_experience_years')) f('Experience (yrs)', _s(d.totalExperienceYears)),
+        if (vis('previous_employer')) f('Previous Employer', _s(d.previousEmployer)),
+        if (vis('previous_designation')) f('Previous Role', _s(d.previousDesignation)),
+        if (vis('leaving_reason')) f('Leaving Reason', _s(d.leavingReason)),
+      ]),
     );
   }
+
+  static bool anyVisible(ProfileFieldConfig config) => const [
+        'highest_qualification', 'institution', 'year_of_passing', 'specialization', //
+        'total_experience_years', 'previous_employer', 'previous_designation', 'leaving_reason',
+      ].any((k) => isProfileFieldVisible(EmployeeProfileSection.education, k, config));
 }
 
 // ── Bank details (read-only, contact HR to update) ────────────────────────────
 
 class ProfileBankSection extends StatelessWidget {
   final MyProfileModel profile;
-  const ProfileBankSection({super.key, required this.profile});
+  final ProfileFieldConfig config;
+  const ProfileBankSection({super.key, required this.profile, this.config});
 
   @override
   Widget build(BuildContext context) {
     final d = profile.detail;
+    bool vis(String k) => isProfileFieldVisible(EmployeeProfileSection.bank, k, config);
+    Widget f(String label, String value) => ProfileDisplayField(label: label, value: value, padBottom: false);
     return ProfileSectionCard(
       icon: Icons.account_balance_outlined,
       title: 'Bank Details',
-      trailing: Icon(Icons.lock_outline, size: 14, color: AppColors.textHint),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ProfileDisplayFieldRow(
-            label1: 'Account Holder Name',
-            value1: _s(d.accountHolderName),
-            label2: 'Account Type',
-            value2: _s(d.accountType),
-          ),
-          ProfileDisplayFieldRow(
-            // Web ProfileClient.tsx:658: only the last 4 digits are shown.
-            label1: 'Account Number',
-            value1: d.accountNumber.isEmpty
-                ? _s(d.accountNumber)
-                : '••••${d.accountNumber.substring(d.accountNumber.length > 4 ? d.accountNumber.length - 4 : 0)}',
-            label2: 'IFSC Code', value2: _s(d.ifscCode),
-          ),
-          ProfileDisplayFieldRow(
-            label1: 'Bank Name',
-            value1: _s(d.bankName),
-            label2: 'Bank Branch',
-            value2: _s(d.bankBranchName),
-            padBottom: false,
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.backgroundLow,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, size: 14, color: AppColors.textSecondary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Contact HR to update your bank details.',
-                    style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-                  ),
+          Row(
+            children: [
+              Icon(Icons.lock_outline, size: 14, color: AppColors.textSecondary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Contact HR to update',
+                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+          const SizedBox(height: 14),
+          ProfileFieldGrid(children: [
+            if (vis('bank_name')) f('Bank Name', _s(d.bankName)),
+            if (vis('account_type')) f('Account Type', _s(d.accountType)),
+            if (vis('account_holder_name')) f('Account Holder', _s(d.accountHolderName)),
+            // Web: only the last 4 digits are ever shown.
+            if (vis('account_number')) f('Account Number', maskedAccountNumber(d.accountNumber)),
+            if (vis('ifsc_code')) f('IFSC Code', _s(d.ifscCode)),
+            if (vis('bank_branch_name')) f('Bank Branch', _s(d.bankBranchName)),
+          ]),
         ],
       ),
     );
@@ -559,6 +300,7 @@ class ProfileEmergencySection extends StatelessWidget {
   final TextEditingController relationshipCtrl;
   final TextEditingController phoneCtrl;
   final TextEditingController emailCtrl;
+  final ProfileFieldConfig config;
 
   const ProfileEmergencySection({
     super.key,
@@ -566,26 +308,29 @@ class ProfileEmergencySection extends StatelessWidget {
     required this.relationshipCtrl,
     required this.phoneCtrl,
     required this.emailCtrl,
+    this.config,
   });
 
   @override
   Widget build(BuildContext context) {
+    bool vis(String k) => isProfileFieldVisible(EmployeeProfileSection.emergency, k, config);
     return ProfileSectionCard(
       icon: Icons.local_phone_outlined,
       title: 'Emergency Contact',
-      child: Column(
-        children: [
-          ProfileFieldRow(
-            left: ProfileField(label: 'Contact Name', controller: nameCtrl),
-            right: ProfileField(label: 'Relationship', controller: relationshipCtrl),
-          ),
-          const SizedBox(height: 12),
-          ProfileFieldRow(
-            left: ProfileField(label: 'Phone Number', controller: phoneCtrl, keyboardType: TextInputType.phone),
-            right: ProfileField(label: 'Email', controller: emailCtrl, keyboardType: TextInputType.emailAddress),
-          ),
-        ],
-      ),
+      child: ProfileFieldGrid(children: [
+        if (vis('emergency_name')) ProfileField(label: 'Name', controller: nameCtrl, hint: 'Contact name'),
+        if (vis('emergency_relationship'))
+          ProfileField(label: 'Relationship', controller: relationshipCtrl, hint: 'e.g. Spouse, Parent'),
+        if (vis('emergency_phone'))
+          ProfileField(
+              label: 'Phone', controller: phoneCtrl, keyboardType: TextInputType.phone, hint: '+91 98765 43210'),
+        if (vis('emergency_email'))
+          ProfileField(
+              label: 'Email',
+              controller: emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              hint: 'email@example.com'),
+      ]),
     );
   }
 }
@@ -616,34 +361,36 @@ class ProfileChangePasswordSection extends StatelessWidget {
       child: Column(
         children: [
           ProfileField(
-            label: 'Current Password',
+            label: 'Current password',
             controller: currentCtrl,
             obscureText: true,
-            hint: '••••••••',
+            hint: 'Current password',
           ),
-          const SizedBox(height: 12),
-          ProfileFieldRow(
-            left: ProfileField(label: 'New Password', controller: newCtrl, obscureText: true, hint: '••••••••'),
-            right:
-                ProfileField(label: 'Confirm Password', controller: confirmCtrl, obscureText: true, hint: '••••••••'),
+          const SizedBox(height: 14),
+          ProfileField(label: 'New password', controller: newCtrl, obscureText: true, hint: 'New password'),
+          const SizedBox(height: 14),
+          ProfileField(
+            label: 'Confirm new password',
+            controller: confirmCtrl,
+            obscureText: true,
+            hint: 'Confirm new password',
           ),
-          const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
               onPressed: loading ? null : onSubmit,
               icon: loading
                   ? const SizedBox(
-                      width: 13,
-                      height: 13,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
-                  : const Icon(Icons.lock_outline, size: 13),
-              label: Text(loading ? 'Updating…' : 'Update Password'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                side: BorderSide(color: AppColors.primary),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  : const Icon(Icons.lock_outline, size: 16),
+              label: Text(loading ? 'Updating…' : 'Update password'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                minimumSize: const Size.fromHeight(46),
                 textStyle: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
               ),
             ),

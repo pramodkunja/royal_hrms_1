@@ -36,3 +36,20 @@ const kChangeHqTitle = 'Change Headquarter?';
 const kChangeHqBody = 'Another branch is already marked as the headquarter. Setting this branch as HQ will remove the '
     'HQ status from the existing one. Do you want to continue?';
 const kChangeHqConfirm = 'Yes, Change HQ';
+
+/// Web OTHER_CITY sentinel: the "Other (type city name)" city option.
+const kOtherCityLabel = 'Other (type city name)';
+
+/// Web CITY_NAME_RE (= backend _CITY_NAME_RE): ASCII letters in words
+/// separated by a single space, apostrophe or hyphen.
+final kCityNameRe = RegExp(r"^[A-Za-z]+(?:[ '-][A-Za-z]+)*$");
+
+/// Web validate() for new_city_name, on the trimmed value (null when valid).
+String? validateNewCityName(String raw) {
+  final name = raw.trim();
+  if (name.isEmpty) return 'Please enter a city name.';
+  if (!kCityNameRe.hasMatch(name)) {
+    return 'City name may only contain letters, spaces, hyphens and apostrophes.';
+  }
+  return null;
+}

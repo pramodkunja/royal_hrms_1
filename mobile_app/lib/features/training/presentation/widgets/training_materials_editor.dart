@@ -8,6 +8,9 @@ import '../providers/training_file_io.dart';
 import '../providers/training_office_opener.dart';
 import '../providers/training_providers.dart';
 import 'training_widgets.dart';
+import '../../../../core/theme/app_text_styles.dart';
+import '../../../approvals/presentation/widgets/approvals_kit.dart';
+import '../../../approvals/presentation/widgets/approvals_ui.dart';
 
 /// Opens an external link (provider so tests need no platform channel).
 typedef TrainingLinkLauncher = Future<bool> Function(Uri uri);
@@ -123,7 +126,14 @@ class _TrainingMaterialsTabState extends ConsumerState<TrainingMaterialsTab> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
-          if (materials.isEmpty) const TrainingNote('No learning materials yet.', icon: Icons.folder_open_outlined),
+          if (materials.isEmpty)
+            TrainingStateView.empty(
+              key: const Key('training-materials-empty'),
+              title: 'No learning materials yet.',
+              message: widget.canEdit ? 'Add a document, a video or a video link below.' : 'Materials will appear here once HR adds them.',
+              icon: Icons.folder_open_outlined,
+              compact: true,
+            ),
           for (final (i, m) in materials.indexed)
             TrainingCard(
               key: Key('training-material-${m.id}'),
@@ -133,46 +143,52 @@ class _TrainingMaterialsTabState extends ConsumerState<TrainingMaterialsTab> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(_icon(m), color: AppColors.primary, size: 22),
-                      const SizedBox(width: 10),
+                      if (!trainingCompact(context)) ...[
+                        ApprovalsIconBox(_icon(m), size: 40),
+                        const SizedBox(width: 12),
+                      ],
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('${i + 1}. ${m.title}',
-                                style:
-                                    TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                            const SizedBox(height: 2),
-                            Text(
-                              [
-                                m.kindLabel,
-                                m.isRequired ? 'Required' : 'Optional',
-                                if (m.fileSize > 0) formatTrainingBytes(m.fileSize),
-                                if (m.durationSeconds != null) formatTrainingDuration(m.durationSeconds),
-                                if (m.isDocument && m.minViewSeconds > 0)
-                                  'min. ${formatTrainingDuration(m.minViewSeconds)} reading',
-                                if (!m.isDocument && !m.isTracked)
-                                  m.allowManualCompletion
-                                      ? 'completion confirmed by employee'
-                                      : 'not trackable — allow confirmation',
-                              ].where((p) => p.isNotEmpty).join(' · '),
-                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                            ),
+                                style: AppTextStyles.label.copyWith(fontSize: 14, fontWeight: FontWeight.w700, height: 1.3)),
+                            const SizedBox(height: 6),
+                            Wrap(spacing: 6, runSpacing: 4, children: [
+                              ApprovalsChip(m.kindLabel),
+                              ApprovalsChip(m.isRequired ? 'Required' : 'Optional',
+                                  tone: m.isRequired ? ApprovalsTone.info : ApprovalsTone.neutral),
+                              if (m.durationSeconds != null)
+                                ApprovalsChip(formatTrainingDuration(m.durationSeconds), icon: Icons.schedule),
+                              if (m.fileSize > 0) ApprovalsChip(formatTrainingBytes(m.fileSize)),
+                            ]),
+                            if (m.isDocument && m.minViewSeconds > 0 || (!m.isDocument && !m.isTracked)) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                m.isDocument
+                                    ? 'min. ${formatTrainingDuration(m.minViewSeconds)} reading'
+                                    : (m.allowManualCompletion
+                                        ? 'Completion confirmed by employee'
+                                        : 'Not trackable — allow confirmation'),
+                                style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                              ),
+                            ],
                             if (m.description.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(m.description, style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
+                              const SizedBox(height: 6),
+                              Text(m.description, style: AppTextStyles.caption.copyWith(color: AppColors.textPrimary)),
                             ],
                           ],
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 10),
                   Align(
-                    alignment: Alignment.centerRight,
+                    alignment: Alignment.centerLeft,
                     child: m.isPdf
                         ? OutlinedButton.icon(
                             key: Key('training-material-preview-${m.id}'),
+                            style: trainingOutlinedStyle(),
                             onPressed: () => TrainingPdfPreviewScreen.open(context, m),
                             icon: const Icon(Icons.visibility_outlined, size: 16),
                             label: const Text('Preview'),
@@ -180,6 +196,7 @@ class _TrainingMaterialsTabState extends ConsumerState<TrainingMaterialsTab> {
                         : m.isExternal
                             ? OutlinedButton.icon(
                                 key: Key('training-material-open-${m.id}'),
+                                style: trainingOutlinedStyle(),
                                 onPressed: () => _openLink(m),
                                 icon: const Icon(Icons.open_in_new, size: 16),
                                 label: const Text('Open the original'),
@@ -187,6 +204,7 @@ class _TrainingMaterialsTabState extends ConsumerState<TrainingMaterialsTab> {
                             : m.isDocument && TrainingOfficeOpener.supports(m.fileFormat)
                                 ? OutlinedButton.icon(
                                     key: Key('training-material-office-${m.id}'),
+                                    style: trainingOutlinedStyle(),
                                     onPressed: _busy.contains('office') ? null : () => _openOffice(m),
                                     icon: const Icon(Icons.open_in_new, size: 16),
                                     label: const Text('Open in another app'),
@@ -195,7 +213,7 @@ class _TrainingMaterialsTabState extends ConsumerState<TrainingMaterialsTab> {
                                     m.isUploadedVideo
                                         ? 'Preview uploaded videos on the web app.'
                                         : '${m.fileFormat.toUpperCase()} files open on the web app.',
-                                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                    style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
                                   ),
                   ),
                   if (widget.canEdit) ...[
@@ -216,8 +234,9 @@ class _TrainingMaterialsTabState extends ConsumerState<TrainingMaterialsTab> {
                                 () => ref
                                     .read(trainingAdminActionsProvider)
                                     .updateMaterial(_c, m, {'is_required': v == true})),
+                        activeColor: AppColors.primary,
                         title: Text(trainingRequiredLabel(m.materialType, hasAssessment),
-                            style: const TextStyle(fontSize: 12)),
+                            style: AppTextStyles.caption.copyWith(color: AppColors.textPrimary)),
                       ),
                     if (m.isExternal && !m.isTracked)
                       CheckboxListTile(
@@ -233,7 +252,8 @@ class _TrainingMaterialsTabState extends ConsumerState<TrainingMaterialsTab> {
                                 () => ref
                                     .read(trainingAdminActionsProvider)
                                     .updateMaterial(_c, m, {'allow_manual_completion': v == true})),
-                        title: const Text('Allow confirmation', style: TextStyle(fontSize: 12)),
+                        activeColor: AppColors.primary,
+                        title: Text('Allow confirmation', style: AppTextStyles.caption.copyWith(color: AppColors.textPrimary)),
                       ),
                     Wrap(
                       alignment: WrapAlignment.end,
@@ -243,6 +263,7 @@ class _TrainingMaterialsTabState extends ConsumerState<TrainingMaterialsTab> {
                         if (m.isTracked && (m.durationSeconds ?? 0) == 0)
                           OutlinedButton.icon(
                             key: Key('material-set-length-${m.id}'),
+                            style: trainingOutlinedStyle(),
                             onPressed: _busy.contains(m.id) ? null : () => _setLength(m),
                             icon: Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.warning),
                             label: const Text('Set video length'),
@@ -291,12 +312,11 @@ class _TrainingMaterialsTabState extends ConsumerState<TrainingMaterialsTab> {
                       padding: const EdgeInsets.symmetric(vertical: 6),
                       child: Row(
                         children: [
-                          Icon(_addOpen ? Icons.expand_more : Icons.add, color: AppColors.primary),
-                          const SizedBox(width: 8),
+                          ApprovalsIconBox(_addOpen ? Icons.expand_more : Icons.add, size: 34),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Text('Add learning material',
-                                style:
-                                    TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                                style: AppTextStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.w700)),
                           ),
                         ],
                       ),
@@ -389,17 +409,7 @@ class _AddMaterialFormState extends ConsumerState<_AddMaterialForm> {
     }
   }
 
-  InputDecoration _dec(String label, {String? helper, String? error}) => InputDecoration(
-        labelText: label,
-        helperText: helper,
-        errorText: error,
-        helperMaxLines: 2,
-        errorMaxLines: 2,
-        isDense: true,
-        filled: true,
-        fillColor: AppColors.surface,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      );
+  InputDecoration _dec(String label, {String? helper, String? error}) => trainingInput(label, helper: helper, error: error);
 
   @override
   Widget build(BuildContext context) {
@@ -424,6 +434,12 @@ class _AddMaterialFormState extends ConsumerState<_AddMaterialForm> {
               ChoiceChip(
                 key: Key('add-material-kind-$k'),
                 label: Text(label),
+                labelStyle: AppTextStyles.caption.copyWith(
+                    fontWeight: FontWeight.w600, color: d.kind == k ? AppColors.primary : AppColors.textSecondary),
+                selectedColor: AppColors.primary.withValues(alpha: 0.12),
+                backgroundColor: AppColors.surface,
+                checkmarkColor: AppColors.primary,
+                side: BorderSide(color: d.kind == k ? AppColors.primary : AppColors.border),
                 selected: d.kind == k,
                 onSelected: (_) => setState(() {
                   _d = d.copyWith(kind: k, clearFile: true);
@@ -456,6 +472,7 @@ class _AddMaterialFormState extends ConsumerState<_AddMaterialForm> {
             children: [
               OutlinedButton.icon(
                 key: const Key('add-material-file'),
+                style: trainingOutlinedStyle(),
                 onPressed: _busy ? null : _pick,
                 icon: const Icon(Icons.upload_file_outlined, size: 16),
                 label: Text(d.file == null ? 'Choose file' : d.file!.name, overflow: TextOverflow.ellipsis),
@@ -534,6 +551,7 @@ class _AddMaterialFormState extends ConsumerState<_AddMaterialForm> {
             key: const Key('add-material-required'),
             dense: true,
             contentPadding: EdgeInsets.zero,
+            activeColor: AppColors.primary,
             controlAffinity: ListTileControlAffinity.leading,
             value: d.required,
             onChanged: (v) => setState(() => _d = _d.copyWith(required: v == true)),
@@ -545,6 +563,7 @@ class _AddMaterialFormState extends ConsumerState<_AddMaterialForm> {
             key: const Key('add-material-allow-confirm'),
             dense: true,
             contentPadding: EdgeInsets.zero,
+            activeColor: AppColors.primary,
             controlAffinity: ListTileControlAffinity.leading,
             value: d.allowConfirm,
             onChanged: (v) => setState(() => _d = _d.copyWith(allowConfirm: v == true)),
@@ -552,18 +571,19 @@ class _AddMaterialFormState extends ConsumerState<_AddMaterialForm> {
                 style: TextStyle(fontSize: 12)),
           ),
         const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
+        Wrap(
+          alignment: WrapAlignment.end,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          runSpacing: 8,
           children: [
             if (_busy && d.kind != 'external_video')
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Text('Uploading… $_pct%',
-                    key: const Key('add-material-progress'),
-                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              ),
+              Text('Uploading… $_pct%',
+                  key: const Key('add-material-progress'),
+                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
             FilledButton.icon(
               key: const Key('add-material-submit'),
+              style: trainingFilledStyle(),
               onPressed: _busy ? null : _add,
               icon: const Icon(Icons.add, size: 16),
               label: Text(_busy ? 'Saving…' : 'Add Material'),
@@ -594,19 +614,22 @@ class _VideoLengthDialogState extends State<_VideoLengthDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-        title: const Text('Video length'),
+  Widget build(BuildContext context) => TrainingDialog(
+        title: 'Video length',
+        icon: Icons.schedule,
         content: TextField(
           key: const Key('material-length-input'),
           controller: _ctrl,
           autofocus: true,
           keyboardType: TextInputType.datetime,
-          decoration:
-              InputDecoration(hintText: 'minutes:seconds, e.g. 12:30', labelText: 'Length of "${widget.title}"'),
+          decoration: trainingInput('Length of "${widget.title}"', hint: 'minutes:seconds, e.g. 12:30'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, _ctrl.text), child: const Text('Save')),
+          TextButton(style: trainingTextStyle(), onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(
+              style: trainingFilledStyle(),
+              onPressed: () => Navigator.pop(context, _ctrl.text),
+              child: const Text('Save')),
         ],
       );
 }

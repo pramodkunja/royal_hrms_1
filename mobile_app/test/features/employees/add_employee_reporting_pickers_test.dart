@@ -564,7 +564,9 @@ void main() {
       await pumpSheet(tester);
       await submit(tester);
       expect(server.of('POST', ApiConstants.employees), isEmpty);
-      expect(find.text('Branch is required.'), findsOneWidget);
+      // Web AddEmployeeModal.validate() says plain "Required" (Task 97 parity).
+      expect(find.text('Required'), findsWidgets);
+      expect(find.text('Branch is required.'), findsNothing);
       expect(find.text('Assign HR is required.'), findsNothing);
     });
   });

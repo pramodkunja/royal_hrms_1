@@ -172,7 +172,7 @@ const _admin = [
 
 Future<void> _pump(WidgetTester tester, List<String> perms,
     {String at = '/dashboard/training', void Function(_TServer)? configure}) async {
-  tester.view.physicalSize = const Size(720, 1640);
+  tester.view.physicalSize = const Size(720, 2600);
   tester.view.devicePixelRatio = 2;
   addTearDown(tester.view.reset);
   _srv = _TServer();

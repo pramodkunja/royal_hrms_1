@@ -30,7 +30,7 @@ String _fmtIso(String iso) {
   if (iso.isEmpty) return '—';
   try {
     final d = DateTime.parse(iso);
-    const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
     return '${d.day} ${m[d.month]}';
   } catch (_) {
     return iso;
@@ -41,7 +41,7 @@ String _fmtDateTime(String? iso) {
   if (iso == null || iso.isEmpty) return '—';
   try {
     final d = DateTime.parse(iso.length >= 10 ? iso.substring(0, 10) : iso);
-    const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
     return '${d.day} ${m[d.month]} ${d.year}';
   } catch (_) {
     return iso;

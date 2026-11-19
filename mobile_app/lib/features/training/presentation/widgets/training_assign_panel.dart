@@ -5,7 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../shared/widgets/app_error_state.dart';
+import '../../../../core/theme/app_text_styles.dart';
+import '../../../approvals/presentation/widgets/approvals_kit.dart';
 import '../../data/models/training_models.dart';
 import '../providers/training_providers.dart';
 import 'training_widgets.dart';
@@ -158,20 +159,16 @@ class _TrainingAssignPanelState extends ConsumerState<TrainingAssignPanel> with 
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
             children: [
               if (!widget.course.isActive)
-                Container(
+                TrainingBanner(
                   key: const Key('training-assign-inactive'),
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.warningContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text('Activate the course (on the web app) before assigning it.',
-                      style: TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+                  text: 'Activate the course (on the web app) before assigning it.',
+                  icon: Icons.info_outline,
+                  color: AppColors.warning,
+                  background: AppColors.warningContainer,
                 ),
-              Text('Employees who already have this course are skipped automatically.',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              const SizedBox(height: 10),
+              const TrainingSectionHeader(Icons.person_add_alt_outlined, 'Assign this course',
+                  subtitle: 'Employees who already have this course are skipped automatically.'),
+              const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -184,6 +181,12 @@ class _TrainingAssignPanelState extends ConsumerState<TrainingAssignPanel> with 
                     ChoiceChip(
                       key: Key('training-assign-mode-${m.name}'),
                       label: Text(label),
+                      labelStyle: AppTextStyles.bodySmall.copyWith(
+                          fontWeight: FontWeight.w600, color: _mode == m ? AppColors.primary : AppColors.textSecondary),
+                      selectedColor: AppColors.primary.withValues(alpha: 0.12),
+                      backgroundColor: AppColors.surface,
+                      checkmarkColor: AppColors.primary,
+                      side: BorderSide(color: _mode == m ? AppColors.primary : AppColors.border),
                       selected: _mode == m,
                       onSelected: (_) => setState(() => _mode = m),
                     ),
@@ -194,18 +197,13 @@ class _TrainingAssignPanelState extends ConsumerState<TrainingAssignPanel> with 
                 AssignMode.people => _people(pickerAsync),
                 AssignMode.groups => _groups(pickerAsync),
                 AssignMode.all => [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.infoContainer,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        'The course will be assigned to every active employee you manage who doesn\'t already '
-                        'have it. New joiners are covered by the "Assign automatically to new joiners" '
-                        'course option.',
-                        style: TextStyle(fontSize: 13, color: AppColors.textPrimary),
-                      ),
+                    TrainingBanner(
+                      text: 'The course will be assigned to every active employee you manage who doesn\'t already '
+                          'have it. New joiners are covered by the "Assign automatically to new joiners" '
+                          'course option.',
+                      icon: Icons.groups_outlined,
+                      color: AppColors.info,
+                      background: AppColors.infoContainer,
                     ),
                   ],
               },
@@ -226,39 +224,49 @@ class _TrainingAssignPanelState extends ConsumerState<TrainingAssignPanel> with 
               children: [
                 Text(_summary,
                     key: const Key('training-assign-summary'),
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                    style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        key: const Key('training-assign-due'),
-                        onPressed: _pickDue,
-                        icon: const Icon(Icons.event_outlined, size: 16),
-                        label:
-                            Text(_due.isEmpty ? 'Due date (optional)' : 'Due $_due', overflow: TextOverflow.ellipsis),
-                      ),
-                    ),
-                    if (_due.isNotEmpty)
-                      IconButton(
-                        tooltip: 'Clear due date',
-                        onPressed: () => setState(() => _due = ''),
-                        icon: const Icon(Icons.close),
-                      ),
-                    const SizedBox(width: 8),
-                    FilledButton.icon(
-                      key: const Key('training-assign-submit'),
-                      onPressed: ready && !_busy ? _assign : null,
-                      icon: _busy
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Icon(Icons.send_outlined, size: 16),
-                      label: Text(_busy ? 'Assigning…' : 'Assign'),
-                    ),
-                  ],
-                ),
+                LayoutBuilder(builder: (context, c) {
+                  final dueLabel = _due.isEmpty ? 'Due date (optional)' : 'Due $_due';
+                  final due = OutlinedButton.icon(
+                    key: const Key('training-assign-due'),
+                    onPressed: _pickDue,
+                    style: trainingOutlinedStyle(),
+                    icon: const Icon(Icons.event_outlined, size: 16),
+                    label: Text(dueLabel, overflow: TextOverflow.ellipsis),
+                  );
+                  final clear = _due.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear due date',
+                          onPressed: () => setState(() => _due = ''),
+                          icon: const Icon(Icons.close),
+                        );
+                  final assign = FilledButton.icon(
+                    key: const Key('training-assign-submit'),
+                    onPressed: ready && !_busy ? _assign : null,
+                    style: trainingFilledStyle(),
+                    icon: _busy
+                        ? const SizedBox(
+                            width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.send_outlined, size: 16),
+                    label: Text(_busy ? 'Assigning…' : 'Assign'),
+                  );
+                  final oneLine = trainingActionsFit(context, c.maxWidth, [dueLabel, 'Assigning…'], extra: clear == null ? 0 : 48);
+                  if (oneLine) {
+                    return Row(children: [
+                      Expanded(child: due),
+                      if (clear != null) clear,
+                      const SizedBox(width: 8),
+                      assign,
+                    ]);
+                  }
+                  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Row(children: [Expanded(child: due), if (clear != null) clear]),
+                    const SizedBox(height: 8),
+                    assign,
+                  ]);
+                }),
               ],
             ),
           ),
@@ -275,14 +283,8 @@ class _TrainingAssignPanelState extends ConsumerState<TrainingAssignPanel> with 
         key: const Key('training-assign-search'),
         controller: _searchCtrl,
         onChanged: _onSearch,
-        decoration: InputDecoration(
-          hintText: 'Search by name or employee ID',
-          prefixIcon: const Icon(Icons.search),
-          isDense: true,
-          filled: true,
-          fillColor: AppColors.surface,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        ),
+        decoration: trainingInput('Search by name or employee ID', prefix: const Icon(Icons.search))
+            .copyWith(labelText: null, hintText: 'Search by name or employee ID'),
       ),
       const SizedBox(height: 8),
       if (_picked.isNotEmpty)
@@ -296,22 +298,28 @@ class _TrainingAssignPanelState extends ConsumerState<TrainingAssignPanel> with 
                 onDeleted: () => setState(() => _picked.remove(p.id)),
                 deleteButtonTooltipMessage: 'Remove ${p.name}',
               ),
-            TextButton(onPressed: () => setState(_picked.clear), child: const Text('Clear selection')),
+            TextButton(style: trainingTextStyle(), onPressed: () => setState(_picked.clear), child: const Text('Clear selection')),
           ],
         ),
       if (pickerAsync.hasError && employees.isEmpty)
-        AppErrorState.forError(pickerAsync.error!, onRetry: () => ref.invalidate(trainingPickerProvider(_search)))
+        TrainingStateView.error(pickerAsync.error!, what: 'employees', onRetry: () => ref.invalidate(trainingPickerProvider(_search)))
       else if (pickerAsync.isLoading && employees.isEmpty)
-        Padding(
-          padding: const EdgeInsets.all(20),
-          child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
-        )
+        const ApprovalsLoading(label: 'Loading employees…')
       else if (employees.isEmpty)
-        const TrainingNote('No employees match your search.', icon: Icons.person_search_outlined)
+        TrainingStateView.noMatch(
+          key: const Key('training-assign-no-match'),
+          title: 'No employees match your search.',
+          message: 'Check the spelling or try the employee ID.',
+          onClear: () {
+            _searchCtrl.clear();
+            setState(() => _search = '');
+          },
+        )
       else ...[
         CheckboxListTile(
           key: const Key('training-assign-select-all'),
           contentPadding: EdgeInsets.zero,
+          activeColor: AppColors.primary,
           controlAffinity: ListTileControlAffinity.leading,
           value: allShown,
           onChanged: (on) => setState(() {
@@ -325,11 +333,12 @@ class _TrainingAssignPanelState extends ConsumerState<TrainingAssignPanel> with 
           CheckboxListTile(
             key: Key('training-assign-emp-${e.id}'),
             contentPadding: EdgeInsets.zero,
+            activeColor: AppColors.primary,
             controlAffinity: ListTileControlAffinity.leading,
             value: _picked.containsKey(e.id),
             onChanged: (on) => setState(() => on == true ? _picked[e.id] = e : _picked.remove(e.id)),
-            title: Text(e.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-            subtitle: e.subtitle.isEmpty ? null : Text(e.subtitle, style: const TextStyle(fontSize: 12)),
+            title: Text(e.name, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
+            subtitle: e.subtitle.isEmpty ? null : Text(e.subtitle, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
           ),
       ],
     ];
@@ -340,12 +349,9 @@ class _TrainingAssignPanelState extends ConsumerState<TrainingAssignPanel> with 
     if (p == null) {
       return [
         if (pickerAsync.hasError)
-          AppErrorState.forError(pickerAsync.error!, onRetry: () => ref.invalidate(trainingPickerProvider(_search)))
+          TrainingStateView.error(pickerAsync.error!, what: 'employees', onRetry: () => ref.invalidate(trainingPickerProvider(_search)))
         else
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
-          ),
+          const ApprovalsLoading(label: 'Loading…'),
       ];
     }
     Widget group(String label, List<String> options, Set<String> chosen, String keyPrefix) => Column(
@@ -364,6 +370,10 @@ class _TrainingAssignPanelState extends ConsumerState<TrainingAssignPanel> with 
                     FilterChip(
                       key: Key('$keyPrefix-$o'),
                       label: Text(o),
+                      selectedColor: AppColors.primary.withValues(alpha: 0.12),
+                      checkmarkColor: AppColors.primary,
+                      backgroundColor: AppColors.surface,
+                      side: BorderSide(color: chosen.contains(o) ? AppColors.primary : AppColors.border),
                       selected: chosen.contains(o),
                       onSelected: (on) => setState(() => on ? chosen.add(o) : chosen.remove(o)),
                     ),

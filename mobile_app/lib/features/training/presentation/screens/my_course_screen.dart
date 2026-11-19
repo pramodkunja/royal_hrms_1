@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
-import '../../../../shared/widgets/app_error_state.dart';
+import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/blue_app_bar.dart';
+import '../../../approvals/presentation/widgets/approvals_kit.dart';
+import '../../../approvals/presentation/widgets/approvals_ui.dart';
 import '../../data/models/training_models.dart';
 import '../providers/training_providers.dart';
 import '../widgets/training_widgets.dart';
@@ -84,13 +87,14 @@ class _MyCourseScreenState extends ConsumerState<MyCourseScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar:
-          AppBar(title: Text((t ?? widget.initial)?.course.title ?? 'My Learning', overflow: TextOverflow.ellipsis)),
+      appBar: BlueAppBar(title: (t ?? widget.initial)?.course.title ?? 'My Learning'),
       body: t == null
           ? (detailAsync.hasError
-              ? AppErrorState.forError(detailAsync.error!,
-                  onRetry: () => ref.invalidate(myTrainingDetailProvider(assignmentId)))
-              : Center(child: CircularProgressIndicator(color: AppColors.primary)))
+              ? ListView(children: [
+                  TrainingStateView.error(detailAsync.error!,
+                      what: 'this course', onRetry: () => ref.invalidate(myTrainingDetailProvider(assignmentId)))
+                ])
+              : const TrainingLoading('Loading course…'))
           : RefreshIndicator(
               color: AppColors.primary,
               onRefresh: () async {
@@ -129,41 +133,71 @@ class _Body extends StatelessWidget {
       onChanged();
     }
 
+    final done = materials.where((m) => m.isCompleted).length;
+    final overdue = t.status == TrainingStatus.overdue;
     return ListView(
       key: const Key('my-course'),
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 96),
       children: [
         TrainingCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (!trainingCompact(context)) ...[
+                    const ApprovalsIconBox(Icons.school_outlined, size: 44),
+                    const SizedBox(width: 12),
+                  ],
                   Expanded(
-                    child: Text(
-                      [
-                        t.course.category,
-                        if (t.row.dueDate != null) 'Due ${t.row.dueDate}',
-                        '${t.progressPercent}% complete',
-                      ].where((p) => p.isNotEmpty).join(' · '),
-                      key: const Key('my-course-summary'),
-                      style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(t.course.title,
+                            style: AppTextStyles.h4.copyWith(fontWeight: FontWeight.w700, height: 1.3)),
+                        const SizedBox(height: 6),
+                        Wrap(spacing: 6, runSpacing: 4, children: [
+                          TrainingBadge.status(t.status),
+                          if (t.course.category.isNotEmpty) ApprovalsChip(t.course.category, icon: Icons.sell_outlined),
+                          if (t.course.isMandatory) const ApprovalsChip('Mandatory', tone: ApprovalsTone.info),
+                        ]),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  TrainingBadge.status(t.status),
                 ],
               ),
+              const SizedBox(height: 12),
+              Text(
+                [
+                  t.course.category,
+                  if (t.row.dueDate != null) 'Due ${t.row.dueDate}',
+                  '${t.progressPercent}% complete',
+                ].where((p) => p.isNotEmpty).join(' · '),
+                key: const Key('my-course-summary'),
+                style: AppTextStyles.bodySmall.copyWith(
+                    color: overdue ? AppColors.warning : AppColors.textSecondary,
+                    fontWeight: overdue ? FontWeight.w600 : FontWeight.w500),
+              ),
+              const SizedBox(height: 8),
+              TrainingProgressBar(t.progressPercent,
+                  color: t.status == TrainingStatus.completed ? AppColors.success : null, height: 8),
+              if (materials.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text('$done of ${materials.length} materials completed',
+                    style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+              ],
               if (t.course.description.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Text(t.course.description, style: TextStyle(fontSize: 14, color: AppColors.textPrimary)),
+                const SizedBox(height: 12),
+                Text(t.course.description,
+                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary, height: 1.45)),
               ],
             ],
           ),
         ),
         if (t.isClosed)
-          _Alert(
+          TrainingBanner(
             key: const Key('my-course-closed'),
             text: 'You have used all assessment attempts without passing. HR can reset your attempts.',
             color: AppColors.error,
@@ -171,14 +205,23 @@ class _Body extends StatelessWidget {
             icon: Icons.block,
           ),
         if (notOpen)
-          _Alert(
+          TrainingBanner(
             key: const Key('my-course-not-open'),
             text: 'This course starts on ${t.startsOn}. The materials and the assessment open on that date.',
             color: AppColors.info,
             background: AppColors.infoContainer,
             icon: Icons.event_outlined,
           ),
-        if (materials.isEmpty) const TrainingNote('No materials yet.', icon: Icons.folder_open_outlined),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(2, 4, 2, 10),
+          child: TrainingSectionHeader(Icons.library_books_outlined, 'Learning materials'),
+        ),
+        if (materials.isEmpty)
+          TrainingStateView.empty(
+              title: 'No materials yet.',
+              message: 'HR has not added anything to this course.',
+              icon: Icons.folder_open_outlined,
+              compact: true),
         for (final (i, m) in materials.indexed)
           _MaterialRow(
             index: i,
@@ -186,15 +229,21 @@ class _Body extends StatelessWidget {
             enabled: !notOpen,
             onTap: () => openMaterial(m),
           ),
-        if (a != null && a.required)
+        if (a != null && a.required) ...[
+          const Padding(
+            padding: EdgeInsets.fromLTRB(2, 10, 2, 10),
+            child: TrainingSectionHeader(Icons.fact_check_outlined, 'Assessment'),
+          ),
           TrainingCard(
             key: const Key('my-course-assessment'),
             onTap: notOpen ? null : openAssessment,
             child: Row(
               children: [
-                Icon(
+                ApprovalsIconBox(
                   a.passed == true ? Icons.check_circle : (a.unlocked ? Icons.fact_check_outlined : Icons.lock_outline),
-                  color: a.passed == true ? AppColors.success : AppColors.primary,
+                  color:
+                      a.passed == true ? AppColors.success : (a.unlocked ? AppColors.primary : AppColors.textSecondary),
+                  size: 38,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -202,15 +251,16 @@ class _Body extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Assessment',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                      Text(a.rowHint, style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                          style: AppTextStyles.label.copyWith(fontSize: 14, fontWeight: FontWeight.w700)),
+                      Text(a.rowHint, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
                     ],
                   ),
                 ),
-                if (!notOpen) Icon(Icons.chevron_right, color: AppColors.textSecondary),
+                if (!notOpen) Icon(Icons.chevron_right, color: AppColors.textHint),
               ],
             ),
           ),
+        ],
       ],
     );
   }
@@ -232,54 +282,37 @@ class _MaterialRow extends StatelessWidget {
         : (m.isDocument
             ? Icons.description_outlined
             : (m.isUploadedVideo ? Icons.videocam_outlined : Icons.smart_display_outlined));
+    final tone = done ? AppColors.success : AppColors.primary;
     return TrainingCard(
       key: Key('my-material-${m.id}'),
       onTap: enabled ? onTap : null,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 22, color: done ? AppColors.success : AppColors.primary),
-          const SizedBox(width: 12),
+          if (!trainingCompact(context)) ...[
+            ApprovalsIconBox(icon, color: tone, size: 38),
+            const SizedBox(width: 12),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('${index + 1}. ${m.title}',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                const SizedBox(height: 2),
+                    style: AppTextStyles.label.copyWith(fontSize: 14, fontWeight: FontWeight.w700, height: 1.3)),
+                const SizedBox(height: 4),
                 Text(
                   '${m.kindLabel}${m.isRequired ? '' : ' · optional'} · ${trainingMaterialHint(m)}',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
                 ),
               ],
             ),
           ),
-          if (enabled) Icon(Icons.chevron_right, color: AppColors.textSecondary),
+          if (enabled && !trainingCompact(context))
+            Padding(
+                padding: const EdgeInsets.only(left: 4, top: 8),
+                child: Icon(Icons.chevron_right, color: AppColors.textHint)),
         ],
       ),
     );
   }
-}
-
-class _Alert extends StatelessWidget {
-  const _Alert({super.key, required this.text, required this.color, required this.background, required this.icon});
-  final String text;
-  final Color color;
-  final Color background;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(12)),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 18, color: color),
-            const SizedBox(width: 8),
-            Expanded(child: Text(text, style: TextStyle(fontSize: 13, color: AppColors.textPrimary))),
-          ],
-        ),
-      );
 }

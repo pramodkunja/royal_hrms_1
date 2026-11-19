@@ -267,9 +267,12 @@ void main() {
 
     testWidgets('status options match web: All / Pending / Approved / Rejected (no separate "Pending HR")', (tester) async {
       await pump(tester, hrL2, mixed());
-      final dd = tester.widget<DropdownButton<String>>(
-          find.byWidgetPredicate((w) => w is DropdownButton<String> && (w.items ?? []).any((i) => i.value == 'rejected')));
-      expect([for (final i in dd.items!) i.value], ['all', 'pending', 'approved', 'rejected']);
+      await tester.tap(find.byKey(const Key('approvals-filters')));
+      await settle(tester);
+      for (final k in ['all', 'pending', 'approved', 'rejected']) {
+        expect(find.byKey(Key('approvals-status-$k')), findsOneWidget, reason: k);
+      }
+      expect(find.descendant(of: find.byType(BottomSheet), matching: find.textContaining('Pending HR')), findsNothing);
     });
   });
 

@@ -603,6 +603,6 @@ class _MyRequestCard extends StatelessWidget {
 
 String _fmtShortDate(DateTime d) {
   if (d.millisecondsSinceEpoch == 0) return '—';
-  const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
   return '${d.day} ${months[d.month]} ${d.year}';
 }

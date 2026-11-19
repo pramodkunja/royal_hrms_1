@@ -231,16 +231,16 @@ Future<void> pumpAdd(WidgetTester tester, {Server? with_, UserEntity? as}) async
 }
 
 Future<void> fillBranch(WidgetTester tester, {String name = 'Test Branch'}) async {
-  await tester.tap(find.text('Select state'));
+  await tester.tap(find.text('Select State'));
   await tester.pumpAndSettle();
   await tester.tap(find.text('Test State').last);
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Select city'));
+  await tester.tap(find.text('Select City'));
   await tester.pumpAndSettle();
   await tester.tap(find.text('Test City').last);
   await tester.pumpAndSettle();
   await tester.enterText(find.widgetWithText(TextFormField, 'Branch Name *'), name);
-  await tester.enterText(find.widgetWithText(TextFormField, 'Address *'), '1 Test Road');
+  await tester.enterText(find.widgetWithText(TextFormField, 'Branch Address *'), '1 Test Road');
   await tester.pump();
 }
 

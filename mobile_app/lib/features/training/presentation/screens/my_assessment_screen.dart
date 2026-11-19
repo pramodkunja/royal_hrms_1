@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../shared/widgets/app_error_state.dart';
+import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/blue_app_bar.dart';
 import '../../data/models/training_models.dart';
 import '../providers/training_providers.dart';
 import '../widgets/training_widgets.dart';
@@ -122,17 +123,18 @@ class _MyAssessmentScreenState extends ConsumerState<MyAssessmentScreen> {
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(
-            title:
-                Text(state?.title.isNotEmpty == true ? state!.title : 'Assessment', overflow: TextOverflow.ellipsis)),
+        appBar: BlueAppBar(title: state?.title.isNotEmpty == true ? state!.title : 'Assessment'),
         body: state == null
             ? (detailAsync.hasError
-                ? AppErrorState.forError(detailAsync.error!,
-                    onRetry: () => ref.invalidate(myTrainingDetailProvider(widget.assignmentId)))
-                : Center(child: CircularProgressIndicator(color: AppColors.primary)))
+                ? ListView(children: [
+                    TrainingStateView.error(detailAsync.error!,
+                        what: 'the assessment',
+                        onRetry: () => ref.invalidate(myTrainingDetailProvider(widget.assignmentId)))
+                  ])
+                : const TrainingLoading('Loading assessment…'))
             : ListView(
                 key: const Key('my-assessment'),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
                 children: [
                   Text(
                     [
@@ -142,7 +144,7 @@ class _MyAssessmentScreenState extends ConsumerState<MyAssessmentScreen> {
                         '${state.timeLimitMins} minute time limit',
                     ].join(' · '),
                     key: const Key('my-assessment-meta'),
-                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 12),
                   if (_result != null) _resultBanner(state, _result!),
@@ -166,17 +168,17 @@ class _MyAssessmentScreenState extends ConsumerState<MyAssessmentScreen> {
             r.passed ? AppColors.success : AppColors.error,
             r.passed ? AppColors.successContainer : AppColors.errorContainer,
           );
-    return Container(
+    return TrainingBanner(
       key: const Key('my-assessment-result'),
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
-      child: Text(text, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
+      text: text,
+      icon: r.passed ? Icons.check_circle_outline : Icons.info_outline,
+      color: color,
+      background: bg,
     );
   }
 
   List<Widget> _intro(TrainingAssessmentState s) {
-    final notice = TextStyle(fontSize: 13, color: AppColors.textSecondary);
+    final notice = AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary, height: 1.45);
     return [
       if (s.passed == true) ...[
         Text('You passed — best score ${s.bestScorePercent ?? 0}%.',
@@ -210,6 +212,7 @@ class _MyAssessmentScreenState extends ConsumerState<MyAssessmentScreen> {
         const SizedBox(height: 14),
         FilledButton(
           key: const Key('my-assessment-start'),
+          style: trainingFilledStyle(),
           onPressed: _busy ? null : () => _start(s),
           child: Text(_busy
               ? 'Starting…'
@@ -222,6 +225,19 @@ class _MyAssessmentScreenState extends ConsumerState<MyAssessmentScreen> {
   }
 
   List<Widget> _questionList(TrainingAssessmentState s) => [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TrainingProgressBar(_questions!.isEmpty ? 0 : (_answers.length * 100 ~/ _questions!.length), height: 6),
+              const SizedBox(height: 4),
+              Text('${_answers.length} of ${_questions!.length} answered',
+                  key: const Key('my-assessment-answered'),
+                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+            ],
+          ),
+        ),
         for (final (i, q) in _questions!.indexed)
           TrainingCard(
             key: Key('my-assessment-q-${q.id}'),
@@ -229,7 +245,7 @@ class _MyAssessmentScreenState extends ConsumerState<MyAssessmentScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('${i + 1}. ${q.question}${q.section.isNotEmpty ? ' · ${q.section}' : ''}',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                    style: AppTextStyles.label.copyWith(fontSize: 14, fontWeight: FontWeight.w700, height: 1.35)),
                 const SizedBox(height: 4),
                 RadioGroup<String>(
                   groupValue: _answers[q.id],
@@ -242,7 +258,8 @@ class _MyAssessmentScreenState extends ConsumerState<MyAssessmentScreen> {
                           contentPadding: EdgeInsets.zero,
                           dense: true,
                           value: o.key,
-                          title: Text(o.text, style: const TextStyle(fontSize: 13)),
+                          activeColor: AppColors.primary,
+                          title: Text(o.text, style: AppTextStyles.bodySmall),
                         ),
                     ],
                   ),
@@ -251,13 +268,11 @@ class _MyAssessmentScreenState extends ConsumerState<MyAssessmentScreen> {
             ),
           ),
         const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerRight,
-          child: FilledButton(
-            key: const Key('my-assessment-submit'),
-            onPressed: _busy ? null : () => _submit(s),
-            child: Text(_busy ? 'Submitting…' : 'Submit'),
-          ),
+        FilledButton(
+          key: const Key('my-assessment-submit'),
+          style: trainingFilledStyle(),
+          onPressed: _busy ? null : () => _submit(s),
+          child: Text(_busy ? 'Submitting…' : 'Submit'),
         ),
       ];
 }

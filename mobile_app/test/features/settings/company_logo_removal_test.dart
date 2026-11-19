@@ -166,7 +166,11 @@ Future<void> tapRemove(WidgetTester tester) async {
 
 Future<void> pick(WidgetTester tester, File f) async {
   nextPick = f;
-  await tester.tap(byKey('company-logo-change'));
+  // The screen reads the file's size (real async I/O) before accepting it.
+  await tester.runAsync(() async {
+    await tester.tap(byKey('company-logo-change'));
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+  });
   await tester.pumpAndSettle();
 }
 
@@ -252,9 +256,9 @@ void main() {
       await save(tester);
       expect(server.puts, hasLength(2));
       final second = server.puts.last;
-      expect(second, isA<Map>(), reason: 'an ordinary save, as before (JSON)');
-      expect((second as Map).containsKey('remove_logo'), isFalse);
-      expect(second.containsKey('logo'), isFalse);
+      expect(second, isA<FormData>(), reason: 'web always sends multipart');
+      expect(fieldMap(second).containsKey('remove_logo'), isFalse);
+      expect((second as FormData).files, isEmpty);
     });
   });
 
@@ -355,10 +359,10 @@ void main() {
       await tester.enterText(find.widgetWithText(TextFormField, 'Mumbai'), 'Pune');
       await save(tester);
       final body = server.puts.single;
-      expect(body, isA<Map>());
-      expect((body as Map)['city'], 'Pune');
-      expect(body.containsKey('remove_logo'), isFalse);
-      expect(body.containsKey('logo'), isFalse);
+      expect(body, isA<FormData>());
+      expect(fieldMap(body)['city'], 'Pune');
+      expect(fieldMap(body).containsKey('remove_logo'), isFalse);
+      expect((body as FormData).files, isEmpty);
       expect(server.company['logo_url'], oldLogo);
       expect(networkLogo(oldLogo), findsOneWidget);
     });
@@ -367,7 +371,7 @@ void main() {
       final c = await signedIn(Server());
       final model = c.read(companyProvider).requireValue.copyWith(website: 'https://brand.example.test');
       expect(await c.read(companyProvider.notifier).save(model), isNull);
-      expect((server.puts.single as Map)['website'], 'https://brand.example.test');
+      expect(fieldMap(server.puts.single)['website'], 'https://brand.example.test');
       expect(c.read(companyProvider).requireValue.logoUrl, oldLogo);
 
       final file = tempImage('brand.png');

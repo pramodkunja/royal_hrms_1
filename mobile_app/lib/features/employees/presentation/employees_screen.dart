@@ -13,6 +13,7 @@ import '../../../shared/widgets/app_error_state.dart';
 import '../../../shared/widgets/blue_hero_banner.dart';
 import '../../../shared/widgets/expandable_fab.dart';
 import '../../../shared/widgets/stat_card.dart';
+import '../../auth/presentation/providers/auth_providers.dart';
 import '../data/models/employee_model.dart';
 import 'providers/employee_providers.dart';
 import 'widgets/add_employee_sheet.dart';
@@ -117,6 +118,9 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     final filters = ref.read(employeeFiltersProvider);
     final branches = ref.read(employeeListBranchOptionsProvider);
     final depts = ref.read(employeeListDepartmentOptionsProvider);
+    final user = ref.read(authStateProvider).valueOrNull?.user;
+    final isAdmin = user?.isSuperuser == true;
+    final userBranch = user?.branch ?? '';
 
     await showModalBottomSheet(
       context: context,
@@ -160,8 +164,20 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              if (branches.isNotEmpty)
+              // Web BranchFilterSelect: locked to the caller's own branch unless
+              // is_superuser (page.tsx isAdmin); the server already scopes rows
+              // and stats, the lock just keeps the UI honest.
+              if (!isAdmin)
                 _FilterSheetRow(
+                  key: const Key('employees-branch-filter-locked'),
+                  icon: Icons.lock_outline,
+                  label: 'Branch',
+                  value: userBranch.isEmpty ? 'All Branches' : userBranch,
+                  onTap: () {},
+                )
+              else if (branches.isNotEmpty)
+                _FilterSheetRow(
+                  key: const Key('employees-branch-filter'),
                   icon: Icons.location_on_outlined,
                   label: 'Branch',
                   value: filters.branch.isEmpty ? 'All Branches' : filters.branch,
@@ -170,11 +186,15 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                     title: 'Filter by Branch',
                     options: branches,
                     current: filters.branch,
-                    onSelect: (v) => ref.read(employeeFiltersProvider.notifier).state = filters.copyWith(branch: v),
+                    // Web: changing the branch resets the department.
+                    onSelect: (v) =>
+                        ref.read(employeeFiltersProvider.notifier).state = filters.copyWith(branch: v, department: ''),
                   ),
                 ),
-              if (depts.isNotEmpty)
+              // Web: Department filter is is_superuser only.
+              if (isAdmin && depts.isNotEmpty)
                 _FilterSheetRow(
+                  key: const Key('employees-department-filter'),
                   icon: Icons.business_outlined,
                   label: 'Department',
                   value: filters.department.isEmpty ? 'All Departments' : filters.department,
@@ -621,7 +641,7 @@ class _StatsGrid extends StatelessWidget {
     return StatCardRow(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       cards: [
-        StatCard(icon: Icons.groups_outlined, count: stats.total, label: 'Total', color: AppColors.primary),
+        StatCard(icon: Icons.groups_outlined, count: stats.total, label: 'Total Employees', color: AppColors.primary),
         StatCard(icon: Icons.person_outlined, count: stats.active, label: 'Active', color: AppColors.success),
         StatCard(
             icon: Icons.person_add_outlined, count: stats.onboarding, label: 'Onboarding', color: AppColors.warning),
@@ -692,6 +712,7 @@ class _FilterSheetRow extends StatelessWidget {
   final VoidCallback onTap;
 
   const _FilterSheetRow({
+    super.key,
     required this.icon,
     required this.label,
     required this.value,

@@ -1,78 +1,221 @@
 import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../../../core/permissions/permission_providers.dart';
+import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/app_error_state.dart';
 import '../../data/models/company_model.dart';
+import '../../domain/company_validation.dart';
 import '../providers/settings_providers.dart';
 import '../widgets/settings_app_bar.dart';
 import 'widgets/company_form_fields.dart';
+import 'widgets/company_widgets.dart';
 import 'widgets/financial_year_section.dart';
+import 'widgets/plan_details_tab.dart';
 
-/// Picks a new company logo image (gallery). Tests override it.
+/// Picks a new company logo (web: JPEG, PNG, WebP or SVG). The original file
+/// is used as picked — never re-compressed. Tests override it.
 final companyLogoPickerProvider = Provider<Future<File?> Function()>((ref) => () async {
-      final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 80);
-      return picked == null ? null : File(picked.path);
+      final res = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: kCompanyLogoExtensions,
+      );
+      final path = res?.files.single.path;
+      return path == null ? null : File(path);
     });
 
+/// Company Information (web settings/company/page.tsx) and, for settings.edit
+/// users, Plan Details. [initialTab] mirrors web's `?tab=plan`.
 class CompanyScreen extends ConsumerStatefulWidget {
-  const CompanyScreen({super.key});
+  const CompanyScreen({super.key, this.initialTab = CompanyTab.info});
+
+  final CompanyTab initialTab;
 
   @override
   ConsumerState<CompanyScreen> createState() => _CompanyScreenState();
 }
 
 class _CompanyScreenState extends ConsumerState<CompanyScreen> {
-  final _formKey = GlobalKey<FormState>();
+  final _fieldsKey = GlobalKey<CompanyFormFieldsState>();
   CompanyModel? _draft;
   File? _logoFile;
   bool _saving = false;
+  late CompanyTab _tab = widget.initialTab;
 
   /// Web `logoRemoved`: the saved logo is marked for removal; it is sent as
   /// `remove_logo=true` on Save. Nothing changes on the server until then.
   bool _logoRemoved = false;
 
+  void _snack(String message, {required bool error}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      backgroundColor: error ? AppColors.error : AppColors.success,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(companyProvider);
-    // Web: logo Upload/Remove and Save Changes only with settings.edit; others
-    // see the company details read-only.
+    // Web: logo Upload/Remove, Save Changes and the Plan Details tab only with
+    // settings.edit (usePermission); others see the details read-only.
     final canEdit = ref.watch(permissionProvider('settings.edit'));
+    final tab = (canEdit && _tab == CompanyTab.plan) ? CompanyTab.plan : CompanyTab.info;
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: const SettingsAppBar(title: 'Company Info'),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => _ErrorView(message: err.toString()),
+        error: (err, _) => AppErrorState.forError(err, onRetry: () => ref.invalidate(companyProvider)),
         data: (company) {
           _draft ??= company;
-          // Web displayLogo: picked image ?? (removed ? none : saved logo).
-          final hasLogo = _logoFile != null ||
-              (!_logoRemoved && (_draft!.logoUrl?.isNotEmpty ?? false));
-          return _Body(
-            formKey: _formKey,
-            company: _draft!,
-            logoFile: _logoFile,
-            logoRemoved: _logoRemoved,
-            isSaving: _saving,
-            canEdit: canEdit,
-            onChanged: (updated) => setState(() => _draft = updated),
-            onLogoTap: canEdit ? _pickLogo : null,
-            onRemoveLogo: canEdit && hasLogo && !_saving ? _removeLogo : null,
-            onSave: _submit,
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 760),
+              child: CustomScrollView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                    sliver: SliverToBoxAdapter(child: _top(company, tab)),
+                  ),
+                  if (canEdit)
+                    SliverPersistentHeader(
+                      pinned: true,
+                      delegate: _TabsDelegate(
+                        extent: 58 + 30 * (MediaQuery.textScalerOf(context).scale(10) / 10 - 1).clamp(0.0, 1.5),
+                        selected: tab,
+                        onSelected: (t) {
+                          FocusScope.of(context).unfocus();
+                          setState(() => _tab = t);
+                        },
+                      ),
+                    ),
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 2, 16, 32),
+                    sliver: SliverToBoxAdapter(
+                      child: tab == CompanyTab.plan ? const PlanDetailsTab() : _info(company, canEdit),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           );
         },
       ),
+      // Web's bottom Cancel / Save Changes row, kept in reach on a phone;
+      // steps aside while the keyboard is open.
+      bottomNavigationBar: (async.hasValue && canEdit && tab == CompanyTab.info && !keyboardOpen) ? _bottomBar() : null,
+    );
+  }
+
+  Widget _top(CompanyModel company, CompanyTab tab) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(tab == CompanyTab.plan ? 'Plan Details' : 'Company Information', style: AppTextStyles.h4),
+        const SizedBox(height: 2),
+        Text(
+          tab == CompanyTab.plan
+              ? 'Your subscription, the modules it includes, other plans and payment history'
+              : 'Legal entity details, statutory identifiers, and registered address',
+          style: AppTextStyles.caption.copyWith(fontSize: 12),
+        ),
+        const SizedBox(height: 14),
+        CompanyHeaderCard(
+          company: company,
+          // Web displayLogo: picked image ?? (removed ? none : saved logo).
+          logoUrl: _logoRemoved ? null : company.logoUrl,
+          logoFile: _logoFile,
+        ),
+      ],
+    );
+  }
+
+  Widget _info(CompanyModel company, bool canEdit) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const FinancialYearSection(),
+        const SizedBox(height: 16),
+        // Read-only without settings.edit (nothing can be saved anyway).
+        IgnorePointer(
+          key: const Key('company-fields'),
+          ignoring: !canEdit,
+          child: CompanyFormFields(
+            key: _fieldsKey,
+            company: _draft!,
+            readOnly: !canEdit,
+            onChanged: (updated) => setState(() => _draft = updated),
+            branding: canEdit ? _logoControls(company) : null,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _logoControls(CompanyModel company) {
+    final hasLogo = _logoFile != null || (!_logoRemoved && (company.logoUrl?.isNotEmpty ?? false));
+    final status = _logoFile != null
+        ? 'New logo selected: ${_logoFile!.path.split('/').last} — Save Changes to apply.'
+        : _logoRemoved
+            ? 'The logo will be removed when you save.'
+            : hasLogo
+                ? 'Logo set.'
+                : 'No logo uploaded.';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Company Logo', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 3),
+        Text(
+          'Used on payslips and other documents issued in your name · JPEG, PNG, WebP or SVG · Max 5 MB',
+          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 6),
+        Text(status, key: const Key('company-logo-status'), style: AppTextStyles.caption),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              key: const Key('company-logo-change'),
+              onPressed: _saving ? null : _pickLogo,
+              icon: const Icon(Icons.upload_outlined, size: 16),
+              label: Text(hasLogo ? 'Change' : 'Upload'),
+            ),
+            if (hasLogo)
+              OutlinedButton.icon(
+                key: const Key('company-logo-remove'),
+                onPressed: _saving ? null : _removeLogo,
+                icon: const Icon(Icons.delete_outline, size: 16),
+                label: const Text('Remove'),
+              ),
+          ],
+        ),
+      ],
     );
   }
 
   Future<void> _pickLogo() async {
     final picked = await ref.read(companyLogoPickerProvider)();
     if (picked == null || !mounted) return;
-    // Web handleLogoChange: a new image replaces any pending removal.
+    // Web handleLogoChange: type, then size; a refusal changes nothing.
+    final problem = companyLogoError(picked.path, await picked.length());
+    if (problem != null) return _snack(problem, error: true);
+    if (!mounted) return;
+    // A new image replaces any pending removal.
     setState(() {
       _logoFile = picked;
       _logoRemoved = false;
@@ -86,8 +229,17 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
         _logoRemoved = true;
       });
 
+  void _cancel() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppRoutes.settings);
+    }
+  }
+
   Future<void> _submit() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_saving) return;
+    if (!(_fieldsKey.currentState?.validate() ?? false)) return;
     setState(() => _saving = true);
     // Web precedence: a picked file is uploaded; otherwise a pending removal
     // is sent as remove_logo=true; otherwise the logo is left alone.
@@ -110,307 +262,51 @@ class _CompanyScreenState extends ConsumerState<CompanyScreen> {
       // On failure everything is kept (form edits, picked file, pending
       // removal) so the user can retry; the saved company is unchanged.
     });
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(error ?? 'Company info saved successfully.'),
-      backgroundColor: error == null ? AppColors.success : AppColors.error,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
+    _snack(error ?? 'Company info saved successfully.', error: error != null);
   }
-}
 
-// ── Body ──────────────────────────────────────────────────────────────────────
-
-class _Body extends StatelessWidget {
-  final GlobalKey<FormState> formKey;
-  final CompanyModel company;
-  final File? logoFile;
-  final bool logoRemoved;
-  final bool isSaving;
-  final bool canEdit;
-  final ValueChanged<CompanyModel> onChanged;
-  final VoidCallback? onLogoTap;
-  final VoidCallback? onRemoveLogo;
-  final VoidCallback onSave;
-
-  const _Body({
-    required this.formKey,
-    required this.company,
-    required this.logoFile,
-    required this.logoRemoved,
-    required this.isSaving,
-    required this.canEdit,
-    required this.onChanged,
-    this.onLogoTap,
-    this.onRemoveLogo,
-    required this.onSave,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Form(
-      key: formKey,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _LogoSection(
-              // A pending removal hides the saved logo locally until Save.
-              currentUrl: logoRemoved ? null : company.logoUrl,
-              logoFile: logoFile,
-              companyName: company.companyName,
-              onTap: onLogoTap,
-              onRemove: onRemoveLogo,
-            ),
-            const SizedBox(height: 16),
-            const FinancialYearSection(),
-            const SizedBox(height: 24),
-            // Read-only without settings.edit (nothing can be saved anyway).
-            IgnorePointer(
-              key: const Key('company-fields'),
-              ignoring: !canEdit,
-              child: CompanyFormFields(company: company, onChanged: onChanged),
-            ),
-            const SizedBox(height: 28),
-            if (canEdit) _SaveButton(isSaving: isSaving, onSave: onSave),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Save button ───────────────────────────────────────────────────────────────
-
-class _SaveButton extends StatelessWidget {
-  final bool isSaving;
-  final VoidCallback onSave;
-  const _SaveButton({required this.isSaving, required this.onSave});
-
-  @override
-  Widget build(BuildContext context) {
-    return FilledButton(
-      onPressed: isSaving ? null : onSave,
-      style: FilledButton.styleFrom(
-        minimumSize: const Size(double.infinity, 52),
-        backgroundColor: AppColors.primary,
-        disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.55),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        elevation: 0,
-      ),
-      child: isSaving
-          ? const SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                color: Colors.white,
-              ),
-            )
-          : Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.save_outlined, size: 18, color: Colors.white),
-                const SizedBox(width: 8),
-                Text(
-                  'Save Changes',
-                  style: AppTextStyles.label.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
+  Widget _bottomBar() {
+    return Material(
+      color: AppColors.surface,
+      elevation: 8,
+      child: SafeArea(
+        top: false,
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: Row(
+                children: [
+                  OutlinedButton(
+                    key: const Key('company-cancel'),
+                    onPressed: _saving ? null : _cancel,
+                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 46)),
+                    child: const Text('Cancel'),
                   ),
-                ),
-              ],
-            ),
-    );
-  }
-}
-
-// ── Logo section ──────────────────────────────────────────────────────────────
-
-class _LogoSection extends StatelessWidget {
-  final String? currentUrl;
-  final File? logoFile;
-  final String companyName;
-  /// Null when the logo can't be changed (no settings.edit).
-  final VoidCallback? onTap;
-  final VoidCallback? onRemove;
-
-  const _LogoSection({
-    this.currentUrl,
-    this.logoFile,
-    required this.companyName,
-    this.onTap,
-    this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppColors.cardShadow,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          // Navy gradient banner with centered logo
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 28),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [const Color(0xFF102C52), AppColors.primary],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: Center(
-              child: GestureDetector(
-                onTap: onTap,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Container(
-                      width: 90,
-                      height: 90,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.6),
-                          width: 3,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.18),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(15),
-                        child: logoFile != null
-                            ? Image.file(logoFile!, fit: BoxFit.cover)
-                            : (currentUrl != null && currentUrl!.isNotEmpty)
-                                ? Image.network(currentUrl!, fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => _logoPlaceholder())
-                                : _logoPlaceholder(),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _saving ? null : _submit,
+                      icon: _saving
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.save_outlined, size: 16),
+                      label: Text(_saving ? 'Saving…' : 'Save Changes'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        minimumSize: const Size(0, 46),
+                        textStyle: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
                       ),
                     ),
-                    if (onTap != null)
-                      Positioned(
-                        key: const Key('company-logo-change'),
-                        bottom: -5,
-                        right: -5,
-                        child: Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: AppColors.secondary,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                          ),
-                          child: const Icon(Icons.camera_alt, size: 14, color: Colors.white),
-                        ),
-                      ),
-                    if (onRemove != null)
-                      Positioned(
-                        top: -5,
-                        left: -5,
-                        child: GestureDetector(
-                          key: const Key('company-logo-remove'),
-                          onTap: onRemove,
-                          child: Container(
-                            width: 26,
-                            height: 26,
-                            decoration: BoxDecoration(
-                              color: AppColors.error,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.error.withValues(alpha: 0.35),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: const Icon(Icons.close, size: 13, color: Colors.white),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          ),
-          // Info row below the banner
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        companyName.isNotEmpty ? companyName : 'Your Company',
-                        style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          Icon(Icons.touch_app_outlined, size: 13, color: AppColors.textHint),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Tap logo to change',
-                            style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.07),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'JPG · PNG\nmax 5 MB',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.primary,
-                      fontSize: 10,
-                      height: 1.5,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _logoPlaceholder() {
-    final initial = companyName.isNotEmpty ? companyName[0].toUpperCase() : 'C';
-    return Container(
-      color: AppColors.primary.withValues(alpha: 0.08),
-      child: Center(
-        child: Text(
-          initial,
-          style: AppTextStyles.h2.copyWith(
-            color: AppColors.primary, fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -418,28 +314,28 @@ class _LogoSection extends StatelessWidget {
   }
 }
 
-// ── Error ─────────────────────────────────────────────────────────────────────
+class _TabsDelegate extends SliverPersistentHeaderDelegate {
+  _TabsDelegate({required this.extent, required this.selected, required this.onSelected});
 
-class _ErrorView extends StatelessWidget {
-  final String message;
-  const _ErrorView({required this.message});
+  final double extent;
+  final CompanyTab selected;
+  final ValueChanged<CompanyTab> onSelected;
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.cloud_off_outlined, size: 52, color: AppColors.textHint),
-            const SizedBox(height: 12),
-            Text('Could not load company info', style: AppTextStyles.h4),
-            const SizedBox(height: 6),
-            Text(message, style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
-          ],
-        ),
-      ),
+  double get minExtent => extent;
+  @override
+  double get maxExtent => extent;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: AppColors.background,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      alignment: Alignment.centerLeft,
+      child: CompanyTabStrip(selected: selected, onSelected: onSelected),
     );
   }
+
+  @override
+  bool shouldRebuild(covariant _TabsDelegate old) => true;
 }

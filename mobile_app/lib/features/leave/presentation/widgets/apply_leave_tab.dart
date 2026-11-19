@@ -1294,7 +1294,7 @@ class _DateField extends StatelessWidget {
       'Jun',
       'Jul',
       'Aug',
-      'Sep',
+      'Sept',
       'Oct',
       'Nov',
       'Dec'
@@ -1713,7 +1713,7 @@ class _RequestSummarySideCard extends StatelessWidget {
       'Jun',
       'Jul',
       'Aug',
-      'Sep',
+      'Sept',
       'Oct',
       'Nov',
       'Dec'
@@ -2048,7 +2048,7 @@ class _MyLeaveRequestsSideCard extends ConsumerWidget {
         'Jun',
         'Jul',
         'Aug',
-        'Sep',
+        'Sept',
         'Oct',
         'Nov',
         'Dec'

@@ -50,7 +50,14 @@ Future<void> pumpSection(WidgetTester tester, MyProfileModel profile) async {
   await tester.pumpWidget(ProviderScope(
     key: UniqueKey(),
     child: MaterialApp(
-      home: Scaffold(body: SingleChildScrollView(child: ProfilePersonalSection(profile: profile, phoneCtrl: phone))),
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: Column(children: [
+            ProfilePersonalSection(profile: profile, phoneCtrl: phone),
+            ProfileWorkSection(profile: profile),
+          ]),
+        ),
+      ),
     ),
   ));
   await tester.pumpAndSettle();

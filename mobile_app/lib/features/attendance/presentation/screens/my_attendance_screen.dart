@@ -999,7 +999,7 @@ const _correctionMonthAbbr = [
   'Jun',
   'Jul',
   'Aug',
-  'Sep',
+  'Sept',
   'Oct',
   'Nov',
   'Dec',

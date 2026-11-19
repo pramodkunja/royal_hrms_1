@@ -113,7 +113,7 @@ class _CardHeader extends StatelessWidget {
   String _formatDate(String iso) {
     try {
       final dt = DateTime.parse(iso).toLocal();
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sept','Oct','Nov','Dec'];
       final h = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
       final m = dt.minute.toString().padLeft(2, '0');
       final ampm = dt.hour >= 12 ? 'pm' : 'am';

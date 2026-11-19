@@ -296,11 +296,11 @@ void main() {
       final perms = ['leave.approve', 'facial_recognition.approve', 'payroll.edit'];
       await pump(tester, u(perms, modules: allModules), const ApprovalsScreen());
       expect(find.text('Attendance Approval'), findsOneWidget);
-      expect(find.text('Face ID Approvals'), findsOneWidget);
+      expect(find.text('Face Registration'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       await pump(tester, u(perms, modules: without(['attendance', 'face_attendance'])), const ApprovalsScreen());
       expect(find.text('Attendance Approval'), findsNothing);
-      expect(find.text('Face ID Approvals'), findsNothing);
+      expect(find.text('Face Registration'), findsNothing);
       expect(find.text('Team Approvals'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     });

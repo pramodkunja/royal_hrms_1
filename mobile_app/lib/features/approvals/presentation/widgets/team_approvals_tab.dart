@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_text_styles.dart';
 import '../providers/approvals_providers.dart';
+import 'approvals_kit.dart';
 import 'approvals_list.dart';
 import 'approvals_summary_cards.dart';
 import 'approvals_toolbar.dart';
@@ -34,35 +33,27 @@ class TeamApprovalsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!canApproveLeave && !canApproveExpense && !canApproveCorrections && !canApproveWfh && !canApproveSeparation) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.inbox_outlined, size: 44, color: AppColors.textHint),
-              const SizedBox(height: 12),
-              Text(
-                'You have no approval permissions.',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+      return const Center(
+        child: ApprovalsEmptyState(
+          kind: ApprovalsStateKind.denied,
+          title: 'Approvals aren’t available',
+          message: 'You have no approval permissions.',
         ),
       );
     }
 
     final selected = ref.watch(approvalsSelectedIdsProvider);
 
+    // One scroll view: the summary, type tabs and filters are the list's header.
+    // Only the bulk bar is pinned (at the bottom, within thumb reach).
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const ApprovalsSummaryCards(),
-        const ApprovalsTypeTabsRow(),
-        const ApprovalsToolbar(),
-        if (selected.isNotEmpty) const ApprovalsBulkActionBar(),
-        const Expanded(child: ApprovalsList()),
+        const Expanded(
+          child: ApprovalsList(header: [ApprovalsSummaryCards(), ApprovalsTypeTabsRow(), ApprovalsToolbar()]),
+        ),
+        if (selected.isNotEmpty)
+          const SafeArea(top: false, child: Padding(padding: EdgeInsets.only(top: 8), child: ApprovalsBulkActionBar())),
       ],
     );
   }

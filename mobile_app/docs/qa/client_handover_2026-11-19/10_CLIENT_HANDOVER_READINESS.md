@@ -180,3 +180,12 @@ HO-42, HO-43, HO-44 and the Employee Profile parity gaps (HO-55…58) are implem
 
 ## Task 95 update (18 Nov 2026)
 Final source-level parity audit: 403 matrix rows — 249 COMPLETE, 98 PARTIAL, 16 MISSING, 0 BLOCKED, 27 WEB-ONLY, 13 UNTESTED (before the small fixes applied in the task; COMPLETE = source + mocked tests, not production-verified). A P1 bug (Employee dashboard cards empty against the real server) was found and fixed. Open P1/P2 items and the release recommendation: `22_TASK95_FINAL_PARITY_AUDIT.md` §4 and §10; register HO-60…HO-72.
+
+## Task 96 update (19 Nov 2026)
+My Payslip now matches web's document (adjustments/arrears, Additions panel, one-time deductions, wage-slip layout, UAN/ESIC, saved letterhead, status labels) with 41 reconciliation tests (5 deliberate mutations all caught) and a PDF that follows the same layouts. Dashboard Action Items parsing re-verified and hardened. Full suite 2,907 passed. Not device/staging verified; open: logo, sidebar card, stamp in PDF. See `23_TASK96_MY_PAYSLIP.md`.
+
+## Task 97 update (19 Nov 2026)
+My Payslip has no remaining Flutter-only difference (logo, sidebar employee card, stamp embedded in the PDF via a login-free secure loader). Employee Management P2: Add Employee for Branch Admin roles, server-side employee stats, and Add Branch "Other city" implemented to web parity. Full suite 2,979 passed; all mocked — nothing device/staging verified. See `24_TASK97_PAYSLIP_AND_EMPLOYEES.md` (incl. a formatting-churn note for diff review).
+
+## Task 98 update (19 Nov 2026)
+Hidden Date of Birth no longer blocks Edit Save (web has no client-side required check; hidden fields keep stored values), Employee Bulk Import has Sample CSV/XLSX and Error Report downloads per web, Branch form copy matches web, role-permission investigation documented (safe-now items and backend-confirmation items separated). Full suite 3,007 passed; mocked only. **Formatting churn found: 80 lib files reflowed by folder-wide formatting in Tasks 94–97 — needs your git diff review (HO-73).** See `25_TASK98_PROFILE_IMPORT_UI.md`.

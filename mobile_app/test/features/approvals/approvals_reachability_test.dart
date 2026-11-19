@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mobile_app/features/approvals/presentation/widgets/approvals_ui.dart' show ApprovalsTabLabel;
 import 'package:mobile_app/core/network/api_client.dart';
 import 'package:mobile_app/core/router/access_control.dart';
 import 'package:mobile_app/core/router/app_router.dart';
@@ -114,7 +115,7 @@ UserEntity user(List<String> perms, {bool superuser = false, bool team = false, 
 
 const team = 'Team Approvals';
 const att = 'Attendance Approval';
-const face = 'Face ID Approvals';
+const face = 'Face Registration';
 const canc = 'Leave Cancellations';
 const del = 'Delegation';
 
@@ -156,7 +157,7 @@ Future<void> pump(WidgetTester tester, UserEntity u,
 /// section, where the screen shows no tab bar — that section's widget.
 List<String> sections(WidgetTester tester) {
   if (find.byType(TabBar).evaluate().isNotEmpty) {
-    return [for (final t in tester.widgetList<Tab>(find.byType(Tab))) t.text ?? ''];
+    return [for (final t in tester.widgetList<Tab>(find.byType(Tab))) (t.child as ApprovalsTabLabel).label];
   }
   return [
     if (find.byType(TeamApprovalsTab).evaluate().isNotEmpty) team,

@@ -143,7 +143,7 @@ class MyRequestItem {
     // title, code and summary (no punch times).
     if (c.isLateJustification) {
       final d = DateTime.tryParse(c.date);
-      const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
       final day = d == null ? c.date : '${d.day.toString().padLeft(2, '0')} ${m[d.month - 1]} ${d.year}';
       return MyRequestItem(
         kind: MyRequestKind.attendanceCorrection,

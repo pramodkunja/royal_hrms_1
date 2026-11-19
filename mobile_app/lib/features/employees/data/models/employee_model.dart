@@ -423,11 +423,19 @@ class EmployeeStats {
   final int onboarding;
   final int departments;
 
+  /// GET /employees/stats/ `branch_names` / `department_names` — every branch
+  /// and department present in the caller's scope (ignores the branch
+  /// filter); web's Employees filters list exactly these.
+  final List<String> branchNames;
+  final List<String> departmentNames;
+
   const EmployeeStats({
     required this.total,
     required this.active,
     required this.onboarding,
     required this.departments,
+    this.branchNames = const [],
+    this.departmentNames = const [],
   });
 
   static const empty = EmployeeStats(
@@ -437,13 +445,17 @@ class EmployeeStats {
     departments: 0,
   );
 
-  factory EmployeeStats.fromList(List<EmployeeModel> employees) {
-    final depts = employees.map((e) => e.department).where((d) => d.isNotEmpty).toSet();
+  /// Parses the `data` object of GET /employees/stats/.
+  factory EmployeeStats.fromJson(Map<String, dynamic> json) {
+    int n(dynamic v) => v is num ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
+    List<String> names(dynamic v) => v is List ? v.map((e) => '$e').toList() : const [];
     return EmployeeStats(
-      total: employees.length,
-      active: employees.where((e) => e.status == 'active').length,
-      onboarding: employees.where((e) => e.status == 'onboarding').length,
-      departments: depts.length,
+      total: n(json['total']),
+      active: n(json['active']),
+      onboarding: n(json['onboarding']),
+      departments: n(json['departments']),
+      branchNames: names(json['branch_names']),
+      departmentNames: names(json['department_names']),
     );
   }
 }
@@ -530,6 +542,11 @@ class EmployeeFormData {
   /// for "— Auto-assign —".
   String? reportingManagerId;
 
+  /// The selected role carries `can_manage_branch` (web AddEmployeeModal
+  /// `isBranchAdmin`): Department is locked "Not applicable - Branch Admin"
+  /// and not required, and Designation is free text.
+  bool isBranchAdmin = false;
+
   EmployeeFormData({
     this.firstName = '',
     this.lastName = '',
@@ -546,27 +563,53 @@ class EmployeeFormData {
     this.reportingManagerId,
   });
 
-  static final RegExp _emailRe = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+  // Web AddEmployeeModal NAME_RE / EMAIL_RE.
+  static final RegExp _nameRe = RegExp(r"^[A-Za-z0-9]+(?:[ '-][A-Za-z0-9]+)*$");
+  static final RegExp _emailRe = RegExp(
+      r'^[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$');
+  static const String nameError = 'Letters, numbers, spaces, hyphens and apostrophes only';
 
+  /// Web `set("role")`: choosing a Branch Admin role clears the department
+  /// (and so, as web's department effect does, the reporting manager) and
+  /// defaults a blank designation to "Branch Manager".
+  void applyRole(dynamic id, {required bool canManageBranch}) {
+    roleId = id;
+    isBranchAdmin = canManageBranch;
+    if (canManageBranch) {
+      if (department.isNotEmpty) reportingManagerId = null;
+      department = '';
+      departmentId = null;
+      if (designation.trim().isEmpty) designation = 'Branch Manager';
+    }
+  }
+
+  /// Same messages as web AddEmployeeModal.validate().
   Map<String, String> validate() {
     final errors = <String, String>{};
-    if (firstName.trim().isEmpty) errors['first_name'] = 'First name is required.';
-    if (lastName.trim().isEmpty) errors['last_name'] = 'Last name is required.';
-    if (email.trim().isEmpty) {
-      errors['email'] = 'Work email is required.';
-    } else if (!_emailRe.hasMatch(email.trim())) {
-      errors['email'] = 'Enter a valid email address.';
+    if (firstName.trim().isEmpty) {
+      errors['first_name'] = 'Required';
+    } else if (!_nameRe.hasMatch(firstName.trim())) {
+      errors['first_name'] = nameError;
     }
-    // Mirrors EmployeeListCreateView.post's _is_valid_phone: optional field,
-    // but if provided it must be exactly 10 digits (spaces/-/()/./ stripped
-    // first) with an optional leading 91 or +91.
+    if (lastName.trim().isEmpty) {
+      errors['last_name'] = 'Required';
+    } else if (!_nameRe.hasMatch(lastName.trim())) {
+      errors['last_name'] = nameError;
+    }
+    if (email.trim().isEmpty) {
+      errors['email'] = 'Required';
+    } else if (!_emailRe.hasMatch(email.trim())) {
+      errors['email'] = 'Enter a valid email';
+    }
+    // Optional; if provided exactly 10 digits (separators stripped) with an
+    // optional 91 / +91 — same rule and message as web.
     final phoneError = FormValidators.employeeCreatePhone(phone);
     if (phoneError != null) errors['phone'] = phoneError;
-    if (roleId == null) errors['role'] = 'Role is required.';
-    if (department.isEmpty) errors['department'] = 'Department is required.';
-    if (designation.isEmpty) errors['designation'] = 'Designation is required.';
-    if (branch.isEmpty) errors['branch'] = 'Branch is required.';
-    if (dateOfJoining.isEmpty) errors['date_of_joining'] = 'Date of joining is required.';
+    if (roleId == null) errors['role'] = 'Required';
+    if (!isBranchAdmin && department.isEmpty) errors['department'] = 'Required';
+    if (designation.trim().isEmpty) errors['designation'] = 'Required';
+    if (branch.isEmpty) errors['branch'] = 'Required';
+    if (dateOfJoining.isEmpty) errors['date_of_joining'] = 'Required';
     return errors;
   }
 
@@ -714,7 +757,13 @@ class EmployeeUpdateFormData {
   /// Backend _PHONE_RE_PROFILE (accounts/serializers.py).
   static final RegExp _phoneRe = RegExp(r'^\+?[\d\s\-()./]{7,20}$');
 
-  Map<String, String> validate() {
+  /// [dobVisible]: Settings -> Onboarding Fields can hide Date of Birth; a
+  /// hidden field is not shown, so it is not checked (its stored value is
+  /// resent as loaded, as web). Web's save has no client-side required check
+  /// at all (the "required" flag is only the asterisk) and the backend
+  /// skips an empty date_of_birth, so an empty DOB is not an error; a value
+  /// that is present is still checked with the backend's own rules.
+  Map<String, String> validate({bool dobVisible = true}) {
     final errors = <String, String>{};
     // Web marks Login Email required; checked here with the backend's own
     // format rule and message so the request isn't sent only to be refused.
@@ -734,9 +783,7 @@ class EmployeeUpdateFormData {
     // is not required here either.
     if (designation.isEmpty) errors['designation'] = 'Designation is required.';
     if (branch.isEmpty) errors['branch'] = 'Branch is required.';
-    if (dateOfBirth.isEmpty) {
-      errors['date_of_birth'] = 'Date of birth is required.';
-    } else {
+    if (dobVisible && dateOfBirth.isNotEmpty) {
       final dob = DateTime.tryParse(dateOfBirth);
       if (dob == null) {
         errors['date_of_birth'] = 'Enter a valid date of birth.';
@@ -766,7 +813,8 @@ class EmployeeUpdateFormData {
         'department': department,
         'designation': designation,
         'branch': branch,
-        'date_of_birth': dateOfBirth,
+        // Web `date_of_birth || null`.
+        'date_of_birth': dateOfBirth.isEmpty ? null : dateOfBirth,
         'gender': gender,
         'marital_status': maritalStatus,
         'father_name': fatherName,

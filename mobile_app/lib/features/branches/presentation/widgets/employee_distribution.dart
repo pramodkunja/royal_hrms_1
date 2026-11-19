@@ -81,7 +81,7 @@ class _DistributionCardShell extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Employee Distribution',
+                          'Employee Distribution by Branch',
                           style: AppTextStyles.label.copyWith(
                               color: Colors.white, fontWeight: FontWeight.w700),
                         ),

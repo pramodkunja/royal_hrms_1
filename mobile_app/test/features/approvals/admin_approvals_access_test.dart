@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mobile_app/features/approvals/presentation/widgets/approvals_ui.dart' show ApprovalsTabLabel;
 import 'package:mobile_app/core/network/api_client.dart';
 import 'package:mobile_app/core/security/secure_storage.dart';
 import 'package:mobile_app/features/approvals/presentation/providers/approvals_providers.dart';
@@ -165,7 +166,7 @@ Future<void> pump(WidgetTester tester, UserEntity u, {void Function(Server)? set
 List<String> tabs(WidgetTester tester) {
   final bar = find.byType(TabBar);
   if (bar.evaluate().isEmpty) return const [];
-  return [for (final t in tester.widgetList<Tab>(find.descendant(of: bar, matching: find.byType(Tab)))) t.text ?? ''];
+  return [for (final t in tester.widgetList<Tab>(find.descendant(of: bar, matching: find.byType(Tab)))) (t.child as ApprovalsTabLabel).label];
 }
 
 const teamKinds = ['/leave/requests/', '/expenses/', '/attendance/corrections/', '/wfh/requests/', '/separation/requests/'];
@@ -193,10 +194,10 @@ void main() {
       });
     }
 
-    testWidgets('Face ID Approvals shown and its queue fetched (face_attendance on / unknown)', (tester) async {
+    testWidgets('Face Registration shown and its queue fetched (face_attendance on / unknown)', (tester) async {
       await pump(tester, settingsAdmin);
-      expect(tabs(tester), contains('Face ID Approvals'));
-      await tester.tap(find.text('Face ID Approvals'));
+      expect(tabs(tester), contains('Face Registration'));
+      await tester.tap(find.text('Face Registration'));
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
@@ -205,7 +206,7 @@ void main() {
 
     testWidgets('face_attendance off: no Face ID tab and its queue never fetched', (tester) async {
       await pump(tester, user(['settings.edit'], superuser: true, modules: const ['leave', 'attendance']));
-      expect(tabs(tester), isNot(contains('Face ID Approvals')));
+      expect(tabs(tester), isNot(contains('Face Registration')));
       expect(server.asked('/attendance/face-registration/pending/'), isFalse);
       // Disabled modules are not fetched either.
       expect(server.asked('/expenses/'), isFalse);
@@ -227,7 +228,7 @@ void main() {
       await pump(tester, employee);
       expect(tabs(tester), isEmpty);
       expect(find.text('Team Approvals'), findsNothing);
-      expect(find.text('Face ID Approvals'), findsNothing);
+      expect(find.text('Face Registration'), findsNothing);
       for (final path in [...teamKinds, '/attendance/face-registration/pending/', '/payroll/queries/']) {
         expect(server.asked(path), isFalse, reason: path);
       }
@@ -240,7 +241,7 @@ void main() {
       for (final path in ['/expenses/', '/attendance/corrections/', '/wfh/requests/', '/separation/requests/']) {
         expect(server.asked(path), isFalse, reason: path);
       }
-      expect(find.text('Face ID Approvals'), findsNothing);
+      expect(find.text('Face Registration'), findsNothing);
     });
 
     testWidgets('attendance staff (attendance.create): Team Approvals with corrections only', (tester) async {
@@ -252,8 +253,8 @@ void main() {
 
     testWidgets('explicit facial_recognition.approve: Face ID tab only', (tester) async {
       await pump(tester, faceApprover);
-      // A single tab shows no tab bar: the Face ID queue itself is on screen.
-      expect(tabs(tester), isEmpty);
+      // Web always shows the section tabs, even for a single one.
+      expect(tabs(tester), ['Face Registration']);
       expect(server.asked('/attendance/face-registration/pending/'), isTrue);
       expect(find.text('Team Approvals'), findsNothing);
       for (final path in teamKinds) {

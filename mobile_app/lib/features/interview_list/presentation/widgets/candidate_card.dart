@@ -123,7 +123,7 @@ class CandidateCard extends ConsumerWidget {
   static String _fmtDate(String raw) {
     final dt = DateTime.tryParse(raw);
     if (dt == null) return raw;
-    const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
     return '${dt.day} ${m[dt.month]} ${dt.year}';
   }
 }

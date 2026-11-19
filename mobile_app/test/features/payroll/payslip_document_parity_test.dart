@@ -135,11 +135,14 @@ class _Auth extends AuthNotifier {
 
 late Server server;
 
-Future<void> pump(WidgetTester tester, List<Map<String, dynamic>> payslips, {int status = 200}) async {
+Future<void> pump(WidgetTester tester, List<Map<String, dynamic>> payslips, {int status = 200}) =>
+    pumpWith(tester, Server(payslips, payslipsStatus: status));
+
+Future<void> pumpWith(WidgetTester tester, Server with_) async {
   tester.view.physicalSize = const Size(1080, 5200);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  server = Server(payslips, payslipsStatus: status);
+  server = with_;
   await tester.pumpWidget(ProviderScope(
     overrides: [
       dioProvider.overrideWithValue(Dio(BaseOptions(baseUrl: 'https://test.invalid/api'))..httpClientAdapter = server),
@@ -319,7 +322,9 @@ void main() {
 
     testWidgets('empty and error states stay as before; only the user\'s own endpoint is read', (tester) async {
       await pump(tester, []);
-      expect(find.text('No payslips available yet.'), findsOneWidget);
+      expect(find.text('No payslips yet'), findsOneWidget);
+      expect(textOf(tester, 'payslip-empty-desc'),
+          'Your payslips will appear here once payroll is processed for your account.');
       expect(server.calls.where((c) => c.contains('/payroll/') && !c.contains('my-payslips') && !c.contains('queries')),
           isEmpty);
       await tester.pumpWidget(const SizedBox());

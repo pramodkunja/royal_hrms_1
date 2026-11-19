@@ -82,6 +82,7 @@ dependencies:
   # as web MaterialViewer.tsx. BSD-3-Clause (Flutter authors). video_player was not
   # needed: uploaded videos play from the backend's signed Cloudinary URL.
   webview_flutter: ^4.14.1
+  flutter_svg: ^2.3.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

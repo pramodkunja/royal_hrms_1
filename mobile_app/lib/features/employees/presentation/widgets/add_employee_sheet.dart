@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -7,7 +8,9 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../settings/data/models/departments_model.dart';
 import '../../../settings/data/models/roles_model.dart';
 import '../../data/models/employee_model.dart';
+import '../../domain/employee_profile_sections.dart' show isPersonalFieldVisible;
 import '../providers/employee_providers.dart';
+import 'custom_fields_block.dart' show profileFieldConfigProvider;
 
 // ignore_for_file: use_build_context_synchronously
 
@@ -43,7 +46,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
   bool _hrAutoAssignAllowed = true;
   final _errors = <String, String>{};
   bool _submitting = false;
-  bool _branchPrefilled = false;
+  int _designationRev = 0;
 
   @override
   void initState() {
@@ -59,21 +62,14 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
 
   @override
   Widget build(BuildContext context) {
-    // Mirrors web's AddEmployeeModal: non-system_admin users can only add
-    // employees under their own branch, so the field is pre-filled and
-    // locked as soon as the branch list loads (the backend doesn't enforce
-    // this server-side, so the client is the only guard).
+    // Web AddEmployeeModal: everyone except an unrestricted user
+    // (is_superuser or settings.edit — lib/auth.ts isUnrestrictedUser) adds
+    // employees to their own branch; the field is pre-set from the user's
+    // branch and shown locked.
     final currentUser = ref.watch(authStateProvider).valueOrNull?.user;
-    final branchLocked = !_isEditing && currentUser != null && currentUser.role != 'system_admin';
-    if (branchLocked && !_branchPrefilled) {
-      final branches = ref.watch(employeeBranchesProvider).valueOrNull;
-      if (branches != null && (_createForm?.branch.isEmpty ?? false)) {
-        final own = branches.where((b) => b.name.toLowerCase() == (currentUser.branch ?? '').toLowerCase()).toList();
-        if (own.isNotEmpty) {
-          _createForm!.branch = own.first.name;
-          _branchPrefilled = true;
-        }
-      }
+    final branchLocked = !_isEditing && currentUser != null && !isUnrestrictedEmployeeUser(currentUser);
+    if (branchLocked && _createForm!.branch.isEmpty) {
+      _createForm!.branch = currentUser.branch ?? '';
     }
     return Container(
       decoration: BoxDecoration(
@@ -122,6 +118,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
               required: true,
               initialValue: form.firstName,
               error: _errors['first_name'],
+              inputFormatters: [_nameFormatter],
               onChanged: (v) => form.firstName = v,
               hint: 'e.g. Anjali',
             ),
@@ -133,6 +130,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
               required: true,
               initialValue: form.lastName,
               error: _errors['last_name'],
+              inputFormatters: [_nameFormatter],
               onChanged: (v) => form.lastName = v,
               hint: 'e.g. Sharma',
             ),
@@ -148,6 +146,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
               required: true,
               initialValue: form.email,
               error: _errors['email'],
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9._%+@-]'))],
               onChanged: (v) => form.email = v,
               hint: 'name@company.com',
               keyboardType: TextInputType.emailAddress,
@@ -159,6 +158,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
               label: 'Phone',
               initialValue: form.phone,
               error: _errors['phone'],
+              inputFormatters: [_phoneFormatter],
               onChanged: (v) => form.phone = v,
               hint: '+91 98765 43210',
               keyboardType: TextInputType.phone,
@@ -174,42 +174,70 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
       const SizedBox(height: 14),
       // Role + Department
       Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: _RoleIdDropdown(
               selectedId: form.roleId,
               error: _errors['role'],
-              onSelected: (id) => setState(() => form.roleId = id),
+              onSelected: (role) => setState(() {
+                // Web set("role"): a Branch Admin role clears the department
+                // (and the reporting manager with it) and defaults a blank
+                // designation to "Branch Manager".
+                final wasBlank = form.designation.trim().isEmpty;
+                form.applyRole(role?.id, canManageBranch: role?.canManageBranch ?? false);
+                if (wasBlank && form.designation.isNotEmpty) _designationRev++;
+              }),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: _DeptDropdown(
-              selectedName: form.department.isEmpty ? null : form.department,
-              error: _errors['department'],
-              onSelected: (dept) => setState(() {
-                // Web: a manager picked for one department isn't valid for
-                // another — drop it when the department changes.
-                if ((dept?.name ?? '') != form.department) form.reportingManagerId = null;
-                form.department = dept?.name ?? '';
-                form.departmentId = dept?.id;
-                form.designation = '';
-              }),
-            ),
+            child: form.isBranchAdmin
+                ? const _LockedField(
+                    label: 'Department',
+                    text: 'Not applicable — Branch Admin',
+                    keyName: 'add-employee-department-locked',
+                  )
+                : _DeptDropdown(
+                    selectedName: form.department.isEmpty ? null : form.department,
+                    error: _errors['department'],
+                    onSelected: (dept) => setState(() {
+                      // Web: a manager picked for one department isn't valid for
+                      // another — drop it when the department changes.
+                      if ((dept?.name ?? '') != form.department) form.reportingManagerId = null;
+                      form.department = dept?.name ?? '';
+                      form.departmentId = dept?.id;
+                      form.designation = '';
+                    }),
+                  ),
           ),
         ],
       ),
       const SizedBox(height: 14),
       // Designation + Branch
       Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: _DesignationDropdown(
-              departmentId: form.departmentId,
-              selectedDesignation: form.designation,
-              error: _errors['designation'],
-              onSelected: (v) => setState(() => form.designation = v ?? ''),
-            ),
+            child: form.isBranchAdmin
+                // Web: free-text Designation for a Branch Admin (no
+                // department-filtered list to pick from).
+                ? _Field(
+                    key: ValueKey('add-employee-designation-text-$_designationRev'),
+                    label: 'Designation',
+                    required: true,
+                    initialValue: form.designation,
+                    error: _errors['designation'],
+                    inputFormatters: [_nameFormatter],
+                    onChanged: (v) => form.designation = v,
+                    hint: 'e.g. Branch Manager',
+                  )
+                : _DesignationDropdown(
+                    departmentId: form.departmentId,
+                    selectedDesignation: form.designation,
+                    error: _errors['designation'],
+                    onSelected: (v) => setState(() => form.designation = v ?? ''),
+                  ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -315,6 +343,8 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
     // (managerEligibleList), whatever the current role — it decides whether a
     // role change to Manager keeps the selected reporting manager.
     ref.watch(employeeApproverOptionsProvider(_managerEligibleKey(form)));
+    final fieldConfig = ref.watch(profileFieldConfigProvider).valueOrNull;
+    bool vis(String key) => isPersonalFieldVisible(key, fieldConfig);
     return [
       const _SectionHeader(
         icon: Icons.person_outline,
@@ -336,112 +366,121 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
         hint: 'name@company.com',
         keyboardType: TextInputType.emailAddress,
       ),
-      const SizedBox(height: 14),
-      Row(
-        children: [
-          Expanded(
-            child: _Field(
-              key: const Key('edit-employee-phone'),
-              label: 'Phone',
-              initialValue: form.phone,
-              error: _errors['phone'],
-              onChanged: (v) => form.phone = v,
-              hint: '+91 98765 43210',
-              keyboardType: TextInputType.phone,
-            ),
+      // Web applyFieldConfig: the seven configurable personal fields are
+      // hidden here as on the profile when Settings -> Onboarding Fields
+      // hides them (config not loaded -> all shown). A hidden field is not
+      // shown, not validated, and keeps its stored value in the PUT (web
+      // resends the loaded values).
+      ..._pairRow(
+        Expanded(
+          child: _Field(
+            key: const Key('edit-employee-phone'),
+            label: 'Phone',
+            initialValue: form.phone,
+            error: _errors['phone'],
+            onChanged: (v) => form.phone = v,
+            hint: '+91 98765 43210',
+            keyboardType: TextInputType.phone,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _DateField(
-              label: 'Date of Birth',
-              required: true,
-              error: _errors['date_of_birth'],
-              isoValue: form.dateOfBirth,
-              onChanged: (iso) => setState(() => form.dateOfBirth = iso),
-              firstDate: DateTime(1950),
-              lastDate: DateTime.now(),
-            ),
-          ),
-        ],
+        ),
+        vis('date_of_birth')
+            ? Expanded(
+                child: _DateField(
+                  key: const Key('edit-employee-dob'),
+                  label: 'Date of Birth',
+                  required: true,
+                  error: _errors['date_of_birth'],
+                  isoValue: form.dateOfBirth,
+                  onChanged: (iso) => setState(() => form.dateOfBirth = iso),
+                  firstDate: DateTime(1950),
+                  lastDate: DateTime.now(),
+                ),
+              )
+            : null,
       ),
-      const SizedBox(height: 14),
-      Row(
-        children: [
-          Expanded(
-            child: _ChoiceDropdown(
-              label: 'Gender',
-              value: form.gender,
-              items: const [
-                {'value': 'male', 'label': 'Male'},
-                {'value': 'female', 'label': 'Female'},
-                {'value': 'other', 'label': 'Other / Prefer not to say'},
-              ],
-              onChanged: (v) => setState(() => form.gender = v ?? ''),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _ChoiceDropdown(
-              label: 'Marital Status',
-              value: form.maritalStatus,
-              items: const [
-                {'value': 'single', 'label': 'Single'},
-                {'value': 'married', 'label': 'Married'},
-                {'value': 'divorced', 'label': 'Divorced'},
-                {'value': 'widowed', 'label': 'Widowed'},
-              ],
-              onChanged: (v) => setState(() => form.maritalStatus = v ?? ''),
-            ),
-          ),
-        ],
+      ..._pairRow(
+        vis('gender')
+            ? Expanded(
+                child: _ChoiceDropdown(
+                  label: 'Gender',
+                  required: true,
+                  value: form.gender,
+                  items: const [
+                    {'value': 'male', 'label': 'Male'},
+                    {'value': 'female', 'label': 'Female'},
+                    {'value': 'other', 'label': 'Other / Prefer not to say'},
+                  ],
+                  onChanged: (v) => setState(() => form.gender = v ?? ''),
+                ),
+              )
+            : null,
+        vis('marital_status')
+            ? Expanded(
+                child: _ChoiceDropdown(
+                  label: 'Marital Status',
+                  value: form.maritalStatus,
+                  items: const [
+                    {'value': 'single', 'label': 'Single'},
+                    {'value': 'married', 'label': 'Married'},
+                    {'value': 'divorced', 'label': 'Divorced'},
+                    {'value': 'widowed', 'label': 'Widowed'},
+                  ],
+                  onChanged: (v) => setState(() => form.maritalStatus = v ?? ''),
+                ),
+              )
+            : null,
       ),
-      const SizedBox(height: 14),
-      Row(
-        children: [
-          Expanded(
-            child: _Field(
-              label: "Father's Name",
-              initialValue: form.fatherName,
-              onChanged: (v) => form.fatherName = v,
-              hint: "Father's full name",
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _ChoiceDropdown(
-              label: 'Blood Group',
-              value: form.bloodGroup,
-              items: const [
-                {'value': 'A+', 'label': 'A+'},
-                {'value': 'A-', 'label': 'A-'},
-                {'value': 'B+', 'label': 'B+'},
-                {'value': 'B-', 'label': 'B-'},
-                {'value': 'O+', 'label': 'O+'},
-                {'value': 'O-', 'label': 'O-'},
-                {'value': 'AB+', 'label': 'AB+'},
-                {'value': 'AB-', 'label': 'AB-'},
-              ],
-              onChanged: (v) => setState(() => form.bloodGroup = v ?? ''),
-            ),
-          ),
-        ],
+      ..._pairRow(
+        vis('father_name')
+            ? Expanded(
+                child: _Field(
+                  label: "Father's Name",
+                  initialValue: form.fatherName,
+                  onChanged: (v) => form.fatherName = v,
+                  hint: "Father's full name",
+                ),
+              )
+            : null,
+        vis('blood_group')
+            ? Expanded(
+                child: _ChoiceDropdown(
+                  label: 'Blood Group',
+                  value: form.bloodGroup,
+                  items: const [
+                    {'value': 'A+', 'label': 'A+'},
+                    {'value': 'A-', 'label': 'A-'},
+                    {'value': 'B+', 'label': 'B+'},
+                    {'value': 'B-', 'label': 'B-'},
+                    {'value': 'O+', 'label': 'O+'},
+                    {'value': 'O-', 'label': 'O-'},
+                    {'value': 'AB+', 'label': 'AB+'},
+                    {'value': 'AB-', 'label': 'AB-'},
+                  ],
+                  onChanged: (v) => setState(() => form.bloodGroup = v ?? ''),
+                ),
+              )
+            : null,
       ),
-      const SizedBox(height: 14),
-      _Field(
-        label: 'Current Address',
-        initialValue: form.currentAddress,
-        onChanged: (v) => form.currentAddress = v,
-        hint: 'House / Flat no., Street, City, State, PIN',
-        maxLines: 3,
-      ),
-      const SizedBox(height: 14),
-      _Field(
-        label: 'Permanent Address',
-        initialValue: form.permanentAddress,
-        onChanged: (v) => form.permanentAddress = v,
-        hint: 'Leave blank if same as current',
-        maxLines: 3,
-      ),
+      if (vis('current_address')) ...[
+        const SizedBox(height: 14),
+        _Field(
+          label: 'Current Address',
+          initialValue: form.currentAddress,
+          onChanged: (v) => form.currentAddress = v,
+          hint: 'House / Flat no., Street, City, State, PIN',
+          maxLines: 3,
+        ),
+      ],
+      if (vis('permanent_address')) ...[
+        const SizedBox(height: 14),
+        _Field(
+          label: 'Permanent Address',
+          initialValue: form.permanentAddress,
+          onChanged: (v) => form.permanentAddress = v,
+          hint: 'Leave blank if same as current',
+          maxLines: 3,
+        ),
+      ],
       const SizedBox(height: 22),
       const _SectionHeader(
         icon: Icons.work_outline,
@@ -598,6 +637,23 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
 
   void _rebuild() => setState(() {});
 
+  /// A two-column row (each side null when hidden), led by its 14px gap;
+  /// nothing when both are hidden. A lone field keeps its half width.
+  static List<Widget> _pairRow(Widget? a, Widget? b) {
+    if (a == null && b == null) return const [];
+    return [
+      const SizedBox(height: 14),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          a ?? const Spacer(),
+          const SizedBox(width: 12),
+          b ?? const Spacer(),
+        ],
+      ),
+    ];
+  }
+
   static ({String branch, bool managerRole, String designation}) _managerEligibleKey(EmployeeUpdateFormData f) =>
       (branch: f.branch, managerRole: true, designation: f.designation);
 
@@ -631,9 +687,10 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
 
   Future<void> _submitEdit() async {
     final form = _editForm!;
+    final dobVisible = isPersonalFieldVisible('date_of_birth', ref.read(profileFieldConfigProvider).valueOrNull);
     setState(() {
       _errors.clear();
-      _errors.addAll(form.validate());
+      _errors.addAll(form.validate(dobVisible: dobVisible));
     });
     if (_errors.isNotEmpty) return;
 
@@ -741,9 +798,11 @@ class _Field extends StatelessWidget {
   final String? hint;
   final TextInputType? keyboardType;
   final int maxLines;
+  final List<TextInputFormatter>? inputFormatters;
 
   const _Field({
     super.key,
+    this.inputFormatters,
     required this.label,
     this.required = false,
     this.initialValue,
@@ -765,6 +824,7 @@ class _Field extends StatelessWidget {
           initialValue: initialValue,
           style: AppTextStyles.body,
           keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
           maxLines: maxLines,
           onChanged: onChanged,
           decoration: _inputDec(hint ?? '', error: error),
@@ -782,12 +842,14 @@ class _Field extends StatelessWidget {
 
 class _ChoiceDropdown extends StatelessWidget {
   final String label;
+  final bool required;
   final String value;
   final List<Map<String, String>> items;
   final ValueChanged<String?> onChanged;
 
   const _ChoiceDropdown({
     required this.label,
+    this.required = false,
     required this.value,
     required this.items,
     required this.onChanged,
@@ -798,7 +860,7 @@ class _ChoiceDropdown extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Label(text: label),
+        _Label(text: label, required: required),
         const SizedBox(height: 5),
         DropdownButtonFormField<String>(
           initialValue: value.isEmpty ? null : value,
@@ -858,7 +920,7 @@ class _ReadOnlyField extends StatelessWidget {
 class _RoleIdDropdown extends ConsumerWidget {
   final dynamic selectedId;
   final String? error;
-  final ValueChanged<dynamic> onSelected;
+  final ValueChanged<RoleModel?> onSelected;
 
   const _RoleIdDropdown({
     this.selectedId,
@@ -869,9 +931,9 @@ class _RoleIdDropdown extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final rolesAsync = ref.watch(employeeFormRolesProvider);
-    // system_admin is never assignable via employee create/edit — the
-    // backend rejects it outright, and web excludes it from this dropdown.
-    final roles = (rolesAsync.valueOrNull ?? []).where((r) => r.name != 'system_admin').toList();
+    // Web AddEmployeeModal: roles carrying `settings.edit` are not offered
+    // (matched by permission, not role name).
+    final roles = assignableEmployeeRoles(rolesAsync.valueOrNull ?? const []);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -890,7 +952,7 @@ class _RoleIdDropdown extends ConsumerWidget {
                     child: Text(r.displayName, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
                   ))
               .toList(),
-          onChanged: onSelected,
+          onChanged: (id) => onSelected(roles.where((r) => r.id == id).firstOrNull),
         ),
         if (error != null) ...[
           const SizedBox(height: 3),
@@ -1105,26 +1167,32 @@ class _BranchDropdown extends ConsumerWidget {
           ],
         ]),
         const SizedBox(height: 5),
-        IgnorePointer(
-          ignoring: locked,
-          child: Opacity(
-            opacity: locked ? 0.6 : 1,
-            child: DropdownButtonFormField<String>(
-              initialValue: selected,
-              style: AppTextStyles.body,
-              isExpanded: true,
-              decoration: _inputDec('— Select Branch —', error: error),
-              hint: Text('— Select Branch —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
-              items: branches
-                  .map((b) => DropdownMenuItem(
-                        value: b.name,
-                        child: Text(b.name, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
-                      ))
-                  .toList(),
-              onChanged: onSelected,
+        if (locked)
+          _LockedBox(
+            key: const Key('add-employee-branch-locked'),
+            text: selectedBranch ?? '',
+          )
+        else
+          IgnorePointer(
+            ignoring: locked,
+            child: Opacity(
+              opacity: locked ? 0.6 : 1,
+              child: DropdownButtonFormField<String>(
+                initialValue: selected,
+                style: AppTextStyles.body,
+                isExpanded: true,
+                decoration: _inputDec('— Select Branch —', error: error),
+                hint: Text('— Select Branch —', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
+                items: branches
+                    .map((b) => DropdownMenuItem(
+                          value: b.name,
+                          child: Text(b.name, style: AppTextStyles.body, overflow: TextOverflow.ellipsis),
+                        ))
+                    .toList(),
+                onChanged: onSelected,
+              ),
             ),
           ),
-        ),
         if (error != null) ...[
           const SizedBox(height: 3),
           Text(error!, style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w500)),
@@ -1816,3 +1884,59 @@ InputDecoration _inputDec(String hint, {String? error, bool enabled = true}) => 
       ),
       isDense: true,
     );
+
+// Web's locked, non-editable box (lock icon + text) used for the branch of a
+// branch-scoped user and for a Branch Admin's department.
+class _LockedBox extends StatelessWidget {
+  final String text;
+  const _LockedBox({super.key, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.lock_outline, size: 13, color: AppColors.textHint),
+          const SizedBox(width: 6),
+          Expanded(child: Text(text, style: AppTextStyles.body, overflow: TextOverflow.ellipsis)),
+        ],
+      ),
+    );
+  }
+}
+
+class _LockedField extends StatelessWidget {
+  final String label;
+  final String text;
+  final String keyName;
+  const _LockedField({required this.label, required this.text, required this.keyName});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _Label(text: label),
+        const SizedBox(height: 5),
+        _LockedBox(key: Key(keyName), text: text),
+      ],
+    );
+  }
+}
+
+// Web sanitizeName / sanitizePhone: strip disallowed characters as typed.
+final TextInputFormatter _nameFormatter = FilteringTextInputFormatter.allow(RegExp(r"[A-Za-z0-9 '-]"));
+final TextInputFormatter _phoneFormatter = TextInputFormatter.withFunction((old, next) {
+  final t = next.text;
+  final plus = t.trim().startsWith('+') ? '+' : '';
+  final v = (plus + t.replaceAll(RegExp(r'[^\d]'), '')).substring(0);
+  final cut = v.length > (plus.isNotEmpty ? 13 : 12) ? v.substring(0, plus.isNotEmpty ? 13 : 12) : v;
+  return TextEditingValue(text: cut, selection: TextSelection.collapsed(offset: cut.length));
+});

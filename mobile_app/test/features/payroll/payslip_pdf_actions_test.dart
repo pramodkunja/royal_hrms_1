@@ -69,7 +69,8 @@ Future<void> pump(WidgetTester tester, Map<String, dynamic> slip, {bool fontsFai
   rec = Recorder();
   await tester.pumpWidget(ProviderScope(
     overrides: [
-      dioProvider.overrideWithValue(Dio(BaseOptions(baseUrl: 'https://test.invalid/api'))..httpClientAdapter = h.server),
+      dioProvider
+          .overrideWithValue(Dio(BaseOptions(baseUrl: 'https://test.invalid/api'))..httpClientAdapter = h.server),
       cookieJarProvider.overrideWithValue(CookieJar()),
       secureStorageProvider.overrideWithValue(_NullStorage()),
       authStateProvider.overrideWith(_Auth.new),

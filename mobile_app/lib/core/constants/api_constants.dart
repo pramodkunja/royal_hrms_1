@@ -32,8 +32,8 @@ class ApiConstants {
 
   // Settings — Company
   static const String settingsCompany = '/settings/company/';
-  static const String settingsCompanyFinancialYear =
-      '/settings/company/financial-year/';
+  static const String settingsCompanyFinancialYear = '/settings/company/financial-year/';
+  static const String settingsCompanyPlan = '/settings/company/plan/';
 
   // Settings — Employee Code
   static const String settingsEmployeeCode = '/settings/employee-code/';
@@ -56,12 +56,9 @@ class ApiConstants {
 
   // Settings — Email Templates
   static const String settingsEmailTemplates = '/settings/email-templates/';
-  static String settingsEmailTemplateDetail(int id) =>
-      '/settings/email-templates/$id/';
-  static String settingsEmailTemplatePreview(int id) =>
-      '/settings/email-templates/$id/preview/';
-  static const String settingsEmailTemplateCategories =
-      '/settings/email-template-categories/';
+  static String settingsEmailTemplateDetail(int id) => '/settings/email-templates/$id/';
+  static String settingsEmailTemplatePreview(int id) => '/settings/email-templates/$id/preview/';
+  static const String settingsEmailTemplateCategories = '/settings/email-template-categories/';
 
   // Settings — Departments / Designations
   static const String departments = '/departments/';
@@ -80,18 +77,18 @@ class ApiConstants {
   // Settings — Onboarding Fields (steps 0-3) & Document Types (step 4) —
   // matches backend OnboardingFieldConfigView / DocumentTypeConfigView.
   static const String settingsOnboardingFields = '/settings/onboarding-fields/';
-  static String settingsOnboardingFieldDetail(String fieldKey) =>
-      '/settings/onboarding-fields/$fieldKey/';
+  static String settingsOnboardingFieldDetail(String fieldKey) => '/settings/onboarding-fields/$fieldKey/';
   static const String settingsDocumentTypes = '/settings/document-types/';
-  static String settingsDocumentTypeDetail(String typeKey) =>
-      '/settings/document-types/$typeKey/';
+  static String settingsDocumentTypeDetail(String typeKey) => '/settings/document-types/$typeKey/';
 
   // Organisation Chart
   static const String orgChart = '/org-chart/';
 
   // Employees
   static const String employees = '/employees/';
+  static const String employeeStats = '/employees/stats/';
   static const String employeeBulkImport = '/employees/bulk-import/';
+  static const String employeeBulkImportSample = '/employees/bulk-import/sample/';
   static String employeeDetail(String employeeId) => '/employees/$employeeId/';
   static String employeeCustomFileFields(String employeeId) => '/employees/$employeeId/custom-file-fields/';
 
@@ -123,22 +120,18 @@ class ApiConstants {
   // Employees — per-employee Approval Matrix (GET list of workflow rows /
   // PATCH a single row's L1/L2 override). Matches backend
   // EmployeeApprovalMatrixView.
-  static String employeeApprovalMatrix(String employeeId) =>
-      '/employees/$employeeId/approval-matrix/';
+  static String employeeApprovalMatrix(String employeeId) => '/employees/$employeeId/approval-matrix/';
 
   // Employees — Approval Matrix tab's "Reporting Relationships" quick-edit
   // (Reporting Manager + Branch HR), distinct from the full Edit Employee
   // sheet's REPORTING & HR section.
-  static String employeeReportingManager(String employeeId) =>
-      '/employees/$employeeId/reporting-manager/';
-  static String employeeHrAssign(String employeeId) =>
-      '/employees/$employeeId/hr/';
+  static String employeeReportingManager(String employeeId) => '/employees/$employeeId/reporting-manager/';
+  static String employeeHrAssign(String employeeId) => '/employees/$employeeId/hr/';
 
   // Employees — HR/admin document upload (matches backend
   // EmployeeDocumentAdminView, distinct from the self-service onboarding
   // upload endpoint since it isn't restricted to the onboarding window).
-  static String employeeDocuments(String employeeId) =>
-      '/employees/$employeeId/documents/';
+  static String employeeDocuments(String employeeId) => '/employees/$employeeId/documents/';
 
   // My Profile (self-service) — matches backend MyProfileView
   static const String myProfile = '/employees/me/';
@@ -165,19 +158,15 @@ class ApiConstants {
   static const String candidateStats = '/recruitment/candidates/stats/';
   static const String candidates = '/recruitment/candidates/';
   static String candidateDetail(int id) => '/recruitment/candidates/$id/';
-  static String candidateStatus(int id) =>
-      '/recruitment/candidates/$id/status/';
-  static String candidateSendLogin(int id) =>
-      '/recruitment/candidates/$id/send-portal-login/';
-  static String candidateResendLogin(int id) =>
-      '/recruitment/candidates/$id/resend-portal-login/';
+  static String candidateStatus(int id) => '/recruitment/candidates/$id/status/';
+  static String candidateSendLogin(int id) => '/recruitment/candidates/$id/send-portal-login/';
+  static String candidateResendLogin(int id) => '/recruitment/candidates/$id/resend-portal-login/';
   static const String candidateBulkImport = '/recruitment/candidates/bulk-import/';
   static const String candidateBulkImportSample = '/recruitment/candidates/bulk-import/sample/';
   // Accepts either the numeric candidate pk or the human-readable employee
   // code (e.g. "EMP0001") — SendCandidateEmailView falls back to
   // `portal_user__employee_id` when the path segment isn't purely digits.
-  static String candidateSendEmail(String id) =>
-      '/recruitment/candidates/$id/send-email/';
+  static String candidateSendEmail(String id) => '/recruitment/candidates/$id/send-email/';
 
   // Email Log — matches backend /api/recruitment/emails/ (apps/recruitment/
   // urls.py). This is the ONLY email-logging feature in the backend; it is
@@ -186,10 +175,8 @@ class ApiConstants {
   static const String emailLogs = '/recruitment/emails/';
 
   // Referrals — matches backend /api/recruitment/referrals/...
-  static const String referrals =
-      '/recruitment/referrals/'; // GET (mine) / POST (create)
-  static const String referralsAll =
-      '/recruitment/referrals/all/'; // GET, requires recruitment.view
+  static const String referrals = '/recruitment/referrals/'; // GET (mine) / POST (create)
+  static const String referralsAll = '/recruitment/referrals/all/'; // GET, requires recruitment.view
   static const String referralRules =
       '/recruitment/referral-rules/'; // GET (settings.view for the admin list) / POST (settings.edit)
   static String referralRuleDetail(int id) =>
@@ -198,15 +185,13 @@ class ApiConstants {
   // Assessments (HR admin management) — matches backend /api/assessments/...
   static const String assessments = '/assessments/';
   static String assessmentDetail(String id) => '/assessments/$id/';
-  static String assessmentItems(String assessmentId) =>
-      '/assessments/$assessmentId/items/';
+  static String assessmentItems(String assessmentId) => '/assessments/$assessmentId/items/';
   // Web API.assessments.sections / sectionDetail (AssessmentSection*View):
   // GET assessments.view; POST / PUT / DELETE assessments.edit.
   static String assessmentSections(String assessmentId) => '/assessments/$assessmentId/sections/';
   static String assessmentSectionDetail(String assessmentId, String sectionId) =>
       '/assessments/$assessmentId/sections/$sectionId/';
-  static String assessmentItemDetail(String itemId) =>
-      '/assessments/items/$itemId/';
+  static String assessmentItemDetail(String itemId) => '/assessments/items/$itemId/';
   static const String assessmentAssign = '/assessments/assign/';
   // The signed-in user's own assignments (self-service; any signed-in user —
   // apps/assessments/views/portal.py MyAssessmentView). Not paginated.
@@ -220,14 +205,10 @@ class ApiConstants {
   // Taking an assessment (portal.py): save one item's response (video:
   // empty body; quiz: {"selected_option": "a"–"d"}), grade the attempt,
   // and reset a completed attempt for another try.
-  static String assessmentRespond(String assignmentId, String itemId) =>
-      '/assessments/$assignmentId/respond/$itemId/';
-  static String assessmentComplete(String assignmentId) =>
-      '/assessments/$assignmentId/complete/';
-  static String assessmentRetry(String assignmentId) =>
-      '/assessments/$assignmentId/retry/';
-  static const String assessmentEmailTemplateOptions =
-      '/assessments/email-template-options/';
+  static String assessmentRespond(String assignmentId, String itemId) => '/assessments/$assignmentId/respond/$itemId/';
+  static String assessmentComplete(String assignmentId) => '/assessments/$assignmentId/complete/';
+  static String assessmentRetry(String assignmentId) => '/assessments/$assignmentId/retry/';
+  static const String assessmentEmailTemplateOptions = '/assessments/email-template-options/';
 
   // Settings — Assessment Config (singleton) — matches backend /api/assessments/settings/
   static const String settingsAssessmentConfig =
@@ -280,6 +261,7 @@ class ApiConstants {
   // Company Contact Matrix (accounts/urls.py → views_policy.py).
   static const String companyContacts = '/company-contacts/';
   static String companyContactDetail(int id) => '/company-contacts/$id/';
+
   /// Read-only L1 / L2 approvers (web API.companyPolicy.contactApprovers).
   static const String companyContactApprovers = '/company-contacts/approvers/';
   static String branchDetail(int id) => '/branch/branches/$id/';
@@ -290,13 +272,11 @@ class ApiConstants {
   static const String onboardingProfile = '/onboarding/';
   static String onboardingStep(int step) => '/onboarding/step/$step/';
   static const String onboardingDocuments = '/onboarding/documents/';
-  static String onboardingDocumentDetail(int id) =>
-      '/onboarding/documents/$id/';
+  static String onboardingDocumentDetail(int id) => '/onboarding/documents/$id/';
 
   // Onboarding Approvals (HR)
   static const String onboardingApprovals = '/onboarding/approvals/';
-  static String onboardingApprove(String userId) =>
-      '/onboarding/approvals/$userId/';
+  static String onboardingApprove(String userId) => '/onboarding/approvals/$userId/';
 
   // Leave management — paths match backend /api/leave/...
   static const String leaveTypes = '/leave/policy/';
@@ -310,8 +290,7 @@ class ApiConstants {
   static String leaveCancellationRequest(String id) => '/leave/requests/$id/cancellation/';
   static String leaveCancellationDecision(String id) => '/leave/requests/$id/cancellation/decision/';
   static const String leaveCancellations = '/leave/cancellations/';
-  static String leavePolicyDetail(String leaveType) =>
-      '/leave/policy/$leaveType/';
+  static String leavePolicyDetail(String leaveType) => '/leave/policy/$leaveType/';
   static const String leaveBalanceCredit = '/leave/balance/credit/';
   // Employee Profile → Leave → Manage Leave Credits (web API.leave.credits*).
   static String leaveCreditsOverview(String employeeCode) => '/leave/credits/$employeeCode/';
@@ -327,26 +306,19 @@ class ApiConstants {
   static const String separationTypes = '/separation/types/';
   static const String separationReasons = '/separation/reasons/';
   static const String separationRequests = '/separation/requests/';
-  static String separationRequestDetail(String id) =>
-      '/separation/requests/$id/';
+  static String separationRequestDetail(String id) => '/separation/requests/$id/';
   static String separationStageAction(String requestId, String stageId) =>
       '/separation/requests/$requestId/stages/$stageId/action/';
-  static String separationTasks(String requestId) =>
-      '/separation/requests/$requestId/tasks/';
+  static String separationTasks(String requestId) => '/separation/requests/$requestId/tasks/';
   static String separationTaskDetail(String requestId, String taskId) =>
       '/separation/requests/$requestId/tasks/$taskId/';
-  static String separationClearances(String requestId) =>
-      '/separation/requests/$requestId/clearances/';
-  static String separationClearanceAction(
-          String requestId, String clearanceId) =>
+  static String separationClearances(String requestId) => '/separation/requests/$requestId/clearances/';
+  static String separationClearanceAction(String requestId, String clearanceId) =>
       '/separation/requests/$requestId/clearances/$clearanceId/action/';
-  static String separationDocuments(String requestId) =>
-      '/separation/requests/$requestId/documents/';
-  static String separationDocumentDetail(
-          String requestId, String documentId) =>
+  static String separationDocuments(String requestId) => '/separation/requests/$requestId/documents/';
+  static String separationDocumentDetail(String requestId, String documentId) =>
       '/separation/requests/$requestId/documents/$documentId/';
-  static String separationActivities(String requestId) =>
-      '/separation/requests/$requestId/activities/';
+  static String separationActivities(String requestId) => '/separation/requests/$requestId/activities/';
 
   // Work From Home — matches backend /api/wfh/... (apps/hrms/urls.py).
   static const String wfhRequests = '/wfh/requests/';
@@ -356,8 +328,7 @@ class ApiConstants {
   // WFH daily work report (apps/hrms/views/wfh_reports.py).
   static const String wfhReports = '/wfh/reports/';
   static String wfhReportReview(int id) => '/wfh/reports/$id/review/';
-  static String wfhSavedLocationDetail(dynamic id) =>
-      '/wfh/saved-locations/$id/';
+  static String wfhSavedLocationDetail(dynamic id) => '/wfh/saved-locations/$id/';
 
   // Opening Balance & History bulk import (one-time historical migration
   // tool) — matches web's API.leave.balanceImport*.
@@ -388,8 +359,7 @@ class ApiConstants {
   static const String expenseStats = '/expenses/stats/';
   static const String expenseCategories = '/expenses/categories/';
   static const String expenseStatusList = '/expenses/status/';
-  static String expenseDetail(dynamic expenseNumber) =>
-      '/expenses/$expenseNumber/';
+  static String expenseDetail(dynamic expenseNumber) => '/expenses/$expenseNumber/';
 
   // Attendance — My Attendance (employee self-service), matches backend /api/attendance/...
   // geofence-check is a read-only pre-punch validation (views/geofence_check.py)
@@ -429,8 +399,7 @@ class ApiConstants {
   static const String attendanceInvalidPunches = '/attendance/invalid-punches/';
   static const String attendanceUnpunches = '/attendance/un-punches/';
   static const String attendanceHrCorrections = '/attendance/corrections/';
-  static String attendanceHrCorrectionReview(String id) =>
-      '/attendance/corrections/$id/review/';
+  static String attendanceHrCorrectionReview(String id) => '/attendance/corrections/$id/review/';
 
   // Attendance — employee's own correction-request history (status +
   // L1/L2 approver breakdown), distinct from the HR inbox above.
@@ -450,12 +419,9 @@ class ApiConstants {
   static const String attendanceLateArrivalLimitEmployees = '/attendance/late-arrival-limit/employees/';
 
   // Attendance — Invalid Punch actions (assign/discard/convert)
-  static String attendanceInvalidPunchAssign(String id) =>
-      '/attendance/invalid-punches/$id/assign/';
-  static String attendanceInvalidPunchDiscard(String id) =>
-      '/attendance/invalid-punches/$id/discard/';
-  static String attendanceInvalidPunchConvert(String id) =>
-      '/attendance/invalid-punches/$id/convert/';
+  static String attendanceInvalidPunchAssign(String id) => '/attendance/invalid-punches/$id/assign/';
+  static String attendanceInvalidPunchDiscard(String id) => '/attendance/invalid-punches/$id/discard/';
+  static String attendanceInvalidPunchConvert(String id) => '/attendance/invalid-punches/$id/convert/';
 
   // Attendance — Export / Import
   static const String attendanceExport = '/attendance/export/';
@@ -475,8 +441,7 @@ class ApiConstants {
   static const String attendanceImportSample = '/attendance/import/sample/';
 
   // Attendance — Record audit history
-  static String attendanceRecordAudit(String id) =>
-      '/attendance/records/$id/audit/';
+  static String attendanceRecordAudit(String id) => '/attendance/records/$id/audit/';
 
   // Employees — HR users list (for the Invalid Punch "Assign" picker, and the
   // Edit Employee sheet's HR contact picker)
@@ -500,53 +465,34 @@ class ApiConstants {
   // Employee-scoped ones (employee/*) have no extra role gate — any
   // authenticated user gets their own data.
   static const String dashboardSystemAdminKpis = '/dashboard/system-admin/kpis/';
-  static const String dashboardSystemAdminAnnouncement =
-      '/dashboard/system-admin/announcement/';
-  static const String dashboardSystemAdminPendingApprovals =
-      '/dashboard/system-admin/pending-approvals/';
-  static const String dashboardSystemAdminDepartmentHeadcount =
-      '/dashboard/system-admin/department-headcount/';
-  static const String dashboardSystemAdminEmployeeLifecycle =
-      '/dashboard/system-admin/employee-lifecycle/';
-  static const String dashboardSystemAdminBirthdaysToday =
-      '/dashboard/system-admin/birthdays/today/';
-  static const String dashboardSystemAdminBirthdaysUpcoming =
-      '/dashboard/system-admin/birthdays/upcoming/';
-  static const String dashboardSystemAdminAuditLogs =
-      '/dashboard/system-admin/audit-logs/';
+  static const String dashboardSystemAdminAnnouncement = '/dashboard/system-admin/announcement/';
+  static const String dashboardSystemAdminPendingApprovals = '/dashboard/system-admin/pending-approvals/';
+  static const String dashboardSystemAdminDepartmentHeadcount = '/dashboard/system-admin/department-headcount/';
+  static const String dashboardSystemAdminEmployeeLifecycle = '/dashboard/system-admin/employee-lifecycle/';
+  static const String dashboardSystemAdminBirthdaysToday = '/dashboard/system-admin/birthdays/today/';
+  static const String dashboardSystemAdminBirthdaysUpcoming = '/dashboard/system-admin/birthdays/upcoming/';
+  static const String dashboardSystemAdminAuditLogs = '/dashboard/system-admin/audit-logs/';
 
   static const String dashboardHrKpis = '/dashboard/hr/kpis/';
   // Manager dashboard — every widget in one response (ManagerDashboardView).
   static const String dashboardManager = '/dashboard/manager/';
-  static const String dashboardHrAttendanceSummary =
-      '/dashboard/hr/attendance-summary/';
+  static const String dashboardHrAttendanceSummary = '/dashboard/hr/attendance-summary/';
   static const String dashboardHrActionQueue = '/dashboard/hr/action-queue/';
-  static const String dashboardHrRecruitmentFunnel =
-      '/dashboard/hr/recruitment-funnel/';
-  static const String dashboardHrEmployeeLifecycle =
-      '/dashboard/hr/employee-lifecycle/';
-  static const String dashboardHrBirthdaysToday =
-      '/dashboard/hr/birthdays/today/';
-  static const String dashboardHrBirthdaysUpcoming =
-      '/dashboard/hr/birthdays/upcoming/';
-  static const String dashboardHrDepartmentHeadcount =
-      '/dashboard/department-headcount/';
+  static const String dashboardHrRecruitmentFunnel = '/dashboard/hr/recruitment-funnel/';
+  static const String dashboardHrEmployeeLifecycle = '/dashboard/hr/employee-lifecycle/';
+  static const String dashboardHrBirthdaysToday = '/dashboard/hr/birthdays/today/';
+  static const String dashboardHrBirthdaysUpcoming = '/dashboard/hr/birthdays/upcoming/';
+  static const String dashboardHrDepartmentHeadcount = '/dashboard/department-headcount/';
 
   static const String dashboardEmployeeKpis = '/dashboard/employee/kpis/';
-  static const String dashboardEmployeeLeaveBalances =
-      '/dashboard/employee/leave-balances/';
-  static const String dashboardEmployeeActionItems =
-      '/dashboard/employee/action-items/';
-  static const String dashboardEmployeeRecentRequests =
-      '/dashboard/employee/recent-requests/';
-  static const String dashboardEmployeeAttendanceSummary =
-      '/dashboard/employee/attendance-summary/';
-  static const String dashboardEmployeeAttendanceStatus =
-      '/dashboard/employee/attendance-status/';
+  static const String dashboardEmployeeLeaveBalances = '/dashboard/employee/leave-balances/';
+  static const String dashboardEmployeeActionItems = '/dashboard/employee/action-items/';
+  static const String dashboardEmployeeRecentRequests = '/dashboard/employee/recent-requests/';
+  static const String dashboardEmployeeAttendanceSummary = '/dashboard/employee/attendance-summary/';
+  static const String dashboardEmployeeAttendanceStatus = '/dashboard/employee/attendance-status/';
   // The signed-in employee's own notice countdown (null unless their
   // separation is fully approved) — web EmpNoticePeriodCard.
-  static const String dashboardEmployeeNoticePeriod =
-      '/dashboard/employee/notice-period/';
+  static const String dashboardEmployeeNoticePeriod = '/dashboard/employee/notice-period/';
   // Web EmpBirthdayAnnouncement (API.employeeDashboard.birthdaysToday): open to
   // any onboarded employee (EmployeeBirthdayTodayView, HasCompletedOnboarding),
   // unlike /birthdays/ and the HR/admin birthday endpoints (employees.view).
@@ -581,8 +527,7 @@ class ApiConstants {
   static const String faceRegistrationMe = '/attendance/face-registration/me/';
   static const String faceRegistrationSubmit = '/attendance/face-registration/';
   static const String faceRegistrationPending = '/attendance/face-registration/pending/';
-  static String faceRegistrationReview(String id) =>
-      '/attendance/face-registration/$id/review/';
+  static String faceRegistrationReview(String id) => '/attendance/face-registration/$id/review/';
   static const String faceRegistrationHrRegister = '/attendance/face-registration/register/';
   static const String faceRegistrationEmployees = '/attendance/face-registration/employees/';
   static String faceRegistrationEmployeeStatus(String employeeUuid) =>

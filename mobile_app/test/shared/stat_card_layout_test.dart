@@ -3,8 +3,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:mobile_app/features/approvals/presentation/providers/approvals_providers.dart';
-import 'package:mobile_app/features/approvals/presentation/widgets/approvals_summary_cards.dart';
 import 'package:mobile_app/features/branches/data/models/branch_model.dart';
 import 'package:mobile_app/features/branches/presentation/widgets/branch_stats_row.dart';
 import 'package:mobile_app/features/documents/domain/entities/document_entity.dart';
@@ -15,7 +13,8 @@ import 'package:mobile_app/shared/widgets/stat_card.dart';
 //  - StatCardRow (fixed 88 px before): attendance, my attendance, holiday
 //    calendar, email templates, departments, leave policy, assessments,
 //    referrals, interview list, employees, employee attendance tab,
-//    approvals summary (ApprovalsSummaryCards);
+//    (the Approvals summary no longer uses it — its large-text layout is covered in
+//    test/features/approvals/team_approvals_redesign_test.dart);
 //  - GridView.count, 2 columns, childAspectRatio 2.5: expenses,
 //    BranchStatsRow, DocumentStatsRow; 2.2: candidate review;
 //  - Row + Expanded (natural height): announcements.
@@ -143,21 +142,6 @@ void main() {
         await pumpAt(tester,
             const DocumentStatsRow(stats: DocumentStatsEntity(total: 12345, policy: 234, form: 56, template: 7, other: 8)), scale);
         expectFits(tester, ['12345', '234']);
-      });
-
-      testWidgets('ApprovalsSummaryCards (Team Approvals): fits', (tester) async {
-        await pumpAt(tester, const ApprovalsSummaryCards(), scale, overrides: [
-          approvalsSummaryCountsProvider.overrideWithValue(const ApprovalsSummaryCounts(
-            pendingTotal: 1234,
-            leavePending: 456,
-            expensePending: 78,
-            correctionPending: 9,
-            wfhPending: 10,
-            separationPending: 11,
-            payslipPending: 12,
-          )),
-        ]);
-        expectFits(tester, ['1234', '456']);
       });
     });
   }

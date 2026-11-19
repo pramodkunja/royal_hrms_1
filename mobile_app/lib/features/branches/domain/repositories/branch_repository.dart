@@ -6,7 +6,7 @@ abstract class BranchRepository {
 
   Future<List<CityEntity>> getCities(int stateId);
 
-  Future<String> previewBranchCode(int cityId);
+  Future<String> previewBranchCode({int? cityId, String? cityName});
 
   Future<BranchStatsEntity> getStats();
 
@@ -15,7 +15,8 @@ abstract class BranchRepository {
   Future<List<BranchEntity>> getBranches({int page = 1, int pageSize = 50});
 
   Future<BranchEntity> createBranch({
-    required int cityId,
+    int? cityId,
+    String? newCityName,
     required int stateId,
     required String branchName,
     required String address,
@@ -26,7 +27,8 @@ abstract class BranchRepository {
 
   Future<BranchEntity> updateBranch({
     required int id,
-    required int cityId,
+    int? cityId,
+    String? newCityName,
     required int stateId,
     required String branchName,
     required String address,

@@ -30,7 +30,7 @@ final employeeAssetsProvider = FutureProvider.autoDispose.family<EmployeeAssets,
 /// backend LoginView; the API checks assets.edit itself either way.)
 bool canEditAssets(UserEntity? user) => user != null && (user.isSuperuser || user.permissions.contains('assets.edit'));
 
-const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
 
 /// Web fmtDate (en-IN, 2-digit day, short month): "05 Nov 2026".
 String fmtAssetDate(String iso) {

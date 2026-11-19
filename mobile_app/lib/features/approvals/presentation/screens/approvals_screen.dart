@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../../shared/widgets/blue_hero_banner.dart';
+import '../providers/approvals_providers.dart' show approvalsSummaryCountsProvider;
+import '../widgets/approvals_kit.dart';
+import '../widgets/approvals_ui.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../leave/presentation/widgets/leave_cancellation_panel.dart'
     show LeaveCancellationsTab, canReviewLeaveCancellations;
@@ -42,10 +44,18 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
 
   String _tabLabel(String key) => switch (key) {
         'team' => 'Team Approvals',
-        'face_id' => 'Face ID Approvals',
+        'face_id' => 'Face Registration', // web page.tsx section label
         'leave_cancellations' => 'Leave Cancellations',
         'delegation' => 'Delegation',
         _ => 'Attendance Approval',
+      };
+
+  IconData _tabIcon(String key) => switch (key) {
+        'team' => Icons.checklist_rtl,
+        'face_id' => Icons.face_outlined,
+        'leave_cancellations' => Icons.event_busy_outlined,
+        'delegation' => Icons.supervisor_account_outlined,
+        _ => Icons.fact_check_outlined,
       };
 
   bool _listEquals(List<String> a, List<String> b) {
@@ -129,33 +139,58 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            BlueHeroBanner(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Approvals', style: AppTextStyles.h4.copyWith(color: Colors.white)),
-                  const SizedBox(height: 2),
-                  Text('Items waiting on your action',
-                      style: AppTextStyles.caption.copyWith(color: Colors.white.withValues(alpha: 0.85))),
-                ],
-              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+              // Same heading + sub-line pattern as My Profile under the blue app bar.
+              // Title and the pending badge sit side by side only when there is room;
+              // on a narrow screen or at large text the badge goes underneath, so the
+              // title is never squeezed into a sliver.
+              child: LayoutBuilder(builder: (context, c) {
+                final scale = MediaQuery.textScalerOf(context).scale(10) / 10;
+                final title = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Approvals', style: AppTextStyles.h4),
+                    const SizedBox(height: 2),
+                    Text('Items waiting on your action', style: AppTextStyles.caption.copyWith(fontSize: 12)),
+                  ],
+                );
+                if (!canApproveTeam) return title;
+                if (c.maxWidth < 340 || scale > 1.2) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [title, const SizedBox(height: 8), _PendingTotal()],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [Expanded(child: title), _PendingTotal()],
+                );
+              }),
             ),
             if (keys.isEmpty)
               Expanded(child: _EmptyState())
             else if (tabCtrl != null) ...[
-              if (keys.length > 1)
-                TabBar(
-                  controller: tabCtrl,
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  labelColor: AppColors.primary,
-                  unselectedLabelColor: AppColors.textSecondary,
-                  indicatorColor: AppColors.primary,
-                  labelStyle: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, fontSize: 13),
-                  unselectedLabelStyle: AppTextStyles.label.copyWith(fontSize: 13),
-                  tabs: keys.map((k) => Tab(text: _tabLabel(k))).toList(),
-                ),
+              // Web always shows the section tabs, even for a single one.
+              TabBar(
+                controller: tabCtrl,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                dividerColor: Colors.transparent,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicator: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(22)),
+                labelColor: Colors.white,
+                unselectedLabelColor: AppColors.textPrimary,
+                labelPadding: const EdgeInsets.symmetric(horizontal: 18),
+                splashBorderRadius: BorderRadius.circular(22),
+                labelStyle: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w700),
+                unselectedLabelStyle: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600),
+                tabs: [
+                  for (final k in keys)
+                    Tab(height: 44, child: ApprovalsTabLabel(_tabIcon(k), _tabLabel(k))),
+                ],
+              ),
               Expanded(
                 child: TabBarView(
                   controller: tabCtrl,
@@ -187,22 +222,26 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> with SingleTi
 class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.inbox_outlined, size: 44, color: AppColors.textHint),
-            const SizedBox(height: 12),
-            Text(
-              'You have no approval permissions.',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+    return const Center(
+      child: ApprovalsEmptyState(
+        kind: ApprovalsStateKind.denied,
+        title: 'Approvals aren’t available',
+        message: 'You have no approval permissions.',
       ),
+    );
+  }
+}
+
+/// Total pending across every kind this user can see (web SummaryCards "Pending
+/// Requests") — the real count, nothing invented.
+class _PendingTotal extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final total = ref.watch(approvalsSummaryCountsProvider).pendingTotal;
+    return Semantics(
+      label: '$total pending',
+      child: ApprovalsBadge('$total pending', total > 0 ? ApprovalsTone.warning : ApprovalsTone.success,
+          icon: Icons.schedule),
     );
   }
 }

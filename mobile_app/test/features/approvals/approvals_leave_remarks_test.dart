@@ -283,9 +283,9 @@ void main() {
       await act(tester, 'Hari Leveltwo', approve: true, remarks: 'Once');
       expect(server.writes, hasLength(1));
       // While in flight, the row's actions are disabled.
-      final approveBtn = find.ancestor(of: buttonIn('Hari Leveltwo', 'Approve'), matching: find.byType(FilledButton));
+      final approveBtn = find.byKey(const Key('approval-approve-l2'));
       expect(tester.widget<FilledButton>(approveBtn).onPressed, isNull);
-      await tester.tap(buttonIn('Hari Leveltwo', 'Approve'), warnIfMissed: false);
+      await tester.tap(approveBtn, warnIfMissed: false);
       await settle(tester);
       expect(find.text('Confirm Approval'), findsNothing);
       expect(server.writes, hasLength(1));

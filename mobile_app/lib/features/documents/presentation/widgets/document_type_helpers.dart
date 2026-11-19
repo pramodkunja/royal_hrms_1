@@ -49,6 +49,6 @@ IconData documentTypeIcon(String type) {
 }
 
 String formatDocDate(DateTime dt) {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
   return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
 }
