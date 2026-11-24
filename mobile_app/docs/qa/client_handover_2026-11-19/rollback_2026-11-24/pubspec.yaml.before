@@ -1,0 +1,147 @@
+name: mobile_app
+description: "Royal HRMS - Enterprise HR Management System Mobile Application"
+publish_to: "none"
+version: 1.0.2+11
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+
+  # Navigation
+  go_router: ^14.6.2
+
+  # Network
+  dio: ^5.7.0
+  dio_cookie_manager: ^3.1.1
+  cookie_jar: ^4.0.8
+
+  # Storage
+  flutter_secure_storage: ^9.2.2
+  path_provider: ^2.1.5
+
+  # Fonts
+  google_fonts: ^6.2.1
+
+  # Connectivity
+  connectivity_plus: ^6.1.1
+
+  # Animations (Lottie JSON — 404 / no-internet screens)
+  lottie: ^3.1.3
+
+  # File / Image picking
+  image_picker: ^1.1.2
+  file_picker: ^8.1.2
+
+  # Location (attendance clock-in geofencing)
+  geolocator: ^13.0.1
+
+  # URL launching (preview / download)
+  url_launcher: ^6.3.0
+
+  # Voice commands — native speech-to-text capture; spoken replies are
+  # synthesized server-side (POST /voice/speak/, bilingual EN/HI Sarvam
+  # Bulbul TTS) and played back locally via audioplayers, not
+  # flutter_tts — backend is the single source of truth for which language
+  # to reply in, and an on-device English-only TTS engine can't speak Hindi.
+  speech_to_text: ^7.0.0
+  # Fixed-duration mic re-capture for the Hindi-STT fallback retry
+  # (POST /voice/transcribe-fallback/) — records a short WAV clip when a
+  # voice-sourced transcript comes back as a final no_match.
+  record: ^7.1.1
+  # Local playback of the raw audio/wav bytes POST /voice/speak/ returns.
+  audioplayers: ^6.8.1
+
+  # Face ID registration/verification — live camera preview + capture,
+  # ML Kit face detection for liveness cues (blink / head-turn), and the web
+  # app's own face-api.js 0.22.2 networks converted to TFLite (assets/
+  # face_api/ — see tool/face_api_conversion/) for the 128-d descriptor, so
+  # mobile and web registrations/verifications share one descriptor space.
+  # There is no backend endpoint for computing embeddings server-side.
+  camera: ^0.11.0+2
+  google_mlkit_face_detection: ^0.13.1
+  tflite_flutter: ^0.12.1
+  image: ^4.8.0
+  uuid: ^4.5.1
+
+  # In-app viewing of the employee's own profile documents (PDF). The file
+  # never leaves the app: no other app is given access. JPG/PNG are shown
+  # with Flutter's own Image widget. Opened with PdfDocument.openFile (not
+  # openData, which leaves an undeleted copy in the cache on Android).
+  pdfx: ^2.11.0
+  pdf: ">=3.12.0 <3.13.0"
+  printing: ">=5.14.3 <5.15.0"
+  # My Learning video players (Task 90 batch 2): YouTube IFrame API, Vimeo embed and
+  # HTML5 <video> for uploaded / direct videos — the same players and playback events
+  # as web MaterialViewer.tsx. BSD-3-Clause (Flutter authors). video_player was not
+  # needed: uploaded videos play from the backend's signed Cloudinary URL.
+  webview_flutter: ^4.14.1
+  flutter_svg: ^2.3.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  flutter_native_splash: ^2.4.4
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    # face-api.js models (detector, 68 landmarks, recognition) + licence.
+    # (assets/models/mobilefacenet.tflite is no longer used or bundled.)
+    - assets/face_api/
+    - assets/animations/
+    # Noto fonts (SIL Open Font License 1.1 — licence texts shipped beside
+    # them) for the Employee ID card PDF: Noto Sans is web's card font, and
+    # Noto Sans Devanagari lets Hindi names/addresses render offline.
+    - assets/fonts/
+
+  fonts:
+    - family: NotoSans
+      fonts:
+        - asset: assets/fonts/NotoSans-Regular.ttf
+        - asset: assets/fonts/NotoSans-Bold.ttf
+          weight: 700
+    - family: NotoSansDevanagari
+      fonts:
+        - asset: assets/fonts/NotoSansDevanagari-Regular.ttf
+        - asset: assets/fonts/NotoSansDevanagari-Bold.ttf
+          weight: 700
+
+# Config for `dart run flutter_native_splash:create` — generates the native
+# (pre-Flutter-engine) launch screen shown the instant the app icon is
+# tapped, before Dart even starts running.
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: assets/images/Royal_logo.png
+  # Android 12+ masks the splash icon to a centre circle — the 3:2 wordmark
+  # gets its "R" and "L" clipped, so use the emblem (same as launcher icon).
+  android_12:
+    color: "#FFFFFF"
+    image: assets/icon/android12_splash.png
+
+# Config for `dart run flutter_launcher_icons` — generates the Android
+# launcher icons (legacy mipmaps + API 26+ adaptive icon). Sources live in
+# assets/icon/ (not bundled into the app) and are the "O" people emblem from
+# the official Royal_logo.png wordmark — the full wordmark is unreadable at
+# launcher size. Foreground emblem sits inside the adaptive 66dp safe zone so
+# no launcher mask shape crops it. assets/icon/play_store_icon_512.png is the
+# matching Play Console listing icon.
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: false
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
+  # Padding is baked into the foreground PNG — the plugin's default 16% inset
+  # would shrink the emblem to ~39% of the canvas.
+  adaptive_icon_foreground_inset: 0

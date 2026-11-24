@@ -18,3 +18,8 @@ abstract class FaceApiNets {
 
   Future<void> dispose();
 }
+
+/// Numbers-only results of the optional on-device comparison runs (thread
+/// count vs single thread). Written by the TFLite implementation only when the
+/// diagnostics build asked for it; empty otherwise. Never holds descriptors.
+final Map<String, num> faceApiNumericDiagnostics = {};

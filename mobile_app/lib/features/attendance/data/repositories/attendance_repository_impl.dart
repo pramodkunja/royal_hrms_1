@@ -220,6 +220,15 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
       _ds.fetchUnpunches(date: date, branch: branch, department: department);
 
   @override
+  Future<UnpunchPageEntity> getUnpunchesPage({
+    required String date,
+    String? branch,
+    String? department,
+    int page = 1,
+  }) =>
+      _ds.fetchUnpunchesPage(date: date, branch: branch, department: department, page: page);
+
+  @override
   Future<List<HrCorrectionRowEntity>> getHrCorrections({
     String? branch,
     String? department,

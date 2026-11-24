@@ -416,8 +416,7 @@ class _RulesTabBody extends ConsumerWidget {
                     ReferralRuleCard(rule: rules[i], displayIndex: i + 1),
                   ],
                 ],
-                const SizedBox(height: 16),
-                const ReferralBonusBreakdownPanel(),
+                const SizedBox(height: 16), // closing space under the last rule card
               ],
             );
           },

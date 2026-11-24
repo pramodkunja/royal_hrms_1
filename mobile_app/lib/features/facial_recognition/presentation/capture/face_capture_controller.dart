@@ -1,16 +1,19 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
-import 'package:image/image.dart' as img;
 import 'package:uuid/uuid.dart';
+
+import 'package:image/image.dart' as img;
 
 import '../../face_api/face_api_image.dart';
 import '../../face_api/face_api_nets.dart';
 import '../../face_api/face_api_pipeline.dart';
+import 'face_capture_geometry.dart';
 import 'face_capture_state.dart';
 import 'face_embedding_model.dart';
 import 'liveness_tracker.dart';
@@ -56,6 +59,24 @@ const _kMultipleFacesHint = 'Multiple faces detected — make sure only your fac
 const _kTooFarHint = 'Move closer to the camera.';
 const _kTooCloseHint = 'Move back a little.';
 const _kNotFrontalHint = 'Face the camera directly.';
+const _kNotCenteredHint = 'Centre your face in the oval.';
+const _kTooDarkHint = 'Find better lighting — your face looks too dark.';
+const _kLostFaceHint = 'Keep your face in the oval.';
+const _kDifferentFaceHint = 'A different face was detected — let\'s start the check again.';
+
+// During the liveness window a face may vanish briefly (head turn, blink,
+// motion blur). The challenge keeps running through such gaps instead of
+// restarting, but only for a bounded wall-clock time, and only for the SAME
+// tracked face (see _kDifferentFaceHint).
+// Time-based companion to the frame count: the frame rate varies by device
+// and load, so continuity is judged in wall-clock time as well.
+const _kMaxLostDuringLiveness = Duration(milliseconds: 800);
+// UI state for frame-driven updates is published at most this often; camera
+// frames arrive far faster than the screen needs to repaint.
+const _kUiUpdateInterval = Duration(milliseconds: 100);
+// Mean luma (0-255) of the Y plane below which framing is called too dark
+// (web readiness.ts uses 50 as its dark floor).
+const _kTooDarkLuma = 50.0;
 final _orientations = {
   DeviceOrientation.portraitUp: 0,
   DeviceOrientation.landscapeLeft: 90,
@@ -63,10 +84,34 @@ final _orientations = {
   DeviceOrientation.landscapeRight: 270,
 };
 
+/// Duration of the one model load of this app session (null until loaded) —
+/// a number for the debug diagnostics only.
+int? lastFaceModelLoadMs;
+
 /// The face-api.js networks, loaded once per app session (~25 MB of models;
 /// web likewise keeps them cached after the first load). Tests override it.
+/// CPU threads for the TFLite interpreters. 1 = the library default (what
+/// every verified run so far used). Only changed from `main.dart` in a
+/// diagnostics (debug/profile) build, to A/B-benchmark on a device before any
+/// default is changed.
+final faceApiThreadsProvider = Provider<int>((_) => 1);
+
+/// Diagnostics builds only: also run a single-thread copy of the recognition
+/// net to measure descriptor equality against the multi-thread one.
+final faceApiCompareThreadsProvider = Provider<bool>((_) => false);
+
+/// Diagnostics builds only: on the first still of a run, also decode it with
+/// the platform codec and record aggregate pixel differences vs the Dart
+/// decoder (numbers only, nothing kept). Never used for recognition.
+final faceDecodeCompareProvider = Provider<bool>((_) => false);
+
 final faceApiNetsProvider = FutureProvider<FaceApiNets>((ref) async {
-  final nets = await loadFaceApiNets();
+  final sw = Stopwatch()..start();
+  final nets = await loadFaceApiNets(
+    threads: ref.watch(faceApiThreadsProvider),
+    compareThreads: ref.watch(faceApiCompareThreadsProvider),
+  );
+  lastFaceModelLoadMs = sw.elapsedMilliseconds;
   ref.onDispose(nets.dispose);
   return nets;
 });
@@ -92,6 +137,25 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
   LivenessTracker? _liveness;
   bool _processingFrame = false;
   bool _stopped = false;
+  DateTime? _lostSince;
+  int _session = 0; // bumped on every start/teardown: stale async work checks it
+  int _stillMicros = 0, _prepMicros = 0, _analysisMicros = 0;
+  int? _livenessStartedMs;
+  FaceApiStageTimes _stageTimes = FaceApiStageTimes();
+  int _stillsTaken = 0;
+  // Framing efficiency counters (aggregate numbers only).
+  int _framesReceived = 0, _framesDroppedBusy = 0, _framesProcessed = 0, _noFaceFrames = 0, _multiFaceFrames = 0;
+  int _stableResets = 0, _detectMicrosSum = 0, _detectMicrosMax = 0, _gapMicrosSum = 0, _gapMicrosMax = 0;
+  int? _lastDetectDoneMicros;
+  final Stopwatch _clock = Stopwatch()..start();
+  int _firstStillMicros = 0;
+  DateTime Function() _now = DateTime.now;
+  int? _trackedId;
+  final Stopwatch _sinceStart = Stopwatch();
+  final Map<String, int> _timings = {};
+  DateTime _lastUiEmit = DateTime.fromMillisecondsSinceEpoch(0);
+  static CameraDescription? _frontCamera; // chosen once per app session
+  double _lastLuma = 128;
 
   CameraController? get cameraController => _cameraController;
 
@@ -120,21 +184,41 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
       );
       return;
     }
+    _session++;
+    _stillMicros = _prepMicros = _analysisMicros = 0;
+    _stillsTaken = 0;
+    _framesReceived = _framesDroppedBusy = _framesProcessed = _noFaceFrames = _multiFaceFrames = 0;
+    _stableResets = _detectMicrosSum = _detectMicrosMax = _gapMicrosSum = _gapMicrosMax = 0;
+    _lastDetectDoneMicros = null;
+    _firstStillMicros = 0;
+    _stageTimes = FaceApiStageTimes();
+    _livenessStartedMs = null;
     _stopped = false;
+    _timings.clear();
+    _sinceStart
+      ..reset()
+      ..start();
     state = FaceCaptureUiState(
       phase: FaceCapturePhase.initializingCamera,
       captureSessionId: const Uuid().v4(),
     );
     try {
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) {
-        state = state.copyWith(phase: FaceCapturePhase.error, message: 'No camera available on this device.');
-        return;
+      // The ~25 MB descriptor models load in parallel with the camera (cached
+      // for the app session after the first load), instead of after it.
+      ref.read(faceApiNetsProvider.future).ignore();
+      var camera = _frontCamera;
+      if (camera == null) {
+        final cameras = await availableCameras();
+        if (cameras.isEmpty) {
+          state = state.copyWith(phase: FaceCapturePhase.error, message: 'No camera available on this device.');
+          return;
+        }
+        camera = _frontCamera = cameras.firstWhere(
+          (c) => c.lensDirection == CameraLensDirection.front,
+          orElse: () => cameras.first,
+        );
       }
-      final camera = cameras.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.front,
-        orElse: () => cameras.first,
-      );
+      _mark('camera_lookup');
       _cameraController = CameraController(
         camera,
         ResolutionPreset.medium,
@@ -142,6 +226,7 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
         imageFormatGroup: Platform.isAndroid ? ImageFormatGroup.nv21 : ImageFormatGroup.bgra8888,
       );
       await _cameraController!.initialize();
+      _mark('camera_ready');
       if (_stopped) return;
 
       _detector = FaceDetector(
@@ -151,13 +236,14 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
           // angle). The captured frames are analysed by the face-api.js
           // pipeline, with web's own 68-landmark eye-occlusion check.
           performanceMode: FaceDetectorMode.fast,
+          // Lets the liveness challenge notice that a DIFFERENT face took
+          // over after a gap (see _handleFaces).
+          enableTracking: true,
         ),
       );
       state = state.copyWith(phase: FaceCapturePhase.detecting);
-      // Load the descriptor models during framing/liveness (web: the big
-      // recognition net downloads while the person blinks and turns).
-      ref.read(faceApiNetsProvider.future).ignore();
       await _cameraController!.startImageStream(_onFrame);
+      _mark('stream_started');
     } on CameraException catch (e) {
       state = state.copyWith(
         phase: FaceCapturePhase.cameraDenied,
@@ -171,19 +257,47 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
   Future<void> retry() async {
     await _teardown();
     _stableFrames = 0;
+    _lostSince = null;
+    _trackedId = null;
     _liveness = null;
+    _livenessDeadline = null;
     await start();
   }
 
   Future<void> _onFrame(CameraImage image) async {
-    if (_processingFrame || _stopped || _detector == null || _cameraController == null) return;
+    if (_stopped || _detector == null || _cameraController == null) return;
     if (state.phase != FaceCapturePhase.detecting && state.phase != FaceCapturePhase.livenessChecking) return;
+    _framesReceived++;
+    if (_processingFrame) {
+      _framesDroppedBusy++; // bounded pipeline: a busy detector drops the frame, nothing queues
+      return;
+    }
     _processingFrame = true;
     try {
       final inputImage = _toInputImage(image, _cameraController!.description);
       if (inputImage == null) return;
+      final rotation = inputImage.metadata?.rotation.rawValue ?? 0;
+      final upright = uprightSize(Size(image.width.toDouble(), image.height.toDouble()), rotation);
+      if (Platform.isAndroid && image.planes.isNotEmpty) _lastLuma = meanLuma(image.planes.first.bytes);
+      _mark('first_frame');
+      final detectWatch = Stopwatch()..start();
       final faces = await _detector!.processImage(inputImage);
-      if (!_stopped) await _handleFaces(faces, image.width);
+      _mark('first_detection_result');
+      final tookUs = detectWatch.elapsedMicroseconds;
+      _framesProcessed++;
+      _detectMicrosSum += tookUs;
+      if (tookUs > _detectMicrosMax) _detectMicrosMax = tookUs;
+      final doneUs = _clock.elapsedMicroseconds;
+      final last = _lastDetectDoneMicros;
+      if (last != null) {
+        final gap = doneUs - last;
+        _gapMicrosSum += gap;
+        if (gap > _gapMicrosMax) _gapMicrosMax = gap;
+      }
+      _lastDetectDoneMicros = doneUs;
+      if (faces.isEmpty) _noFaceFrames++;
+      if (faces.length > 1) _multiFaceFrames++;
+      if (!_stopped) await _handleFaces(faces, upright);
     } catch (_) {
       // A single failed frame shouldn't abort the whole capture attempt.
     } finally {
@@ -191,58 +305,176 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
     }
   }
 
-  Future<void> _handleFaces(List<Face> faces, int frameWidth) async {
-    if (faces.length != 1) {
-      _stableFrames = 0;
-      // "No face" stays silent (state.liveHint: null, falling back to the
-      // caller's static instruction text) — mirrors web's own
-      // classifyDetectedFaceCount handling exactly (`faceCount === 'none'`
-      // returns empty reasons, only 'multiple' gets a message). Only the
-      // multiple-faces case gets a distinct hint; there's no separate "no
-      // face" message to add on top of the ambient "Looking for a face…"
-      // status this phase's UI already shows.
-      state = state.copyWith(
-        phase: FaceCapturePhase.detecting,
-        liveHint: faces.length > 1 ? _kMultipleFacesHint : null,
-      );
-      return;
-    }
-    final face = faces.first;
+  @visibleForTesting
+  set livenessModeForTest(LivenessMode m) => _livenessMode = m;
 
-    if (state.phase == FaceCapturePhase.detecting) {
-      // Distance/frontality only gate this phase — not livenessChecking,
-      // where the head is deliberately moving/turning as part of the
-      // challenge itself; checking frontality there would just fight the
-      // very motion being asked for. See this file's module-level comment
-      // for why these run pre-liveness at all (a deliberate mobile-specific
-      // adaptation — web's own equivalent checks only run post-liveness, at
-      // actual frame-capture time, since its capture is multi-frame and
-      // averaged; this app's is a single still, so catching bad framing
-      // before spending 9s on the liveness challenge is worth the earlier
-      // check here).
-      final hint = _liveFramingHint(face, frameWidth);
-      if (hint != null) {
-        _stableFrames = 0;
-        state = state.copyWith(liveHint: hint);
+  @visibleForTesting
+  set clockForTest(DateTime Function() clock) => _now = clock;
+
+  @visibleForTesting
+  void expireLivenessForTest() => _livenessDeadline = _now().subtract(const Duration(seconds: 1));
+
+  void _snapshotCounters() {
+    final n = _framesProcessed;
+    _timings
+      ..['frames_received'] = _framesReceived
+      ..['frames_processed'] = n
+      ..['frames_dropped_busy'] = _framesDroppedBusy
+      ..['no_face_frames'] = _noFaceFrames
+      ..['multi_face_frames'] = _multiFaceFrames
+      ..['stable_resets'] = _stableResets
+      ..['detect_mean_ms'] = n == 0 ? 0 : _detectMicrosSum ~/ n ~/ 1000
+      ..['detect_max_ms'] = _detectMicrosMax ~/ 1000
+      ..['detect_gap_mean_ms'] = n < 2 ? 0 : _gapMicrosSum ~/ (n - 1) ~/ 1000
+      ..['detect_gap_max_ms'] = _gapMicrosMax ~/ 1000;
+  }
+
+  void _mark(String stage) => _timings.putIfAbsent(stage, () => _sinceStart.elapsedMilliseconds);
+
+  /// Frame-driven updates are throttled; phase changes and hint changes are
+  /// published at once so the screen never lags a real transition.
+  void _publish(FaceCaptureUiState next) {
+    final now = _now();
+    var timingsChanged = false;
+    if (_timings.length != next.timingsMs.length) {
+      next = next.copyWith(liveHint: next.liveHint, message: next.message, timingsMs: Map.of(_timings));
+      timingsChanged = true;
+    }
+    final important = timingsChanged ||
+        next.phase != state.phase ||
+        next.liveHint != state.liveHint ||
+        next.blinkSeen != state.blinkSeen ||
+        next.turnSeen != state.turnSeen;
+    if (!important && now.difference(_lastUiEmit) < _kUiUpdateInterval) return;
+    _lastUiEmit = now;
+    state = next;
+  }
+
+  /// Test seam: feeds detector output (no camera, no pixels) through the same
+  /// framing + liveness logic the live stream uses.
+  @visibleForTesting
+  Future<void> feedFacesForTest(List<Face> faces, Size upright, {FaceCapturePhase? phase}) {
+    _stopped = false;
+    if (phase != null) state = state.copyWith(phase: phase);
+    return _handleFaces(faces, upright);
+  }
+
+  Future<void> _handleFaces(List<Face> faces, Size upright) async {
+    final camera = _cameraController;
+    final geometry = camera == null
+        ? null
+        : (
+            aspect: portraitPreviewAspect(camera.value.previewSize),
+            mirrored: camera.description.lensDirection == CameraLensDirection.front,
+          );
+    final inLiveness = state.phase == FaceCapturePhase.livenessChecking;
+
+    if (faces.length != 1) {
+      if (inLiveness) {
+        // Brief loss of the face must not throw the challenge away: keep the
+        // tracker and deadline, tell the user what to do, and only fail once
+        // the face has been gone for a sustained stretch (or time runs out).
+        final lostSince = _lostSince ??= _now();
+        if (_livenessExpired()) return _failLiveness();
+        _publish(state.copyWith(
+          liveHint: faces.length > 1 ? _kMultipleFacesHint : _kLostFaceHint,
+          clearFace: true,
+          uprightFrame: upright,
+          previewAspect: geometry?.aspect,
+          mirrored: geometry?.mirrored,
+          blinkSeen: _liveness?.blinkSeen,
+          turnSeen: _liveness?.turnSeen,
+          livenessSecondsLeft: _secondsLeft(),
+        ));
+        if (_now().difference(lostSince) > _kMaxLostDuringLiveness) {
+          // Sustained loss: restart framing (not the whole camera).
+          _stableFrames = 0;
+          _liveness = null;
+          _trackedId = null;
+          _lostSince = null;
+          _publish(state.copyWith(phase: FaceCapturePhase.detecting, liveHint: _kLostFaceHint, clearFace: true));
+        }
         return;
       }
-      if (state.liveHint != null) state = state.copyWith(liveHint: null);
+      _stableFrames = 0;
+      // "No face" stays silent (mirrors web's classifyDetectedFaceCount); only
+      // multiple faces gets a distinct hint.
+      _publish(state.copyWith(
+        phase: FaceCapturePhase.detecting,
+        liveHint: faces.length > 1 ? _kMultipleFacesHint : null,
+        clearFace: true,
+        uprightFrame: upright,
+        previewAspect: geometry?.aspect,
+        mirrored: geometry?.mirrored,
+      ));
+      return;
+    }
+    _lostSince = null;
+    final face = faces.first;
+    if (inLiveness && _trackedId != null && face.trackingId != null && face.trackingId != _trackedId) {
+      // The face that completed part of the challenge is not the one in front
+      // of the camera now: nobody inherits another person's progress.
+      _stableFrames = 0;
+      _liveness = null;
+      _trackedId = null;
+      _publish(state.copyWith(
+        phase: FaceCapturePhase.detecting,
+        liveHint: _kDifferentFaceHint,
+        clearFace: true,
+        blinkSeen: false,
+        turnSeen: false,
+      ));
+      return;
+    }
+    final box = face.boundingBox;
+
+    if (state.phase == FaceCapturePhase.detecting) {
+      // Distance / centring / frontality / lighting gate this phase only — not
+      // livenessChecking, where the head deliberately moves.
+      final hint = _liveFramingHint(face, upright);
+      if (hint != null) {
+        if (_stableFrames > 0) _stableResets++;
+        _stableFrames = 0;
+        _publish(state.copyWith(
+          liveHint: hint,
+          faceBox: box,
+          uprightFrame: upright,
+          previewAspect: geometry?.aspect,
+          mirrored: geometry?.mirrored,
+        ));
+        return;
+      }
 
       _stableFrames++;
       if (_stableFrames >= _kStableFramesToStart) {
-        _livenessDeadline = DateTime.now().add(_kLivenessTimeout);
+        _livenessStartedMs = _sinceStart.elapsedMilliseconds;
+        _mark('liveness_started');
+        _snapshotCounters();
+        _livenessDeadline = _now().add(_kLivenessTimeout);
         final tracker = _liveness = LivenessTracker(_livenessMode);
+        _trackedId = face.trackingId;
         tracker.addSample(yaw: face.headEulerAngleY); // facing-the-camera baseline
-        state = state.copyWith(phase: FaceCapturePhase.livenessChecking, liveHint: tracker.prompt);
+        _publish(state.copyWith(
+          phase: FaceCapturePhase.livenessChecking,
+          liveHint: tracker.prompt,
+          faceBox: box,
+          uprightFrame: upright,
+          previewAspect: geometry?.aspect,
+          mirrored: geometry?.mirrored,
+          blinkRequired: _livenessMode == LivenessMode.blinkAndTurn,
+          blinkSeen: false,
+          turnSeen: false,
+          livenessSecondsLeft: _secondsLeft(),
+        ));
+      } else {
+        _publish(state.copyWith(faceBox: box, uprightFrame: upright, previewAspect: geometry?.aspect, mirrored: geometry?.mirrored));
       }
       return;
     }
 
-    if (state.phase == FaceCapturePhase.livenessChecking) {
+    if (inLiveness) {
       final tracker = _liveness;
       if (tracker == null) return;
-      // Web LivenessTracker: a head turn AND (registration) a blink, both
-      // within the window, in any order.
       tracker.addSample(
         leftEyeOpen: face.leftEyeOpenProbability,
         rightEyeOpen: face.rightEyeOpenProbability,
@@ -252,46 +484,111 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
         await _onLivenessPassed(score: tracker.score);
         return;
       }
-      if (_livenessDeadline != null && DateTime.now().isAfter(_livenessDeadline!)) {
-        state = state.copyWith(phase: FaceCapturePhase.livenessFailed, message: tracker.missingMessage);
-        return;
-      }
-      if (state.liveHint != tracker.prompt) state = state.copyWith(liveHint: tracker.prompt);
+      if (_livenessExpired()) return _failLiveness();
+      _publish(state.copyWith(
+        liveHint: tracker.prompt,
+        faceBox: box,
+        uprightFrame: upright,
+        previewAspect: geometry?.aspect,
+        mirrored: geometry?.mirrored,
+        blinkSeen: tracker.blinkSeen,
+        turnSeen: tracker.turnSeen,
+        livenessSecondsLeft: _secondsLeft(),
+      ));
     }
   }
 
-  /// Distance, then frontality — the two live, per-frame checks that gate
-  /// the pre-liveness `detecting` phase (multi-face is handled by the caller
-  /// before this is ever reached). Returns null when framing looks fine.
-  /// headEulerAngleY is "guaranteed only in accurate mode" per ML Kit's own
-  /// docs (this detector runs `fast`, same as the pre-existing head-turn
-  /// liveness check above, which already relies on the same field) — a null
-  /// reading here just skips the frontality check for that frame rather than
-  /// blocking on it, same fail-open shape as the liveness code already uses.
-  String? _liveFramingHint(Face face, int frameWidth) {
-    if (frameWidth <= 0) return null;
-    final widthRatio = face.boundingBox.width / frameWidth;
+  bool _livenessExpired() => _livenessDeadline != null && _now().isAfter(_livenessDeadline!);
+
+  int? _secondsLeft() {
+    final d = _livenessDeadline;
+    if (d == null) return null;
+    final ms = d.difference(_now()).inMilliseconds;
+    return ms <= 0 ? 0 : (ms / 1000).ceil();
+  }
+
+  void _failLiveness() {
+    state = state.copyWith(
+      phase: FaceCapturePhase.livenessFailed,
+      message: _liveness?.missingMessage ?? 'Liveness check was not completed. Please try again.',
+      blinkSeen: _liveness?.blinkSeen,
+      turnSeen: _liveness?.turnSeen,
+      clearFace: true,
+    );
+  }
+
+  /// Distance, centring, frontality, lighting — the live per-frame checks that
+  /// gate the pre-liveness `detecting` phase. Only geometry blocks (as on web);
+  /// headEulerAngleY null just skips the frontality check for that frame.
+  String? _liveFramingHint(Face face, Size upright) {
+    if (upright.width <= 0 || upright.height <= 0) return null;
+    final widthRatio = faceWidthRatio(face.boundingBox, upright);
     if (widthRatio < _kMinFaceWidthRatio) return _kTooFarHint;
     if (widthRatio > _kMaxFaceWidthRatio) return _kTooCloseHint;
+
+    // Centring against the same oval the user sees (guide is drawn in preview
+    // coordinates; the upright image maps onto the preview by pure scale).
+    final preview = Size(upright.width, upright.height);
+    final guide = guideOval(preview);
+    if (!faceCentreInsideGuide(face.boundingBox, guide)) return _kNotCenteredHint;
 
     final yaw = face.headEulerAngleY;
     if (yaw != null && yaw.abs() > _kMaxFrontalYawDegrees) return _kNotFrontalHint;
 
+    if (_lastLuma < _kTooDarkLuma) return _kTooDarkHint;
     return null;
   }
 
   Future<void> _onLivenessPassed({required double score}) async {
     if (_stopped) return;
     _stopped = true; // stop reacting to further frames immediately
+    final session = _session;
+    final started = _livenessStartedMs;
+    if (started != null) _timings['liveness_ms'] = _sinceStart.elapsedMilliseconds - started;
+    _mark('liveness_passed');
     state = state.copyWith(phase: FaceCapturePhase.extractingEmbedding, livenessPassed: true, livenessScore: score);
     try {
+      final stopWatch = Stopwatch()..start();
       await _cameraController?.stopImageStream();
+      _timings['stop_stream_ms'] = stopWatch.elapsedMilliseconds;
       final nets = await ref.read(faceApiNetsProvider.future);
-      final outcome = await FaceApiPipeline(nets).capture(nextFrame: _takeFrame, framesToCapture: _framesToCapture);
+      // Cancelled (screen closed / retried) while waiting: drop everything —
+      // no stale descriptor, no state write on a disposed notifier.
+      if (session != _session) return;
+      _mark('nets_ready');
+      final outcome = await FaceApiPipeline(nets).capture(
+        nextFrame: () => _takeFrame(session),
+        framesToCapture: _framesToCapture,
+        framesArePrepared: true,
+        onAnalysisTime: (us) => _analysisMicros += us,
+        isCancelled: () => session != _session,
+        times: _stageTimes,
+      );
+      if (session != _session) return;
+      _mark('descriptor_done');
+      _snapshotCounters();
+      faceApiNumericDiagnostics.forEach((k, v) => _timings[k] = v.toInt());
+      _timings['still_capture_total'] = _stillMicros ~/ 1000;
+      _timings['preprocess_total'] = _prepMicros ~/ 1000;
+      _timings['inference_total'] = _analysisMicros ~/ 1000;
+      final t = _stageTimes;
+      _timings
+        ..['stills_taken'] = _stillsTaken
+        ..['still_first'] = _firstStillMicros ~/ 1000
+        ..['decode_total'] = t.decodeUs ~/ 1000
+        ..['convert_total'] = t.convertUs ~/ 1000
+        ..['scale_total'] = t.scaleUs ~/ 1000
+        ..['clahe_total'] = t.claheUs ~/ 1000
+        ..['detect_total'] = t.detectUs ~/ 1000
+        ..['landmarks_total'] = t.landmarksUs ~/ 1000
+        ..['describe_total'] = t.describeUs ~/ 1000
+        ..['quality_total'] = t.qualityUs ~/ 1000
+        ..['average_total'] = t.averageUs ~/ 1000
+        ..['frames_analysed'] = t.framesAnalysed;
       final descriptor = outcome.descriptor;
       if (descriptor == null) {
         // Web "quality_failed": retryable (reposition / relight), not broken.
-        state = state.copyWith(phase: FaceCapturePhase.qualityFailed, message: outcome.message);
+        state = state.copyWith(phase: FaceCapturePhase.qualityFailed, message: outcome.message, timingsMs: Map.of(_timings));
         return;
       }
       state = state.copyWith(
@@ -299,25 +596,39 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
         embedding: descriptor,
         captureFrameCount: outcome.frameCount,
         captureVariance: outcome.variance,
+        timingsMs: Map.of(_timings),
       );
     } catch (_) {
-      state = state.copyWith(phase: FaceCapturePhase.error, message: 'Could not process the captured photo.');
+      if (session == _session) {
+        state = state.copyWith(phase: FaceCapturePhase.error, message: 'Could not process the captured photo.');
+      }
     } finally {
-      await _teardown();
+      if (session == _session) await _teardown();
     }
   }
 
   /// One still from the camera, decoded upright; the photo file is deleted
   /// straight away (nothing of the face is kept on the device). Null when no
   /// usable photo could be taken — counted as a failed attempt.
-  Future<RgbaBuffer?> _takeFrame() async {
+  Future<RgbaBuffer?> _takeFrame(int session) async {
     final camera = _cameraController;
-    if (camera == null || !camera.value.isInitialized) return null;
+    if (session != _session || camera == null || !camera.value.isInitialized) return null;
     XFile? shot;
     try {
+      final sw = Stopwatch()..start();
       shot = await camera.takePicture();
-      final decoded = img.decodeImage(await shot.readAsBytes());
-      return decoded == null ? null : RgbaBuffer.fromImage(decoded);
+      _stillMicros += sw.elapsedMicroseconds;
+      if (++_stillsTaken == 1) _firstStillMicros = sw.elapsedMicroseconds;
+      _mark('first_still');
+      // JPEG decode, upright, downscale and CLAHE run on a worker isolate so
+      // the preview and Cancel stay responsive; the pipeline is told the
+      // frame is already prepared.
+      final bytes = await shot.readAsBytes();
+      if (_stillsTaken == 1 && ref.read(faceDecodeCompareProvider)) await _compareDecoders(bytes);
+      final prep = Stopwatch()..start();
+      final frame = await prepareStillOffUi(bytes, times: _stageTimes);
+      _prepMicros += prep.elapsedMicroseconds;
+      return frame;
     } catch (_) {
       return null;
     } finally {
@@ -326,6 +637,49 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
           await File(shot.path).delete();
         } catch (_) {}
       }
+    }
+  }
+
+  /// Diagnostics only: platform codec vs the Dart decoder on the same still.
+  /// Records durations and aggregate pixel differences — nothing is kept.
+  Future<void> _compareDecoders(Uint8List bytes) async {
+    try {
+      final nativeWatch = Stopwatch()..start();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final data = await frame.image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      final nw = frame.image.width, nh = frame.image.height;
+      _timings['native_decode_ms'] = nativeWatch.elapsedMilliseconds;
+      frame.image.dispose();
+      codec.dispose();
+      final dartWatch = Stopwatch()..start();
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null || data == null) return;
+      final dart = RgbaBuffer.fromImage(decoded);
+      _timings['dart_decode_ms'] = dartWatch.elapsedMilliseconds;
+      _timings['cmp_dims_equal'] = (dart.width == nw && dart.height == nh) ? 1 : 0;
+      _timings['cmp_native_w'] = nw;
+      _timings['cmp_native_h'] = nh;
+      _timings['cmp_dart_w'] = dart.width;
+      _timings['cmp_dart_h'] = dart.height;
+      if (dart.width == nw && dart.height == nh) {
+        final a = dart.data, b = data.buffer.asUint8List();
+        var sum = 0, max = 0, over2 = 0, n = 0;
+        for (var i = 0; i < a.length; i += 4) {
+          for (var c = 0; c < 3; c++) {
+            final d = (a[i + c] - b[i + c]).abs();
+            sum += d;
+            if (d > max) max = d;
+            if (d > 2) over2++;
+            n++;
+          }
+        }
+        _timings['cmp_mean_x1000'] = n == 0 ? 0 : sum * 1000 ~/ n;
+        _timings['cmp_max'] = max;
+        _timings['cmp_pct_over2_x100'] = n == 0 ? 0 : over2 * 10000 ~/ n;
+      }
+    } catch (_) {
+      _timings['cmp_failed'] = 1;
     }
   }
 
@@ -364,11 +718,17 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
       );
     }
 
-    final allBytes = WriteBuffer();
-    for (final plane in image.planes) {
-      allBytes.putUint8List(plane.bytes);
+    // NV21 normally arrives as one packed plane: use it as is (no copy).
+    final Uint8List bytes;
+    if (image.planes.length == 1) {
+      bytes = image.planes.first.bytes;
+    } else {
+      final allBytes = WriteBuffer();
+      for (final plane in image.planes) {
+        allBytes.putUint8List(plane.bytes);
+      }
+      bytes = allBytes.done().buffer.asUint8List();
     }
-    final bytes = allBytes.done().buffer.asUint8List();
     return InputImage.fromBytes(
       bytes: bytes,
       metadata: InputImageMetadata(
@@ -382,6 +742,7 @@ class FaceCaptureController extends AutoDisposeNotifier<FaceCaptureUiState> {
 
   Future<void> _teardown() async {
     _stopped = true;
+    _session++;
     final camera = _cameraController;
     _cameraController = null;
     try {

@@ -243,7 +243,11 @@ void main() {
       expect(inCard(find.text('General 9-6')), findsOneWidget);
       expect(find.byKey(const Key('shift-master-default-s1')), findsOneWidget);
       expect(inCard(find.text('22:00 – 06:00')), findsOneWidget);
-      expect(inCard(find.text('Break 45 min · Grace Period 10 min')), findsOneWidget);
+      expect(find.byKey(const Key('shift-master-break-s2')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('shift-master-break-s2')), matching: find.text('45 min')),
+          findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('shift-master-grace-s2')), matching: find.text('10 min')),
+          findsOneWidget);
       expect(inCard(find.text('General / Default — 09:30 to 18:30')), findsOneWidget);
       expect(enabled(tester, 'shift-master-delete-s1'), isFalse); // default can't be deactivated
       expect(enabled(tester, 'shift-master-delete-s2'), isTrue);
@@ -372,7 +376,10 @@ void main() {
         'is_active': true,
       });
       expect(find.text('Working hours policy updated successfully.'), findsOneWidget);
-      expect(inCard(find.text('Break 60 min · Grace Period 10 min')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('shift-master-break-s2')), matching: find.text('60 min')),
+          findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('shift-master-grace-s2')), matching: find.text('10 min')),
+          findsOneWidget);
     });
 
     testWidgets('a refused edit keeps the sheet and the value', (tester) async {

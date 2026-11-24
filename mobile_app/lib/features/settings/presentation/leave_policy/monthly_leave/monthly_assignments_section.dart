@@ -30,6 +30,7 @@ class _MonthlyAssignmentsSectionState extends ConsumerState<MonthlyAssignmentsSe
       context: context,
       isScrollControlled: true,
       isDismissible: false,
+      useSafeArea: true,
       builder: (_) => EditMonthlyCreditSheet(row: row),
     );
     if (message != null && mounted) setState(() => _ok = message);
@@ -63,7 +64,7 @@ class _MonthlyAssignmentsSectionState extends ConsumerState<MonthlyAssignmentsSe
         ),
         const SizedBox(height: 12),
         if (async.valueOrNull case final data?) ...[
-          Wrap(spacing: 8, runSpacing: 8, children: [
+          _Stats(children: [
             _Stat('Employees assigned', '${data.employees}', 'unique employees'),
             _Stat('Credit entries', '${data.entries}', 'employee + leave type'),
             _Stat('Total days credited', fmtNum(data.totalDays), '$monthName $_year'),
@@ -76,7 +77,7 @@ class _MonthlyAssignmentsSectionState extends ConsumerState<MonthlyAssignmentsSe
         ],
         async.when(
           loading: () =>
-              Row(children: [monthlySpinner(), const SizedBox(width: 8), Text('Loading assignments…', style: muted)]),
+              Row(children: [monthlySpinner(), const SizedBox(width: 8), Expanded(child: Text('Loading assignments…', style: muted))]),
           error: (e, _) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             MonthlyAlert(
                 key: const Key('assign-error'),
@@ -84,6 +85,7 @@ class _MonthlyAssignmentsSectionState extends ConsumerState<MonthlyAssignmentsSe
                 text: monthlyLeaveError(e, 'Could not load monthly leave assignments.')),
             TextButton(
               key: const Key('assign-retry'),
+              style: monthlyTextStyle,
               onPressed: () => ref.invalidate(monthlyAssignmentsProvider(key)),
               child: const Text('Retry'),
             ),
@@ -93,11 +95,29 @@ class _MonthlyAssignmentsSectionState extends ConsumerState<MonthlyAssignmentsSe
                   'No monthly leave assignments found for $monthName $_year. Use the import or manual entry above to add them.',
                   key: const Key('assign-empty'),
                   style: muted)
-              : Column(children: [for (final a in data.assignments) _AssignmentCard(a, onEdit: () => _edit(a))]),
+              : MonthlyCardGrid(children: [for (final a in data.assignments) _AssignmentCard(a, onEdit: () => _edit(a))]),
         ),
       ],
     );
   }
+}
+
+/// Summary figures: three across when there is room, two, or one per line;
+/// widths come from the slot, never fixed.
+class _Stats extends StatelessWidget {
+  const _Stats({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, c) {
+        const gap = 8.0;
+        final big = monthlyTextScale(context) > 1.3;
+        final cols = c.maxWidth >= 480 && !big ? 3 : (c.maxWidth >= 290 && !big ? 2 : 1);
+        final w = (c.maxWidth - gap * (cols - 1)) / cols;
+        return Wrap(spacing: gap, runSpacing: gap, children: [
+          for (final child in children) SizedBox(width: w, child: child),
+        ]);
+      });
 }
 
 class _Stat extends StatelessWidget {
@@ -106,12 +126,11 @@ class _Stat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: 150,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
             color: AppColors.backgroundLow,
             border: Border.all(color: AppColors.border),
-            borderRadius: BorderRadius.circular(8)),
+            borderRadius: BorderRadius.circular(10)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label, style: AppTextStyles.caption.copyWith(fontSize: 12)),
           Text(value, key: Key('assign-stat-$label'), style: AppTextStyles.h3.copyWith(fontWeight: FontWeight.w700)),
@@ -127,34 +146,44 @@ class _AssignmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final muted = AppTextStyles.caption.copyWith(fontSize: 11.5, color: AppColors.textSecondary);
+    final muted = AppTextStyles.caption.copyWith(fontSize: 12, color: AppColors.textSecondary);
+    final month = kMonthNames[(a.month - 1).clamp(0, 11)];
+    final edit = a.isActive
+        ? OutlinedButton.icon(
+            key: Key('assignment-edit-${a.employeeId}-${a.leaveType}'),
+            style: monthlyOutlinedStyle,
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_outlined, size: 16),
+            label: const Text('Edit'),
+          )
+        : null;
     return Container(
       key: Key('assignment-${a.employeeId}-${a.leaveType}'),
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(8)),
-      child: Row(children: [
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('${a.employeeName}${a.isActive ? '' : ' (inactive)'}',
-                style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
-            Text('${a.employeeId} · ${a.branch.isEmpty ? '—' : a.branch}', style: muted),
-            Text('${a.leaveTypeLabel} · ${kMonthNames[(a.month - 1).clamp(0, 11)]} ${a.year}', style: muted),
-            Text('Last updated ${formatMonthlyWhen(a.lastUpdated)}', style: muted),
-          ]),
-        ),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('${fmtNum(a.credit)} day(s)', style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w700)),
-          if (a.isActive)
-            TextButton.icon(
-              key: Key('assignment-edit-${a.employeeId}-${a.leaveType}'),
-              onPressed: onEdit,
-              icon: const Icon(Icons.edit_outlined, size: 14),
-              label: const Text('Edit'),
-            )
-          else
-            Text('—', style: muted),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('${a.employeeName}${a.isActive ? '' : ' (inactive)'}',
+            style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
+        Text('${a.employeeId} · ${a.branch.isEmpty ? '—' : a.branch}', style: muted),
+        const SizedBox(height: 4),
+        Text('${a.leaveTypeLabel} · $month ${a.year}', style: muted),
+        const SizedBox(height: 8),
+        Wrap(spacing: 20, runSpacing: 8, children: [
+          MonthlyFigure('$month credit', '${fmtNum(a.credit)} day(s)'),
+          MonthlyFigure('Last updated', formatMonthlyWhen(a.lastUpdated)),
         ]),
+        if (edit != null) ...[
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, c) => monthlyCompact(context, c.maxWidth, narrow: 300, scale: 1.3)
+                ? SizedBox(width: double.infinity, child: edit)
+                : Align(alignment: Alignment.centerRight, child: edit),
+          ),
+        ],
       ]),
     );
   }
@@ -216,8 +245,11 @@ class _EditMonthlyCreditSheetState extends ConsumerState<EditMonthlyCreditSheet>
     return PopScope(
       canPop: !_saving,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
-        child: Column(
+        // Keyboard-safe: the sheet sits above the keyboard and its content scrolls.
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
           key: const Key('edit-monthly-credit'),
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -234,18 +266,22 @@ class _EditMonthlyCreditSheetState extends ConsumerState<EditMonthlyCreditSheet>
             ],
             const SizedBox(height: 12),
             if (!_confirming)
-              TextField(
-                key: const Key('edit-credit'),
-                controller: _ctrl,
-                autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (_) => setState(() => _error = null),
-                decoration: InputDecoration(
-                  labelText: 'New monthly leave credit (days)',
-                  isDense: true,
-                  border: const OutlineInputBorder(),
-                  errorText: validation,
-                  helperText: validation == null ? "0–31, one decimal place. 0 removes this month's credit." : null,
+              MonthlyField(
+                label: 'New monthly leave credit (days)',
+                child: TextField(
+                  key: const Key('edit-credit'),
+                  controller: _ctrl,
+                  autofocus: true,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (_) => setState(() => _error = null),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: const OutlineInputBorder(),
+                    errorText: validation,
+                    errorMaxLines: 3,
+                    helperMaxLines: 3,
+                    helperText: validation == null ? "0–31, one decimal place. 0 removes this month's credit." : null,
+                  ),
                 ),
               )
             else
@@ -258,30 +294,32 @@ class _EditMonthlyCreditSheetState extends ConsumerState<EditMonthlyCreditSheet>
                     'would leave less than their used plus pending leave.',
               ),
             const SizedBox(height: 14),
-            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              TextButton(
+            MonthlyActionBar(
+              secondary: TextButton(
                 key: const Key('edit-back'),
+                style: monthlyTextStyle,
                 onPressed: _saving
                     ? null
                     : () => _confirming ? setState(() => _confirming = false) : Navigator.of(context).pop(),
                 child: Text(_confirming ? 'Back' : 'Cancel'),
               ),
-              const SizedBox(width: 8),
-              if (_confirming)
-                FilledButton.icon(
-                  key: const Key('edit-confirm'),
-                  onPressed: _saving || next == null ? null : () => _save(next),
-                  icon: _saving ? monthlySpinner() : const Icon(Icons.check, size: 16),
-                  label: Text(_saving ? 'Saving…' : 'Confirm'),
-                )
-              else
-                FilledButton(
-                  key: const Key('edit-review'),
-                  onPressed: validation != null || unchanged ? null : () => setState(() => _confirming = true),
-                  child: const Text('Review change'),
-                ),
-            ]),
+              primary: _confirming
+                  ? FilledButton.icon(
+                      key: const Key('edit-confirm'),
+                      style: monthlyFilledStyle,
+                      onPressed: _saving || next == null ? null : () => _save(next),
+                      icon: _saving ? monthlySpinner() : const Icon(Icons.check, size: 16),
+                      label: Text(_saving ? 'Saving…' : 'Confirm'),
+                    )
+                  : FilledButton(
+                      key: const Key('edit-review'),
+                      style: monthlyFilledStyle,
+                      onPressed: validation != null || unchanged ? null : () => setState(() => _confirming = true),
+                      child: const Text('Review change'),
+                    ),
+            ),
           ],
+        ),
         ),
       ),
     );

@@ -82,6 +82,20 @@ gradle.taskGraph.whenReady {
     }
 }
 
+// Security: Guava 33.5.0-android (pulled in by the camera_android_camerax plugin)
+// is affected by GHSA-xxph-c9ww-hj94 / CVE-2026-102554 (native-deserialization
+// memory exhaustion in CompactHashMap/CompactHashSet/MapMakerInternalMap);
+// fixed in 33.7.2. A constraint (not a force) raises only the selected version
+// to the lowest patched release and keeps the Android (-android) variant.
+// Remove once camera_android_camerax itself depends on Guava >= 33.7.2.
+dependencies {
+    constraints {
+        implementation("com.google.guava:guava:33.7.2-android") {
+            because("GHSA-xxph-c9ww-hj94 / CVE-2026-102554 is fixed in Guava 33.7.2")
+        }
+    }
+}
+
 flutter {
     source = "../.."
 }

@@ -69,52 +69,54 @@ class ExpenseModel {
   }
 }
 
+/// `GET /expenses/stats/` (backend `ExpenseStatsView`). Every field is nullable: a field the
+/// server did not send, or sent as something that is not a number, is **unknown** (shown as
+/// "—"), never silently 0 — a real 0 from the server stays 0.
+///
+/// Scope is the server's: a user with `expenses.approve` gets company-wide figures, everyone
+/// else only their own claims. The values are not derived from the (paginated, category-filtered)
+/// expense list.
 class ExpenseStats {
-  final int    total;
-  final int    pending;
-  final int    approved;
-  final int    rejected;
-  final double totalAmount;
-  final double pendingAmount;
-  final double approvedAmount;
+  final int? total;
+  final int? pending;
+  final int? approved;
+  final int? rejected;
+  final double? totalAmount;
+  final double? pendingAmount;
+  final double? approvedAmount;
 
   const ExpenseStats({
-    required this.total,
-    required this.pending,
-    required this.approved,
-    required this.rejected,
-    required this.totalAmount,
-    required this.pendingAmount,
-    required this.approvedAmount,
+    this.total,
+    this.pending,
+    this.approved,
+    this.rejected,
+    this.totalAmount,
+    this.pendingAmount,
+    this.approvedAmount,
   });
 
   factory ExpenseStats.fromJson(Map<String, dynamic> json) => ExpenseStats(
-    total:          _int(json['total']),
-    pending:        _int(json['pending']),
-    approved:       _int(json['approved']),
-    rejected:       _int(json['rejected']),
-    totalAmount:    _dbl(json['total_amount']),
-    pendingAmount:  _dbl(json['pending_amount']),
-    approvedAmount: _dbl(json['approved_amount']),
-  );
+        total: _int(json['total']),
+        pending: _int(json['pending']),
+        approved: _int(json['approved']),
+        rejected: _int(json['rejected']),
+        totalAmount: _dbl(json['total_amount']),
+        pendingAmount: _dbl(json['pending_amount']),
+        approvedAmount: _dbl(json['approved_amount']),
+      );
 
-  // Django's Sum() returns null when there are no rows and Decimal when
-  // there are, both of which the standard cast fails on.
-  static int _int(dynamic v) {
-    if (v == null) return 0;
+  static int? _int(dynamic v) {
     if (v is int) return v;
-    return int.tryParse(v.toString()) ?? 0;
+    if (v is num && v == v.truncate()) return v.toInt();
+    if (v is String) return int.tryParse(v);
+    return null;
   }
 
-  static double _dbl(dynamic v) {
-    if (v == null) return 0.0;
-    if (v is double) return v;
+  // Amounts arrive as JSON numbers (the backend casts Decimal to float), but a string
+  // decimal is accepted too.
+  static double? _dbl(dynamic v) {
     if (v is num) return v.toDouble();
-    return double.tryParse(v.toString()) ?? 0.0;
+    if (v is String) return double.tryParse(v);
+    return null;
   }
-
-  factory ExpenseStats.empty() => const ExpenseStats(
-    total: 0, pending: 0, approved: 0, rejected: 0,
-    totalAmount: 0, pendingAmount: 0, approvedAmount: 0,
-  );
 }

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../capture/face_capture_controller.dart';
+import '../capture/face_capture_geometry.dart';
 import '../capture/face_capture_state.dart';
 import '../capture/liveness_tracker.dart';
 
@@ -83,78 +84,53 @@ class _FaceCaptureCameraViewState extends ConsumerState<FaceCaptureCameraView> {
       );
     }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          height: 300,
-          width: double.infinity,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Container(
-                  color: const Color(0xFF14181F),
-                  child: camera != null && camera.value.isInitialized
-                      ? CameraPreview(camera)
-                      : Center(
-                          child: SizedBox(
-                            width: 28,
-                            height: 28,
-                            child:
-                                CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white.withValues(alpha: 0.8)),
-                          ),
-                        ),
-                ),
-                if (isLive)
-                  Center(
-                    child: Container(
-                      width: 170,
-                      height: 210,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.rectangle,
-                        borderRadius: BorderRadius.circular(100),
-                        border: Border.all(
-                          color: state.phase == FaceCapturePhase.livenessChecking
-                              ? AppColors.success
-                              : Colors.white.withValues(alpha: 0.85),
-                          width: 3,
-                        ),
-                      ),
-                    ),
-                  ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [Colors.black.withValues(alpha: 0.55), Colors.transparent],
-                      ),
-                    ),
-                    child: Text(
-                      _liveHint(state, widget.instructionText),
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        _StatusCard(state: state, onRetry: controller.retry),
-        if (widget.onCancel != null) ...[
-          const SizedBox(height: 6),
-          TextButton(onPressed: widget.onCancel, child: const Text('Cancel')),
-        ],
+    final live = state.phase == FaceCapturePhase.livenessChecking;
+    final bottom = <Widget>[
+      const SizedBox(height: 12),
+      if (live) _LivenessProgress(state: state),
+      if (live) const SizedBox(height: 10),
+      _StatusCard(state: state, onRetry: controller.retry),
+      if (widget.onCancel != null) ...[
+        const SizedBox(height: 6),
+        TextButton(onPressed: widget.onCancel, child: const Text('Cancel')),
       ],
+    ];
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final boundedHeight = c.hasBoundedHeight;
+        final stage = _Stage(
+          state: state,
+          camera: camera,
+          instructionText: widget.instructionText,
+          isLive: isLive,
+          liveHint: _liveHint(state, widget.instructionText),
+        );
+        if (boundedHeight) {
+          // Full-screen scan: the preview takes whatever the controls leave.
+          // The controls scroll inside a capped band so large text / short
+          // screens can never push the preview out or overflow the screen.
+          return Column(
+            children: [
+              Expanded(child: stage),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: c.maxHeight * 0.45),
+                child: SingleChildScrollView(child: Column(children: bottom)),
+              ),
+            ],
+          );
+        }
+        // Unbounded (scrollable host): size from width at the camera's
+        // natural portrait aspect — never a hard-coded height.
+        final aspect = state.previewAspect ?? (camera != null ? portraitPreviewAspect(camera.value.previewSize) : 3 / 4);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AspectRatio(aspectRatio: aspect, child: stage),
+            ...bottom,
+          ],
+        );
+      },
     );
   }
 
@@ -171,6 +147,14 @@ class _FaceCaptureCameraViewState extends ConsumerState<FaceCaptureCameraView> {
   }
 }
 
+/// The liveness stage the user is actually in, from the tracker's progress.
+String _livenessStage(FaceCaptureUiState s) {
+  if (s.blinkRequired && !s.blinkSeen && !s.turnSeen) return 'Blink naturally, then turn your head slightly';
+  if (s.blinkRequired && !s.blinkSeen) return 'Blink naturally';
+  if (!s.turnSeen) return 'Turn your head slightly';
+  return 'Hold on…';
+}
+
 class _StatusCard extends StatelessWidget {
   final FaceCaptureUiState state;
   final VoidCallback onRetry;
@@ -182,7 +166,7 @@ class _StatusCard extends StatelessWidget {
     final (icon, label, color, showRetry) = switch (state.phase) {
       FaceCapturePhase.idle || FaceCapturePhase.initializingCamera => (
           Icons.hourglass_top_outlined,
-          'Starting camera…',
+          'Opening camera…',
           AppColors.textSecondary,
           false,
         ),
@@ -198,10 +182,17 @@ class _StatusCard extends StatelessWidget {
           AppColors.error,
           true,
         ),
-      FaceCapturePhase.detecting => (Icons.face_outlined, 'Looking for a face…', AppColors.primary, false),
+      FaceCapturePhase.detecting => (
+          Icons.face_outlined,
+          // A face is tracked and nothing needs correcting → say so; otherwise
+          // the hint under the preview says what to fix.
+          state.faceBox != null && state.liveHint == null ? 'Face detected' : 'Position your face in the oval',
+          AppColors.primary,
+          false,
+        ),
       FaceCapturePhase.livenessChecking => (
           Icons.remove_red_eye_outlined,
-          'Confirming it\'s really you…',
+          _livenessStage(state),
           AppColors.primary,
           false,
         ),
@@ -211,7 +202,12 @@ class _StatusCard extends StatelessWidget {
           AppColors.error,
           true,
         ),
-      FaceCapturePhase.extractingEmbedding => (Icons.hourglass_top_outlined, 'Processing…', AppColors.primary, false),
+      FaceCapturePhase.extractingEmbedding => (
+          Icons.hourglass_top_outlined,
+          'Capturing and checking your face…',
+          AppColors.primary,
+          false,
+        ),
       // Recoverable, expected — a lighting/eye-occlusion check on the
       // captured photo didn't pass, not something actually broken (see this
       // phase's own doc comment in face_capture_state.dart). Same "Try
@@ -222,7 +218,7 @@ class _StatusCard extends StatelessWidget {
           AppColors.warning,
           true,
         ),
-      FaceCapturePhase.ready => (Icons.check_circle_outline, 'Captured', AppColors.success, false),
+      FaceCapturePhase.ready => (Icons.check_circle_outline, 'Face captured — verifying…', AppColors.success, false),
       FaceCapturePhase.error => (
           Icons.error_outline,
           state.message ?? 'Something went wrong.',
@@ -269,6 +265,154 @@ class _StatusCard extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// The camera stage: the preview at its natural aspect (contain — never
+/// stretched), the framing oval measured from the preview rectangle, and the
+/// live instruction. The oval and the preview share one rectangle, so the guide
+/// can never drift from what the camera sees.
+class _Stage extends StatelessWidget {
+  final FaceCaptureUiState state;
+  final CameraController? camera;
+  final String instructionText;
+  final bool isLive;
+  final String liveHint;
+
+  const _Stage({
+    required this.state,
+    required this.camera,
+    required this.instructionText,
+    required this.isLive,
+    required this.liveHint,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = camera != null && camera!.value.isInitialized;
+    final aspect = state.previewAspect ?? (ready ? portraitPreviewAspect(camera!.value.previewSize) : 3 / 4);
+    return Container(
+      decoration: BoxDecoration(color: const Color(0xFF14181F), borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final size = fitAspect(Size(c.maxWidth, c.maxHeight), aspect);
+          if (!ready) {
+            return Center(
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white.withValues(alpha: 0.8)),
+              ),
+            );
+          }
+          final oval = guideOval(size);
+          final inGuide = state.faceBox != null &&
+              state.uprightFrame != null &&
+              faceCentreInsideGuide(
+                mapToPreview(state.faceBox!, state.uprightFrame!, size, mirrored: state.mirrored),
+                oval,
+              );
+          final color = state.phase == FaceCapturePhase.livenessChecking || inGuide
+              ? AppColors.success
+              : Colors.white.withValues(alpha: 0.85);
+          return Center(
+            child: SizedBox(
+              width: size.width,
+              height: size.height,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Tight constraints of exactly the preview's own aspect, so
+                  // CameraPreview's internal AspectRatio has nothing to stretch.
+                  CameraPreview(camera!),
+                  if (isLive)
+                    CustomPaint(
+                      key: const Key('face-guide-oval'),
+                      painter: _OvalPainter(oval, color),
+                    ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [Colors.black.withValues(alpha: 0.6), Colors.transparent],
+                        ),
+                      ),
+                      child: Text(
+                        liveHint,
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _OvalPainter extends CustomPainter {
+  final Rect oval;
+  final Color color;
+  const _OvalPainter(this.oval, this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawOval(
+      oval,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..color = color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_OvalPainter old) => old.oval != oval || old.color != color;
+}
+
+/// Live liveness progress: which step is done and the time left.
+class _LivenessProgress extends StatelessWidget {
+  final FaceCaptureUiState state;
+  const _LivenessProgress({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget chip(String label, bool done) {
+      final color = done ? AppColors.success : AppColors.textSecondary;
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(done ? Icons.check_circle : Icons.radio_button_unchecked, size: 16, color: color),
+          const SizedBox(width: 4),
+          Text(label, style: AppTextStyles.caption.copyWith(color: color, fontWeight: FontWeight.w600)),
+        ],
+      );
+    }
+
+    return Wrap(
+      key: const Key('liveness-progress'),
+      alignment: WrapAlignment.center,
+      spacing: 16,
+      runSpacing: 4,
+      children: [
+        if (state.blinkRequired) chip('Blink', state.blinkSeen),
+        chip('Turn head', state.turnSeen),
+        if (state.livenessSecondsLeft != null)
+          Text('${state.livenessSecondsLeft}s left',
+              style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+      ],
     );
   }
 }

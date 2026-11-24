@@ -8,6 +8,15 @@ import '../../data/models/shift_assignment_models.dart' show isoDate;
 // Weekly Off Assignment): bottom sheet, labelled dropdown, Effective From date
 // field and inline error.
 
+/// Bottom sheet for the assignment forms.
+///
+/// A modal bottom sheet is drawn by the Navigator, outside any Scaffold, so
+/// nothing in it adds the system-bar inset: the action row used to sit under
+/// the Android gesture / three-button navigation bar. The footer is therefore
+/// wrapped in a [SafeArea] (real `MediaQuery.padding.bottom`, whatever the
+/// device) and the keyboard (`viewInsets.bottom`) is added on top of it. The
+/// title and fields scroll; the Cancel / action row is pinned below them so it
+/// is never scrolled out of reach.
 class AssignmentSheet extends StatelessWidget {
   const AssignmentSheet(
       {super.key, required this.title, required this.saving, required this.content, required this.action});
@@ -18,21 +27,50 @@ class AssignmentSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final stacked = media.textScaler.scale(10) / 10 > 1.3 || media.size.width < 360;
+    final cancel = TextButton(
+      style: TextButton.styleFrom(minimumSize: const Size(64, 48)),
+      onPressed: saving ? null : () => Navigator.of(context).pop(),
+      child: const Text('Cancel'),
+    );
     return PopScope(
       canPop: !saving,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
-        child: SingleChildScrollView(
+        // Keyboard: lift the whole sheet. (The engine already reports the
+        // bottom safe padding net of the keyboard, so the two never double up.)
+        padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: media.size.height - media.padding.top - 24),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text(title, style: AppTextStyles.h4.copyWith(fontSize: 16)),
-            const SizedBox(height: 12),
-            ...content,
-            const SizedBox(height: 16),
-            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              TextButton(onPressed: saving ? null : () => Navigator.of(context).pop(), child: const Text('Cancel')),
-              const SizedBox(width: 8),
-              action,
-            ]),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Text(title, style: AppTextStyles.h4.copyWith(fontSize: 16)),
+                  const SizedBox(height: 12),
+                  ...content,
+                ]),
+              ),
+            ),
+            Container(
+              decoration: BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                  child: stacked
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [action, const SizedBox(height: 4), cancel])
+                      : Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                          cancel,
+                          const SizedBox(width: 8),
+                          Flexible(child: action),
+                        ]),
+                ),
+              ),
+            ),
           ]),
         ),
       ),
@@ -55,7 +93,12 @@ class AssignmentPicker extends StatelessWidget {
       key: ValueKey('$label|$value|${options.length}'),
       initialValue: values.contains(value) ? value : options.first.$1,
       isExpanded: true,
-      decoration: InputDecoration(labelText: label, isDense: true, border: const OutlineInputBorder()),
+      decoration: InputDecoration(
+        labelText: label,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        border: const OutlineInputBorder(),
+      ),
       items: [
         for (final o in options) DropdownMenuItem(value: o.$1, child: Text(o.$2, overflow: TextOverflow.ellipsis)),
       ],
@@ -86,7 +129,13 @@ class AssignmentDateField extends StatelessWidget {
               if (picked != null) onChanged(picked);
             },
       child: InputDecorator(
-        decoration: const InputDecoration(labelText: 'Effective From', isDense: true, border: OutlineInputBorder()),
+        decoration: const InputDecoration(
+          labelText: 'Effective From',
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          suffixIcon: Icon(Icons.calendar_today_outlined, size: 18),
+          border: OutlineInputBorder(),
+        ),
         child: Text(isoDate(value)),
       ),
     );

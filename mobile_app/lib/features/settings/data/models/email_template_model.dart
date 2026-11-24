@@ -168,11 +168,14 @@ class EmailTemplateFormData {
         availableVariables: List.of(model.availableVariables),
       );
 
+  /// Web `toSlug`: lowercase, keep letters/digits/underscores, spaces → "_",
+  /// and the slug must start with a letter (leading digits/underscores dropped).
   static String toSlug(String text) => text
       .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9\s]'), '')
+      .replaceAll(RegExp(r'[^a-z0-9\s_]'), '')
       .trim()
-      .replaceAll(RegExp(r'\s+'), '_');
+      .replaceAll(RegExp(r'\s+'), '_')
+      .replaceFirst(RegExp(r'^[^a-z]+'), '');
 
   static final RegExp slugPattern = RegExp(r'^[a-z][a-z0-9_]*$');
 

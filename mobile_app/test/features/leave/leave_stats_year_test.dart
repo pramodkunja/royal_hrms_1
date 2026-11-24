@@ -283,7 +283,7 @@ void main() {
 
     testWidgets('loading state shows placeholders, then the year\'s figures', (tester) async {
       await pumpAnalytics(tester, at: DateTime(2027, 2, 2), setup: (s) => s.hold = Completer());
-      expect(find.text('…'), findsNWidgets(4));
+      expect(find.text('…'), findsNWidgets(5)); // Task 109: five cards now (Loss of Pay joined the four)
       expect(statsYears(), [2027]);
       server.hold!.complete();
       await settle(tester);
@@ -304,7 +304,8 @@ void main() {
 
     testWidgets('unauthorised (403): error state, still the calendar year, no retries on its own', (tester) async {
       await pumpAnalytics(tester, at: DateTime(2027, 3, 1), setup: (s) => s.statsStatus = 403);
-      expect(find.text('Failed to load leave analytics.'), findsOneWidget);
+      // Task 109: a refusal reads "Access denied" (with the server's message), not a generic failure.
+      expect(find.text('Access denied'), findsOneWidget);
       expect(statsYears(), [2027]);
     });
 

@@ -96,16 +96,16 @@ class ExpenseRemoteDataSource {
 
   // ── Fetch stats ─────────────────────────────────────────────────────────────
 
+  // A failed or unreadable response is an error, not zeros: an HTTP failure (404, 403, 5xx,
+  // no connection) propagates so the screen can say so, and a body that is not an object is
+  // rejected rather than shown as "0 claims".
   Future<ExpenseStats> fetchStats() async {
-    try {
-      final res = await _dio.get(ApiConstants.expenseStats);
-      final data = _unwrap(res.data);
-      if (data is! Map<String, dynamic>) return ExpenseStats.empty();
-      return ExpenseStats.fromJson(data);
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 404) return ExpenseStats.empty();
-      rethrow;
+    final res = await _dio.get(ApiConstants.expenseStats);
+    final data = _unwrap(res.data);
+    if (data is! Map<String, dynamic>) {
+      throw const FormatException('Unexpected expense summary response.');
     }
+    return ExpenseStats.fromJson(data);
   }
 
   // ── Submit expense ──────────────────────────────────────────────────────────

@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../approvals/presentation/widgets/approvals_kit.dart';
+import '../../../approvals/presentation/widgets/approvals_ui.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../employees/presentation/providers/employee_providers.dart';
 import '../../data/models/shift_assignment_models.dart';
 import '../providers/shift_assignment_providers.dart';
 import 'assignment_form_widgets.dart';
+import 'shift_card.dart';
 import 'shift_master_card.dart';
 
 // HR Attendance → "Shift Assignment" tab — web ShiftAssignmentTab.tsx: every
@@ -57,112 +60,119 @@ class ShiftAssignmentTab extends ConsumerWidget {
       }
     }
 
-    return ListView(
-      key: const Key('shift-assignment-tab'),
-      primary: false,
-      padding: const EdgeInsets.all(12),
-      children: [
-        // Web: ShiftMasterCard above the filters, for users who can assign.
-        if (canAssign) const ShiftMasterCard(),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          SizedBox(
-            width: 170,
-            child: AssignmentPicker(
-              key: const Key('shift-filter-branch'),
-              label: 'Branch',
-              value: unrestricted ? q.branch : effectiveBranch(user),
-              options: unrestricted
-                  ? [('', 'All Branches'), for (final b in branches) (b, b)]
-                  : [(effectiveBranch(user), effectiveBranch(user).isEmpty ? 'All Branches' : effectiveBranch(user))],
-              onChanged: unrestricted ? (v) => setQuery(q.copyWith(branch: v)) : null,
-            ),
+    final scale = MediaQuery.textScalerOf(context).scale(10) / 10;
+    Widget filter(String key, String label, String value, List<(String, String)> options, ValueChanged<String>? on) =>
+        AssignmentPicker(key: Key(key), label: label, value: value, options: options, onChanged: on);
+
+    return LayoutBuilder(builder: (context, box) {
+      final width = box.maxWidth;
+      // Centred reading column on large tablets.
+      final side = width > 984 ? (width - 960) / 2 : 12.0;
+      final content = width > 984 ? 960.0 : width - 24;
+      final cols = scale > 1.3 || content < 520 ? 1 : (content < 900 ? 2 : 4);
+      final fw = cols == 1 ? content : (content - 8.0 * (cols - 1)) / cols;
+      final filters = <Widget>[
+        filter(
+            'shift-filter-branch',
+            'Branch',
+            unrestricted ? q.branch : effectiveBranch(user),
+            unrestricted
+                ? [('', 'All Branches'), for (final b in branches) (b, b)]
+                : [(effectiveBranch(user), effectiveBranch(user).isEmpty ? 'All Branches' : effectiveBranch(user))],
+            unrestricted ? (v) => setQuery(q.copyWith(branch: v)) : null),
+        filter('shift-filter-department', 'Department', q.department,
+            [('', 'All Departments'), for (final d in departments) (d, d)], (v) => setQuery(q.copyWith(department: v))),
+        filter('shift-filter-shift', 'Shift', q.shift, [('', 'All Shifts'), for (final s in shifts) (s.id, s.name)],
+            (v) => setQuery(q.copyWith(shift: v))),
+        filter('shift-filter-status', 'Status', q.status, [for (final o in kShiftStatusOptions) (o.value, o.label)],
+            (v) => setQuery(q.copyWith(status: v))),
+      ];
+      return ListView(
+        key: const Key('shift-assignment-tab'),
+        primary: false,
+        padding: EdgeInsets.fromLTRB(side, 12, side, 24),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        children: [
+          // Web: ShiftMasterCard above the filters, for users who can assign.
+          if (canAssign) const ShiftMasterCard(),
+          ShiftSectionHeader(
+            icon: Icons.groups_outlined,
+            title: 'Employee shift assignment',
+            subtitle: 'See which shift each employee follows, and assign or change it from a chosen date. '
+                'Past attendance is never affected.',
+            trailing: canAssign
+                ? FilledButton.icon(
+                    key: const Key('shift-bulk-open'),
+                    onPressed: openBulk,
+                    style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+                    icon: const Icon(Icons.groups_outlined, size: 18),
+                    label: const Text('Bulk Assign'),
+                  )
+                : null,
           ),
-          SizedBox(
-            width: 170,
-            child: AssignmentPicker(
-              key: const Key('shift-filter-department'),
-              label: 'Department',
-              value: q.department,
-              options: [('', 'All Departments'), for (final d in departments) (d, d)],
-              onChanged: (v) => setQuery(q.copyWith(department: v)),
-            ),
-          ),
-          SizedBox(
-            width: 170,
-            child: AssignmentPicker(
-              key: const Key('shift-filter-shift'),
-              label: 'Shift',
-              value: q.shift,
-              options: [('', 'All Shifts'), for (final s in shifts) (s.id, s.name)],
-              onChanged: (v) => setQuery(q.copyWith(shift: v)),
-            ),
-          ),
-          SizedBox(
-            width: 240,
-            child: AssignmentPicker(
-              key: const Key('shift-filter-status'),
-              label: 'Status',
-              value: q.status,
-              options: [for (final o in kShiftStatusOptions) (o.value, o.label)],
-              onChanged: (v) => setQuery(q.copyWith(status: v)),
-            ),
-          ),
-        ]),
-        if (canAssign) ...[
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton.icon(
-              key: const Key('shift-bulk-open'),
-              onPressed: openBulk,
-              icon: const Icon(Icons.groups_outlined, size: 16),
-              label: const Text('Bulk Assign'),
-            ),
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, runSpacing: 12, children: [for (final f in filters) SizedBox(width: fw, child: f)]),
+          const SizedBox(height: 14),
+          pageAsync.when(
+            loading: () => const ApprovalsLoading(key: Key('shift-loading'), label: 'Loading employees…'),
+            error: (e, _) => Column(children: [
+              ApprovalsEmptyState.forError(e,
+                  key: const Key('shift-list-error'), compact: true, what: 'shift assignments'),
+              OutlinedButton.icon(
+                key: const Key('shift-retry'),
+                onPressed: () => ref.invalidate(shiftAssignmentsProvider),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Retry'),
+              ),
+            ]),
+            data: (page) => Column(children: [
+              if (page.rows.isEmpty)
+                const ApprovalsEmptyState(
+                  key: Key('shift-empty'),
+                  kind: ApprovalsStateKind.noMatch,
+                  title: 'No employees found.',
+                  message: 'Change the branch, department, shift or status filters to see more employees.',
+                  icon: Icons.groups_outlined,
+                  compact: true,
+                ),
+              LayoutBuilder(builder: (context, c) {
+                final two = c.maxWidth >= 600;
+                final w = two ? (c.maxWidth - 12) / 2 : c.maxWidth;
+                return Wrap(spacing: 12, runSpacing: 12, children: [
+                  for (final r in page.rows)
+                    SizedBox(width: w, child: _RowCard(row: r, canAssign: canAssign, onAssign: () => openAssign(r))),
+                ]);
+              }),
+              if (page.totalPages > 1)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text('Page ${page.page} of ${page.totalPages} · ${page.count} employees',
+                          key: const Key('shift-page-info'), style: AppTextStyles.caption.copyWith(fontSize: 12)),
+                      Row(mainAxisSize: MainAxisSize.min, children: [
+                        TextButton(
+                          key: const Key('shift-prev'),
+                          onPressed: q.page <= 1 ? null : () => setQuery(q.copyWith(page: q.page - 1)),
+                          child: const Text('Prev'),
+                        ),
+                        TextButton(
+                          key: const Key('shift-next'),
+                          onPressed: q.page >= page.totalPages ? null : () => setQuery(q.copyWith(page: q.page + 1)),
+                          child: const Text('Next'),
+                        ),
+                      ]),
+                    ],
+                  ),
+                ),
+            ]),
           ),
         ],
-        const SizedBox(height: 10),
-        pageAsync.when(
-          loading: () => const Padding(
-            padding: EdgeInsets.all(24),
-            child: Center(child: Text('Loading…', key: Key('shift-loading'))),
-          ),
-          error: (e, _) => Column(children: [
-            AssignmentErrorBox(
-                key: const Key('shift-list-error'), text: shiftAssignmentError(e, 'Failed to load shift assignments.')),
-            TextButton(
-              key: const Key('shift-retry'),
-              onPressed: () => ref.invalidate(shiftAssignmentsProvider),
-              child: const Text('Retry'),
-            ),
-          ]),
-          data: (page) => Column(children: [
-            if (page.rows.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(24),
-                child: Center(child: Text('No employees found.', key: Key('shift-empty'))),
-              ),
-            for (final r in page.rows) _RowCard(row: r, canAssign: canAssign, onAssign: () => openAssign(r)),
-            if (page.totalPages > 1)
-              Row(children: [
-                Expanded(
-                  child: Text('Page ${page.page} of ${page.totalPages} · ${page.count} employees',
-                      key: const Key('shift-page-info'), style: AppTextStyles.caption.copyWith(fontSize: 12)),
-                ),
-                TextButton(
-                  key: const Key('shift-prev'),
-                  onPressed: q.page <= 1 ? null : () => setQuery(q.copyWith(page: q.page - 1)),
-                  child: const Text('Prev'),
-                ),
-                TextButton(
-                  key: const Key('shift-next'),
-                  onPressed: q.page >= page.totalPages ? null : () => setQuery(q.copyWith(page: q.page + 1)),
-                  child: const Text('Next'),
-                ),
-              ]),
-          ]),
-        ),
-      ],
-    );
+      );
+    });
   }
 }
 
@@ -175,41 +185,44 @@ class _RowCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final muted = AppTextStyles.caption.copyWith(fontSize: 11.5, color: AppColors.textSecondary);
-    final badge = row.isAssigned ? AppColors.success : AppColors.textSecondary;
     return Container(
       key: Key('shift-row-${row.employeeId}'),
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(color: AppColors.textPrimary.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))
+        ],
       ),
-      child: Row(children: [
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(row.employeeName, style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
-            Text([row.employeeId, row.department, row.branch].where((s) => s.isNotEmpty).join(' · '), style: muted),
-            const SizedBox(height: 4),
-            Text(row.shiftName ?? 'General / Default',
-                style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
-            Text('Effective From ${row.effectiveFrom ?? '—'} · Effective To ${row.effectiveTo ?? '-'}', style: muted),
-          ]),
-        ),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(color: badge.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
-            child: Text(row.status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: badge)),
-          ),
-          if (canAssign)
-            TextButton.icon(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(row.employeeName, style: AppTextStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 2),
+        Text([row.employeeId, row.department, row.branch].where((s) => s.isNotEmpty).join(' · '), style: muted),
+        const SizedBox(height: 10),
+        Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          Text(row.shiftName ?? 'General / Default',
+              style: AppTextStyles.bodySmall.copyWith(fontSize: 13, fontWeight: FontWeight.w600)),
+          ApprovalsChip(row.status,
+              key: Key('shift-status-${row.employeeId}'),
+              tone: row.isAssigned ? ApprovalsTone.success : ApprovalsTone.neutral),
+        ]),
+        const SizedBox(height: 4),
+        Text('Effective From ${row.effectiveFrom ?? '—'} · Effective To ${row.effectiveTo ?? '-'}', style: muted),
+        if (canAssign) ...[
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
               key: Key('shift-assign-${row.employeeId}'),
               onPressed: onAssign,
-              icon: const Icon(Icons.edit_outlined, size: 14),
-              label: Text(row.isAssigned ? 'Change' : 'Assign'),
+              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+              icon: const Icon(Icons.swap_horiz, size: 18),
+              label: Text(row.isAssigned ? 'Change shift' : 'Assign shift'),
             ),
-        ]),
+          ),
+        ],
       ]),
     );
   }

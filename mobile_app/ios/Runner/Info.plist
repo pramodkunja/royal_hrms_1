@@ -26,6 +26,8 @@
 		<string>$(FLUTTER_BUILD_NUMBER)</string>
 		<key>LSRequiresIPhoneOS</key>
 		<true/>
+		<key>NSCameraUsageDescription</key>
+		<string>Royal HRMS uses your camera to verify your face when you clock in or out, and to register your Face ID. No photo is stored — only a numeric face signature is sent.</string>
 		<key>NSLocationWhenInUseUsageDescription</key>
 		<string>Royal HRMS uses your location to verify you are within range of your office branch when you clock in or out.</string>
 		<key>NSMicrophoneUsageDescription</key>

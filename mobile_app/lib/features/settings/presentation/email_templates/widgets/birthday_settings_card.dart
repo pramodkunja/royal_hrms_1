@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../approvals/presentation/widgets/approvals_ui.dart' show ApprovalsIconBox;
 import '../../../../auth/presentation/providers/auth_providers.dart';
 import '../../../data/models/birthday_settings_model.dart';
 import '../birthday_settings_providers.dart';
@@ -48,49 +49,72 @@ class BirthdaySettingsCard extends ConsumerWidget {
 
     return Container(
       key: const Key('birthday-settings-card'),
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.fromLTRB(14, 8, 8, 12),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.cardShadow,
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(Icons.cake_outlined, size: 18, color: AppColors.primary),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text('Automatic Birthday Wishes',
-                style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, fontSize: 13),
-                overflow: TextOverflow.ellipsis),
-          ),
-          if (settings != null) ...[
-            const SizedBox(width: 6),
-            Text(settings.isEnabled ? 'Enabled' : 'Disabled',
-                key: const Key('birthday-settings-status'),
-                style: AppTextStyles.caption.copyWith(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: settings.isEnabled ? AppColors.success : AppColors.textSecondary)),
-          ],
-          const Spacer(),
-          if (canEdit && settings != null)
-            TextButton.icon(
-              key: const Key('birthday-settings-edit'),
-              onPressed: () => showModalBottomSheet<void>(
-                context: context,
-                isScrollControlled: true,
-                isDismissible: false,
-                builder: (_) => BirthdaySettingsEditorSheet(initial: settings),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          LayoutBuilder(builder: (context, c) {
+            final large = MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3 || c.maxWidth < 300;
+            final edit = (canEdit && settings != null)
+                ? TextButton.icon(
+                    key: const Key('birthday-settings-edit'),
+                    onPressed: () => showModalBottomSheet<void>(
+                      context: context,
+                      isScrollControlled: true,
+                      isDismissible: false,
+                      builder: (_) => BirthdaySettingsEditorSheet(initial: settings),
+                    ),
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    label: const Text('Edit'),
+                    style: TextButton.styleFrom(foregroundColor: AppColors.primary, minimumSize: const Size(0, 44)),
+                  )
+                : null;
+            final head = Row(children: [
+              ApprovalsIconBox(Icons.cake_outlined, color: AppColors.primary, size: 36),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Automatic Birthday Wishes',
+                      style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, fontSize: 14)),
+                  if (settings != null)
+                    Padding(padding: const EdgeInsets.only(top: 3), child: _EnabledPill(enabled: settings.isEnabled)),
+                ]),
               ),
-              icon: const Icon(Icons.edit_outlined, size: 15),
-              label: const Text('Edit'),
-            )
-          else
-            const SizedBox(height: 40),
+              if (!large && edit != null) edit,
+            ]);
+            return large && edit != null
+                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [head, Align(alignment: Alignment.centerLeft, child: edit)])
+                : head;
+          }),
+          const SizedBox(height: 8),
+          Padding(padding: const EdgeInsets.only(right: 6), child: body),
         ]),
-        body,
+      ),
+    );
+  }
+}
+
+/// Enabled / Disabled: a word and a dot (colour is never the only signal).
+class _EnabledPill extends StatelessWidget {
+  const _EnabledPill({required this.enabled});
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = enabled ? AppColors.success : AppColors.textSecondary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: c.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 6, height: 6, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+        const SizedBox(width: 5),
+        Text(enabled ? 'Enabled' : 'Disabled',
+            key: const Key('birthday-settings-status'),
+            style: AppTextStyles.caption.copyWith(color: c, fontWeight: FontWeight.w700, fontSize: 11.5)),
       ]),
     );
   }

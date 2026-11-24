@@ -344,12 +344,10 @@ class _AddCandidateFormContent extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Interviewer', style: _labelStyle),
       const SizedBox(height: 6),
-      EmployeePickerField(
-        key: const Key('candidate-interviewer'),
+      InterviewerSelectField(
         value: interviewer,
         onChanged: onInterviewerChanged,
         enabled: !loading,
-        hintText: 'Search interviewer by name or ID…',
       ),
     ]);
   }

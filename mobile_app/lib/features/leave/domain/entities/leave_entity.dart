@@ -144,6 +144,8 @@ class LeaveRequestEntity {
   final String from; // ISO date string 'YYYY-MM-DD'
   final String to; // ISO date string 'YYYY-MM-DD'
   final int days;
+  // total_days exactly as sent (e.g. 0.5 for a half day); [days] is its rounded form.
+  final double? totalDays;
   final String status;
   final String reason;
   final String appliedOn;
@@ -195,6 +197,7 @@ class LeaveRequestEntity {
     required this.from,
     required this.to,
     required this.days,
+    this.totalDays,
     required this.status,
     required this.reason,
     required this.appliedOn,
@@ -424,6 +427,11 @@ class LeaveStatsEntity {
   final int
       lopRequests; // lop_requests — count of approved requests with any LOP days
 
+  /// Names of the response fields that were absent or not numeric. Their values above are 0
+  /// only as a placeholder: the Analytics tab shows these as unavailable ("—"), never as a
+  /// real zero. Empty for a well-formed response (and for every hand-built entity).
+  final Set<String> unavailable;
+
   const LeaveStatsEntity({
     required this.total,
     required this.pending,
@@ -434,6 +442,7 @@ class LeaveStatsEntity {
     this.balances = const [],
     this.lopDays = 0.0,
     this.lopRequests = 0,
+    this.unavailable = const {},
   });
 }
 

@@ -255,8 +255,12 @@ void main() {
       await pump(tester);
       expect(server.lists.first, {'page': 1, 'page_size': 20});
       expect(find.text('Sat-Sun Off'), findsWidgets);
-      expect(find.descendant(of: find.byKey(const Key('wo-row-EMP-9')), matching: find.text('—')), findsOneWidget);
-      expect(find.text('Effective From 2026-10-01 · Effective To -'), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('wo-pattern-EMP-9')), matching: find.text('—')), findsOneWidget);
+      // Redesigned card: labelled values instead of one "Effective From … · Effective To …" line.
+      final annCard = find.byKey(const Key('wo-row-EMP-7'));
+      for (final t in ['Effective from', '2026-10-01', 'Effective to', '-']) {
+        expect(find.descendant(of: annCard, matching: find.text(t)), findsOneWidget, reason: t);
+      }
       expect(find.widgetWithText(TextButton, 'Change'), findsOneWidget);
       expect(find.widgetWithText(TextButton, 'Assign'), findsOneWidget);
       expect(find.byKey(const Key('wo-bulk-open')), findsOneWidget);

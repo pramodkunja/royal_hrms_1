@@ -6,4 +6,5 @@ import '../../face_api/face_api_tflite.dart';
 /// and web registrations and verifications share one 128-d descriptor space
 /// (backend FACE_RECOGNITION_MODEL_VERSION 'face-api.js-faceRecognitionNet-v1').
 /// The backend only ever receives the computed vector, never an image.
-Future<FaceApiNets> loadFaceApiNets() => TfliteFaceApiNets.load();
+Future<FaceApiNets> loadFaceApiNets({int threads = 1, bool compareThreads = false}) =>
+    TfliteFaceApiNets.load(threads: threads, compareWithSingleThread: compareThreads);

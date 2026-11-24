@@ -21,6 +21,7 @@ class _DeptFormSheetState extends State<DeptFormSheet> {
   late bool _isActive;
   bool _saving = false;
   String? _nameError;
+  String? _saveError;
 
   bool get _isAdd => widget.department == null;
 
@@ -61,11 +62,33 @@ class _DeptFormSheetState extends State<DeptFormSheet> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (_saveError != null) ...[
+                      Container(
+                        key: const Key('dept-save-error'),
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.error.withValues(alpha: 0.4)),
+                        ),
+                        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Icon(Icons.error_outline, size: 18, color: AppColors.error),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(_saveError!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error))),
+                        ]),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     TextFormField(
+                      key: const Key('dept-name'),
                       controller: _nameCtrl,
                       style: AppTextStyles.body,
                       autofocus: true,
-                      onChanged: (_) => setState(() => _nameError = null),
+                      onChanged: (_) => setState(() {
+                        _nameError = null;
+                        _saveError = null;
+                      }),
                       decoration: _dec('Department Name *', _nameError),
                     ),
                     const SizedBox(height: 12),
@@ -82,6 +105,7 @@ class _DeptFormSheetState extends State<DeptFormSheet> {
                     ),
                     const SizedBox(height: 20),
                     FilledButton(
+                      key: const Key('dept-submit'),
                       onPressed: _saving ? null : _submit,
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(double.infinity, 48),
@@ -131,7 +155,10 @@ class _DeptFormSheetState extends State<DeptFormSheet> {
       setState(() => _nameError = error);
       return;
     }
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
     final notifier = widget.ref.read(departmentsProvider.notifier);
     final result = _isAdd
         ? await notifier.createDept(form)
@@ -141,10 +168,7 @@ class _DeptFormSheetState extends State<DeptFormSheet> {
     if (result == null) {
       Navigator.pop(context);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result),
-        backgroundColor: AppColors.error,
-      ));
+      setState(() => _saveError = result); // inline: a snackbar would sit behind this dialog's scrim
     }
   }
 }
@@ -224,6 +248,8 @@ class _DlgHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // At large text the icon tile and subtitle give way so the title keeps whole words.
+    final large = MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3;
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
       decoration: BoxDecoration(
@@ -232,7 +258,7 @@ class _DlgHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
+          if (!large) Container(
             width: 40, height: 40,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.15),
@@ -240,21 +266,22 @@ class _DlgHeader extends StatelessWidget {
             ),
             child: Icon(icon, color: Colors.white, size: 20),
           ),
-          const SizedBox(width: 12),
+          if (!large) const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
-                const SizedBox(height: 2),
-                Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                if (!large) const SizedBox(height: 2),
+                if (!large) Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 12)),
               ],
             ),
           ),
           IconButton(
+            tooltip: 'Close',
             icon: const Icon(Icons.close, color: Colors.white70, size: 20),
             onPressed: onClose,
-            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           ),
         ],
       ),

@@ -112,6 +112,9 @@ class CalendarDayEntity {
   final String? holidayName;
   final bool canRegularize;
 
+  /// The backend's own colour for this day's status (`#rrggbb`, services_attendance `_STATUS_COLOR`).
+  final String? color;
+
   /// Server verdict: a late day inside the 3-day window with no open or
   /// approved justification (services_late_justification.can_explain).
   final bool canExplainLate;
@@ -126,6 +129,7 @@ class CalendarDayEntity {
     this.hours,
     this.note,
     this.holidayName,
+    this.color,
     required this.canRegularize,
     this.canExplainLate = false,
     this.lateJustificationStatus,
@@ -423,6 +427,22 @@ class UnpunchRowEntity {
     required this.branch,
     required this.correctionPending,
     this.correctionId,
+  });
+}
+
+/// One page of the web's `GET /attendance/un-punches/` envelope
+/// (`count`, `page`, `total_pages`, `results`).
+class UnpunchPageEntity {
+  final List<UnpunchRowEntity> rows;
+  final int page;
+  final int totalPages;
+  final int count;
+
+  const UnpunchPageEntity({
+    required this.rows,
+    required this.page,
+    required this.totalPages,
+    required this.count,
   });
 }
 

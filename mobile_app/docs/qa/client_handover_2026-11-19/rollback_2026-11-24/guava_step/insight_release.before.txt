@@ -1,0 +1,20 @@
+com.google.guava:guava:33.5.0-android
+  Variant androidRuntimeElements:
+    | Attribute Name                                  | Provided     | Requested    |
+    |-------------------------------------------------|--------------|--------------|
+    | org.gradle.dependency.bundling                  | external     |              |
+    | org.gradle.jvm.version                          | 8            |              |
+    | org.gradle.libraryelements                      | jar          |              |
+    | org.gradle.status                               | release      |              |
+    | org.gradle.category                             | library      | library      |
+    | org.gradle.jvm.environment                      | android      | android      |
+    | org.gradle.usage                                | java-runtime | java-runtime |
+    | com.android.build.api.attributes.AgpVersionAttr |              | 8.11.1       |
+    | com.android.build.api.attributes.BuildTypeAttr  |              | release      |
+    | org.jetbrains.kotlin.platform.type              |              | androidJvm   |
+
+com.google.guava:guava:33.5.0-android
+\--- project :camera_android_camerax
+     \--- releaseRuntimeClasspath
+
+A web-based, searchable dependency report is available by adding the --scan option.

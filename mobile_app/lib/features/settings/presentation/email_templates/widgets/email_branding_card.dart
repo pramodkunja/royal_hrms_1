@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../approvals/presentation/widgets/approvals_ui.dart' show ApprovalsIconBox;
 import '../../../data/models/company_model.dart';
 import '../../providers/settings_providers.dart';
 
@@ -20,7 +21,7 @@ class EmailBrandingCard extends ConsumerWidget {
     final async = ref.watch(companyProvider);
     return async.when(
       loading: () => const _BrandingSkeleton(),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, __) => _BrandingError(onRetry: () => ref.invalidate(companyProvider)),
       data: (company) => _BrandingCard(company: company),
     );
   }
@@ -33,115 +34,108 @@ class _BrandingCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final hasLogo = company.logoUrl?.isNotEmpty ?? false;
-    final footerParts = [
-      if (company.address.isNotEmpty) company.address,
-      [company.city, company.state].where((s) => s.isNotEmpty).join(', '),
-    ].where((s) => s.isNotEmpty).toList();
+    // Web's footer text: website | address, city, state — else the company name.
+    final addr = [company.address, company.city, company.state].where((s) => s.isNotEmpty).join(', ');
+    final footer = [company.website, addr].where((s) => s.isNotEmpty).join('  |  ');
+    final footerText = footer.isNotEmpty ? footer : (company.companyName.isNotEmpty ? company.companyName : '—');
+    final name = company.companyName.isNotEmpty ? company.companyName : '[Company Name]';
+
+    Widget label(String t) => Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text(t.toUpperCase(),
+              style: AppTextStyles.caption.copyWith(
+                  fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: AppColors.textSecondary)),
+        );
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      key: const Key('email-branding-card'),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.cardShadow,
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: AppColors.primary,
-            child: Row(
-              children: [
-                const Icon(Icons.badge_outlined, color: Colors.white, size: 18),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Email Branding',
-                    style: AppTextStyles.label.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: () => _openEditor(context, ref),
-                  icon: const Icon(Icons.edit_outlined, size: 15, color: Colors.white),
-                  label: const Text('Edit', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    visualDensity: VisualDensity.compact,
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-              ],
-            ),
-          ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          LayoutBuilder(builder: (context, c) {
+            final large = MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3 || c.maxWidth < 300;
+            final titleBlock = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Email Header & Footer', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, fontSize: 14)),
+              Text('Applied to every outgoing email',
+                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontSize: 11.5)),
+            ]);
+            final edit = TextButton.icon(
+              key: const Key('email-branding-edit'),
+              onPressed: () => _openEditor(context, ref),
+              icon: const Icon(Icons.edit_outlined, size: 16),
+              label: const Text('Edit'),
+              style: TextButton.styleFrom(foregroundColor: AppColors.primary, minimumSize: const Size(0, 44)),
+            );
+            final head = Row(children: [
+              ApprovalsIconBox(Icons.palette_outlined, color: AppColors.primary, size: 36),
+              const SizedBox(width: 10),
+              Expanded(child: titleBlock),
+              if (!large) edit,
+            ]);
+            return large
+                ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [head, Align(alignment: Alignment.centerLeft, child: edit)])
+                : head;
+          }),
+          const SizedBox(height: 10),
           Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 44, height: 44,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: hasLogo
-                      ? Image.network(company.logoUrl!, fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _initial(company.companyName))
-                      : _initial(company.companyName),
+            padding: const EdgeInsets.only(right: 6),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              label('Header'),
+              Container(
+                key: const Key('email-branding-header'),
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        company.companyName.isNotEmpty ? company.companyName : 'Your Company',
-                        style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w700),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 3),
-                      if (footerParts.isNotEmpty)
-                        Text(
-                          footerParts.join(' · '),
-                          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      if (company.website.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          company.website,
-                          style: AppTextStyles.caption.copyWith(color: AppColors.primary),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
+                clipBehavior: Clip.antiAlias,
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                    child: hasLogo
+                        ? ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 44, maxWidth: 180),
+                            child: Image.network(company.logoUrl!, fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => _nameText(name)),
+                          )
+                        : _nameText(name),
                   ),
+                  Container(height: 3, color: AppColors.primary),
+                ]),
+              ),
+              const SizedBox(height: 12),
+              label('Footer'),
+              Container(
+                key: const Key('email-branding-footer'),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.backgroundLow,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border),
                 ),
-              ],
-            ),
+                child: Text(footerText,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, height: 1.5)),
+              ),
+            ]),
           ),
-        ],
+        ]),
       ),
     );
   }
 
-  Widget _initial(String name) {
-    final letter = name.isNotEmpty ? name[0].toUpperCase() : 'C';
-    return Center(
-      child: Text(letter, style: AppTextStyles.label.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)),
-    );
-  }
+  Widget _nameText(String name) => Text(name,
+      textAlign: TextAlign.center,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.textPrimary));
 
   Future<void> _openEditor(BuildContext context, WidgetRef ref) async {
     await showDialog<void>(
@@ -163,14 +157,48 @@ class _BrandingSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       height: 88,
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.border),
       ),
       child: const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+    );
+  }
+}
+
+/// The company details (header/footer source) could not be loaded: said, with
+/// Retry — web falls back to a placeholder preview, but a silently missing
+/// card would read as "no branding".
+class _BrandingError extends StatelessWidget {
+  const _BrandingError({required this.onRetry});
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('email-branding-error'),
+      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.4)),
+      ),
+      child: Row(children: [
+        Icon(Icons.error_outline, size: 18, color: AppColors.error),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text("Couldn't load the email header & footer.",
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+        ),
+        TextButton(
+          key: const Key('email-branding-retry'),
+          onPressed: onRetry,
+          style: TextButton.styleFrom(foregroundColor: AppColors.primary, minimumSize: const Size(0, 44)),
+          child: const Text('Retry'),
+        ),
+      ]),
     );
   }
 }

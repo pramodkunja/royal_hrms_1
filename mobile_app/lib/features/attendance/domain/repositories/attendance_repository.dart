@@ -108,6 +108,12 @@ abstract class AttendanceRepository {
     String? branch,
     String? department,
   });
+  Future<UnpunchPageEntity> getUnpunchesPage({
+    required String date,
+    String? branch,
+    String? department,
+    int page = 1,
+  });
   Future<List<HrCorrectionRowEntity>> getHrCorrections({
     String? branch,
     String? department,

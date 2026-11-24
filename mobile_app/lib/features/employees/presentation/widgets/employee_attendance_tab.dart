@@ -5,47 +5,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../attendance/domain/entities/attendance_entity.dart';
 import '../../../attendance/presentation/providers/attendance_providers.dart';
 import '../../data/models/employee_model.dart';
-
-// Matches my_attendance_screen.dart's day-status color legend exactly, so an
-// HR admin sees the same color coding when looking at someone else's month.
-const _kDayStatusColors = <String, Color>{
-  'Present': Color(0xFF1B8A6B),
-  'Late': Color(0xFFD97706),
-  'Absent': Color(0xFFC0392B),
-  'On Leave': Color(0xFF0E7C86),
-  'Half Day': Color(0xFF1E4E8C),
-  'Weekly Off': Color(0xFF7C8AA3),
-  'Holiday': Color(0xFFB5651D),
-  'Incomplete': Color(0xFF9333EA),
-};
-
-// Single/short letter codes shown top-right of each day cell — matches the
-// reference web calendar's per-cell status badges exactly.
-const _kStatusShortCode = <String, String>{
-  'Present': 'P',
-  'Late': 'L',
-  'Absent': 'A',
-  'On Leave': 'OL',
-  'Half Day': 'H',
-  'Weekly Off': 'W',
-  'Holiday': 'Ho',
-  'Incomplete': '!',
-};
-
-const _kMonthNames = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
+import 'employee_attendance_calendar.dart';
 
 // ── Widget ────────────────────────────────────────────────────────────────────
 
@@ -63,7 +23,6 @@ class EmployeeAttendanceTab extends ConsumerStatefulWidget {
 
 class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
   late DateTime _month;
-  int _calendarTab = 0; // 0 = Calendar, 1 = History
 
   @override
   void initState() {
@@ -163,6 +122,12 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
           ),
         ];
 
+        // One column at large text so labels keep whole words.
+        if (MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3) {
+          return Column(children: [
+            for (var i = 0; i < cards.length; i++) ...[if (i > 0) const SizedBox(height: 10), cards[i]],
+          ]);
+        }
         return Column(children: [
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Expanded(child: cards[0]),
@@ -207,7 +172,7 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
             children: [
               Icon(Icons.calendar_month_outlined, size: 18, color: AppColors.primary),
               const SizedBox(width: 8),
-              Text('Monthly Summary', style: AppTextStyles.h4),
+              Expanded(child: Text('Monthly Summary', style: AppTextStyles.h4)),
             ],
           ),
           const SizedBox(height: 14),
@@ -221,24 +186,19 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
                 _SummaryCell(label: 'Half Days', value: '${summary.halfDays}', color: AppColors.info),
                 _SummaryCell(label: 'OT Hours', value: summary.otHours, color: AppColors.success),
               ];
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                // A fixed aspect ratio (GridView.count's childAspectRatio)
-                // ties cell height to the column width, so on narrower
-                // phones (3 columns leaves little width each) the cell
-                // shrinks below what the label + value text needs and
-                // overflows. mainAxisExtent instead gives every cell a fixed,
-                // width-independent height that's always tall enough.
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  mainAxisExtent: 64,
-                ),
-                itemCount: cells.length,
-                itemBuilder: (_, i) => cells[i],
-              );
+              // Cells size to their content (a fixed height clipped them at large text); two
+              // columns at large text so labels and values keep whole words.
+              return LayoutBuilder(builder: (context, c) {
+                final large = MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3;
+                final cols = large ? 2 : 3;
+                const gap = 10.0;
+                final w = (c.maxWidth - gap * (cols - 1)) / cols;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: [for (final cell in cells) SizedBox(width: w, child: cell)],
+                );
+              });
             },
             loading: () => const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
@@ -255,165 +215,15 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
   // ── Calendar / History card (read-only: no Regularize action anywhere) ───
 
   Widget _buildCalendarCard(AsyncValue<AttendanceCalendarEntity> calendarAsync) {
-    final daysInMonth = DateUtils.getDaysInMonth(_month.year, _month.month);
-    final firstWd = DateTime(_month.year, _month.month, 1).weekday % 7;
-    final today = DateTime.now();
-
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        children: [
-          // Toggle + month nav share one header, matching web's single
-          // consolidated bar (Calendar/History + legend + month nav) — split
-          // across two rows here since mobile width can't fit it all inline.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _CalTabButton(
-                    label: 'Calendar',
-                    icon: Icons.calendar_month_outlined,
-                    selected: _calendarTab == 0,
-                    onTap: () => setState(() => _calendarTab = 0),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _CalTabButton(
-                    label: 'History',
-                    icon: Icons.list_alt_outlined,
-                    selected: _calendarTab == 1,
-                    onTap: () => setState(() => _calendarTab = 1),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.chevron_left, size: 20),
-                  onPressed: _prevMonth,
-                  color: AppColors.textSecondary,
-                  visualDensity: VisualDensity.compact,
-                ),
-                Expanded(
-                  child: Center(
-                    child: Text(
-                      '${_kMonthNames[_month.month - 1]} ${_month.year}',
-                      style: AppTextStyles.labelLarge,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right, size: 20),
-                  onPressed: _isCurrentMonth ? null : _nextMonth,
-                  color: _isCurrentMonth ? AppColors.textHint.withValues(alpha: 0.4) : AppColors.textSecondary,
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
-            ),
-          ),
-          if (_calendarTab == 0)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: _kDayStatusColors.entries.map((e) => _LegendChip(e.key, e.value)).toList(),
-              ),
-            ),
-          const SizedBox(height: 10),
-          if (_calendarTab == 0) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Row(
-                children: ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
-                    .map(
-                      (d) => Expanded(
-                        child: Center(
-                          child: Text(
-                            d,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textHint,
-                              letterSpacing: 0.4,
-                            ),
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ),
-            const SizedBox(height: 6),
-            calendarAsync.when(
-              data: (calendar) => Padding(
-                padding: const EdgeInsets.fromLTRB(10, 0, 10, 14),
-                child: Container(
-                  decoration: BoxDecoration(border: Border.all(color: AppColors.border)),
-                  child: GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 7,
-                      childAspectRatio: 0.95,
-                    ),
-                    itemCount: firstWd + daysInMonth,
-                    itemBuilder: (_, idx) {
-                      if (idx < firstWd) {
-                        return const _DayCell.blank();
-                      }
-                      final day = idx - firstWd + 1;
-                      final isToday = day == today.day && _month.month == today.month && _month.year == today.year;
-                      final dayRecord = calendar.days[day];
-                      final statusColor = dayRecord != null ? _kDayStatusColors[dayRecord.status] : null;
-                      final code = dayRecord != null ? _kStatusShortCode[dayRecord.status] : null;
-
-                      return _DayCell(
-                        day: day,
-                        isToday: isToday,
-                        statusColor: statusColor,
-                        code: code,
-                        onTap: dayRecord == null ? null : () => _showDayDetail(day, dayRecord),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              loading: () => const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-              ),
-              error: (e, _) => Padding(
-                padding: const EdgeInsets.all(20),
-                child:
-                    Text(friendlyAttendanceError(e), style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
-              ),
-            ),
-          ] else
-            calendarAsync.when(
-              data: (calendar) => _buildHistoryList(calendar.history),
-              loading: () => const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-              ),
-              error: (e, _) => Padding(
-                padding: const EdgeInsets.all(20),
-                child:
-                    Text(friendlyAttendanceError(e), style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
-              ),
-            ),
-        ],
-      ),
+    final now = DateTime.now();
+    return EmployeeAttendanceCalendarCard(
+      month: _month,
+      calendar: calendarAsync,
+      onPrev: _prevMonth,
+      onNext: _isCurrentMonth ? null : _nextMonth,
+      onToday: _isCurrentMonth ? null : () => setState(() => _month = DateTime(now.year, now.month, 1)),
+      onRetry: () => ref.invalidate(employeeAttendanceCalendarProvider(_key)),
+      historyBuilder: (cal) => _buildHistoryList(cal.history),
     );
   }
 
@@ -438,41 +248,9 @@ class _EmployeeAttendanceTabState extends ConsumerState<EmployeeAttendanceTab> {
             if (i > 0) Divider(height: 1, color: AppColors.border),
             _HistoryRow(
               row: history[i],
-              statusColor: _kDayStatusColors[history[i].status],
+              statusColor: attendanceDayColor(history[i].status, null),
             ),
           ],
-        ],
-      ),
-    );
-  }
-
-  // Info-only day detail — no Regularize action (read-only HR view).
-  void _showDayDetail(int day, CalendarDayEntity record) {
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('${_kMonthNames[_month.month - 1]} $day, ${_month.year}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _DetailRow(
-              'Status',
-              (record.holidayName != null && record.holidayName!.isNotEmpty)
-                  ? '${record.status} — ${record.holidayName}'
-                  : record.status,
-            ),
-            if (record.clockIn != null) _DetailRow('Clock In', record.clockIn!),
-            if (record.clockOut != null) _DetailRow('Clock Out', record.clockOut!),
-            if (record.hours != null) _DetailRow('Hours', record.hours!),
-            if (record.note != null && record.note!.isNotEmpty) _DetailRow('Note', record.note!),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Close'),
-          ),
         ],
       ),
     );
@@ -545,186 +323,15 @@ class _AnimatedCellValue extends StatelessWidget {
 // ── Legend chip — a colored badge (dot + label) instead of a bare dot, to
 // match the reference web calendar's legend chips ────────────────────────────
 
-class _LegendChip extends StatelessWidget {
-  final String label;
-  final Color color;
-  const _LegendChip(this.label, this.color);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Day cell — bordered grid cell with a status-color background tint and a
-// short status-code badge top-right, matching the reference web calendar's
-// spreadsheet-style day cells (replaces the old floating-circle + dot look).
-
-class _DayCell extends StatelessWidget {
-  final int? day;
-  final bool isToday;
-  final Color? statusColor;
-  final String? code;
-  final VoidCallback? onTap;
-
-  const _DayCell({
-    required this.day,
-    required this.isToday,
-    required this.statusColor,
-    required this.code,
-    required this.onTap,
-  });
-
-  const _DayCell.blank()
-      : day = null,
-        isToday = false,
-        statusColor = null,
-        code = null,
-        onTap = null;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: statusColor?.withValues(alpha: 0.08),
-          border: Border(
-            right: BorderSide(color: AppColors.border, width: 0.5),
-            bottom: BorderSide(color: AppColors.border, width: 0.5),
-          ),
-        ),
-        padding: const EdgeInsets.all(4),
-        child: day == null
-            ? const SizedBox.expand()
-            : Stack(
-                children: [
-                  Align(
-                    alignment: Alignment.topLeft,
-                    child: isToday
-                        ? Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: AppColors.primary,
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              '$day',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                          )
-                        : Text(
-                            '$day',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                  ),
-                  if (code != null)
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: Text(
-                        code!,
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          color: statusColor,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-      ),
-    );
-  }
-}
-
-// ── Calendar/History tab button (mirrors my_attendance_screen.dart's
-// _CalTabButton) ──────────────────────────────────────────────────────────────
-
-class _CalTabButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _CalTabButton({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.primary.withValues(alpha: 0.10) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: selected ? AppColors.primary : AppColors.border),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 15, color: selected ? AppColors.primary : AppColors.textSecondary),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: selected ? AppColors.primary : AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── History row (mirrors my_attendance_screen.dart's _HistoryRow, minus the
-// "Regularize" action — read-only for HR viewing another employee) ──────────
-
 class _HistoryRow extends StatelessWidget {
   final AttendanceHistoryRowEntity row;
   final Color? statusColor;
 
   const _HistoryRow({required this.row, required this.statusColor});
 
-  bool get _isLateArrival => row.clockIn != null && row.clockIn!.compareTo('09:15') > 0;
+  // The server's own verdict (status), not a clock-time guess: only a plain 'Late' day (not an
+  // excused one) marks the clock-in time.
+  bool get _isLateArrival => row.status == 'Late';
 
   @override
   Widget build(BuildContext context) {
@@ -794,35 +401,9 @@ class _HistoryRow extends StatelessWidget {
   }
 }
 
-// ── Detail dialog row ─────────────────────────────────────────────────────────
-
-class _DetailRow extends StatelessWidget {
-  final String label;
-  final String value;
-  const _DetailRow(this.label, this.value);
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 90,
-              child: Text(label, style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            ),
-            Expanded(
-              child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-            ),
-          ],
-        ),
-      );
-}
-
 /// A number as web prints it (JavaScript): 8.0 → "8", 7.5 → "7.5".
 String webNumber(double v) => v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
 
-/// Web `.stat-card`: label, value, sub-line, icon, and a progress bar.
 class EmployeeStatCard extends StatelessWidget {
   const EmployeeStatCard({
     super.key,

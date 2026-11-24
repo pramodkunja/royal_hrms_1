@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../domain/entities/org_chart_entity.dart';
+import 'org_labels.dart';
 
 /// One department's card: an always-visible head row, and a member list
 /// that expands on tap rather than being rendered in full up front — with
@@ -118,11 +119,15 @@ class _HeadSection extends StatelessWidget {
                       onTap: onTapHead,
                       behavior: HitTestBehavior.opaque,
                       child: Text(
-                        dept.head?.name ?? '—',
+                        orgHeadLabel(dept.head),
+                        key: const Key('org-dept-head'),
+                        // A placeholder reads as one: quieter than a real name.
                         style: AppTextStyles.h4.copyWith(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
-                          color: onTapHead != null ? AppColors.primary : null,
+                          fontWeight: orgHasText(dept.head?.name) ? FontWeight.w700 : FontWeight.w500,
+                          fontSize: orgHasText(dept.head?.name) ? 16 : 14,
+                          color: !orgHasText(dept.head?.name)
+                              ? AppColors.textSecondary
+                              : (onTapHead != null ? AppColors.primary : null),
                         ),
                       ),
                     ),
@@ -212,9 +217,11 @@ class _MemberRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      person.name.isEmpty ? '—' : person.name,
-                      style: AppTextStyles.bodySmall
-                          .copyWith(fontWeight: FontWeight.w600),
+                      orgMemberLabel(person),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        fontWeight: orgHasText(person.name) ? FontWeight.w600 : FontWeight.w500,
+                        color: orgHasText(person.name) ? null : AppColors.textSecondary,
+                      ),
                     ),
                     if (person.designation.isNotEmpty)
                       Text(

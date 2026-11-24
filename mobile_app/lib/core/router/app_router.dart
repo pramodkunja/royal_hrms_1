@@ -694,7 +694,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.myRequests,
             pageBuilder: (_, state) => NoTransitionPage(
-                key: state.pageKey, child: const MyRequestsScreen()),
+                key: state.pageKey,
+                child: MyRequestsScreen(initialTab: state.uri.queryParameters['tab'])),
           ),
           // Every signed-in user, as on web (the backend scopes the list).
           GoRoute(

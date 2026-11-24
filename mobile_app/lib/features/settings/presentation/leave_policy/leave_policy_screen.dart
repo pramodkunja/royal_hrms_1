@@ -11,7 +11,7 @@ import '../../../leave/presentation/widgets/leave_type_icons.dart';
 import '../../data/models/leave_policy_model.dart';
 import '../leave_credit_rules/leave_credit_rules_screen.dart';
 import '../providers/settings_providers.dart';
-import '../widgets/settings_app_bar.dart';
+import '../../../dashboard/presentation/widgets/pushed_app_top_bar.dart';
 import 'widgets/add_leave_type_dialog.dart';
 import 'widgets/leave_carry_forward_tab.dart';
 import 'leave_balance_import_screen.dart' show canImportLeaveBalances;
@@ -95,40 +95,8 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: SettingsAppBar(
-        title: 'Leave Policy',
-        trailing: _showImport
-            ? IconButton(
-                key: const Key('leave-import-entry'),
-                icon: const Icon(Icons.file_upload_outlined, size: 20),
-                color: AppColors.textSecondary,
-                tooltip: 'Import Opening Balances',
-                onPressed: () =>
-                    context.push(AppRoutes.settingsLeaveBalanceImport),
-              )
-            : null,
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          tabs: [
-            _iconTab(Icons.beach_access_outlined, 'Leave Types'),
-            _iconTab(Icons.rule_outlined, 'Leave Policy'),
-            _iconTab(Icons.paid_outlined, 'Credit Rules'),
-            if (_showCarryForward)
-              _iconTab(Icons.repeat_rounded, 'Carry Forward'),
-            if (_showMonthly)
-              _iconTab(Icons.calendar_month_outlined, 'Monthly Leave Management'),
-          ],
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textSecondary,
-          indicatorColor: AppColors.primary,
-          indicatorWeight: 2.5,
-          labelStyle: AppTextStyles.label.copyWith(fontSize: 13),
-          unselectedLabelStyle: AppTextStyles.label.copyWith(fontSize: 13),
-          dividerColor: AppColors.border,
-        ),
-      ),
+      // The same blue bar Announcements has (this route sits outside the shell).
+      appBar: const PushedAppTopBar(title: 'Leave Policy', fallbackRoute: AppRoutes.settings),
       floatingActionButton: switch (_tabController.index) {
         0 => FloatingActionButton.extended(
             onPressed: () => _policyKey.currentState?.openAdd(),
@@ -143,7 +111,45 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
         // No "Add Rule" on Credit Rules: accrual rules have no backend (HO-35).
         _ => null,
       },
-      body: TabBarView(
+      body: Column(
+        children: [
+          // Tab strip under the bar; Import Opening Balances (web: leave.edit) stays one tap away.
+          Material(
+            color: AppColors.surface,
+            child: Row(children: [
+              Expanded(
+                child: TabBar(
+                  controller: _tabController,
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  tabs: [
+                    _iconTab(Icons.beach_access_outlined, 'Leave Types'),
+                    _iconTab(Icons.rule_outlined, 'Leave Policy'),
+                    _iconTab(Icons.paid_outlined, 'Credit Rules'),
+                    if (_showCarryForward) _iconTab(Icons.repeat_rounded, 'Carry Forward'),
+                    if (_showMonthly) _iconTab(Icons.calendar_month_outlined, 'Monthly Leave Management'),
+                  ],
+                  labelColor: AppColors.primary,
+                  unselectedLabelColor: AppColors.textSecondary,
+                  indicatorColor: AppColors.primary,
+                  indicatorWeight: 2.5,
+                  labelStyle: AppTextStyles.label.copyWith(fontSize: 13),
+                  unselectedLabelStyle: AppTextStyles.label.copyWith(fontSize: 13),
+                  dividerColor: AppColors.border,
+                ),
+              ),
+              if (_showImport)
+                IconButton(
+                  key: const Key('leave-import-entry'),
+                  icon: const Icon(Icons.file_upload_outlined, size: 22),
+                  color: AppColors.primary,
+                  tooltip: 'Import Opening Balances',
+                  constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                  onPressed: () => context.push(AppRoutes.settingsLeaveBalanceImport),
+                ),
+            ]),
+          ),
+          Expanded(child: TabBarView(
         controller: _tabController,
         children: [
           policiesAsync.when(
@@ -156,6 +162,8 @@ class _LeavePolicyScreenState extends ConsumerState<LeavePolicyScreen>
           CreditRulesTab(key: _creditRulesKey),
           if (_showCarryForward) const LeaveCarryForwardTab(),
           if (_showMonthly) const MonthlyLeaveTab(),
+        ],
+      )),
         ],
       ),
     );
@@ -376,71 +384,10 @@ class _PolicyCard extends StatelessWidget {
     final shortLabel = LeaveTypeColors.shortLabelForCode(policy.leaveType);
     final isLwp = isBuiltIn && LeaveTypeColors.isLwp(policy.leaveType);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.cardShadow,
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(leaveTypeIconForCode(policy.leaveType),
-                    size: 18, color: color),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(policy.leaveTypeDisplay,
-                              style: AppTextStyles.label
-                                  .copyWith(fontWeight: FontWeight.w700),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: isBuiltIn
-                                ? AppColors.backgroundLow
-                                : AppColors.textSecondary
-                                    .withValues(alpha: 0.10),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(shortLabel,
-                              style: AppTextStyles.caption.copyWith(
-                                  fontSize: 10,
-                                  color: AppColors.textSecondary,
-                                  fontWeight: FontWeight.w800)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                        isLwp
-                            ? 'Unpaid · no fixed entitlement'
-                            : '${_fmt(policy.annualDays)} days / year',
-                        style: AppTextStyles.caption.copyWith(fontSize: 11)),
-                  ],
-                ),
-              ),
+    // Status, Edit and the menu sit beside the name when there is room and under it at
+    // large text / narrow widths (a Row of fixed-width controls overflowed there).
+    final large = MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3;
+    final trail = <Widget>[
               _StatusPill(isActive: policy.isActive),
               const SizedBox(width: 6),
               IconButton(
@@ -509,8 +456,77 @@ class _PolicyCard extends StatelessWidget {
                       ),
                   ],
                 ),
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(leaveTypeIconForCode(policy.leaveType),
+                    size: 18, color: color),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(policy.leaveTypeDisplay,
+                              style: AppTextStyles.label
+                                  .copyWith(fontWeight: FontWeight.w700),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: isBuiltIn
+                                ? AppColors.backgroundLow
+                                : AppColors.textSecondary
+                                    .withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(shortLabel,
+                              style: AppTextStyles.caption.copyWith(
+                                  fontSize: 10,
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.w800)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                        isLwp
+                            ? 'Unpaid · no fixed entitlement'
+                            : '${_fmt(policy.annualDays)} days / year',
+                        style: AppTextStyles.caption.copyWith(fontSize: 11)),
+                  ],
+                ),
+              ),
+              if (!large) ...trail,
             ],
           ),
+          if (large) Padding(padding: const EdgeInsets.only(top: 8), child: Row(children: trail)),
           const SizedBox(height: 10),
           Wrap(
             spacing: 6,

@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/router/app_router.dart' show AppRoutes;
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/stat_card.dart';
@@ -1122,6 +1124,14 @@ class _MyCorrectionsSection extends ConsumerWidget {
   }
 }
 
+/// The latest [count] corrections, newest submitted first (web: sort by created_at, slice 5).
+List<MyCorrectionEntity> recentCorrections(List<MyCorrectionEntity> records, {int count = 5}) {
+  DateTime when(MyCorrectionEntity r) =>
+      DateTime.tryParse(r.createdAt.replaceFirst(' ', 'T')) ?? DateTime.fromMillisecondsSinceEpoch(0);
+  final sorted = [...records]..sort((a, b) => when(b).compareTo(when(a)));
+  return sorted.take(count).toList();
+}
+
 class _MyCorrectionsBody extends StatelessWidget {
   final List<MyCorrectionEntity> records;
   const _MyCorrectionsBody({required this.records});
@@ -1135,15 +1145,26 @@ class _MyCorrectionsBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(child: _CorrectionCountTile(label: 'Pending', count: pending, color: AppColors.warning)),
-            const SizedBox(width: 10),
-            Expanded(child: _CorrectionCountTile(label: 'Approved', count: approved, color: AppColors.success)),
-            const SizedBox(width: 10),
-            Expanded(child: _CorrectionCountTile(label: 'Rejected', count: rejected, color: AppColors.error)),
-          ],
-        ),
+        // Three across; stacked at large text so the labels keep whole words.
+        Builder(builder: (context) {
+          final large = MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3;
+          final tiles = [
+            _CorrectionCountTile(label: 'Pending', count: pending, color: AppColors.warning),
+            _CorrectionCountTile(label: 'Approved', count: approved, color: AppColors.success),
+            _CorrectionCountTile(label: 'Rejected', count: rejected, color: AppColors.error),
+          ];
+          if (large) {
+            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              for (var i = 0; i < tiles.length; i++) ...[if (i > 0) const SizedBox(height: 8), tiles[i]],
+            ]);
+          }
+          return Row(children: [
+            for (var i = 0; i < tiles.length; i++) ...[
+              if (i > 0) const SizedBox(width: 10),
+              Expanded(child: tiles[i]),
+            ],
+          ]);
+        }),
         const SizedBox(height: 14),
         SectionCard(
           title: 'Quick Actions',
@@ -1165,20 +1186,37 @@ class _MyCorrectionsBody extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
+        // Web: the latest 5 (newest first) under "Recent Correction Requests"; the full
+        // history is My Requests → Attendance Correction, reached by "View All Corrections".
         SectionCard(
-          title: 'Correction Requests',
+          title: 'Recent Correction Requests',
           icon: Icons.receipt_long_outlined,
           accentColor: AppColors.primary,
-          child: records.isEmpty
-              ? const SectionMessage(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  key: const Key('corrections-view-all'),
+                  onPressed: () => context.push('${AppRoutes.myRequests}?tab=attendance_correction'),
+                  style: TextButton.styleFrom(minimumSize: const Size(48, 44)),
+                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                    Flexible(child: Text('View All Corrections', textAlign: TextAlign.end)),
+                    SizedBox(width: 6),
+                    Icon(Icons.arrow_forward, size: 16),
+                  ]),
+                ),
+              ),
+              if (records.isEmpty)
+                const SectionMessage(
                   icon: Icons.receipt_long_outlined,
                   label: 'No correction requests yet.',
                 )
-              : Column(
-                  children: [
-                    for (final r in records) _MyCorrectionRow(record: r),
-                  ],
-                ),
+              else
+                for (final r in recentCorrections(records)) _MyCorrectionRow(record: r),
+            ],
+          ),
         ),
       ],
     );
@@ -1201,7 +1239,7 @@ class _CorrectionCountTile extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text('$count', style: AppTextStyles.h3.copyWith(color: color, fontWeight: FontWeight.w800)),
+          Text('$count', key: Key('correction-count-${label.toLowerCase()}'), style: AppTextStyles.h3.copyWith(color: color, fontWeight: FontWeight.w800)),
           const SizedBox(height: 2),
           Text(label, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
         ],

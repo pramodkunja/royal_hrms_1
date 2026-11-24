@@ -8,7 +8,7 @@ import '../../../../core/constants/api_constants.dart';
 import '../../../../shared/validators/form_validators.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../separation/domain/entities/separation_entity.dart' show EmployeePickerOption;
-import '../../../separation/presentation/widgets/employee_picker_field.dart';
+import 'interviewer_select_field.dart';
 import '../../domain/entities/candidate_entity.dart';
 import '../providers/interview_providers.dart';
 

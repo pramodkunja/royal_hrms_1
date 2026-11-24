@@ -307,6 +307,32 @@ class AttendanceRemoteDataSource {
     return _unwrapList(res.data).map(UnpunchRowModel.fromJson).toList();
   }
 
+  /// Web UnpunchesTab: date + branch + department + page, `page_size: 20`.
+  Future<UnpunchPageEntity> fetchUnpunchesPage({
+    required String date,
+    String? branch,
+    String? department,
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    final res = await _dio.get(ApiConstants.attendanceUnpunches, queryParameters: {
+      'date': date,
+      if (branch != null && branch.isNotEmpty) 'branch': branch,
+      if (department != null && department.isNotEmpty) 'department': department,
+      'page': page,
+      'page_size': pageSize,
+    });
+    final data = _unwrap(res.data);
+    final rows = _unwrapList(res.data).map(UnpunchRowModel.fromJson).toList();
+    int n(String k, int d) => data is Map ? (int.tryParse('${data[k] ?? ''}') ?? d) : d;
+    return UnpunchPageEntity(
+      rows: rows,
+      page: n('page', page),
+      totalPages: n('total_pages', 1),
+      count: n('count', rows.length),
+    );
+  }
+
   Future<List<HrCorrectionRowModel>> fetchHrCorrections({
     String? branch,
     String? department,

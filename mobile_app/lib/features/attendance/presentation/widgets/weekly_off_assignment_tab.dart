@@ -9,6 +9,7 @@ import '../../data/models/shift_assignment_models.dart' show canAssignShifts, ef
 import '../../data/models/weekly_off_assignment_models.dart';
 import '../providers/weekly_off_assignment_providers.dart';
 import 'assignment_form_widgets.dart';
+import 'weekly_off_sections.dart';
 
 // HR Attendance → "Weekly Off Assignment" tab — web WeeklyOffAssignmentTab.tsx:
 // every in-scope employee with their current weekly-off pattern (branch /
@@ -37,6 +38,7 @@ class WeeklyOffAssignmentTab extends ConsumerWidget {
         context: context,
         isScrollControlled: true,
         isDismissible: false,
+        constraints: const BoxConstraints(maxWidth: 560),
         builder: (_) => AssignWeeklyOffSheet(row: row),
       );
       if (name != null && context.mounted) {
@@ -50,6 +52,7 @@ class WeeklyOffAssignmentTab extends ConsumerWidget {
         context: context,
         isScrollControlled: true,
         isDismissible: false,
+        constraints: const BoxConstraints(maxWidth: 560),
         builder: (_) => const BulkAssignWeeklyOffSheet(),
       );
       if (count != null && context.mounted) {
@@ -58,161 +61,169 @@ class WeeklyOffAssignmentTab extends ConsumerWidget {
       }
     }
 
-    return ListView(
-      key: const Key('weekly-off-tab'),
-      primary: false,
-      padding: const EdgeInsets.all(12),
-      children: [
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          SizedBox(
-            width: 170,
-            child: AssignmentPicker(
-              key: const Key('wo-filter-branch'),
-              label: 'Branch',
-              value: unrestricted ? q.branch : effectiveBranch(user),
-              options: unrestricted
-                  ? [('', 'All Branches'), for (final b in branches) (b, b)]
-                  : [(effectiveBranch(user), effectiveBranch(user).isEmpty ? 'All Branches' : effectiveBranch(user))],
-              onChanged: unrestricted ? (v) => setQuery(q.copyWith(branch: v)) : null,
-            ),
-          ),
-          SizedBox(
-            width: 170,
-            child: AssignmentPicker(
-              key: const Key('wo-filter-department'),
-              label: 'Department',
-              value: q.department,
-              options: [('', 'All Departments'), for (final d in departments) (d, d)],
-              onChanged: (v) => setQuery(q.copyWith(department: v)),
-            ),
-          ),
-          SizedBox(
-            width: 170,
-            child: AssignmentPicker(
-              key: const Key('wo-filter-pattern'),
-              label: 'Weekly Off Pattern',
-              value: q.pattern,
-              options: [('', 'All Patterns'), for (final p in patterns) (p.id, p.name)],
-              onChanged: (v) => setQuery(q.copyWith(pattern: v)),
-            ),
-          ),
-          SizedBox(
-            width: 170,
-            child: AssignmentPicker(
-              key: const Key('wo-filter-status'),
-              label: 'Status',
-              value: q.status,
-              options: [for (final o in kWeeklyOffStatusOptions) (o.value, o.label)],
-              onChanged: (v) => setQuery(q.copyWith(status: v)),
-            ),
-          ),
-        ]),
-        if (canAssign) ...[
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton.icon(
-              key: const Key('wo-bulk-open'),
-              onPressed: openBulk,
-              icon: const Icon(Icons.groups_outlined, size: 16),
-              label: const Text('Bulk Assign'),
-            ),
-          ),
-        ],
-        const SizedBox(height: 10),
-        pageAsync.when(
-          loading: () => const Padding(
-            padding: EdgeInsets.all(24),
-            child: Center(child: Text('Loading…', key: Key('wo-loading'))),
-          ),
-          error: (e, _) => Column(children: [
-            AssignmentErrorBox(
-                key: const Key('wo-list-error'), text: weeklyOffError(e, 'Failed to load weekly off assignments.')),
-            TextButton(
-              key: const Key('wo-retry'),
-              onPressed: () => ref.invalidate(weeklyOffAssignmentsProvider),
-              child: const Text('Retry'),
-            ),
-          ]),
-          data: (page) => Column(children: [
-            if (page.rows.isEmpty)
+    final media = MediaQuery.of(context);
+    return LayoutBuilder(builder: (context, c) {
+      final w = c.maxWidth;
+      final compact = weeklyOffCompact(context, w);
+      // 1 column on phones, 2 from 600dp; a centred column on big tablets.
+      final cols = w >= 600 ? 2 : 1;
+      final side = w >= 1160 ? (w - 1160) / 2 + 12 : 12.0;
+      final inner = w - side * 2;
+      final filterCols = compact ? 1 : weeklyOffColumns(inner - 28, 170);
+      final page = pageAsync.valueOrNull;
+
+      final filters = <Widget>[
+        AssignmentPicker(
+          key: const Key('wo-filter-branch'),
+          label: 'Branch',
+          value: unrestricted ? q.branch : effectiveBranch(user),
+          options: unrestricted
+              ? [('', 'All Branches'), for (final b in branches) (b, b)]
+              : [(effectiveBranch(user), effectiveBranch(user).isEmpty ? 'All Branches' : effectiveBranch(user))],
+          onChanged: unrestricted ? (v) => setQuery(q.copyWith(branch: v)) : null,
+        ),
+        AssignmentPicker(
+          key: const Key('wo-filter-department'),
+          label: 'Department',
+          value: q.department,
+          options: [('', 'All Departments'), for (final d in departments) (d, d)],
+          onChanged: (v) => setQuery(q.copyWith(department: v)),
+        ),
+        AssignmentPicker(
+          key: const Key('wo-filter-pattern'),
+          label: 'Weekly Off Pattern',
+          value: q.pattern,
+          options: [('', 'All Patterns'), for (final p in patterns) (p.id, p.name)],
+          onChanged: (v) => setQuery(q.copyWith(pattern: v)),
+        ),
+        AssignmentPicker(
+          key: const Key('wo-filter-status'),
+          label: 'Status',
+          value: q.status,
+          options: [for (final o in kWeeklyOffStatusOptions) (o.value, o.label)],
+          onChanged: (v) => setQuery(q.copyWith(status: v)),
+        ),
+      ];
+
+      final bulkButton = FilledButton.icon(
+        key: const Key('wo-bulk-open'),
+        style: FilledButton.styleFrom(minimumSize: const Size(0, 48), padding: const EdgeInsets.symmetric(horizontal: 20)),
+        onPressed: openBulk,
+        icon: const Icon(Icons.groups_outlined, size: 18),
+        label: const Text('Bulk Assign'),
+      );
+      final overviewText = Text(
+        canAssign
+            ? 'Assign a weekly off pattern to one employee from the list below, or to every active employee of a '
+                'branch or department at once.'
+            : 'View each employee\u2019s weekly off pattern. Assigning needs additional access.',
+        style: AppTextStyles.caption.copyWith(fontSize: 12, color: AppColors.textSecondary),
+      );
+
+      Widget rows(WeeklyOffAssignmentPage pg) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            if (pg.rows.isEmpty)
               const Padding(
                 padding: EdgeInsets.all(24),
                 child: Center(child: Text('No employees found.', key: Key('wo-empty'))),
               ),
-            for (final r in page.rows) _RowCard(row: r, canAssign: canAssign, onAssign: () => openAssign(r)),
-            if (page.totalPages > 1)
-              Row(children: [
-                Expanded(
-                  child: Text('Page ${page.page} of ${page.totalPages} · ${page.count} employees',
+            WeeklyOffGrid(columns: cols, children: [
+              for (final r in pg.rows)
+                KeyedSubtree(
+                  key: Key('wo-row-${r.employeeId}'),
+                  child: WeeklyOffAssignmentCard(row: r, canAssign: canAssign, onAssign: () => openAssign(r)),
+                ),
+            ]),
+            if (pg.totalPages > 1) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text('Page ${pg.page} of ${pg.totalPages} \u00b7 ${pg.count} employees',
                       key: const Key('wo-page-info'), style: AppTextStyles.caption.copyWith(fontSize: 12)),
-                ),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    TextButton(
+                      key: const Key('wo-prev'),
+                      style: TextButton.styleFrom(minimumSize: const Size(64, 44)),
+                      onPressed: q.page <= 1 ? null : () => setQuery(q.copyWith(page: q.page - 1)),
+                      child: const Text('Prev'),
+                    ),
+                    TextButton(
+                      key: const Key('wo-next'),
+                      style: TextButton.styleFrom(minimumSize: const Size(64, 44)),
+                      onPressed: q.page >= pg.totalPages ? null : () => setQuery(q.copyWith(page: q.page + 1)),
+                      child: const Text('Next'),
+                    ),
+                  ]),
+                ],
+              ),
+            ],
+          ]);
+
+      return ListView(
+        key: const Key('weekly-off-tab'),
+        primary: false,
+        // The explicit padding replaces ListView's automatic safe-area padding,
+        // so the real bottom inset is added back: the end of the list can always
+        // be scrolled clear of the Android navigation bar. The extra clearance
+        // lets the last card scroll above the floating voice assistant.
+        padding: EdgeInsets.fromLTRB(
+            side, 12, side, 12 + media.padding.bottom + (media.viewInsets.bottom > 0 ? 0 : kWeeklyOffAssistantClearance)),
+        children: [
+          WeeklyOffSection(
+            icon: Icons.event_repeat_outlined,
+            title: 'Assignment overview',
+            subtitle: page == null ? null : '${page.count} employee(s) match the current filters',
+            child: compact || w < 600
+                ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    overviewText,
+                    if (canAssign) ...[const SizedBox(height: 12), bulkButton],
+                  ])
+                : Row(children: [
+                    Expanded(child: overviewText),
+                    if (canAssign) ...[const SizedBox(width: 16), bulkButton],
+                  ]),
+          ),
+          const SizedBox(height: 12),
+          WeeklyOffSection(
+            icon: Icons.filter_alt_outlined,
+            title: 'Select employees',
+            subtitle: 'Filter by branch, department, pattern or status.',
+            child: WeeklyOffGrid(columns: filterCols, children: filters),
+          ),
+          const SizedBox(height: 12),
+          WeeklyOffSection(
+            icon: Icons.people_alt_outlined,
+            title: 'Existing assignments',
+            subtitle: canAssign ? 'Use Assign or Change on a card to set one employee\u2019s pattern.' : null,
+            child: pageAsync.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(child: Text('Loading\u2026', key: Key('wo-loading'))),
+              ),
+              error: (e, _) => Column(children: [
+                AssignmentErrorBox(
+                    key: const Key('wo-list-error'),
+                    text: weeklyOffError(e, 'Failed to load weekly off assignments.')),
                 TextButton(
-                  key: const Key('wo-prev'),
-                  onPressed: q.page <= 1 ? null : () => setQuery(q.copyWith(page: q.page - 1)),
-                  child: const Text('Prev'),
-                ),
-                TextButton(
-                  key: const Key('wo-next'),
-                  onPressed: q.page >= page.totalPages ? null : () => setQuery(q.copyWith(page: q.page + 1)),
-                  child: const Text('Next'),
+                  key: const Key('wo-retry'),
+                  style: TextButton.styleFrom(minimumSize: const Size(64, 44)),
+                  onPressed: () => ref.invalidate(weeklyOffAssignmentsProvider),
+                  child: const Text('Retry'),
                 ),
               ]),
-          ]),
-        ),
-      ],
-    );
-  }
-}
-
-class _RowCard extends StatelessWidget {
-  const _RowCard({required this.row, required this.canAssign, required this.onAssign});
-  final WeeklyOffAssignmentRow row;
-  final bool canAssign;
-  final VoidCallback onAssign;
-
-  @override
-  Widget build(BuildContext context) {
-    final muted = AppTextStyles.caption.copyWith(fontSize: 11.5, color: AppColors.textSecondary);
-    final badge = row.isAssigned ? AppColors.success : AppColors.textSecondary;
-    return Container(
-      key: Key('wo-row-${row.employeeId}'),
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(children: [
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(row.employeeName, style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
-            Text([row.employeeId, row.department, row.branch].where((s) => s.isNotEmpty).join(' · '), style: muted),
-            const SizedBox(height: 4),
-            // Web: pattern_name ?? "—"
-            Text(row.patternName ?? '—', style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
-            Text('Effective From ${row.effectiveFrom ?? '—'} · Effective To ${row.effectiveTo ?? '-'}', style: muted),
-          ]),
-        ),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(color: badge.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
-            child: Text(row.status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: badge)),
-          ),
-          if (canAssign)
-            TextButton.icon(
-              key: Key('wo-assign-${row.employeeId}'),
-              onPressed: onAssign,
-              icon: const Icon(Icons.edit_outlined, size: 14),
-              label: Text(row.isAssigned ? 'Change' : 'Assign'),
+              data: rows,
             ),
-        ]),
-      ]),
-    );
+          ),
+        ],
+      );
+    });
   }
 }
+
+/// Scroll-end room so the last card clears the floating voice assistant (a
+/// 96dp bubble drawn above the whole app) — content space, not a fixed bar.
+const double kWeeklyOffAssistantClearance = 96;
 
 /// Web "Assign Weekly Off Pattern" modal: pattern (pre-selected to the
 /// current one) and Effective From (today); pops with the employee's name
@@ -363,7 +374,9 @@ class _BulkAssignWeeklyOffSheetState extends ConsumerState<BulkAssignWeeklyOffSh
           'list needs to load first.',
           style: AppTextStyles.bodySmall.copyWith(fontSize: 13, color: AppColors.textSecondary),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
+        Text('Who', style: AppTextStyles.labelLarge.copyWith(fontSize: 13)),
+        const SizedBox(height: 8),
         AssignmentPicker(
           key: const Key('wo-bulk-branch'),
           label: 'Branch',
@@ -381,7 +394,16 @@ class _BulkAssignWeeklyOffSheetState extends ConsumerState<BulkAssignWeeklyOffSh
           options: [('', 'All Departments'), for (final d in departments) (d, d)],
           onChanged: _saving ? null : (v) => setState(() => _department = v),
         ),
-        const SizedBox(height: 12),
+        if (unrestricted && _branch.isEmpty && _department.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text('Choose a branch or a department to enable assignment.',
+                key: const Key('wo-bulk-hint'),
+                style: AppTextStyles.caption.copyWith(fontSize: 11.5, color: AppColors.textSecondary)),
+          ),
+        const SizedBox(height: 16),
+        Text('Weekly off', style: AppTextStyles.labelLarge.copyWith(fontSize: 13)),
+        const SizedBox(height: 8),
         AssignmentPicker(
           key: const Key('wo-bulk-pattern'),
           label: 'Weekly Off Pattern',

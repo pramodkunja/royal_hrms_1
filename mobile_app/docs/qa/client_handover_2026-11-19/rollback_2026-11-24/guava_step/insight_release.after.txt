@@ -1,0 +1,26 @@
+com.google.guava:guava:33.7.2-android
+  Variant androidRuntimeElements:
+    | Attribute Name                                  | Provided     | Requested    |
+    |-------------------------------------------------|--------------|--------------|
+    | org.gradle.dependency.bundling                  | external     |              |
+    | org.gradle.jvm.version                          | 8            |              |
+    | org.gradle.libraryelements                      | jar          |              |
+    | org.gradle.status                               | release      |              |
+    | org.gradle.category                             | library      | library      |
+    | org.gradle.jvm.environment                      | android      | android      |
+    | org.gradle.usage                                | java-runtime | java-runtime |
+    | com.android.build.api.attributes.AgpVersionAttr |              | 8.11.1       |
+    | com.android.build.api.attributes.BuildTypeAttr  |              | release      |
+    | org.jetbrains.kotlin.platform.type              |              | androidJvm   |
+   Selection reasons:
+      - By constraint: GHSA-xxph-c9ww-hj94 / CVE-2026-102554 is fixed in Guava 33.7.2
+      - By conflict resolution: between versions 33.7.2-android and 33.5.0-android
+
+com.google.guava:guava:33.7.2-android
+\--- releaseRuntimeClasspath
+
+com.google.guava:guava:33.5.0-android -> 33.7.2-android
+\--- project :camera_android_camerax
+     \--- releaseRuntimeClasspath
+
+A web-based, searchable dependency report is available by adding the --scan option.

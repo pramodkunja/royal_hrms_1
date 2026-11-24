@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/blue_hero_banner.dart';
-import '../../../../shared/widgets/stat_card.dart';
+import '../../../../shared/formatters/en_in_format.dart' show formatMoney;
+import '../../data/models/expense_model.dart' show ExpenseStats;
 import '../providers/expense_providers.dart';
 import '../widgets/expense_list_item.dart';
 import '../widgets/expense_form_sheet.dart';
@@ -36,7 +37,6 @@ class ExpenseScreen extends ConsumerWidget {
     final activeFilter = ref.watch(expenseCategoryFilterProvider);
     final listAsync = ref.watch(expenseListProvider);
     final statsAsync = ref.watch(expenseStatsProvider);
-    final stats = statsAsync.valueOrNull;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -87,9 +87,13 @@ class ExpenseScreen extends ConsumerWidget {
                 },
                 child: CustomScrollView(
                   slivers: [
-                    // ── Stats 2×2 grid ──────────────────────────────────────
+                    // ── Stats cards (web's five-card summary; see the section below) ─────────
                     SliverToBoxAdapter(
-                      child: _ExpenseStatsGrid(stats: stats),
+                      child: _ExpenseStatsSection(
+                        stats: statsAsync,
+                        categoryFiltered: activeFilter != 'all',
+                        onRetry: () => ref.invalidate(expenseStatsProvider),
+                      ),
                     ),
 
                     // ── Filter chips ────────────────────────────────────────
@@ -190,37 +194,76 @@ class ExpenseScreen extends ConsumerWidget {
   }
 }
 
-// ── Stats 2×2 grid ────────────────────────────────────────────────────────────
+// ── Stats cards ───────────────────────────────────────────────────────────────
+//
+// Mirrors web's ExpenseClaims summary (GET /expenses/stats/):
+//   Total Claims         ← total                      (count)
+//   Pending              ← pending      + pending_amount  when > 0 (₹, en-IN grouping)
+//   Approved             ← approved     + approved_amount when > 0 (₹, en-IN grouping)
+//   Rejected             ← rejected                   (count)
+//   Total Claimed Amount ← total_amount               (₹, "1.5L" / "12.5K" abbreviation)
+// Values come only from that response, never from the paginated list. While the request is
+// loading or refreshing, or after it failed, a card shows "—" (not the previous numbers, not
+// 0); an error says so and offers Retry.
 
-class _ExpenseStatsGrid extends StatelessWidget {
-  final dynamic stats;
-  const _ExpenseStatsGrid({required this.stats});
+/// Web `formatAmount`: ≥1 lakh → "₹1.5L", ≥1 thousand → "₹12.5K", else en-IN grouped with up
+/// to two decimals (never rounded to a whole rupee).
+String formatExpenseTotal(double n) {
+  if (n >= 100000) return '₹${(n / 100000).toStringAsFixed(1)}L';
+  if (n >= 1000) return '₹${(n / 1000).toStringAsFixed(1)}K';
+  return formatMoney(n);
+}
+
+class _ExpenseStatsSection extends StatelessWidget {
+  final AsyncValue<ExpenseStats> stats;
+  final bool categoryFiltered;
+  final VoidCallback onRetry;
+  const _ExpenseStatsSection({required this.stats, required this.categoryFiltered, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
-    final items = [
-      StatCard(
+    // Only a finished, successful response counts as current data.
+    final s = stats.isLoading ? null : stats.valueOrNull;
+    final failed = !stats.isLoading && stats.hasError;
+
+    String count(int? v) => v == null ? '—' : '$v';
+    String? sub(double? v) => v != null && v > 0 ? formatMoney(v) : null;
+
+    final cards = [
+      _StatTile(
+        key: const Key('expense-stat-total'),
         label: 'Total Claims',
-        valueText: stats != null ? '${stats.total}' : '—',
+        value: count(s?.total),
         icon: Icons.receipt_long_outlined,
         color: AppColors.primary,
       ),
-      StatCard(
+      _StatTile(
+        key: const Key('expense-stat-pending'),
         label: 'Pending',
-        valueText: stats != null ? '${stats.pending}' : '—',
+        value: count(s?.pending),
+        sub: sub(s?.pendingAmount),
         icon: Icons.access_time_outlined,
         color: const Color(0xFFB45309),
       ),
-      StatCard(
+      _StatTile(
+        key: const Key('expense-stat-approved'),
         label: 'Approved',
-        valueText: stats != null ? '${stats.approved}' : '—',
+        value: count(s?.approved),
+        sub: sub(s?.approvedAmount),
         icon: Icons.check_circle_outline,
         color: const Color(0xFF219653),
       ),
-      StatCard(
-        label: 'Total Amount',
-        valueText:
-            stats != null ? _fmtAmount(stats.totalAmount as double) : '—',
+      _StatTile(
+        key: const Key('expense-stat-rejected'),
+        label: 'Rejected',
+        value: count(s?.rejected),
+        icon: Icons.cancel_outlined,
+        color: AppColors.error,
+      ),
+      _StatTile(
+        key: const Key('expense-stat-amount'),
+        label: 'Total Claimed Amount',
+        value: s?.totalAmount == null ? '—' : formatExpenseTotal(s!.totalAmount!),
         icon: Icons.payments_outlined,
         color: AppColors.info,
       ),
@@ -228,22 +271,107 @@ class _ExpenseStatsGrid extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      child: GridView.count(
-        crossAxisCount: 2,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
-        childAspectRatio: 2.5,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        children: items,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (failed) ...[
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.4)),
+              ),
+              child: AppErrorState.forError(
+                stats.error!,
+                key: const Key('expense-stats-error'),
+                title: 'Could not load the summary',
+                onRetry: onRetry,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          LayoutBuilder(builder: (context, c) {
+            // One column at large text so labels and amounts keep whole words.
+            final large = MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3;
+            final cols = large ? 1 : (c.maxWidth >= 900 ? 5 : (c.maxWidth >= 560 ? 3 : 2));
+            const gap = 10.0;
+            final w = (c.maxWidth - gap * (cols - 1)) / cols;
+            return Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: [
+                for (var i = 0; i < cards.length; i++)
+                  // On a phone the last (amount) card takes the whole row.
+                  SizedBox(width: cols <= 2 && i == cards.length - 1 ? c.maxWidth : w, child: cards[i]),
+              ],
+            );
+          }),
+          if (categoryFiltered) ...[
+            const SizedBox(height: 8),
+            Text(
+              'These totals cover all claims in every category; the list below is filtered.',
+              key: const Key('expense-stats-scope-note'),
+              style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+            ),
+          ],
+        ],
       ),
     );
   }
+}
 
-  String _fmtAmount(double amount) {
-    if (amount >= 100000) return '₹${(amount / 100000).toStringAsFixed(1)}L';
-    if (amount >= 1000) return '₹${(amount / 1000).toStringAsFixed(1)}K';
-    return '₹${amount.toStringAsFixed(0)}';
+class _StatTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final String? sub;
+  final IconData icon;
+  final Color color;
+  const _StatTile({super.key, required this.label, required this.value, this.sub, required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final iconTile = Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(12)),
+      child: Icon(icon, size: 20, color: color),
+    );
+    final text = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // The figure is never clipped or truncated: it shrinks only if it cannot fit.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(value,
+              maxLines: 1,
+              style: TextStyle(
+                  fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary, height: 1.1, letterSpacing: -0.5)),
+        ),
+        const SizedBox(height: 3),
+        Text(label,
+            style: AppTextStyles.caption
+                .copyWith(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w500)),
+        if (sub != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(sub!,
+                style: AppTextStyles.caption.copyWith(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+          ),
+      ],
+    );
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Row(children: [iconTile, const SizedBox(width: 10), Expanded(child: text)]),
+    );
   }
 }
 
@@ -256,8 +384,10 @@ class _FilterChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Tall enough for the chip at the user's text size (50 at normal size).
+    final textScale = MediaQuery.textScalerOf(context).scale(10) / 10;
     return SizedBox(
-      height: 50,
+      height: 30 + 20 * textScale,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),

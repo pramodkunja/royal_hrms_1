@@ -230,11 +230,11 @@ Future<void> chooseMode(WidgetTester tester, String from, String to) async {
   await tester.pumpAndSettle();
 }
 
+// Task 110: the interviewer is chosen from a list that opens straight away (no search first).
 Future<void> pickInterviewer(WidgetTester tester) async {
-  final field = find.descendant(of: byKey('candidate-interviewer'), matching: find.byType(TextField));
+  final field = byKey('candidate-interviewer');
   await tester.ensureVisible(field);
-  await tester.enterText(field, 'pic');
-  await tester.pump(const Duration(milliseconds: 350));
+  await tester.tap(field);
   await tester.pumpAndSettle();
   await tester.tap(find.text('Picked Interviewer'));
   await tester.pumpAndSettle();
@@ -399,10 +399,11 @@ void main() {
       expect(byKey('candidate-meeting-link'), findsNothing);
       await tester.tap(byKey('candidate-interview-time-clear'));
       await tester.pumpAndSettle();
-      final clearInterviewer =
-          find.descendant(of: byKey('candidate-interviewer'), matching: find.byIcon(Icons.close));
-      await tester.ensureVisible(clearInterviewer);
-      await tester.tap(clearInterviewer);
+      // Task 110: web's "— Select interviewer —" option is the "No interviewer" row.
+      await tester.ensureVisible(byKey('candidate-interviewer'));
+      await tester.tap(byKey('candidate-interviewer'));
+      await tester.pumpAndSettle();
+      await tester.tap(byKey('interviewer-none'));
       await tester.pumpAndSettle();
       await save(tester, 'Save Changes');
       final b = server.writes('PUT').single;

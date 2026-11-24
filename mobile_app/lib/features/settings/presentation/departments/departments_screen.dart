@@ -77,7 +77,7 @@ class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen> {
       context: context,
       barrierDismissible: false,
       builder: (_) => Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 80),
+        insetPadding: _dialogInset(context),
         backgroundColor: Colors.transparent,
         elevation: 0,
         child: DeptFormSheet(department: dept, ref: ref),
@@ -91,11 +91,10 @@ class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen> {
       context: context,
       barrierDismissible: false,
       builder: (_) => Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 80),
+        insetPadding: _dialogInset(context),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        child: DesigFormSheet(
-            designation: desig, ref: ref, defaultDeptId: defaultDeptId),
+        child: DesigFormSheet(designation: desig, defaultDeptId: defaultDeptId),
       ),
     );
   }
@@ -163,55 +162,55 @@ class _Body extends ConsumerWidget {
             .where((d) => d.name.toLowerCase().contains(query.toLowerCase()))
             .toList();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
-          child: SettingsPageHeader(
-            icon: Icons.account_tree_outlined,
-            title: 'Depts & Designations',
-            subtitle: 'Organise your company structure and manage job titles',
+    // One scroll: the header, stats and search used to sit above the list in a fixed
+    // Column, which overflowed at large text on small screens and left the list a sliver.
+    return ListView.builder(
+      key: const Key('dept-list'),
+      padding: const EdgeInsets.only(bottom: 88),
+      itemCount: 3 + (filtered.isEmpty ? 1 : filtered.length),
+      itemBuilder: (_, i) {
+        if (i == 0) {
+          return const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: SettingsPageHeader(
+              icon: Icons.account_tree_outlined,
+              title: 'Depts & Designations',
+              subtitle: 'Organise your company structure and manage job titles',
+            ),
+          );
+        }
+        if (i == 1) return _StatsRow(depts: depts, desigCount: allDesigs.length);
+        if (i == 2) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+            child: _SearchBar(controller: searchCtrl, onChanged: onQueryChanged),
+          );
+        }
+        if (filtered.isEmpty) return _EmptyView(onAdd: canEdit ? () => onEditDept(null) : null);
+        final dept = filtered[i - 3];
+        final deptDesigs = allDesigns(allDesigs, dept.id);
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+          child: DeptListItem(
+            canEdit: canEdit,
+            dept: dept,
+            isExpanded: selectedDeptId == dept.id,
+            designations: deptDesigs,
+            onTap: () => onSelectDept(dept.id),
+            onEdit: () => onEditDept(dept),
+            onDelete: () => onDeleteDept(dept),
+            onAddDesig: () => onAddDesig(dept.id),
+            onEditDesig: onEditDesig,
+            onDeleteDesig: onDeleteDesig,
           ),
-        ),
-        _StatsRow(depts: depts, desigCount: allDesigs.length),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-          child: _SearchBar(controller: searchCtrl, onChanged: onQueryChanged),
-        ),
-        Expanded(
-          child: filtered.isEmpty
-              ? _EmptyView(onAdd: canEdit ? () => onEditDept(null) : null)
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 88),
-                  itemCount: filtered.length,
-                  itemBuilder: (_, i) {
-                    final dept = filtered[i];
-                    final deptDesigs = allDesigs
-                        .where((d) => d.departmentId == dept.id)
-                        .toList();
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: DeptListItem(
-                        canEdit: canEdit,
-                        dept: dept,
-                        isExpanded: selectedDeptId == dept.id,
-                        designations: deptDesigs,
-                        onTap: () => onSelectDept(dept.id),
-                        onEdit: () => onEditDept(dept),
-                        onDelete: () => onDeleteDept(dept),
-                        onAddDesig: () => onAddDesig(dept.id),
-                        onEditDesig: onEditDesig,
-                        onDeleteDesig: onDeleteDesig,
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
+
+List<DesignationModel> allDesigns(List<DesignationModel> all, int deptId) =>
+    all.where((d) => d.departmentId == deptId).toList();
 
 // ── Stats row ─────────────────────────────────────────────────────────────────
 
@@ -375,6 +374,14 @@ class _ErrorView extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Dialog margin: roomy on a normal phone, tight on a short screen or at large text so the
+/// form keeps most of the height (it scrolls inside).
+EdgeInsets _dialogInset(BuildContext context) {
+  final media = MediaQuery.of(context);
+  final tight = media.size.height < 700 || media.textScaler.scale(10) / 10 > 1.3;
+  return EdgeInsets.symmetric(horizontal: tight ? 12 : 20, vertical: tight ? 12 : 80);
 }
 
 // ── Shared utilities ──────────────────────────────────────────────────────────

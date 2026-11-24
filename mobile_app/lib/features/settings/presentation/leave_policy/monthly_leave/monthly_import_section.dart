@@ -139,34 +139,23 @@ class _MonthlyImportSectionState extends ConsumerState<MonthlyImportSection> {
             _result = null;
           }),
         ),
-        const SizedBox(height: 10),
-        Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          for (final f in const ['csv', 'xlsx'])
-            OutlinedButton.icon(
-              key: Key('import-sample-$f'),
-              onPressed: _sampleBusy != null ? null : () => _sample(f),
-              icon: const Icon(Icons.download_outlined, size: 16),
-              label: Text(_sampleBusy == f ? 'Downloading…' : (f == 'csv' ? 'Sample CSV' : 'Sample Excel')),
-            ),
-          OutlinedButton.icon(
-            key: const Key('import-choose-file'),
-            onPressed: _busy != null ? null : _pick,
-            icon: const Icon(Icons.upload_file_outlined, size: 16),
-            label: Text(_file != null ? 'Choose another file' : 'Choose CSV / Excel file'),
-          ),
-          if (_file != null) Text(_file!.name, key: const Key('import-file-name'), style: AppTextStyles.bodySmall),
-        ]),
+        const SizedBox(height: 12),
+        _fileControls(),
         if (_error != null) ...[
           const SizedBox(height: 10),
           MonthlyAlert(key: const Key('import-error'), kind: MonthlyAlertKind.error, text: _error!),
         ],
         const SizedBox(height: 12),
         if (preview == null && result == null)
-          FilledButton.icon(
-            key: const Key('import-preview'),
-            onPressed: _file == null || _busy != null ? null : () => _send(dryRun: true),
-            icon: _busy == 'preview' ? monthlySpinner() : const Icon(Icons.visibility_outlined, size: 16),
-            label: Text(_busy == 'preview' ? 'Checking…' : 'Preview'),
+          MonthlyActionBar(
+            alignEnd: false,
+            primary: FilledButton.icon(
+              key: const Key('import-preview'),
+              style: monthlyFilledStyle,
+              onPressed: _file == null || _busy != null ? null : () => _send(dryRun: true),
+              icon: _busy == 'preview' ? monthlySpinner() : const Icon(Icons.visibility_outlined, size: 16),
+              label: Text(_busy == 'preview' ? 'Checking…' : 'Preview'),
+            ),
           ),
         if (preview != null) ...[
           MonthlyAlert(
@@ -181,16 +170,21 @@ class _MonthlyImportSectionState extends ConsumerState<MonthlyImportSection> {
           AnnualWarning(types: annualWarningTypes(preview.rows, preview.annualEntitlements)),
           const SizedBox(height: 8),
           MonthlyRowsList(rows: preview.rows),
-          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            TextButton(onPressed: _busy != null ? null : _reset, child: const Text('Cancel')),
-            const SizedBox(width: 8),
-            FilledButton.icon(
+          const SizedBox(height: 4),
+          MonthlyActionBar(
+            secondary: TextButton(
+              style: monthlyTextStyle,
+              onPressed: _busy != null ? null : _reset,
+              child: const Text('Cancel'),
+            ),
+            primary: FilledButton.icon(
               key: const Key('import-confirm'),
+              style: monthlyFilledStyle,
               onPressed: _busy != null || preview.applicable == 0 ? null : () => _send(dryRun: false),
               icon: _busy == 'import' ? monthlySpinner() : const Icon(Icons.check, size: 16),
               label: Text(_busy == 'import' ? 'Importing…' : 'Confirm import (${preview.applicable})'),
             ),
-          ]),
+          ),
         ],
         if (result != null) ...[
           MonthlyAlert(
@@ -202,9 +196,74 @@ class _MonthlyImportSectionState extends ConsumerState<MonthlyImportSection> {
           ),
           const SizedBox(height: 8),
           MonthlyRowsList(rows: result.rows),
-          TextButton(key: const Key('import-another'), onPressed: _reset, child: const Text('Import another file')),
+          const SizedBox(height: 4),
+          MonthlyActionBar(
+            alignEnd: false,
+            primary: TextButton(
+              key: const Key('import-another'),
+              style: monthlyTextStyle,
+              onPressed: _reset,
+              child: const Text('Import another file'),
+            ),
+          ),
         ],
       ],
     );
+  }
+
+  /// Sample downloads, file chooser and the chosen file's chip: a wrapping row
+  /// of ≥44dp buttons, full width and stacked when narrow or text is large.
+  Widget _fileControls() {
+    final sampleButtons = [
+      for (final f in const ['csv', 'xlsx'])
+        OutlinedButton.icon(
+          key: Key('import-sample-$f'),
+          style: monthlyOutlinedStyle,
+          onPressed: _sampleBusy != null ? null : () => _sample(f),
+          icon: const Icon(Icons.download_outlined, size: 16),
+          label: Text(_sampleBusy == f ? 'Downloading…' : (f == 'csv' ? 'Sample CSV' : 'Sample Excel')),
+        ),
+    ];
+    final choose = OutlinedButton.icon(
+      key: const Key('import-choose-file'),
+      style: monthlyOutlinedStyle,
+      onPressed: _busy != null ? null : _pick,
+      icon: const Icon(Icons.upload_file_outlined, size: 16),
+      label: Text(_file != null ? 'Choose another file' : 'Choose CSV / Excel file'),
+    );
+    final chip = _file == null
+        ? null
+        : Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.backgroundLow,
+              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(children: [
+              Icon(Icons.insert_drive_file_outlined, size: 18, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _file!.name,
+                  key: const Key('import-file-name'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodySmall,
+                ),
+              ),
+            ]),
+          );
+    return LayoutBuilder(builder: (context, c) {
+      final compact = monthlyCompact(context, c.maxWidth, narrow: 440, scale: 1.15);
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (compact) ...[
+          for (final b in sampleButtons) ...[b, const SizedBox(height: 8)],
+          choose,
+        ] else
+          Wrap(spacing: 8, runSpacing: 8, children: [...sampleButtons, choose]),
+        if (chip != null) ...[const SizedBox(height: 8), chip],
+      ]);
+    });
   }
 }

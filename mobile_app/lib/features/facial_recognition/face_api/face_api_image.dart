@@ -23,7 +23,9 @@ class RgbaBuffer {
   factory RgbaBuffer.fromImage(img.Image source) {
     final upright = img.bakeOrientation(source);
     final rgba = upright.convert(format: img.Format.uint8, numChannels: 4, alpha: 255);
-    return RgbaBuffer(rgba.width, rgba.height, Uint8List.fromList(rgba.getBytes(order: img.ChannelOrder.rgba)));
+    // `rgba` is private to this call, so its byte buffer is used directly
+    // (no second copy).
+    return RgbaBuffer(rgba.width, rgba.height, rgba.getBytes(order: img.ChannelOrder.rgba));
   }
 
   final int width;
@@ -64,18 +66,44 @@ double _bilinear(RgbaBuffer s, double sx, double sy, int c) {
 
 /// web grabVideoFrame(video, canvas, maxWidth): the frame redrawn at most
 /// [maxWidth] wide (aspect kept, rounded dimensions).
-RgbaBuffer scaleToMaxWidth(RgbaBuffer src, int maxWidth) {
-  if (src.width <= maxWidth) return RgbaBuffer(src.width, src.height, Uint8List.fromList(src.data));
+RgbaBuffer scaleToMaxWidth(RgbaBuffer src, int maxWidth, {bool copyIfUnscaled = true}) {
+  if (src.width <= maxWidth) {
+    return copyIfUnscaled ? RgbaBuffer(src.width, src.height, Uint8List.fromList(src.data)) : src;
+  }
   final scale = maxWidth / src.width;
   final w = (src.width * scale).round();
   final h = (src.height * scale).round();
   final out = RgbaBuffer.blank(w, h);
   final sx = src.width / w, sy = src.height / h;
+  // Per-column source positions and weights are the same for every row.
+  final xa = Int32List(w), xb = Int32List(w);
+  final ax = Float64List(w);
+  for (var x = 0; x < w; x++) {
+    final fx = (x + 0.5) * sx - 0.5;
+    final x0 = fx.floor();
+    ax[x] = fx - x0;
+    xa[x] = x0 < 0 ? 0 : (x0 >= src.width ? src.width - 1 : x0);
+    final x1 = x0 + 1;
+    xb[x] = x1 < 0 ? 0 : (x1 >= src.width ? src.width - 1 : x1);
+  }
+  final d = src.data;
   for (var y = 0; y < h; y++) {
+    final fy = (y + 0.5) * sy - 0.5;
+    final y0 = fy.floor();
+    final ay = fy - y0;
+    final ya = y0 < 0 ? 0 : (y0 >= src.height ? src.height - 1 : y0);
+    final y1 = y0 + 1;
+    final yb = y1 < 0 ? 0 : (y1 >= src.height ? src.height - 1 : y1);
+    final rowA = ya * src.width, rowB = yb * src.width;
     for (var x = 0; x < w; x++) {
       final o = (y * w + x) * 4;
+      final ia = (rowA + xa[x]) * 4, ib = (rowA + xb[x]) * 4, ic = (rowB + xa[x]) * 4, id = (rowB + xb[x]) * 4;
+      final wx = ax[x];
       for (var c = 0; c < 3; c++) {
-        out.data[o + c] = _bilinear(src, (x + 0.5) * sx, (y + 0.5) * sy, c).round().clamp(0, 255);
+        final p00 = d[ia + c], p10 = d[ib + c], p01 = d[ic + c], p11 = d[id + c];
+        final top = p00 + (p10 - p00) * wx;
+        final bottom = p01 + (p11 - p01) * wx;
+        out.data[o + c] = (top + (bottom - top) * ay).round().clamp(0, 255);
       }
       out.data[o + 3] = 255;
     }
@@ -174,22 +202,30 @@ RgbaBuffer applyClahe(RgbaBuffer b, {int tileSize = _kTile, double clipLimit = _
     }
     return mapping;
   });
+  // Per-column tile indices and weights do not depend on the row.
+  final colTx0 = Int32List(width), colTx1 = Int32List(width);
+  final colWx = Float64List(width);
+  for (var x = 0; x < width; x++) {
+    final tx = x / tileSize - 0.5;
+    final tx0 = math.min(tilesX - 1, math.max(0, tx.floor()));
+    colTx0[x] = tx0;
+    colTx1[x] = math.min(tilesX - 1, math.max(0, tx0 + 1));
+    colWx[x] = math.min(1.0, math.max(0.0, tx - tx.floor()));
+  }
   for (var y = 0; y < height; y++) {
     final ty = y / tileSize - 0.5;
     final ty0 = math.min(tilesY - 1, math.max(0, ty.floor()));
     final ty1 = math.min(tilesY - 1, math.max(0, ty0 + 1));
     final wy = math.min(1.0, math.max(0.0, ty - ty.floor()));
+    final rowA = ty0 * tilesX, rowB = ty1 * tilesX;
     for (var x = 0; x < width; x++) {
-      final tx = x / tileSize - 0.5;
-      final tx0 = math.min(tilesX - 1, math.max(0, tx.floor()));
-      final tx1 = math.min(tilesX - 1, math.max(0, tx0 + 1));
-      final wx = math.min(1.0, math.max(0.0, tx - tx.floor()));
+      final wx = colWx[x];
       final oldY = lum[y * width + x];
       final bin = math.min(_kBins - 1, math.max(0, _roundJs(oldY)));
-      final m00 = mappings[ty0 * tilesX + tx0][bin];
-      final m10 = mappings[ty0 * tilesX + tx1][bin];
-      final m01 = mappings[ty1 * tilesX + tx0][bin];
-      final m11 = mappings[ty1 * tilesX + tx1][bin];
+      final m00 = mappings[rowA + colTx0[x]][bin];
+      final m10 = mappings[rowA + colTx1[x]][bin];
+      final m01 = mappings[rowB + colTx0[x]][bin];
+      final m11 = mappings[rowB + colTx1[x]][bin];
       final top = m00 * (1 - wx) + m10 * wx;
       final bottom = m01 * (1 - wx) + m11 * wx;
       final newY = top * (1 - wy) + bottom * wy;

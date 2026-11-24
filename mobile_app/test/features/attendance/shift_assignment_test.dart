@@ -174,7 +174,8 @@ List<Override> overrides(UserEntity u) => [
       shiftAssignmentClockProvider.overrideWithValue(() => today),
     ];
 
-Future<void> pump(WidgetTester tester, {UserEntity? as, void Function(Server)? setup}) async {
+Future<void> pump(WidgetTester tester,
+    {UserEntity? as, void Function(Server)? setup, bool settle = true}) async {
   // Wide enough for all six attendance tabs to be on screen without scrolling the tab bar.
   tester.view.physicalSize = const Size(1600, 4000);
   tester.view.devicePixelRatio = 1;
@@ -188,7 +189,14 @@ Future<void> pump(WidgetTester tester, {UserEntity? as, void Function(Server)? s
   await tester.pumpAndSettle();
   // Tapped in place: scrolling the screen first would collapse its header.
   await tester.tap(find.text('Shift Assignment'));
-  await tester.pumpAndSettle();
+  // While a list is held the loading spinner animates forever: pump by hand.
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+  }
 }
 
 /// Picks [option] from a dropdown. The tab's own filters are already on
@@ -257,8 +265,8 @@ void main() {
       expect(find.text('General / Default'), findsOneWidget);
       expect(find.text('Effective From 2026-10-01 · Effective To -'), findsOneWidget);
       expect(find.text('Effective From — · Effective To -'), findsOneWidget);
-      expect(find.widgetWithText(TextButton, 'Change'), findsOneWidget);
-      expect(find.widgetWithText(TextButton, 'Assign'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'Change shift'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'Assign shift'), findsOneWidget);
       expect(find.byKey(const Key('shift-bulk-open')), findsOneWidget);
     });
 
@@ -297,7 +305,7 @@ void main() {
       await pump(tester, setup: (s) {
         s.rows = [];
         s.holdList = Completer();
-      });
+      }, settle: false);
       expect(find.byKey(const Key('shift-loading')), findsOneWidget);
       server.holdList!.complete();
       await tester.pumpAndSettle();

@@ -30,10 +30,22 @@ class _MonthlyLeaveTabState extends State<MonthlyLeaveTab> with AutomaticKeepAli
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return ListView(
+    // One scroll view for the whole tab; on tablets the column is centred and
+    // capped (≈720dp) so cards never stretch across the screen.
+    return LayoutBuilder(builder: (context, c) {
+      final side = c.maxWidth > 744 ? (c.maxWidth - 720) / 2 : 12.0;
+      return _body(EdgeInsets.fromLTRB(side, 12, side, 24 + MediaQuery.paddingOf(context).bottom));
+    });
+  }
+
+  Widget _body(EdgeInsets padding) {
+    // A plain scroll view (not a lazy list) so a card's state - file chosen,
+    // preview, selection - survives scrolling far away from it.
+    return SingleChildScrollView(
       key: const Key('monthly-leave-tab'),
-      padding: const EdgeInsets.all(12),
-      children: [
+      padding: padding,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         MonthlyCollapsibleCard(
           key: const Key('monthly-card-import'),
           icon: Icons.upload_file_outlined,
@@ -61,7 +73,7 @@ class _MonthlyLeaveTabState extends State<MonthlyLeaveTab> with AutomaticKeepAli
           onToggle: () => setState(() => _assignOpen = !_assignOpen),
           child: MonthlyAssignmentsSection(open: _assignOpen),
         ),
-      ],
+      ]),
     );
   }
 }

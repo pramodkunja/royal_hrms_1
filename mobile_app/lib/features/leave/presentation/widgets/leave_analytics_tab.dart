@@ -3,11 +3,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/app_error_state.dart';
+import '../../../../core/permissions/permission_providers.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../providers/leave_providers.dart';
 
-// ── Widget — mirrors web's LeaveAnalytics.tsx: KPI cards, real leave balance
-// breakdown (stats.balances), and request status distribution. No mock data.
+// ── Widget — mirrors web's LeaveAnalytics.tsx (GET /leave/stats/?year=<calendar year>):
+//   Total Requests   ← total
+//   Approved         ← approved
+//   Pending Approval ← pending           (backend: pending + L2-pending)
+//   Rejected         ← rejected
+//   Loss of Pay (LOP)← lop_days          (backend: approved requests only) + lop_requests
+// then the leave balance breakdown (stats.balances, own-scope views only) and the request
+// status distribution (approved / pending / rejected / cancelled, % of total).
+//
+// Values come only from that response. While it loads, the cards show "…"; after a failure the
+// tab shows an error (or Access denied) with Retry — never the previous numbers; a field the
+// server did not send as a number shows "—" (unavailable), while a real 0 shows 0.
+// There are no user-selectable filters on web (the year is the calendar year, the scope follows
+// the user's permissions on the server), so none are offered here.
 
 class LeaveAnalyticsTab extends ConsumerWidget {
   const LeaveAnalyticsTab({super.key});
@@ -15,38 +28,70 @@ class LeaveAnalyticsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final statsAsync = ref.watch(leaveStatsProvider);
-    final stats = statsAsync.valueOrNull;
-    final currentYear = stats?.year ?? ref.watch(leaveDashboardYearProvider);
-    // AsyncValue.isLoading/valueOrNull alone can't distinguish "still
-    // loading" from "failed" — without this check, a failed fetch (network
-    // error, transient 5xx, etc.) fell through to the same zero-filled KPI
-    // cards and "No leave balance data" empty state as a genuinely empty
-    // account, so the tab looked blank/broken with no way to tell why or
-    // retry (unlike TeamCalendarTab, which already has a dedicated error
-    // view for leaveCalendarProvider). Only treat it as a hard error when
-    // there's no previously-loaded data to keep showing.
-    final hasError = statsAsync.hasError && stats == null;
+    final loading = statsAsync.isLoading;
+    final failed = !loading && statsAsync.hasError;
+    // Only a finished, successful response counts as current data.
+    final stats = loading || failed ? null : statsAsync.valueOrNull;
+    final year = stats != null && stats.year > 0 ? stats.year : ref.watch(leaveDashboardYearProvider);
 
-    final totalLabel = statsAsync.isLoading ? '…' : '${stats?.total ?? 0}';
-    final pendingLabel = statsAsync.isLoading ? '…' : '${stats?.pending ?? 0}';
-    final approvedLabel =
-        statsAsync.isLoading ? '…' : '${stats?.approved ?? 0}';
-    final rejectedLabel =
-        statsAsync.isLoading ? '…' : '${stats?.rejected ?? 0}';
+    // Web: an employee (own figures + balances) is decided by permissions, not the role name —
+    // someone without leave.approve who manages no team or branch.
+    final user = ref.watch(authStateProvider).valueOrNull?.user;
+    final canApprove = ref.watch(permissionProvider('leave.approve'));
+    final isEmployee = !canApprove && !(user?.canManageTeam ?? false) && !(user?.canManageBranch ?? false);
+
+    String count(String key, int value) => stats == null ? '…' : (stats.unavailable.contains(key) ? '—' : '$value');
+    String sub(String key, String text) => stats != null && stats.unavailable.contains(key) ? 'Unavailable' : text;
+    final yearSub = 'This year ($year)';
+
+    final lopRequests = stats?.lopRequests ?? 0;
+    final cards = [
+      _KpiCard(
+          key: const Key('leave-stat-total'),
+          icon: Icons.beach_access_outlined,
+          color: AppColors.primary,
+          label: 'Total Requests',
+          value: count('total', stats?.total ?? 0),
+          sub: sub('total', yearSub)),
+      _KpiCard(
+          key: const Key('leave-stat-approved'),
+          icon: Icons.check_circle_outline,
+          color: AppColors.success,
+          label: 'Approved',
+          value: count('approved', stats?.approved ?? 0),
+          sub: sub('approved', yearSub)),
+      _KpiCard(
+          key: const Key('leave-stat-pending'),
+          icon: Icons.access_time_outlined,
+          color: AppColors.warning,
+          label: 'Pending Approval',
+          value: count('pending', stats?.pending ?? 0),
+          sub: sub('pending', yearSub)),
+      _KpiCard(
+          key: const Key('leave-stat-rejected'),
+          icon: Icons.event_busy_outlined,
+          color: AppColors.error,
+          label: 'Rejected',
+          value: count('rejected', stats?.rejected ?? 0),
+          sub: sub('rejected', yearSub)),
+      _KpiCard(
+          key: const Key('leave-stat-lop'),
+          icon: Icons.money_off_csred_outlined,
+          color: AppColors.warning,
+          label: 'Loss of Pay (LOP)',
+          value: stats == null
+              ? '…'
+              : (stats.unavailable.contains('lop_days') ? '—' : _fmt(stats.lopDays)),
+          sub: stats == null
+              ? ''
+              : (stats.unavailable.contains('lop_requests')
+                  ? 'Unavailable'
+                  : '$lopRequests request${lopRequests != 1 ? 's' : ''} in $year')),
+    ];
 
     final totalAll = stats?.total ?? 0;
+    final totalKnown = stats != null && !stats.unavailable.contains('total');
     final balances = stats?.balances ?? [];
-    // Backend's LeaveStatsView only ever populates `balances` for own-scope
-    // requests (see LeaveStatsView.get — `own_scope` gates `balance_data`);
-    // for an approver (manager/hr_admin/system_admin) hitting this same
-    // endpoint with no `?scope=own`/`?employee_id=`, balances is *always*
-    // empty by design (mirrors web's LeaveAnalytics.tsx, which gates its
-    // identical empty-state card on `isEmployee`). Showing "Contact HR to
-    // credit your annual leave" to an HR/manager/admin about their own
-    // approver-scope view is nonsensical — only employees should see it.
-    final role =
-        ref.watch(authStateProvider).valueOrNull?.user?.role ?? 'employee';
-    final isEmployee = role == 'employee';
 
     return RefreshIndicator(
       color: AppColors.primary,
@@ -54,166 +99,126 @@ class LeaveAnalyticsTab extends ConsumerWidget {
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 96),
-        child: hasError
-            ? AppErrorState(
+        child: failed
+            ? AppErrorState.forError(
+                statsAsync.error!,
+                key: const Key('leave-analytics-error'),
                 title: 'Failed to load leave analytics.',
-                message: friendlyLeaveError(statsAsync.error!),
                 padding: const EdgeInsets.symmetric(vertical: 80),
                 onRetry: () => refreshLeaveStats(ref),
               )
             : Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── KPI cards 2×2 ──────────────────────────────────────────────────
-            Row(
-              children: [
-                Expanded(
-                    child: _KpiCard(
-                        icon: Icons.beach_access_outlined,
-                        color: AppColors.primary,
-                        label: 'Total Requests',
-                        value: totalLabel,
-                        sub: 'This year ($currentYear)')),
-                const SizedBox(width: 10),
-                Expanded(
-                    child: _KpiCard(
-                        icon: Icons.check_circle_outline,
-                        color: AppColors.success,
-                        label: 'Approved',
-                        value: approvedLabel,
-                        sub: 'This year ($currentYear)')),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                    child: _KpiCard(
-                        icon: Icons.access_time_outlined,
-                        color: AppColors.warning,
-                        label: 'Pending Approval',
-                        value: pendingLabel,
-                        sub: 'This year ($currentYear)')),
-                const SizedBox(width: 10),
-                Expanded(
-                    child: _KpiCard(
-                        icon: Icons.event_busy_outlined,
-                        color: AppColors.error,
-                        label: 'Rejected',
-                        value: rejectedLabel,
-                        sub: 'This year ($currentYear)')),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            if (statsAsync.isLoading)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 40),
-                child: Center(
-                    child: CircularProgressIndicator(color: AppColors.primary)),
-              )
-            else ...[
-              // ── Leave Balance Breakdown ───────────────────────────────────────
-              if (balances.isNotEmpty)
-                _SectionCard(
-                  title: 'Leave Balance Breakdown',
-                  icon: Icons.bar_chart_outlined,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: balances.map((b) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 14),
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LayoutBuilder(builder: (context, c) {
+                    final large = MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3;
+                    // One column at large text so labels and figures keep whole words.
+                    final cols = large ? 1 : (c.maxWidth >= 900 ? 5 : (c.maxWidth >= 560 ? 3 : 2));
+                    const gap = 10.0;
+                    final w = (c.maxWidth - gap * (cols - 1)) / cols;
+                    return Wrap(
+                      spacing: gap,
+                      runSpacing: gap,
+                      children: [
+                        for (var i = 0; i < cards.length; i++)
+                          // Two across on a phone; the odd last card takes the whole row.
+                          SizedBox(width: cols == 2 && i == cards.length - 1 ? c.maxWidth : w, child: cards[i]),
+                      ],
+                    );
+                  }),
+                  const SizedBox(height: 16),
+                  if (loading)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 40),
+                      child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+                    )
+                  else ...[
+                    // ── Leave Balance Breakdown ─────────────────────────────────────
+                    if (balances.isNotEmpty)
+                      _SectionCard(
+                        title: 'Leave Balance Breakdown',
+                        icon: Icons.bar_chart_outlined,
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(b.leaveTypeDisplay,
-                                      style: AppTextStyles.caption.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.textPrimary)),
-                                ),
-                                Text(
-                                  '${_fmt(b.usedDays)} used / ${_fmt(b.totalDays)} total',
-                                  style: AppTextStyles.caption
-                                      .copyWith(fontSize: 10),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 5),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: LinearProgressIndicator(
-                                value: b.pct,
-                                minHeight: 8,
-                                backgroundColor: AppColors.backgroundLow,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                    AppColors.primary),
+                          children: balances.map((b) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Wrap(
+                                    alignment: WrapAlignment.spaceBetween,
+                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                    spacing: 8,
+                                    children: [
+                                      Text(b.leaveTypeDisplay,
+                                          style: AppTextStyles.caption
+                                              .copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                                      Text(
+                                        '${_fmt(b.usedDays)} used / ${_fmt(b.totalDays)} total',
+                                        style: AppTextStyles.caption.copyWith(fontSize: 10),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 5),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value: b.pct,
+                                      minHeight: 8,
+                                      backgroundColor: AppColors.backgroundLow,
+                                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text('${_fmt(b.available)} remaining',
+                                      style: AppTextStyles.caption
+                                          .copyWith(fontSize: 10, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                                ],
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text('${_fmt(b.available)} remaining',
-                                style: AppTextStyles.caption.copyWith(
-                                    fontSize: 10,
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.w600)),
+                            );
+                          }).toList(),
+                        ),
+                      )
+                    else if (isEmployee)
+                      _EmptyCard(
+                        icon: Icons.bar_chart_outlined,
+                        message: 'No leave balance data for $year. Contact HR to credit your annual leave.',
+                      ),
+                    const SizedBox(height: 14),
+
+                    // ── Request Status Distribution ─────────────────────────────────
+                    if (totalKnown && totalAll > 0)
+                      _SectionCard(
+                        title: 'Request Status Distribution',
+                        icon: Icons.donut_large_outlined,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (final r in [
+                              ('Approved', 'approved', stats.approved, AppColors.success),
+                              ('Pending', 'pending', stats.pending, AppColors.warning),
+                              ('Rejected', 'rejected', stats.rejected, AppColors.error),
+                              ('Cancelled', 'cancelled', stats.cancelled, AppColors.textSecondary),
+                            ])
+                              _StatusRow(
+                                  label: r.$1,
+                                  value: stats.unavailable.contains(r.$2) ? null : r.$3,
+                                  total: totalAll,
+                                  color: r.$4),
                           ],
                         ),
-                      );
-                    }).toList(),
-                  ),
-                )
-              else if (isEmployee)
-                _EmptyCard(
-                  icon: Icons.bar_chart_outlined,
-                  message:
-                      'No leave balance data for $currentYear. Contact HR to credit your annual leave.',
-                ),
-              const SizedBox(height: 14),
-
-              // ── Request Status Distribution ───────────────────────────────────
-              if (totalAll > 0)
-                _SectionCard(
-                  title: 'Request Status Distribution',
-                  icon: Icons.donut_large_outlined,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _StatusRow(
-                          label: 'Approved',
-                          value: stats?.approved ?? 0,
-                          total: totalAll,
-                          color: AppColors.success),
-                      _StatusRow(
-                          label: 'Pending',
-                          value: stats?.pending ?? 0,
-                          total: totalAll,
-                          color: AppColors.warning),
-                      _StatusRow(
-                          label: 'Rejected',
-                          value: stats?.rejected ?? 0,
-                          total: totalAll,
-                          color: AppColors.error),
-                      _StatusRow(
-                          label: 'Cancelled',
-                          value: stats?.cancelled ?? 0,
-                          total: totalAll,
-                          color: AppColors.textSecondary),
-                    ],
-                  ),
-                ),
-            ],
-          ],
-        ),
+                      ),
+                  ],
+                ],
+              ),
       ),
     );
   }
 
-  static String _fmt(double v) =>
-      v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
+  static String _fmt(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
 }
 
 // ── Sub-widgets ───────────────────────────────────────────────────────────────
@@ -225,7 +230,8 @@ class _KpiCard extends StatelessWidget {
   final String value;
   final String sub;
   const _KpiCard(
-      {required this.icon,
+      {super.key,
+      required this.icon,
       required this.color,
       required this.label,
       required this.value,
@@ -258,20 +264,18 @@ class _KpiCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value,
-                    style: AppTextStyles.h3.copyWith(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary)),
-                Text(label,
-                    style: AppTextStyles.caption.copyWith(fontSize: 10),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-                Text(sub,
-                    style: AppTextStyles.caption
-                        .copyWith(fontSize: 9, color: AppColors.textHint),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                // The figure is never clipped or truncated: it shrinks only if it cannot fit.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(value,
+                      maxLines: 1,
+                      style: AppTextStyles.h3.copyWith(
+                          fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                ),
+                Text(label, style: AppTextStyles.caption.copyWith(fontSize: 10)),
+                if (sub.isNotEmpty)
+                  Text(sub, style: AppTextStyles.caption.copyWith(fontSize: 9, color: AppColors.textHint)),
               ],
             ),
           ),
@@ -306,7 +310,7 @@ class _SectionCard extends StatelessWidget {
               children: [
                 Icon(icon, size: 15, color: AppColors.primary),
                 const SizedBox(width: 6),
-                Text(title, style: AppTextStyles.label),
+                Expanded(child: Text(title, style: AppTextStyles.label)),
               ],
             ),
           ),
@@ -352,7 +356,7 @@ class _EmptyCard extends StatelessWidget {
 
 class _StatusRow extends StatelessWidget {
   final String label;
-  final int value;
+  final int? value; // null = unavailable
   final int total;
   final Color color;
   const _StatusRow(
@@ -363,7 +367,8 @@ class _StatusRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pct = total > 0 ? (value / total * 100).round() : 0;
+    final v = value;
+    final pct = v != null && total > 0 ? (v / total * 100).round() : 0;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Column(
@@ -377,7 +382,7 @@ class _StatusRow extends StatelessWidget {
                     style: AppTextStyles.caption
                         .copyWith(fontWeight: FontWeight.w600)),
               ),
-              Text('$value ($pct%)',
+              Text(v == null ? '—' : '$v ($pct%)',
                   style: AppTextStyles.caption
                       .copyWith(fontSize: 11, color: AppColors.textHint)),
             ],
@@ -386,7 +391,7 @@ class _StatusRow extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
-              value: total > 0 ? value / total : 0,
+              value: v != null && total > 0 ? v / total : 0,
               minHeight: 8,
               backgroundColor: AppColors.backgroundLow,
               valueColor: AlwaysStoppedAnimation<Color>(color),

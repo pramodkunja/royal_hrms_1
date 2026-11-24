@@ -90,11 +90,13 @@ class _FaceConsentPanelState extends State<FaceConsentPanel> {
           ),
         ),
         const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
+        Wrap(
+          alignment: WrapAlignment.end,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
           children: [
             TextButton(onPressed: widget.onCancel, child: const Text('Cancel')),
-            const SizedBox(width: 8),
             FilledButton(
               onPressed: _checked ? widget.onAcknowledge : null,
               child: const Text('I Agree & Continue'),

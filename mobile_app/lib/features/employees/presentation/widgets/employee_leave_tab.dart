@@ -10,6 +10,8 @@ import '../../../settings/data/models/leave_policy_model.dart';
 import '../../../settings/presentation/providers/settings_providers.dart' show leavePoliciesProvider;
 import '../../data/models/employee_model.dart';
 import '../../../dashboard/data/models/employee_leave_breakdown.dart' show LeaveStatementMonth, formatLeaveNumber;
+import '../../../approvals/presentation/widgets/approvals_kit.dart';
+import 'employee_leave_request_cards.dart';
 import 'leave_credits_section.dart';
 import 'monthly_leave_statement.dart';
 
@@ -22,31 +24,6 @@ final _kBalanceDisplay = [
   (code: 'earned', icon: Icons.calendar_month_outlined, color: AppColors.primary),
   (code: 'sick', icon: Icons.medical_services_outlined, color: AppColors.info),
 ];
-
-// ── Date formatter (ISO → 'D MMM') — mirrors leave_dashboard_tab.dart's
-// private helper of the same name. ───────────────────────────────────────────
-
-String _fmtIso(String iso) {
-  if (iso.isEmpty) return '—';
-  try {
-    final d = DateTime.parse(iso);
-    const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
-    return '${d.day} ${m[d.month]}';
-  } catch (_) {
-    return iso;
-  }
-}
-
-String _fmtDateTime(String? iso) {
-  if (iso == null || iso.isEmpty) return '—';
-  try {
-    final d = DateTime.parse(iso.length >= 10 ? iso.substring(0, 10) : iso);
-    const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
-    return '${d.day} ${m[d.month]} ${d.year}';
-  } catch (_) {
-    return iso;
-  }
-}
 
 String _fmtNum(num v) => v.toStringAsFixed(v % 1 == 0 ? 0 : 1);
 
@@ -208,7 +185,7 @@ class _EmployeeLeaveTabState extends ConsumerState<EmployeeLeaveTab> {
           children: [
             Icon(Icons.list_alt_outlined, size: 15, color: AppColors.primary),
             const SizedBox(width: 6),
-            Text('Leave Requests', style: AppTextStyles.label),
+            Flexible(child: Text('Leave Requests', style: AppTextStyles.label)),
           ],
         ),
         const SizedBox(height: 10),
@@ -218,10 +195,12 @@ class _EmployeeLeaveTabState extends ConsumerState<EmployeeLeaveTab> {
             padding: const EdgeInsets.symmetric(vertical: 40),
             child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
           ),
-          error: (e, _) => Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            child: Text('Could not load requests: ${friendlyLeaveError(e)}',
-                style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+          error: (e, _) => ApprovalsEmptyState.forError(
+            e,
+            key: const Key('employee-leave-requests-error'),
+            compact: true,
+            what: 'leave requests',
+            onRetry: () => ref.invalidate(employeeLeaveRequestsProvider((empId, _year, _page))),
           ),
         ),
       ],
@@ -325,35 +304,24 @@ class _EmployeeLeaveTabState extends ConsumerState<EmployeeLeaveTab> {
 
   Widget _buildRequestsSection(LeaveRequestPageEntity page) {
     if (page.results.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.business_outlined, size: 44, color: AppColors.textHint),
-              const SizedBox(height: 10),
-              Text('No leave requests found for $_year.',
-                  style: AppTextStyles.bodySecondary, textAlign: TextAlign.center),
-            ],
-          ),
-        ),
+      // The year is the only filter (web LeaveTab has no status/type filter), so an empty
+      // page means no requests starting in that year.
+      return ApprovalsEmptyState(
+        key: const Key('employee-leave-requests-empty'),
+        kind: ApprovalsStateKind.noMatch,
+        compact: true,
+        icon: Icons.event_busy_outlined,
+        title: 'No leave requests found for $_year.',
+        message: 'Use the arrows above to look at another year.',
       );
     }
 
     return Column(
       children: [
-        ...page.results.map((r) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: GestureDetector(
-                onTap: () => showLeaveRequestDetailSheet(
-                  context,
-                  initial: r,
-                  canApprove: r.canApprove,
-                ),
-                child: _LeaveRequestRow(request: r),
-              ),
-            )),
+        LeaveRequestCardList(
+          requests: page.results,
+          onOpen: (r) => showLeaveRequestDetailSheet(context, initial: r, canApprove: r.canApprove),
+        ),
         const SizedBox(height: 6),
         _PaginationBar(
           page: page.page,
@@ -811,175 +779,6 @@ class _MiniStatCard extends StatelessWidget {
   }
 }
 
-// ── Leave request row (mirrors the former Leave Approvals tab's _ApprovalCard
-// visual style, adapted with LOP badge + approver/actioned-date footer) ─────
-
-class _LeaveRequestRow extends StatelessWidget {
-  final LeaveRequestEntity request;
-  const _LeaveRequestRow({required this.request});
-
-  static Color _statusColor(String s) => switch (s) {
-        'approved' => AppColors.success,
-        'rejected' => AppColors.error,
-        'cancelled' => AppColors.textSecondary,
-        _ => AppColors.warning,
-      };
-
-  @override
-  Widget build(BuildContext context) {
-    final r = request;
-    final sc = _statusColor(r.status);
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.cardShadow,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(height: 3, color: sc),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(LeaveTypeColors.shortLabelForCode(r.leaveTypeCode),
-                          style: AppTextStyles.caption
-                              .copyWith(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 10)),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(r.leaveType,
-                          style: AppTextStyles.label.copyWith(fontSize: 13),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: sc.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: sc.withValues(alpha: 0.3)),
-                      ),
-                      child: Text(r.status,
-                          style: AppTextStyles.caption.copyWith(fontSize: 9, fontWeight: FontWeight.w700, color: sc)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(Icons.calendar_month_outlined, size: 11, color: AppColors.textHint),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        '${_fmtIso(r.from)} – ${_fmtIso(r.to)}',
-                        style: AppTextStyles.caption
-                            .copyWith(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.info.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text('${r.days}d',
-                          style: AppTextStyles.caption
-                              .copyWith(color: AppColors.info, fontWeight: FontWeight.w700, fontSize: 10)),
-                    ),
-                    if (r.hasLopDays) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.warning.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
-                        ),
-                        child: Text('LOP ${_fmtNum(r.lopDays)}d',
-                            style: AppTextStyles.caption
-                                .copyWith(color: AppColors.warning, fontWeight: FontWeight.w700, fontSize: 9)),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Icon(Icons.access_time_outlined, size: 10, color: AppColors.textHint),
-                    const SizedBox(width: 3),
-                    Text(r.appliedOn.isEmpty ? 'Applied —' : 'Applied ${_fmtIso(r.appliedOn)}',
-                        style: AppTextStyles.caption.copyWith(fontSize: 10)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.person_outline, size: 10, color: AppColors.textHint),
-                    const SizedBox(width: 3),
-                    Expanded(
-                      child: Text(
-                        r.approvedBy.isNotEmpty
-                            ? '${r.approvedBy} · ${_fmtDateTime(r.approvedAt)}'
-                            : 'Not yet actioned',
-                        style: AppTextStyles.caption.copyWith(fontSize: 10),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                if (r.isRejected && r.rejectReason != null) ...[
-                  const SizedBox(height: 6),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.error.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.message_outlined, size: 10, color: AppColors.error),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(r.rejectReason!,
-                              style: AppTextStyles.caption.copyWith(color: AppColors.error, fontSize: 10),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ── Pagination bar (Prev/Next + "Page X of Y" — a simple bar precedent,
 // since audit_screen.dart's own pagination is a plain Prev/Next row too) ─────
 
@@ -997,36 +796,39 @@ class _PaginationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final big = MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3;
+    Widget btn(String text, IconData icon, VoidCallback? onTap, Key k) => OutlinedButton.icon(
+          key: k,
+          onPressed: onTap,
+          icon: Icon(icon, size: 18),
+          label: Text(text),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(44, 44),
+            foregroundColor: AppColors.primary,
+            side: BorderSide(color: AppColors.primary),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+    final label = Text('Page $page of $totalPages', style: AppTextStyles.caption.copyWith(fontSize: 11));
+    final prev = btn('Prev', Icons.chevron_left, onPrev, const Key('employee-leave-requests-prev'));
+    final next = btn('Next', Icons.chevron_right, onNext, const Key('employee-leave-requests-next'));
+    if (big) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(child: label),
+          const SizedBox(height: 8),
+          prev,
+          const SizedBox(height: 8),
+          next,
+        ],
+      );
+    }
     return Row(
       children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: onPrev,
-            icon: const Icon(Icons.chevron_left, size: 18),
-            label: const Text('Prev'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primary,
-              side: BorderSide(color: AppColors.primary),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text('Page $page of $totalPages', style: AppTextStyles.caption.copyWith(fontSize: 11)),
-        ),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: onNext,
-            icon: const Icon(Icons.chevron_right, size: 18),
-            label: const Text('Next'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primary,
-              side: BorderSide(color: AppColors.primary),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          ),
-        ),
+        Expanded(child: prev),
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: label),
+        Expanded(child: next),
       ],
     );
   }

@@ -4,16 +4,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../approvals/presentation/widgets/approvals_kit.dart';
+import '../../../approvals/presentation/widgets/approvals_ui.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../settings/presentation/providers/settings_providers.dart' show attendanceSettingsProvider;
 import '../../data/models/shift_master_models.dart';
 import '../providers/shift_master_providers.dart';
 import 'assignment_form_widgets.dart';
+import 'shift_card.dart';
+import 'shift_format.dart';
 
-/// Web ShiftMasterCard ("Shifts") at the top of the Shift Assignment tab
-/// (shown to users who may assign, attendance.create): the active shifts five
-/// per page, the read-only global default, "Add Shift", Edit
-/// (attendance.edit) and Deactivate (attendance.delete; not for the default).
+/// SHIFT CONFIGURATION (web ShiftMasterCard "Shifts"), shown to users who may
+/// assign (attendance.create): the active shifts five per page, the read-only
+/// global default, "Add Shift", Edit (attendance.edit) and Deactivate
+/// (attendance.delete; not for the default). Assigning shifts to employees is
+/// the separate section below it.
 class ShiftMasterCard extends ConsumerWidget {
   const ShiftMasterCard({super.key});
 
@@ -40,6 +45,7 @@ class ShiftMasterCard extends ConsumerWidget {
         context: context,
         isScrollControlled: true,
         isDismissible: false,
+        useSafeArea: true,
         builder: (_) => ShiftMasterFormSheet(shift: shift),
       );
       showMessage(message);
@@ -59,72 +65,89 @@ class ShiftMasterCard extends ConsumerWidget {
 
     return Container(
       key: const Key('shift-master-card'),
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
+      margin: const EdgeInsets.only(bottom: 24),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          Icon(Icons.schedule_outlined, size: 18, color: AppColors.primary),
-          const SizedBox(width: 6),
-          Expanded(child: Text('Shifts', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700))),
-          FilledButton.icon(
+        ShiftSectionHeader(
+          icon: Icons.schedule_outlined,
+          title: 'Shift configuration',
+          subtitle: 'Create the named shifts — timings, break and grace period. '
+              'Assign them to employees in the section below.',
+          trailing: FilledButton.icon(
             key: const Key('shift-master-add'),
             onPressed: () => openForm(),
-            icon: const Icon(Icons.add, size: 16),
+            style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+            icon: const Icon(Icons.add, size: 18),
             label: const Text('Add Shift'),
           ),
-        ]),
-        const SizedBox(height: 8),
-        Text(
-          'Configure named shift timings and assign them to employees from Attendance & Time → Shift Assignment. '
-          'Employees with no shift assigned keep using the global default below.',
-          style: muted,
         ),
+        const SizedBox(height: 6),
+        Text('Employees with no shift assigned keep using the global default.', style: muted),
         if (global != null) ...[
           const SizedBox(height: 10),
           Container(
             key: const Key('shift-master-global'),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: AppColors.backgroundLow, borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.backgroundLow,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('General / Default — ${toHHMM(global.shiftStart)} to ${toHHMM(global.shiftEnd)}',
                   style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 2),
               Text('Applies to every employee with no shift assigned below · edit under Settings → Attendance Rules',
                   style: muted.copyWith(fontSize: 11.5)),
             ]),
           ),
         ],
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         pageAsync.when(
-          loading: () => Text('Loading…', key: const Key('shift-master-loading'), style: muted),
-          error: (e, _) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            AssignmentErrorBox(
-                key: const Key('shift-master-error'), text: shiftMasterError(e, 'Failed to load shifts.')),
-            TextButton(
-              key: const Key('shift-master-retry'),
-              onPressed: () => ref.invalidate(shiftMastersProvider),
-              child: const Text('Retry'),
+          loading: () => const ApprovalsLoading(key: Key('shift-master-loading'), label: 'Loading shifts…'),
+          error: (e, _) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            ApprovalsEmptyState.forError(e, key: const Key('shift-master-error'), compact: true, what: 'shifts'),
+            Center(
+              child: OutlinedButton.icon(
+                key: const Key('shift-master-retry'),
+                onPressed: () => ref.invalidate(shiftMastersProvider),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Retry'),
+              ),
             ),
           ]),
           data: (page) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             if (page.shifts.isEmpty)
-              Text('No named shifts created yet.', key: const Key('shift-master-empty'), style: muted),
-            for (final s in page.shifts)
-              _ShiftRow(
-                shift: s,
-                canEdit: canEdit,
-                canDelete: canDelete,
-                onEdit: () => openForm(s),
-                onDeactivate: () => confirmDeactivate(s, page.shifts.length),
+              const ApprovalsEmptyState(
+                key: Key('shift-master-empty'),
+                kind: ApprovalsStateKind.empty,
+                title: 'No named shifts created yet.',
+                message: 'Add a shift to give employees timings other than the global default.',
+                icon: Icons.schedule_outlined,
+                compact: true,
               ),
+            LayoutBuilder(builder: (context, c) {
+              final cols = c.maxWidth >= 600 ? 2 : 1;
+              final w = cols == 1 ? c.maxWidth : (c.maxWidth - 12) / 2;
+              return Wrap(spacing: 12, runSpacing: 12, children: [
+                for (final s in page.shifts)
+                  SizedBox(
+                    width: w,
+                    child: ShiftMasterTile(
+                      shift: s,
+                      canEdit: canEdit,
+                      canDelete: canDelete,
+                      onEdit: () => openForm(s),
+                      onDeactivate: () => confirmDeactivate(s, page.shifts.length),
+                    ),
+                  ),
+              ]);
+            }),
             if (page.totalPages > 1)
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 IconButton(
                   key: const Key('shift-master-prev'),
+                  tooltip: 'Previous page',
                   onPressed:
                       pageNo <= 1 ? null : () => ref.read(shiftMasterPageNumberProvider.notifier).state = pageNo - 1,
                   icon: const Icon(Icons.chevron_left),
@@ -132,6 +155,7 @@ class ShiftMasterCard extends ConsumerWidget {
                 Text('${page.page} / ${page.totalPages}', key: const Key('shift-master-page'), style: muted),
                 IconButton(
                   key: const Key('shift-master-next'),
+                  tooltip: 'Next page',
                   onPressed: pageNo >= page.totalPages
                       ? null
                       : () => ref.read(shiftMasterPageNumberProvider.notifier).state = pageNo + 1,
@@ -145,70 +169,11 @@ class ShiftMasterCard extends ConsumerWidget {
   }
 }
 
-class _ShiftRow extends StatelessWidget {
-  const _ShiftRow({
-    required this.shift,
-    required this.canEdit,
-    required this.canDelete,
-    required this.onEdit,
-    required this.onDeactivate,
-  });
-
-  final ShiftMaster shift;
-  final bool canEdit;
-  final bool canDelete;
-  final VoidCallback onEdit;
-  final VoidCallback onDeactivate;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = shift;
-    final muted = AppTextStyles.caption.copyWith(fontSize: 12, color: AppColors.textSecondary);
-    return Container(
-      key: Key('shift-master-${s.id}'),
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
-      child: Row(children: [
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Wrap(spacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              Text(s.name, style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
-              if (s.isDefault)
-                Container(
-                  key: Key('shift-master-default-${s.id}'),
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                  decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
-                  child: Text('Default', style: TextStyle(fontSize: 10, color: AppColors.primary)),
-                ),
-            ]),
-            Text('${toHHMM(s.startTime)} – ${toHHMM(s.endTime)}', style: muted),
-            Text('Break ${s.breakDuration} min · Grace Period ${s.gracePeriod} min', style: muted),
-          ]),
-        ),
-        if (canEdit)
-          IconButton(
-            key: Key('shift-master-edit-${s.id}'),
-            tooltip: 'Edit',
-            onPressed: onEdit,
-            icon: const Icon(Icons.edit_outlined, size: 18),
-          ),
-        if (canDelete)
-          IconButton(
-            key: Key('shift-master-delete-${s.id}'),
-            tooltip: s.isDefault ? 'Assign another shift as default before removing this one.' : 'Deactivate',
-            onPressed: s.isDefault ? null : onDeactivate,
-            color: AppColors.error,
-            icon: const Icon(Icons.delete_outline, size: 18),
-          ),
-      ]),
-    );
-  }
-}
-
-/// Web Add/Edit Shift modal: Shift Name, Start/End Time, Break and Grace
-/// Period (minutes), "Make this the organization default shift". Pops with
-/// the server's message once saved; a failure keeps every value.
+/// Web Add/Edit Shift modal, grouped: Shift details, Timings (live length and
+/// overnight indicator), Break and grace, Organization default. Pops with the
+/// server's message once saved; a failure keeps every value. Rules the backend
+/// enforces (start != end, net hours above zero, break <= 480, grace <= 120,
+/// name <= 100) are shown inline and stop the request; the payload is unchanged.
 class ShiftMasterFormSheet extends ConsumerStatefulWidget {
   const ShiftMasterFormSheet({super.key, this.shift});
   final ShiftMaster? shift;
@@ -237,6 +202,35 @@ class _ShiftMasterFormSheetState extends ConsumerState<ShiftMasterFormSheet> {
   /// Web Number(value): empty is 0.
   int _num(TextEditingController c) => int.tryParse(c.text.trim()) ?? 0;
 
+  /// Inline messages for the backend's own rules (same wording).
+  String? get _timeError {
+    if (_form.startTime.isNotEmpty && _form.startTime == _form.endTime) {
+      return 'Start time and end time cannot be the same.';
+    }
+    return null;
+  }
+
+  String? get _breakError {
+    final b = _num(_break);
+    if (b > 480) return 'Break duration cannot exceed 480 minutes (8 hours).';
+    final net = shiftNetMinutes(_form.startTime, _form.endTime, b);
+    if (_timeError == null && net == 0) {
+      return 'Net working hours (shift duration minus break) must be greater than zero. '
+          'Reduce break duration or widen the shift window.';
+    }
+    return null;
+  }
+
+  String? get _graceError => _num(_grace) > 120 ? 'Grace period cannot exceed 120 minutes (2 hours).' : null;
+
+  bool get _valid =>
+      _name.text.trim().isNotEmpty &&
+      _form.startTime.isNotEmpty &&
+      _form.endTime.isNotEmpty &&
+      _timeError == null &&
+      _breakError == null &&
+      _graceError == null;
+
   Future<void> _pickTime(bool start) async {
     final current = start ? _form.startTime : _form.endTime;
     final parts = current.split(':');
@@ -257,7 +251,7 @@ class _ShiftMasterFormSheetState extends ConsumerState<ShiftMasterFormSheet> {
       ..name = _name.text
       ..breakDuration = _num(_break)
       ..gracePeriod = _num(_grace);
-    if (!_form.canSave) return;
+    if (!_form.canSave || !_valid) return;
     setState(() {
       _saving = true;
       _error = null;
@@ -279,76 +273,182 @@ class _ShiftMasterFormSheetState extends ConsumerState<ShiftMasterFormSheet> {
     }
   }
 
-  Widget _time(String key, String label, String value, bool start) => Expanded(
-        child: InkWell(
-          key: Key(key),
-          onTap: _saving ? null : () => _pickTime(start),
-          child: InputDecorator(
-            decoration: InputDecoration(labelText: label, isDense: true, border: const OutlineInputBorder()),
-            child: Text(value),
+  Widget _group(String title, String? hint, List<Widget> children) => Padding(
+        padding: const EdgeInsets.only(bottom: 18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text(title, style: AppTextStyles.label.copyWith(fontSize: 14, fontWeight: FontWeight.w700)),
+          if (hint != null) ...[
+            const SizedBox(height: 2),
+            Text(hint, style: AppTextStyles.caption.copyWith(fontSize: 11.5, color: AppColors.textSecondary)),
+          ],
+          const SizedBox(height: 10),
+          ...children,
+        ]),
+      );
+
+  Widget _timeField(String key, String label, String value, bool start) => InkWell(
+        key: Key(key),
+        onTap: _saving ? null : () => _pickTime(start),
+        child: InputDecorator(
+          decoration: InputDecoration(
+            labelText: label,
+            border: const OutlineInputBorder(),
+            suffixIcon: const Icon(Icons.access_time, size: 18),
+            errorText: !start && _timeError != null ? ' ' : null,
+            errorStyle: const TextStyle(fontSize: 0, height: 0),
           ),
+          child: Text(value, style: AppTextStyles.body),
         ),
       );
 
-  Widget _minutes(String key, String label, TextEditingController c) => Expanded(
-        child: TextField(
-          key: Key(key),
-          controller: c,
-          enabled: !_saving,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: InputDecoration(labelText: label, isDense: true, border: const OutlineInputBorder()),
+  Widget _minutes(String key, String label, TextEditingController c, String? error, String helper) => TextField(
+        key: Key(key),
+        controller: c,
+        enabled: !_saving,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)],
+        onChanged: (_) => setState(() {}),
+        decoration: InputDecoration(
+          labelText: label,
+          helperText: helper,
+          helperMaxLines: 5,
+          errorText: error,
+          errorMaxLines: 4,
+          border: const OutlineInputBorder(),
         ),
       );
 
   @override
   Widget build(BuildContext context) {
-    final canSave = !_saving && _name.text.isNotEmpty && _form.startTime.isNotEmpty && _form.endTime.isNotEmpty;
-    return AssignmentSheet(
-      key: const Key('shift-master-form'),
-      title: widget.shift == null ? 'Add Shift' : 'Edit Shift',
-      saving: _saving,
-      content: [
-        if (_error != null) AssignmentErrorBox(key: const Key('shift-master-form-error'), text: _error!),
-        TextField(
-          key: const Key('shift-master-name'),
-          controller: _name,
-          enabled: !_saving,
-          onChanged: (_) => setState(() {}),
-          decoration: const InputDecoration(
-            labelText: 'Shift Name *',
-            hintText: 'e.g. SGT/ICT Shift, UK Shift',
-            isDense: true,
-            border: OutlineInputBorder(),
+    final scale = MediaQuery.textScalerOf(context).scale(10) / 10;
+    final len = shiftLengthMinutes(_form.startTime, _form.endTime);
+    final net = shiftNetMinutes(_form.startTime, _form.endTime, _num(_break));
+    final overnight = isOvernightShift(_form.startTime, _form.endTime);
+    final editing = widget.shift != null;
+    final timeFields = LayoutBuilder(builder: (context, c) {
+      final stack = c.maxWidth < 300 || scale > 1.3;
+      final start = _timeField('shift-master-start', 'Start Time', _form.startTime, true);
+      final end = _timeField('shift-master-end', 'End Time', _form.endTime, false);
+      if (stack) return Column(children: [start, const SizedBox(height: 12), end]);
+      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: start),
+        const SizedBox(width: 12),
+        Expanded(child: end),
+      ]);
+    });
+    final minuteFields = LayoutBuilder(builder: (context, c) {
+      final stack = c.maxWidth < 360 || scale > 1.3;
+      final brk = _minutes('shift-master-break', 'Break Duration (min)', _break, _breakError,
+          'Deducted from the shift’s working hours.');
+      final grace = _minutes('shift-master-grace', 'Grace Period (min)', _grace, _graceError,
+          'Late-arrival allowance before a punch is marked late.');
+      if (stack) return Column(children: [brk, const SizedBox(height: 12), grace]);
+      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: brk),
+        const SizedBox(width: 12),
+        Expanded(child: grace),
+      ]);
+    });
+    return PopScope(
+      canPop: !_saving,
+      child: Padding(
+        key: const Key('shift-master-form'),
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Flexible(
+            child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(editing ? 'Edit Shift' : 'Add Shift', style: AppTextStyles.h4.copyWith(fontSize: 17)),
+                  const SizedBox(height: 2),
+                  Text(
+                    editing
+                        ? 'Changes apply to employees already assigned this shift.'
+                        : 'A shift is a named set of timings you can assign to employees.',
+                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                  ),
+                ]),
+                const SizedBox(height: 14),
+                if (_error != null) AssignmentErrorBox(key: const Key('shift-master-form-error'), text: _error!),
+                _group('Shift details', null, [
+                  TextField(
+                    key: const Key('shift-master-name'),
+                    controller: _name,
+                    enabled: !_saving,
+                    maxLength: 100,
+                    maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                    textCapitalization: TextCapitalization.sentences,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'Shift Name *',
+                      hintText: 'e.g. SGT/ICT Shift, UK Shift',
+                      counterText: '',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ]),
+                _group(
+                    'Shift timings',
+                    'Pick the start and end time. An end time before the start time means the shift ends the next day.',
+                    [
+                      timeFields,
+                      if (_timeError != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(_timeError!,
+                              key: const Key('shift-master-time-error'),
+                              style: AppTextStyles.caption.copyWith(fontSize: 12, color: AppColors.error)),
+                        ),
+                      if (len != null && _timeError == null) ...[
+                        const SizedBox(height: 10),
+                        Wrap(spacing: 6, runSpacing: 6, children: [
+                          ApprovalsChip('Shift length ${formatShiftDuration(len)}',
+                              key: const Key('shift-master-length'), icon: Icons.timelapse_outlined),
+                          if (net != null)
+                            ApprovalsChip('Working time ${formatShiftDuration(net)}',
+                                key: const Key('shift-master-net'), tone: ApprovalsTone.success),
+                          if (overnight)
+                            const ApprovalsChip('Overnight · ends next day',
+                                key: Key('shift-master-overnight'),
+                                icon: Icons.nights_stay_outlined,
+                                tone: ApprovalsTone.warning),
+                        ]),
+                      ],
+                    ]),
+                _group('Break and grace period', null, [minuteFields]),
+                _group('Organization default', null, [
+                  CheckboxListTile(
+                    key: const Key('shift-master-default'),
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    value: _form.isDefault,
+                    onChanged: _saving ? null : (v) => setState(() => _form.isDefault = v ?? false),
+                    title: Text('Make this the organization default shift',
+                        style: AppTextStyles.bodySmall.copyWith(fontSize: 13)),
+                  ),
+                ]),
+              ]),
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        Row(children: [
-          _time('shift-master-start', 'Start Time', _form.startTime, true),
-          const SizedBox(width: 10),
-          _time('shift-master-end', 'End Time', _form.endTime, false),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Wrap(alignment: WrapAlignment.end, spacing: 8, runSpacing: 8, children: [
+              TextButton(
+                onPressed: _saving ? null : () => Navigator.of(context).pop(),
+                style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                key: const Key('shift-master-save'),
+                onPressed: !_saving && _valid ? _save : null,
+                style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+                child: Text(_saving ? 'Saving…' : 'Save Shift'),
+              ),
+            ]),
+          ),
         ]),
-        const SizedBox(height: 12),
-        Row(children: [
-          _minutes('shift-master-break', 'Break Duration (min)', _break),
-          const SizedBox(width: 10),
-          _minutes('shift-master-grace', 'Grace Period (min)', _grace),
-        ]),
-        const SizedBox(height: 4),
-        CheckboxListTile(
-          key: const Key('shift-master-default'),
-          contentPadding: EdgeInsets.zero,
-          controlAffinity: ListTileControlAffinity.leading,
-          dense: true,
-          value: _form.isDefault,
-          onChanged: _saving ? null : (v) => setState(() => _form.isDefault = v ?? false),
-          title: const Text('Make this the organization default shift', style: TextStyle(fontSize: 13)),
-        ),
-      ],
-      action: FilledButton(
-        key: const Key('shift-master-save'),
-        onPressed: canSave ? _save : null,
-        child: Text(_saving ? 'Saving…' : 'Save Shift'),
       ),
     );
   }

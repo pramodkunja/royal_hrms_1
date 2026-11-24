@@ -289,8 +289,10 @@ void main() {
       expect(byKey('birthday-settings-edit'), findsOneWidget);
       expect(find.text('Birthday Wish'), findsOneWidget);
       expect(find.text('Welcome Email'), findsOneWidget);
-      expect(tester.getTopLeft(byKey('birthday-settings-card')).dy,
-          greaterThan(tester.getTopLeft(find.text('Email Branding')).dy));
+      // after the branding card: below it on a phone, beside it (to its right) on a wide screen
+      final brand = tester.getTopLeft(byKey('email-branding-card'));
+      final bday = tester.getTopLeft(byKey('birthday-settings-card'));
+      expect(bday.dy > brand.dy || bday.dx > brand.dx, isTrue);
     });
 
     testWidgets('disabled shows "Disabled"', (tester) async {

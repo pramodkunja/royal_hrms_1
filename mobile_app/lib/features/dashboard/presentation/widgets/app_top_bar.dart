@@ -10,7 +10,10 @@ import 'package:mobile_app/features/notifications/presentation/widgets/notificat
 /// needs its own RenderBox to anchor the dropdown panel under itself).
 class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
-  final VoidCallback onMenuTap;
+  // Opens the drawer. Null on a screen pushed outside the shell (no drawer): [onBack] then
+  // replaces the hamburger with a back arrow and everything else is identical.
+  final VoidCallback? onMenuTap;
+  final VoidCallback? onBack;
   final VoidCallback onLogoutTap;
   final VoidCallback onThemeToggleTap;
   final bool isDarkMode;
@@ -23,13 +26,14 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   const AppTopBar({
     super.key,
     required this.title,
-    required this.onMenuTap,
+    this.onMenuTap,
+    this.onBack,
     required this.onLogoutTap,
     required this.onThemeToggleTap,
     required this.isDarkMode,
     required this.isBlueTheme,
     this.onSearchTap,
-  });
+  }) : assert(onMenuTap != null || onBack != null, 'give the bar a menu or a back action');
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
@@ -77,13 +81,22 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
               children: [
-                // Hamburger — opens the drawer
-                IconButton(
-                  icon: const Icon(Icons.menu_rounded),
-                  color: iconColor,
-                  onPressed: onMenuTap,
-                  tooltip: 'Menu',
-                ),
+                // Hamburger — opens the drawer (or, outside the shell, a back arrow)
+                if (onBack != null)
+                  IconButton(
+                    key: const Key('app-top-bar-back'),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    color: iconColor,
+                    onPressed: onBack,
+                    tooltip: 'Back',
+                  )
+                else
+                  IconButton(
+                    icon: const Icon(Icons.menu_rounded),
+                    color: iconColor,
+                    onPressed: onMenuTap,
+                    tooltip: 'Menu',
+                  ),
 
                 // Page title
                 // HO-46 / HO-07: a title slightly too long for the bar (e.g.

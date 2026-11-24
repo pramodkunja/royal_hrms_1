@@ -216,38 +216,55 @@ class _MonthlyManualEntrySectionState extends ConsumerState<MonthlyManualEntrySe
           onYear: (y) => _edit(() => _year = y),
         ),
         const SizedBox(height: 12),
-        Text('Employees', style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 6),
-        TextField(
-          key: const Key('manual-search'),
-          controller: _searchCtrl,
-          onChanged: _onSearch,
-          decoration: const InputDecoration(
-            hintText: 'Search by name or employee code…',
-            isDense: true,
-            prefixIcon: Icon(Icons.search, size: 18),
-            border: OutlineInputBorder(),
+        MonthlyField(
+          label: 'Employees',
+          child: TextField(
+            key: const Key('manual-search'),
+            controller: _searchCtrl,
+            onChanged: _onSearch,
+            textInputAction: TextInputAction.search,
+            decoration: const InputDecoration(
+              hintText: 'Search by name or employee code…',
+              isDense: true,
+              prefixIcon: Icon(Icons.search, size: 18),
+              border: OutlineInputBorder(),
+            ),
           ),
         ),
-        Row(children: [
-          Checkbox(
-            key: const Key('manual-select-all'),
-            tristate: true,
-            value: selectable.isEmpty ? false : (ticked == 0 ? false : (ticked == selectable.length ? true : null)),
-            onChanged: selectable.isEmpty || busy ? null : (_) => _toggleAll(ticked != selectable.length),
-          ),
-          Text('Select all shown (${selectable.length})', style: AppTextStyles.bodySmall),
-          const Spacer(),
-          Text('${_selected.length} selected', key: const Key('manual-selected-count'), style: muted),
-          if (_selected.isNotEmpty)
-            IconButton(
-              tooltip: 'Clear selection',
-              onPressed: busy ? null : () => _edit(_selected.clear),
-              icon: const Icon(Icons.clear, size: 18),
-            ),
-        ]),
+        const SizedBox(height: 4),
+        // Select all (tristate) and the count; wraps instead of overflowing.
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Checkbox(
+                key: const Key('manual-select-all'),
+                tristate: true,
+                value: selectable.isEmpty ? false : (ticked == 0 ? false : (ticked == selectable.length ? true : null)),
+                onChanged: selectable.isEmpty || busy ? null : (_) => _toggleAll(ticked != selectable.length),
+              ),
+              Flexible(child: Text('Select all shown (${selectable.length})', style: AppTextStyles.bodySmall)),
+            ]),
+            Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 4, children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text('${_selected.length} selected', key: const Key('manual-selected-count'), style: muted),
+              ),
+              if (_selected.isNotEmpty)
+                TextButton(
+                  key: const Key('manual-clear-selection'),
+                  style: monthlyTextStyle,
+                  onPressed: busy ? null : () => _edit(_selected.clear),
+                  child: const Text('Clear selection'),
+                ),
+            ]),
+          ],
+        ),
+        // The checklist is part of the page flow (no inner scroll view).
         Container(
-          constraints: const BoxConstraints(maxHeight: 300),
+          key: const Key('manual-employee-list'),
+          clipBehavior: Clip.antiAlias,
           decoration:
               BoxDecoration(border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(8)),
           child: _listError != null
@@ -261,19 +278,25 @@ class _MonthlyManualEntrySectionState extends ConsumerState<MonthlyManualEntrySe
                       child: Row(children: [
                         monthlySpinner(),
                         const SizedBox(width: 8),
-                        Text('Loading employees…', style: muted)
+                        Expanded(child: Text('Loading employees…', style: muted)),
                       ]))
                   : _rows.isEmpty
                       ? Padding(padding: const EdgeInsets.all(12), child: Text('No employees found.', style: muted))
                       // Own Material so the tiles' ink shows above the card colour.
                       : Material(
                           type: MaterialType.transparency,
-                          child: ListView(shrinkWrap: true, children: [
-                            for (final e in _rows) _employeeTile(e, busy),
-                            if (_page < _totalPages)
-                              Center(
+                          child: Column(children: [
+                            for (var i = 0; i < _rows.length; i++) ...[
+                              if (i > 0) Divider(height: 1, color: AppColors.border),
+                              _employeeTile(_rows[i], busy),
+                            ],
+                            if (_page < _totalPages) ...[
+                              Divider(height: 1, color: AppColors.border),
+                              Padding(
+                                padding: const EdgeInsets.all(4),
                                 child: TextButton(
                                   key: const Key('manual-load-more'),
+                                  style: monthlyTextStyle,
                                   onPressed: _listLoading
                                       ? null
                                       : () {
@@ -283,6 +306,7 @@ class _MonthlyManualEntrySectionState extends ConsumerState<MonthlyManualEntrySe
                                   child: Text(_listLoading ? 'Loading…' : 'Load more'),
                                 ),
                               ),
+                            ],
                           ])),
         ),
         if (_page < _totalPages)
@@ -292,14 +316,27 @@ class _MonthlyManualEntrySectionState extends ConsumerState<MonthlyManualEntrySe
                 style: muted.copyWith(fontSize: 12)),
           ),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          key: const Key('manual-leave-type'),
-          initialValue: _leaveType.isEmpty ? null : _leaveType,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: 'Leave type', isDense: true, border: OutlineInputBorder()),
-          hint: Text(policiesAsync.hasValue ? 'Select a leave type…' : 'Loading…'),
-          items: [for (final t in types) DropdownMenuItem(value: t.value, child: Text(t.label))],
-          onChanged: busy || !policiesAsync.hasValue ? null : (v) => _edit(() => _leaveType = v ?? ''),
+        MonthlyField(
+          label: 'Leave type',
+          child: DropdownButtonFormField<String>(
+            key: const Key('manual-leave-type'),
+            initialValue: _leaveType.isEmpty ? null : _leaveType,
+            isExpanded: true,
+            itemHeight: null,
+            decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
+            hint: Text(policiesAsync.hasValue ? 'Select a leave type…' : 'Loading…'),
+            selectedItemBuilder: (_) => [
+              for (final t in types) Text(t.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ],
+            items: [
+              for (final t in types)
+                DropdownMenuItem(
+                  value: t.value,
+                  child: Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(t.label)),
+                ),
+            ],
+            onChanged: busy || !policiesAsync.hasValue ? null : (v) => _edit(() => _leaveType = v ?? ''),
+          ),
         ),
         if (policiesAsync.hasError)
           Padding(
@@ -307,18 +344,22 @@ class _MonthlyManualEntrySectionState extends ConsumerState<MonthlyManualEntrySe
             child: Text('Could not load leave types.', style: TextStyle(fontSize: 12, color: AppColors.error)),
           ),
         const SizedBox(height: 12),
-        TextField(
-          key: const Key('manual-credit'),
-          controller: _creditCtrl,
-          enabled: !busy,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          onChanged: (_) => _edit(() {}),
-          decoration: InputDecoration(
-            labelText: 'Monthly leave credit (days)',
-            isDense: true,
-            border: const OutlineInputBorder(),
-            errorText: creditError,
-            helperText: creditError == null ? "0–31, one decimal place. 0 removes the month's credit." : null,
+        MonthlyField(
+          label: 'Monthly leave credit (days)',
+          child: TextField(
+            key: const Key('manual-credit'),
+            controller: _creditCtrl,
+            enabled: !busy,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => _edit(() {}),
+            decoration: InputDecoration(
+              isDense: true,
+              border: const OutlineInputBorder(),
+              errorText: creditError,
+              errorMaxLines: 3,
+              helperMaxLines: 3,
+              helperText: creditError == null ? "0–31, one decimal place. 0 removes the month's credit." : null,
+            ),
           ),
         ),
         if (typeInfo != null && typeInfo.annual > 0) ...[
@@ -331,11 +372,15 @@ class _MonthlyManualEntrySectionState extends ConsumerState<MonthlyManualEntrySe
         ],
         const SizedBox(height: 12),
         if (review == null)
-          FilledButton.icon(
-            key: const Key('manual-review'),
-            onPressed: canReview ? () => _send(dryRun: true) : null,
-            icon: _busy == 'review' ? monthlySpinner() : const Icon(Icons.visibility_outlined, size: 16),
-            label: Text(_busy == 'review' ? 'Checking…' : 'Review (${_selected.length})'),
+          MonthlyActionBar(
+            alignEnd: false,
+            primary: FilledButton.icon(
+              key: const Key('manual-review'),
+              style: monthlyFilledStyle,
+              onPressed: canReview ? () => _send(dryRun: true) : null,
+              icon: _busy == 'review' ? monthlySpinner() : const Icon(Icons.visibility_outlined, size: 16),
+              label: Text(_busy == 'review' ? 'Checking…' : 'Review (${_selected.length})'),
+            ),
           ),
         if (review != null) ...[
           MonthlyAlert(
@@ -348,16 +393,21 @@ class _MonthlyManualEntrySectionState extends ConsumerState<MonthlyManualEntrySe
           ),
           const SizedBox(height: 8),
           MonthlyRowsList(rows: review.rows),
-          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            TextButton(onPressed: busy ? null : () => setState(() => _review = null), child: const Text('Back')),
-            const SizedBox(width: 8),
-            FilledButton.icon(
+          const SizedBox(height: 4),
+          MonthlyActionBar(
+            secondary: TextButton(
+              style: monthlyTextStyle,
+              onPressed: busy ? null : () => setState(() => _review = null),
+              child: const Text('Back'),
+            ),
+            primary: FilledButton.icon(
               key: const Key('manual-confirm'),
+              style: monthlyFilledStyle,
               onPressed: busy || review.applicable == 0 ? null : () => _send(dryRun: false),
               icon: _busy == 'save' ? monthlySpinner() : const Icon(Icons.check, size: 16),
               label: Text(_busy == 'save' ? 'Saving…' : 'Confirm for ${review.applicable} employee(s)'),
             ),
-          ]),
+          ),
         ],
         if (result != null) ...[
           MonthlyAlert(

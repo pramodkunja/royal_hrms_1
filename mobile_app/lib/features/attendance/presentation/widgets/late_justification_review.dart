@@ -3,13 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/api_constants.dart';
-import '../../../../core/network/api_client.dart' show dioProvider;
+import '../../../../core/network/api_client.dart' show AppErrorKind, appErrorKind, dioProvider;
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../employees/presentation/widgets/employee_file_viewer.dart' show openEmployeeFileInApp;
+import '../../../approvals/presentation/widgets/approvals_kit.dart';
+import '../../../approvals/presentation/widgets/approvals_ui.dart';
 import '../../domain/entities/attendance_entity.dart';
 import '../providers/attendance_providers.dart';
 import 'late_justification.dart' show fmtLateDate, lateStatusBadge;
+import 'late_justification_card.dart';
 
 // Reviewing a late-arrival justification — web attendance/_components/
 // LateJustificationReviewModal.tsx and LateJustificationsTab.tsx over backend
@@ -141,14 +144,25 @@ class _LateJustificationReviewSheetState extends ConsumerState<LateJustification
     });
   }
 
-  Widget _row(String label, Widget value) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 120, child: Text(label, style: AppTextStyles.caption.copyWith(fontSize: 12))),
-          Expanded(child: DefaultTextStyle.merge(style: AppTextStyles.bodySmall, child: value)),
-        ]),
-      );
+  Widget _backSend(bool stacked, {required Widget back, required Widget send}) => stacked
+      ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [send, const SizedBox(height: 8), back])
+      : Row(children: [Expanded(child: back), const SizedBox(width: 12), Expanded(child: send)]);
+
+  Widget _row(String label, Widget value) => LayoutBuilder(builder: (context, c) {
+        final stack = c.maxWidth < 300 || MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3;
+        final v = DefaultTextStyle.merge(style: AppTextStyles.bodySmall, child: value);
+        final l = Text(label, style: AppTextStyles.caption.copyWith(fontSize: 12));
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+          child: stack
+              ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [l, const SizedBox(height: 2), v])
+              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  SizedBox(width: 120, child: l),
+                  Expanded(child: v),
+                ]),
+        );
+      });
 
   @override
   Widget build(BuildContext context) {
@@ -302,34 +316,32 @@ class _LateJustificationReviewSheetState extends ConsumerState<LateJustification
                   child: const Text('Close'),
                 )
               : _action != null
-                  ? Row(children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          key: const Key('late-review-back'),
-                          onPressed: _busy
-                              ? null
-                              : () => setState(() {
-                                    _action = null;
-                                    _error = null;
-                                  }),
-                          child: const Text('Back'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton(
-                          key: const Key('late-review-send'),
-                          onPressed: _busy ? null : _send,
-                          child: Text(_busy
-                              ? 'Saving…'
-                              : switch (_action) {
-                                  'approve' => 'Confirm approval',
-                                  'reject' => 'Reject',
-                                  _ => 'Send back',
+                  ? _backSend(
+                      MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3,
+                      back: OutlinedButton(
+                        key: const Key('late-review-back'),
+                        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                        onPressed: _busy
+                            ? null
+                            : () => setState(() {
+                                  _action = null;
+                                  _error = null;
                                 }),
-                        ),
+                        child: const Text('Back'),
                       ),
-                    ])
+                      send: FilledButton(
+                        key: const Key('late-review-send'),
+                        style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+                        onPressed: _busy ? null : _send,
+                        child: Text(_busy
+                            ? 'Saving…'
+                            : switch (_action) {
+                                'approve' => 'Confirm approval',
+                                'reject' => 'Reject',
+                                _ => 'Send back',
+                              }),
+                      ),
+                    )
                   : Wrap(alignment: WrapAlignment.end, spacing: 8, runSpacing: 6, children: [
                       OutlinedButton.icon(
                         key: const Key('late-review-resubmit'),
@@ -402,131 +414,110 @@ class _LateJustificationsReviewTabState extends ConsumerState<LateJustifications
     ref.invalidate(lateJustificationQueueProvider);
   }
 
+  Widget _states(Object e) {
+    final denied = appErrorKind(e) == AppErrorKind.forbidden || appErrorKind(e) == AppErrorKind.moduleDisabled;
+    return Column(key: const Key('late-review-load-error'), children: [
+      ApprovalsEmptyState.forError(e, compact: true, what: 'late justifications'),
+      if (!denied)
+        FilledButton.icon(
+          key: const Key('late-review-retry'),
+          style: FilledButton.styleFrom(backgroundColor: AppColors.primary, minimumSize: const Size(0, 44)),
+          onPressed: () => ref.invalidate(lateJustificationQueueProvider(_filter)),
+          icon: const Icon(Icons.refresh, size: 18),
+          label: const Text('Retry'),
+        ),
+    ]);
+  }
+
+  Widget _cards(List<HrCorrectionRowEntity> rows) {
+    if (rows.isEmpty) {
+      final all = _filter.isEmpty;
+      return KeyedSubtree(
+        key: const Key('late-review-empty'),
+        child: ApprovalsEmptyState(
+          kind: all ? ApprovalsStateKind.empty : ApprovalsStateKind.noMatch,
+          title: 'No requests',
+          message: all ? 'No late-arrival justifications have been submitted yet.' : 'Nothing matches this filter.',
+          icon: Icons.help_outline,
+          actionLabel: all ? null : 'Show all',
+          onAction: all ? null : () => setState(() => _filter = ''),
+          compact: true,
+        ),
+      );
+    }
+    return LayoutBuilder(builder: (context, c) {
+      final cols = c.maxWidth >= 600 ? 2 : 1;
+      const gap = 12.0;
+      final w = (c.maxWidth - gap * (cols - 1)) / cols;
+      return Wrap(spacing: gap, runSpacing: gap, children: [
+        for (final r in rows) SizedBox(width: w, child: LateJustificationCard(row: r, onOpen: () => _open(r))),
+      ]);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(lateJustificationQueueProvider(_filter));
+    final count = async.valueOrNull?.length;
     return RefreshIndicator(
       onRefresh: () => ref.refresh(lateJustificationQueueProvider(_filter).future),
       child: ListView(
         key: const Key('late-review-tab'),
         primary: false,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.symmetric(
+            horizontal: MediaQuery.sizeOf(context).width > 1100 ? (MediaQuery.sizeOf(context).width - 1068) / 2 : 16,
+            vertical: 16),
         children: [
           Row(children: [
-            Icon(Icons.help_outline, size: 18, color: AppColors.primary),
-            const SizedBox(width: 8),
-            Expanded(child: Text('Late Arrival Justifications', style: AppTextStyles.h4)),
+            const ApprovalsIconBox(Icons.help_outline, size: 34),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Late Arrival Justifications', style: AppTextStyles.h4),
+                if (count != null)
+                  Text(count == 1 ? '1 request' : '$count requests',
+                      key: const Key('late-review-count'),
+                      style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+              ]),
+            ),
           ]),
-          const SizedBox(height: 10),
-          Wrap(spacing: 6, runSpacing: 6, children: [
-            for (final (key, label) in kLateReviewFilters)
-              ChoiceChip(
-                key: Key('late-filter-${key.isEmpty ? 'all' : key}'),
-                label: Text(label, style: const TextStyle(fontSize: 12)),
-                selected: _filter == key,
-                onSelected: (_) => setState(() => _filter = key),
-              ),
-          ]),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, c) => Wrap(spacing: 8, runSpacing: 4, children: [
+              for (final (key, label) in kLateReviewFilters)
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: c.maxWidth),
+                  child: ChoiceChip(
+                    key: Key('late-filter-${key.isEmpty ? 'all' : key}'),
+                    label: Text(label, style: const TextStyle(fontSize: 12.5)),
+                    selected: _filter == key,
+                    showCheckmark: false,
+                    onSelected: (_) => setState(() => _filter = key),
+                  ),
+                ),
+            ]),
+          ),
           if (_notice != null)
             Container(
               key: const Key('late-review-notice'),
               margin: const EdgeInsets.only(top: 12),
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
-              child: Text(_notice!, style: AppTextStyles.caption.copyWith(color: AppColors.success)),
-            ),
-          const SizedBox(height: 8),
-          ...async.when(
-            loading: () => [
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 30),
-                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-              ),
-            ],
-            error: (e, _) => [
-              Column(key: const Key('late-review-load-error'), children: [
-                Text(friendlyAttendanceError(e), style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
-                TextButton(
-                  key: const Key('late-review-retry'),
-                  onPressed: () => ref.invalidate(lateJustificationQueueProvider(_filter)),
-                  child: const Text('Retry'),
-                ),
+                  color: AppColors.success.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Icon(Icons.check_circle_outline, size: 18, color: AppColors.success),
+                const SizedBox(width: 8),
+                Expanded(child: Text(_notice!, style: AppTextStyles.caption.copyWith(color: AppColors.success))),
               ]),
-            ],
-            data: (rows) => rows.isEmpty
-                ? [
-                    Padding(
-                      key: const Key('late-review-empty'),
-                      padding: const EdgeInsets.symmetric(vertical: 24),
-                      child: Column(children: [
-                        Icon(Icons.help_outline, size: 26, color: AppColors.textHint),
-                        const SizedBox(height: 6),
-                        Text('No requests', style: AppTextStyles.label),
-                        Text('Nothing matches this filter.', style: AppTextStyles.caption),
-                      ]),
-                    ),
-                  ]
-                : [for (final r in rows) _rowCard(r)],
+            ),
+          const SizedBox(height: 12),
+          async.when(
+            loading: () => const ApprovalsLoading(label: 'Loading justifications…'),
+            error: (e, _) => _states(e),
+            data: _cards,
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _rowCard(HrCorrectionRowEntity r) {
-    final badge = lateStatusBadge(r.status);
-    final (proofText, proofColor) = r.hasDocument
-        ? (r.canViewDocument ? 'Attached' : 'Attached (locked)', AppColors.textSecondary)
-        : (r.proofRequired ? 'Missing' : 'None', r.proofRequired ? AppColors.error : AppColors.textSecondary);
-    return InkWell(
-      key: Key('late-review-row-${r.id}'),
-      onTap: () => _open(r),
-      child: Container(
-        margin: const EdgeInsets.only(top: 10),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Expanded(child: Text(r.name, style: AppTextStyles.label.copyWith(fontWeight: FontWeight.w700))),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration:
-                  BoxDecoration(color: badge.$2.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-              child:
-                  Text(badge.$1, style: AppTextStyles.caption.copyWith(color: badge.$2, fontWeight: FontWeight.w600)),
-            ),
-          ]),
-          Text('${r.employeeId} · ${r.branch.isEmpty ? '—' : r.branch}',
-              style: AppTextStyles.caption.copyWith(fontSize: 11)),
-          const SizedBox(height: 4),
-          Text('${fmtLateDate(r.date)} · clock-in ${r.originalIn ?? '—'}', style: AppTextStyles.bodySmall),
-          Text(r.reasonLabel.isEmpty ? r.reason : r.reasonLabel, style: AppTextStyles.bodySmall),
-          if (r.explanation.isNotEmpty)
-            Text(r.explanation,
-                maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.caption.copyWith(fontSize: 11)),
-          const SizedBox(height: 6),
-          Row(children: [
-            Text('Proof: $proofText', style: AppTextStyles.caption.copyWith(fontSize: 11, color: proofColor)),
-            const Spacer(),
-            r.canAction
-                ? FilledButton(
-                    key: Key('late-review-open-${r.id}'),
-                    onPressed: () => _open(r),
-                    child: const Text('Review'),
-                  )
-                : OutlinedButton(
-                    key: Key('late-review-open-${r.id}'),
-                    onPressed: () => _open(r),
-                    child: const Text('View'),
-                  ),
-          ]),
-        ]),
       ),
     );
   }

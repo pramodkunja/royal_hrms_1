@@ -170,6 +170,7 @@ class LeaveRequestModel extends LeaveRequestEntity {
     required super.from,
     required super.to,
     required super.days,
+    super.totalDays,
     required super.status,
     required super.reason,
     required super.appliedOn,
@@ -224,6 +225,7 @@ class LeaveRequestModel extends LeaveRequestEntity {
       from: json['start_date'] as String? ?? '',
       to: json['end_date'] as String? ?? '',
       days: _toDouble(json['total_days']).round(),
+      totalDays: _toDouble(json['total_days']),
       status: json['status'] as String? ?? 'pending',
       reason: json['reason'] as String? ?? '',
       appliedOn: json['created_at'] as String? ?? '',
@@ -340,26 +342,48 @@ class LeaveStatsModel extends LeaveStatsEntity {
     super.balances,
     super.lopDays,
     super.lopRequests,
+    super.unavailable,
   });
 
-  // Backend returns: total, pending, approved, rejected, cancelled, year,
-  // lop_days, lop_requests,
-  // balances: [{leave_type, leave_type_display, total_days, used_days, available}]
+  // Backend (LeaveStatsView) returns: total, pending (incl. L2-pending), approved, rejected,
+  // cancelled, year, lop_days (approved only), lop_requests, and — for own-scope views only —
+  // balances: [{leave_type, leave_type_display, total_days, used_days, available}].
+  // A field that is missing or not a number is recorded in `unavailable` instead of being
+  // quietly read as 0; a real 0 stays 0.
   factory LeaveStatsModel.fromJson(Map<String, dynamic> json) {
-    final rawBalances = json['balances'] as List<dynamic>? ?? [];
+    final unavailable = <String>{};
+    int? count(String key) {
+      final v = json[key];
+      final n = v is num ? v : (v is String ? num.tryParse(v) : null);
+      if (n == null || n != n.truncate()) {
+        unavailable.add(key);
+        return null;
+      }
+      return n.toInt();
+    }
+
+    double? days(String key) {
+      final v = json[key];
+      final n = v is num ? v.toDouble() : (v is String ? double.tryParse(v) : null);
+      if (n == null) unavailable.add(key);
+      return n;
+    }
+
+    final rawBalances = json['balances'];
     return LeaveStatsModel(
-      total: (json['total'] as num? ?? 0).toInt(),
-      pending: (json['pending'] as num? ?? 0).toInt(),
-      approved: (json['approved'] as num? ?? 0).toInt(),
-      rejected: (json['rejected'] as num? ?? 0).toInt(),
-      cancelled: (json['cancelled'] as num? ?? 0).toInt(),
-      year: (json['year'] as num? ?? 0).toInt(),
-      balances: rawBalances
+      total: count('total') ?? 0,
+      pending: count('pending') ?? 0,
+      approved: count('approved') ?? 0,
+      rejected: count('rejected') ?? 0,
+      cancelled: count('cancelled') ?? 0,
+      year: count('year') ?? 0,
+      balances: (rawBalances is List ? rawBalances : const [])
           .whereType<Map<String, dynamic>>()
           .map(BalanceSummaryModel.fromJson)
           .toList(),
-      lopDays: _toDouble(json['lop_days']),
-      lopRequests: (json['lop_requests'] as num? ?? 0).toInt(),
+      lopDays: days('lop_days') ?? 0.0,
+      lopRequests: count('lop_requests') ?? 0,
+      unavailable: unavailable,
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_constants.dart';
+import '../../../../core/error/exceptions.dart';
 import '../models/leave_models.dart';
 
 class LeaveRemoteDataSource {
@@ -42,7 +43,12 @@ class LeaveRemoteDataSource {
       if (year != null) 'year': year,
       if (scope != null) 'scope': scope,
     });
-    return LeaveStatsModel.fromJson(_unwrap(res.data) as Map<String, dynamic>);
+    final data = _unwrap(res.data);
+    // A body that is not an object is an error, not an empty set of statistics.
+    if (data is! Map<String, dynamic>) {
+      throw const AppException('The leave statistics response was not in the expected format.');
+    }
+    return LeaveStatsModel.fromJson(data);
   }
 
   // scope: without it, the backend ALWAYS returns the requesting user's own

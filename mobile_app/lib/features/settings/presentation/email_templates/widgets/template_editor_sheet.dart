@@ -5,16 +5,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
+import '../../../../../shared/widgets/blue_app_bar.dart';
+import '../../../../profile/presentation/widgets/profile_widgets.dart';
 import '../../../data/models/email_template_model.dart';
 import '../../providers/settings_providers.dart';
+import 'template_preview_sheet.dart' show VariableChip;
 
 // Matches backend's EmailTemplateAttachment.ALLOWED_MIME_TYPES.
 const _kAttachmentExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'xls', 'xlsx'];
 const _kMaxAttachmentBytes = 10 * 1024 * 1024;
 
 const Map<String, String> _kExtToMime = {
-  'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
-  'gif': 'image/gif', 'webp': 'image/webp',
+  'jpg': 'image/jpeg',
+  'jpeg': 'image/jpeg',
+  'png': 'image/png',
+  'gif': 'image/gif',
+  'webp': 'image/webp',
   'pdf': 'application/pdf',
   'doc': 'application/msword',
   'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -26,10 +32,10 @@ const Map<String, String> _kExtToMime = {
 // to keep a legacy template_type selectable even if it's absent from the
 // fetched category list. The real source of truth is emailTemplateCategoriesProvider.
 const _kFallbackTemplateTypes = [
-  ('document',     'Document Templates'),
+  ('document', 'Document Templates'),
   ('notification', 'Notification Templates'),
-  ('reminder',     'Reminder Templates'),
-  ('wish',         'Wish Templates'),
+  ('reminder', 'Reminder Templates'),
+  ('wish', 'Wish Templates'),
 ];
 
 const _kCreateCategorySentinel = '__create_new_category__';
@@ -50,42 +56,52 @@ class _PendingAttachment {
   });
 }
 
-class TemplateEditorSheet extends ConsumerStatefulWidget {
+/// Full-screen Add / Edit Email Template page. Push it with
+/// `Navigator.push<bool>(MaterialPageRoute(...))`: it pops `true` once the
+/// server CONFIRMED the save (create, or edit), and null otherwise.
+class TemplateEditorScreen extends ConsumerStatefulWidget {
   final EmailTemplateModel? template;
 
-  const TemplateEditorSheet({super.key, this.template});
+  const TemplateEditorScreen({super.key, this.template});
 
   @override
-  ConsumerState<TemplateEditorSheet> createState() => _TemplateEditorSheetState();
+  ConsumerState<TemplateEditorScreen> createState() => _TemplateEditorScreenState();
 }
 
-class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
+class _TemplateEditorScreenState extends ConsumerState<TemplateEditorScreen> {
   late final EmailTemplateFormData _form;
   late final TextEditingController _displayNameCtrl;
   late final TextEditingController _slugCtrl;
   late final TextEditingController _subjectCtrl;
   late final TextEditingController _bodyCtrl;
   final Map<String, String?> _errors = {};
+  final _anchors = <String, GlobalKey>{};
+  final _scroll = ScrollController();
+  String? _saveError;
   bool _saving = false;
   bool _slugEdited = false; // track if user manually edited slug
   bool _creatingCategory = false;
+  int _catEpoch = 0; // bumped to rebuild the category dropdown on its real value
   late List<EmailTemplateAttachmentModel> _attachments;
   final List<_PendingAttachment> _pendingAttachments = [];
   bool _uploadingAttachment = false;
 
+  /// The order fields appear in, to find the first one that needs attention.
+  static const _order = ['displayName', 'name', 'templateType', 'subject', 'body'];
+
   bool get _isAdd => widget.template == null;
+
+  GlobalKey _anchor(String f) => _anchors.putIfAbsent(f, GlobalKey.new);
 
   @override
   void initState() {
     super.initState();
-    _form = widget.template != null
-        ? EmailTemplateFormData.fromModel(widget.template!)
-        : EmailTemplateFormData();
+    _form = widget.template != null ? EmailTemplateFormData.fromModel(widget.template!) : EmailTemplateFormData();
     _displayNameCtrl = TextEditingController(text: _form.displayName);
-    _slugCtrl        = TextEditingController(text: _form.name);
-    _subjectCtrl     = TextEditingController(text: _form.subject);
-    _bodyCtrl        = TextEditingController(text: _form.body);
-    _attachments     = List.of(widget.template?.attachments ?? const []);
+    _slugCtrl = TextEditingController(text: _form.name);
+    _subjectCtrl = TextEditingController(text: _form.subject);
+    _bodyCtrl = TextEditingController(text: _form.body);
+    _attachments = List.of(widget.template?.attachments ?? const []);
   }
 
   @override
@@ -94,6 +110,7 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
     _slugCtrl.dispose();
     _subjectCtrl.dispose();
     _bodyCtrl.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -124,84 +141,119 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
     return vars;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _DlgHeader(
-            icon: Icons.mail_outline,
-            title: _isAdd ? 'Add Email Template' : 'Edit Template',
-            subtitle: _isAdd
-                ? 'Create a new transactional email template'
-                : widget.template?.displayName ?? '',
-            onClose: () => Navigator.pop(context),
-          ),
-          Flexible(
-            child: Container(
-              color: AppColors.background,
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.viewInsetsOf(context).bottom + 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildDisplayName(),
-                    if (_isAdd) _buildSlug(),
-                    if (_isAdd) _buildCategoryDropdown() else _buildLockedCategory(),
-                    _buildSubject(),
-                    _buildBody(),
-                    _buildVariableChips(_allVars),
-                    _buildAttachmentsSection(),
-                    const SizedBox(height: 8),
-                    _buildActiveSwitch(),
-                    const SizedBox(height: 16),
-                    _buildSubmitButton(),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  /// Brings the first field that needs attention (or, for a message that
+  /// belongs to no field, the banner at the top) into view.
+  void _showProblem() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final first = _order.where((k) => _errors[k] != null).firstOrNull;
+      final ctx = first == null ? null : _anchors[first]?.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(ctx, alignment: 0.15, duration: const Duration(milliseconds: 250));
+      } else if (_scroll.hasClients) {
+        _scroll.animateTo(0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+      }
+    });
   }
 
-  // ── Fields ─────────────────────────────────────────────────────────────────
+  // ── Look ───────────────────────────────────────────────────────────────────
 
-  Widget _buildDisplayName() => _FormField(
-    label: 'Display Name *',
-    hint: 'e.g. Pay Slip, Birthday Wish',
-    controller: _displayNameCtrl,
-    error: _errors['displayName'],
-    readOnly: !_isAdd,
-    onChanged: _onDisplayNameChanged,
-  );
+  OutlineInputBorder _border(Color c, [double w = 1]) =>
+      OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c, width: w));
 
-  Widget _buildSlug() => Padding(
-    padding: const EdgeInsets.only(bottom: 12),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextFormField(
+  InputDecoration _decoration({String? hint, String? error, Widget? suffix, bool enabled = true}) => InputDecoration(
+        hintText: hint,
+        hintStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
+        errorText: error,
+        errorMaxLines: 4,
+        errorStyle: AppTextStyles.caption.copyWith(color: AppColors.error, fontSize: 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        filled: true,
+        fillColor: enabled ? AppColors.surface : AppColors.backgroundLow,
+        border: _border(AppColors.border),
+        enabledBorder: _border(AppColors.border),
+        disabledBorder: _border(AppColors.border),
+        focusedBorder: _border(AppColors.primary, 1.5),
+        errorBorder: _border(AppColors.error),
+        focusedErrorBorder: _border(AppColors.error, 1.5),
+        suffixIcon: suffix,
+      );
+
+  /// A labelled field: label above, control below, its own scroll anchor.
+  Widget _field(String f, String label, Widget control, {bool required = false, String? helper}) => Padding(
+        key: _anchor(f),
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text.rich(
+            TextSpan(children: [
+              TextSpan(text: label),
+              if (required) TextSpan(text: ' *', style: TextStyle(color: AppColors.error)),
+            ]),
+            style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 6),
+          control,
+          if (helper != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(helper, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontSize: 12)),
+            ),
+        ]),
+      );
+
+  Widget _lock() => Icon(Icons.lock_outline, size: 16, color: AppColors.textHint);
+
+  Widget _lockedText(String key, String value) => InputDecorator(
+        key: Key(key),
+        decoration: _decoration(suffix: _lock(), enabled: false),
+        child: Text(value, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+      );
+
+  // ── Basics ─────────────────────────────────────────────────────────────────
+
+  Widget _buildDisplayName() => _field(
+        'displayName',
+        'Display Name',
+        _isAdd
+            ? TextField(
+                key: const Key('et-field-display-name'),
+                controller: _displayNameCtrl,
+                enabled: !_saving,
+                textInputAction: TextInputAction.next,
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
+                decoration: _decoration(hint: 'e.g. Pay Slip, Birthday Wish', error: _errors['displayName']),
+                onChanged: _onDisplayNameChanged,
+              )
+            : _lockedText('et-field-display-name', _displayNameCtrl.text),
+        required: _isAdd,
+      );
+
+  Widget _buildSlug() => _field(
+        'name',
+        'Slug (name)',
+        TextField(
+          key: const Key('et-field-name'),
           controller: _slugCtrl,
-          style: AppTextStyles.body.copyWith(fontFamily: 'monospace'),
-          decoration: _inputDec('Slug (name) *', _errors['name']).copyWith(
-            helperText: 'auto-generated · lowercase_with_underscores',
-            helperStyle: AppTextStyles.caption.copyWith(color: AppColors.textHint, fontSize: 11),
-            suffixIcon: _slugEdited
+          enabled: !_saving,
+          textInputAction: TextInputAction.next,
+          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary, fontFamily: 'monospace'),
+          decoration: _decoration(
+            error: _errors['name'],
+            suffix: _slugEdited
                 ? IconButton(
+                    key: const Key('et-slug-regen'),
                     icon: Icon(Icons.refresh, size: 18, color: AppColors.textHint),
                     tooltip: 'Re-generate from display name',
-                    onPressed: () {
-                      final slug = EmailTemplateFormData.toSlug(_displayNameCtrl.text);
-                      _slugCtrl.text = slug;
-                      _form.name = slug;
-                      setState(() => _slugEdited = false);
-                    },
+                    onPressed: _saving
+                        ? null
+                        : () {
+                            final slug = EmailTemplateFormData.toSlug(_displayNameCtrl.text);
+                            _slugCtrl.text = slug;
+                            _form.name = slug;
+                            setState(() => _slugEdited = false);
+                          },
                   )
-                : Icon(Icons.lock_outline, size: 16, color: AppColors.textHint),
+                : _lock(),
           ),
           onChanged: (v) {
             _form.name = v;
@@ -209,13 +261,17 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
             setState(() => _slugEdited = v != EmailTemplateFormData.toSlug(_displayNameCtrl.text));
           },
         ),
-      ],
-    ),
-  );
+        required: true,
+        helper: 'auto-generated · lowercase_with_underscores',
+      );
 
   // ── Category — data-driven dropdown with inline "create new" ───────────────
 
-  Widget _buildCategoryDropdown() {
+  Widget _buildCategory() {
+    if (!_isAdd) {
+      final label = widget.template?.category ?? _form.templateType ?? '';
+      return _field('templateType', 'Category', _lockedText('et-field-category', label));
+    }
     final categoriesAsync = ref.watch(emailTemplateCategoriesProvider);
     return categoriesAsync.when(
       loading: () => _categoryDropdownField(
@@ -243,53 +299,69 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
     String? hint,
   }) {
     final validValue = items.any((t) => t.$1 == _form.templateType) ? _form.templateType : null;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: DropdownButtonFormField<String>(
-        initialValue: validValue,
-        isExpanded: true,
-        style: AppTextStyles.body,
-        decoration: _inputDec('Category *', _errors['templateType']).copyWith(
-          suffixIcon: _creatingCategory
-              ? const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                )
-              : null,
-        ),
-        hint: Text(hint ?? 'Select category', style: AppTextStyles.body.copyWith(color: AppColors.textHint)),
-        items: [
-          ...items.map((t) => DropdownMenuItem<String>(
-                value: t.$1,
-                child: Text(t.$2, maxLines: 1, overflow: TextOverflow.ellipsis),
-              )),
-          if (allowCreate)
-            DropdownMenuItem<String>(
-              value: _kCreateCategorySentinel,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.add_circle_outline, size: 16, color: AppColors.primary),
-                  const SizedBox(width: 6),
-                  Text('Create new category',
-                      style: AppTextStyles.body.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
-                ],
+    return _field(
+      'templateType',
+      'Category',
+      KeyedSubtree(
+        key: const Key('et-field-category'),
+        child: DropdownButtonFormField<String>(
+          key: ValueKey('cat-$validValue-${items.length}-$enabled-$_catEpoch'),
+          initialValue: validValue,
+          isExpanded: true,
+          menuMaxHeight: 340,
+          borderRadius: BorderRadius.circular(12),
+          icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary),
+          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
+          decoration: _decoration(
+            error: _errors['templateType'],
+            enabled: enabled && !_saving,
+            suffix: _creatingCategory
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                  )
+                : null,
+          ),
+          hint: Text(hint ?? 'Select category', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint)),
+          items: [
+            ...items.map((t) => DropdownMenuItem<String>(
+                  value: t.$1,
+                  child: Text(t.$2, maxLines: 2, overflow: TextOverflow.ellipsis),
+                )),
+            if (allowCreate)
+              DropdownMenuItem<String>(
+                value: _kCreateCategorySentinel,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_circle_outline, size: 16, color: AppColors.primary),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text('Create new category',
+                          style:
+                              AppTextStyles.bodySmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
               ),
-            ),
-        ],
-        onChanged: (!enabled || _creatingCategory)
-            ? null
-            : (v) {
-                if (v == _kCreateCategorySentinel) {
-                  _showCreateCategoryDialog();
-                  return;
-                }
-                setState(() {
-                  _form.templateType = v;
-                  _clearErr('templateType');
-                });
-              },
+          ],
+          onChanged: (!enabled || _creatingCategory || _saving)
+              ? null
+              : (v) {
+                  if (v == _kCreateCategorySentinel) {
+                    // The dropdown now holds the "create" row; rebuild it on the real value.
+                    setState(() => _catEpoch++);
+                    _showCreateCategoryDialog();
+                    return;
+                  }
+                  setState(() {
+                    _form.templateType = v;
+                    _errors.remove('templateType');
+                  });
+                },
+        ),
       ),
+      required: true,
     );
   }
 
@@ -301,6 +373,7 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: const Text('Create Category'),
         content: TextField(
+          key: const Key('et-new-category-name'),
           controller: ctrl,
           autofocus: true,
           style: AppTextStyles.body,
@@ -312,6 +385,7 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
           FilledButton(
+            key: const Key('et-new-category-create'),
             onPressed: () => Navigator.pop(dialogContext, ctrl.text.trim()),
             child: const Text('Create'),
           ),
@@ -327,108 +401,116 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
       _creatingCategory = false;
       if (created != null) {
         _form.templateType = created.name;
-        _clearErr('templateType');
+        _errors.remove('templateType');
       }
     });
   }
 
-  Widget _buildLockedCategory() {
-    final label = widget.template?.category ?? _form.templateType ?? '';
-    if (label.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Text('Category', style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
-          const SizedBox(width: 10),
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-              ),
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
-              ),
-            ),
+  // ── Message ────────────────────────────────────────────────────────────────
+
+  Widget _buildSubject() => _field(
+        'subject',
+        'Subject',
+        TextField(
+          key: const Key('et-field-subject'),
+          controller: _subjectCtrl,
+          enabled: !_saving,
+          textInputAction: TextInputAction.next,
+          minLines: 1,
+          maxLines: 3,
+          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
+          decoration: _decoration(hint: 'Email subject line...', error: _errors['subject']),
+          onChanged: (v) {
+            _form.subject = v;
+            _clearErr('subject');
+          },
+        ),
+        required: true,
+      );
+
+  // Body — basic toolbar over a raw-HTML field.
+  Widget _buildBody() => _field(
+        'body',
+        'Body',
+        Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _buildBodyToolbar(),
+          const SizedBox(height: 8),
+          TextField(
+            key: const Key('et-field-body'),
+            controller: _bodyCtrl,
+            enabled: !_saving,
+            keyboardType: TextInputType.multiline,
+            textInputAction: TextInputAction.newline,
+            minLines: 10,
+            maxLines: 20,
+            style:
+                AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary, fontFamily: 'monospace', fontSize: 13),
+            onChanged: (v) {
+              _form.body = v;
+              _clearErr('body');
+            },
+            decoration: _decoration(hint: '<p>Dear {EMPLOYEE_NAME},</p>', error: _errors['body']),
           ),
-          const SizedBox(width: 8),
-          Icon(Icons.lock_outline, size: 14, color: AppColors.textHint),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSubject() => _FormField(
-    label: 'Subject *',
-    hint: 'Email subject line...',
-    controller: _subjectCtrl,
-    error: _errors['subject'],
-    onChanged: (v) { _form.subject = v; _clearErr('subject'); },
-  );
-
-  // ── Body — basic rich-text toolbar over a raw-HTML field ────────────────────
-
-  Widget _buildBody() => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Body *', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
-        const SizedBox(height: 6),
-        _buildBodyToolbar(),
-        const SizedBox(height: 6),
-        TextFormField(
-          controller: _bodyCtrl,
-          maxLines: 12,
-          minLines: 8,
-          style: AppTextStyles.body.copyWith(fontFamily: 'monospace', fontSize: 13),
-          onChanged: (v) { _form.body = v; _clearErr('body'); },
-          decoration: _inputDec('', _errors['body']).copyWith(labelText: null),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Supports HTML. Use the toolbar to format, or type {VARIABLE} tokens directly.',
-          style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-        ),
-      ],
-    ),
-  );
+        ]),
+        required: true,
+        helper: 'Supports HTML. Use the toolbar to format, or type {VARIABLE} tokens directly.',
+      );
 
   Widget _buildBodyToolbar() {
+    final on = !_saving;
     return Container(
+      key: const Key('et-toolbar'),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.backgroundLow,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.border),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _ToolbarBtn(icon: Icons.format_bold, tooltip: 'Bold', onTap: () => _wrapSelection('<b>', '</b>')),
-            _ToolbarBtn(icon: Icons.format_italic, tooltip: 'Italic', onTap: () => _wrapSelection('<i>', '</i>')),
-            _ToolbarBtn(icon: Icons.format_underlined, tooltip: 'Underline', onTap: () => _wrapSelection('<u>', '</u>')),
-            _ToolbarBtn(icon: Icons.format_list_bulleted, tooltip: 'Bullet list', onTap: _wrapBulletList),
-            _ToolbarBtn(icon: Icons.link, tooltip: 'Link', onTap: _wrapLink),
-          ],
-        ),
+      padding: const EdgeInsets.all(2),
+      child: Wrap(
+        children: [
+          _ToolbarBtn(
+              id: 'bold',
+              icon: Icons.format_bold,
+              tooltip: 'Bold',
+              onTap: on ? () => _wrapSelection('<b>', '</b>') : null),
+          _ToolbarBtn(
+              id: 'italic',
+              icon: Icons.format_italic,
+              tooltip: 'Italic',
+              onTap: on ? () => _wrapSelection('<i>', '</i>') : null),
+          _ToolbarBtn(
+              id: 'underline',
+              icon: Icons.format_underlined,
+              tooltip: 'Underline',
+              onTap: on ? () => _wrapSelection('<u>', '</u>') : null),
+          _ToolbarBtn(
+              id: 'strike',
+              icon: Icons.format_strikethrough,
+              tooltip: 'Strikethrough',
+              onTap: on ? () => _wrapSelection('<s>', '</s>') : null),
+          _ToolbarBtn(
+              id: 'bullets',
+              icon: Icons.format_list_bulleted,
+              tooltip: 'Bullet list',
+              onTap: on ? () => _wrapList('ul') : null),
+          _ToolbarBtn(
+              id: 'numbers',
+              icon: Icons.format_list_numbered,
+              tooltip: 'Numbered list',
+              onTap: on ? () => _wrapList('ol') : null),
+          _ToolbarBtn(id: 'link', icon: Icons.link, tooltip: 'Link', onTap: on ? _wrapLink : null),
+        ],
       ),
     );
   }
 
   void _applyBodyEdit(String newText, TextSelection newSelection) {
     _bodyCtrl.value = TextEditingValue(text: newText, selection: newSelection);
-    setState(() { _form.body = newText; _clearErrSilently('body'); });
+    setState(() {
+      _form.body = newText;
+      _errors.remove('body');
+    });
   }
-
-  void _clearErrSilently(String key) => _errors.remove(key);
 
   void _wrapSelection(String open, String close) {
     final sel = _bodyCtrl.selection;
@@ -441,16 +523,14 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
     _applyBodyEdit(newText, TextSelection.collapsed(offset: cursor));
   }
 
-  void _wrapBulletList() {
+  void _wrapList(String tag) {
     final sel = _bodyCtrl.selection;
     final text = _bodyCtrl.text;
     final start = sel.isValid ? sel.start : text.length;
     final end = sel.isValid ? sel.end : text.length;
     final selected = text.substring(start, end);
-    final lines = selected.isEmpty
-        ? ['List item']
-        : selected.split('\n').where((l) => l.trim().isNotEmpty).toList();
-    final listHtml = '<ul>${lines.map((l) => '<li>$l</li>').join()}</ul>';
+    final lines = selected.isEmpty ? ['List item'] : selected.split('\n').where((l) => l.trim().isNotEmpty).toList();
+    final listHtml = '<$tag>${lines.map((l) => '<li>$l</li>').join()}</$tag>';
     final newText = text.replaceRange(start, end, listHtml);
     _applyBodyEdit(newText, TextSelection.collapsed(offset: start + listHtml.length));
   }
@@ -463,6 +543,7 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: const Text('Insert Link'),
         content: TextField(
+          key: const Key('et-link-url'),
           controller: ctrl,
           autofocus: true,
           keyboardType: TextInputType.url,
@@ -471,7 +552,11 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, ctrl.text.trim()), child: const Text('Insert')),
+          FilledButton(
+            key: const Key('et-link-insert'),
+            onPressed: () => Navigator.pop(dialogContext, ctrl.text.trim()),
+            child: const Text('Insert'),
+          ),
         ],
       ),
     );
@@ -489,124 +574,95 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
 
   // ── Variables ────────────────────────────────────────────────────────────────
 
-  Widget _buildVariableChips(List<String> vars) => Padding(
-    padding: const EdgeInsets.only(bottom: 12),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'AVAILABLE TAGS',
-          style: AppTextStyles.caption.copyWith(
-            fontSize: 11, color: AppColors.textHint,
-            fontWeight: FontWeight.w700, letterSpacing: 0.7,
-          ),
-        ),
-        const SizedBox(height: 8),
-        if (vars.isEmpty)
-          Text(
-            'Type {VARIABLE} in the subject or body to detect a tag.',
-            style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-          )
-        else
-          Wrap(
-            spacing: 8, runSpacing: 8,
-            children: vars.map((v) => GestureDetector(
-              onTap: () {
-                final sel  = _bodyCtrl.selection;
-                final text = _bodyCtrl.text;
-                final token = '{$v}';
-                final start = sel.isValid ? sel.start : text.length;
-                final end = sel.isValid ? sel.end : text.length;
-                final inserted = text.replaceRange(start, end, token);
-                _applyBodyEdit(inserted, TextSelection.collapsed(offset: start + token.length));
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-                ),
-                child: Text(
-                  '{$v}',
-                  style: AppTextStyles.caption.copyWith(
-                    fontFamily: 'monospace', color: AppColors.primary,
-                    fontWeight: FontWeight.w600, fontSize: 12,
+  void _insertVariable(String v) {
+    final sel = _bodyCtrl.selection;
+    final text = _bodyCtrl.text;
+    final token = '{$v}';
+    final start = sel.isValid ? sel.start : text.length;
+    final end = sel.isValid ? sel.end : text.length;
+    final inserted = text.replaceRange(start, end, token);
+    _applyBodyEdit(inserted, TextSelection.collapsed(offset: start + token.length));
+  }
+
+  Widget _buildVariables(List<String> vars) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (vars.isEmpty)
+            Text(
+              'Type {VARIABLE} in the subject or body to detect a tag.',
+              key: const Key('et-variables-empty'),
+              style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontSize: 12),
+            )
+          else ...[
+            Wrap(
+              key: const Key('et-variables'),
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final v in vars)
+                  KeyedSubtree(
+                    key: Key('et-var-$v'),
+                    child: VariableChip(name: v, onTap: _saving ? null : () => _insertVariable(v)),
                   ),
-                ),
-              ),
-            )).toList(),
-          ),
-      ],
-    ),
-  );
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text('Tap a tag to insert it into the body.',
+                style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontSize: 12)),
+          ],
+        ],
+      );
 
   // ── Attachments ────────────────────────────────────────────────────────────
 
-  Widget _buildAttachmentsSection() => Padding(
-    padding: const EdgeInsets.only(bottom: 16),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'ATTACHMENTS',
-                style: AppTextStyles.caption.copyWith(
-                  fontSize: 11, color: AppColors.textHint,
-                  fontWeight: FontWeight.w700, letterSpacing: 0.7,
-                ),
-              ),
-            ),
-            TextButton.icon(
-              onPressed: _uploadingAttachment
-                  ? null
-                  : (_isAdd ? _pickPendingAttachment : _pickAndUploadAttachment),
-              icon: _uploadingAttachment
-                  ? const SizedBox(
-                      width: 14, height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Icon(Icons.attach_file, size: 16, color: AppColors.primary),
-              label: Text(
-                _uploadingAttachment ? 'Uploading…' : 'Add File',
-                style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700),
-              ),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                visualDensity: VisualDensity.compact,
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-          ],
+  Widget _addFileButton() => OutlinedButton.icon(
+        key: const Key('et-add-file'),
+        onPressed:
+            (_uploadingAttachment || _saving) ? null : (_isAdd ? _pickPendingAttachment : _pickAndUploadAttachment),
+        icon: _uploadingAttachment
+            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+            : Icon(Icons.attach_file, size: 16, color: AppColors.primary),
+        label: Text(
+          _uploadingAttachment ? 'Uploading…' : 'Add File',
+          style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700),
         ),
-        const SizedBox(height: 8),
-        if (_isAdd) ..._buildPendingAttachmentRows() else ..._buildExistingAttachmentRows(),
-      ],
-    ),
-  );
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 44),
+          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+
+  Widget _buildAttachments() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ...(_isAdd ? _buildPendingAttachmentRows() : _buildExistingAttachmentRows()),
+          const SizedBox(height: 4),
+          _addFileButton(),
+        ],
+      );
 
   List<Widget> _buildExistingAttachmentRows() {
     if (_attachments.isEmpty) {
       return [
         Text(
           'No files attached. Images, PDF, Word or Excel · max 10 MB.',
-          style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+          key: const Key('et-attachments-empty'),
+          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontSize: 12),
         ),
       ];
     }
-    return _attachments
-        .map((a) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _AttachmentRow(
-                attachment: a,
-                onOpen: () => _openAttachment(a),
-                onDelete: () => _deleteAttachment(a),
-              ),
-            ))
-        .toList();
+    return [
+      for (final a in _attachments)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _AttachmentRow(
+            attachment: a,
+            onOpen: () => _openAttachment(a),
+            onDelete: _saving ? null : () => _deleteAttachment(a),
+          ),
+        ),
+    ];
   }
 
   List<Widget> _buildPendingAttachmentRows() {
@@ -614,39 +670,50 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
       return [
         Text(
           'Images, PDF, Word or Excel · max 10 MB. Files are uploaded once the template is created.',
-          style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+          key: const Key('et-attachments-empty'),
+          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontSize: 12),
         ),
       ];
     }
-    return _pendingAttachments
-        .map((a) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _PendingAttachmentRow(
-                attachment: a,
-                onRemove: () => setState(() => _pendingAttachments.remove(a)),
-              ),
-            ))
-        .toList();
+    return [
+      for (final a in _pendingAttachments)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _PendingAttachmentRow(
+            attachment: a,
+            onRemove: _saving ? null : () => setState(() => _pendingAttachments.remove(a)),
+          ),
+        ),
+    ];
   }
 
-  Future<void> _pickPendingAttachment() async {
+  /// Picks one file and applies web/backend's size and type rules; null (after
+  /// a message) when the file is refused.
+  Future<(PlatformFile, String)?> _pickValid() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: _kAttachmentExtensions,
     );
     final picked = result?.files.firstOrNull;
-    if (picked == null || picked.path == null) return;
+    if (picked == null || picked.path == null) return null;
 
     if (picked.size > _kMaxAttachmentBytes) {
       _toast('File size must not exceed 10 MB.', false);
-      return;
+      return null;
     }
     final ext = picked.extension?.toLowerCase() ?? '';
     final mimeType = _kExtToMime[ext];
     if (mimeType == null) {
       _toast('Unsupported file type.', false);
-      return;
+      return null;
     }
+    return (picked, mimeType);
+  }
+
+  Future<void> _pickPendingAttachment() async {
+    final v = await _pickValid();
+    if (v == null || !mounted) return;
+    final (picked, mimeType) = v;
     setState(() => _pendingAttachments.add(_PendingAttachment(
           file: File(picked.path!),
           mimeType: mimeType,
@@ -656,23 +723,9 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
   }
 
   Future<void> _pickAndUploadAttachment() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: _kAttachmentExtensions,
-    );
-    final picked = result?.files.firstOrNull;
-    if (picked == null || picked.path == null) return;
-
-    if (picked.size > _kMaxAttachmentBytes) {
-      _toast('File size must not exceed 10 MB.', false);
-      return;
-    }
-    final ext = picked.extension?.toLowerCase() ?? '';
-    final mimeType = _kExtToMime[ext];
-    if (mimeType == null) {
-      _toast('Unsupported file type.', false);
-      return;
-    }
+    final v = await _pickValid();
+    if (v == null || !mounted) return;
+    final (picked, mimeType) = v;
 
     setState(() => _uploadingAttachment = true);
     final error = await ref.read(emailTemplatesProvider.notifier).uploadAttachment(
@@ -684,7 +737,9 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
     setState(() {
       _uploadingAttachment = false;
       if (error == null) {
-        final updated = ref.read(emailTemplatesProvider).valueOrNull
+        final updated = ref
+            .read(emailTemplatesProvider)
+            .valueOrNull
             ?.firstWhere((t) => t.id == widget.template!.id, orElse: () => widget.template!);
         _attachments = List.of(updated?.attachments ?? _attachments);
       }
@@ -701,15 +756,16 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
   Future<void> _deleteAttachment(EmailTemplateAttachmentModel attachment) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: const Text('Remove Attachment'),
         content: Text('Remove "${attachment.filename}"? This cannot be undone.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
           FilledButton(
+            key: const Key('et-remove-confirm'),
             style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('Remove'),
           ),
         ],
@@ -717,9 +773,7 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
     );
     if (ok != true || !mounted) return;
 
-    final error = await ref
-        .read(emailTemplatesProvider.notifier)
-        .removeAttachment(widget.template!.id, attachment.id);
+    final error = await ref.read(emailTemplatesProvider.notifier).removeAttachment(widget.template!.id, attachment.id);
     if (!mounted) return;
     if (error == null) {
       setState(() => _attachments.removeWhere((a) => a.id == attachment.id));
@@ -737,69 +791,146 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
     ));
   }
 
-  Widget _buildActiveSwitch() => SwitchListTile(
-    contentPadding: EdgeInsets.zero,
-    title: Text('Active', style: AppTextStyles.label),
-    subtitle: Text('Inactive templates are not sent by the system.', style: AppTextStyles.caption),
-    value: _form.isActive,
-    activeThumbColor: AppColors.success,
-    onChanged: (v) => setState(() => _form.isActive = v),
-  );
+  // ── Status ─────────────────────────────────────────────────────────────────
 
-  Widget _buildSubmitButton() => FilledButton(
-    onPressed: _saving ? null : _submit,
-    style: FilledButton.styleFrom(
-      minimumSize: const Size(double.infinity, 48),
-      backgroundColor: AppColors.primary,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    ),
-    child: _saving
-        ? const SizedBox(width: 20, height: 20,
-            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-        : Text(
-            _isAdd ? 'Create Template' : 'Save Changes',
-            style: AppTextStyles.label.copyWith(color: Colors.white),
+  Widget _buildActiveSwitch() => Row(
+        children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Active', style: AppTextStyles.label),
+              const SizedBox(height: 2),
+              Text('Inactive templates are not sent by the system.',
+                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+            ]),
           ),
-  );
+          const SizedBox(width: 8),
+          Switch(
+            key: const Key('et-active'),
+            value: _form.isActive,
+            activeThumbColor: AppColors.success,
+            onChanged: _saving ? null : (v) => setState(() => _form.isActive = v),
+          ),
+        ],
+      );
 
-  InputDecoration _inputDec(String label, [String? error]) => InputDecoration(
-    labelText: label.isEmpty ? null : label,
-    errorText: error,
-    labelStyle: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-    filled: true,
-    fillColor: AppColors.surface,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: AppColors.border),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: AppColors.primary, width: 1.5),
-    ),
-    errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: AppColors.error),
-    ),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-  );
+  // ── Save ───────────────────────────────────────────────────────────────────
+
+  Widget _banner(String text) => Container(
+        key: const Key('et-save-error'),
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.error.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(Icons.error_outline, size: 18, color: AppColors.error),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error))),
+        ]),
+      );
+
+  Widget _actionBar(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(context).scale(10) / 10;
+    final cancel = OutlinedButton(
+      key: const Key('et-cancel'),
+      onPressed: _saving ? null : () => Navigator.of(context).pop(),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 48),
+        foregroundColor: AppColors.textPrimary,
+        side: BorderSide(color: AppColors.border),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      ),
+      child: const Text('Cancel'),
+    );
+    final save = FilledButton(
+      key: const Key('et-save'),
+      onPressed: _saving ? null : _submit,
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(0, 48),
+        backgroundColor: AppColors.primary,
+        // While saving the button stays blue with its spinner (not a greyed-out look).
+        disabledBackgroundColor: _saving ? AppColors.primary : null,
+        disabledForegroundColor: _saving ? Colors.white : null,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      ),
+      child: _saving
+          ? const Row(mainAxisSize: MainAxisSize.min, children: [
+              SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+              SizedBox(width: 10),
+              Text('Saving…'),
+            ])
+          : Text(_isAdd ? 'Create Template' : 'Save Changes'),
+    );
+    return Material(
+      color: AppColors.surface,
+      elevation: 4,
+      shadowColor: Colors.black12,
+      child: SafeArea(
+        top: false,
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: LayoutBuilder(builder: (context, c) {
+                if (c.maxWidth < 300 || scale > 1.3) {
+                  return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        save,
+                        const SizedBox(height: 8),
+                        cancel,
+                      ]);
+                }
+                return Row(children: [
+                  Expanded(child: cancel),
+                  const SizedBox(width: 12),
+                  Expanded(flex: 2, child: save),
+                ]);
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _submit() async {
+    if (_saving) return;
+    FocusScope.of(context).unfocus();
     _form.availableVariables = _allVars;
     final errors = _form.validate(isAdd: _isAdd);
     if (errors.isNotEmpty) {
-      setState(() => _errors.addAll(errors));
+      setState(() {
+        _saveError = null;
+        _errors
+          ..clear()
+          ..addAll(errors);
+      });
+      _showProblem();
       return;
     }
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _saveError = null;
+      _errors.clear();
+    });
     final notifier = ref.read(emailTemplatesProvider.notifier);
 
     if (_isAdd) {
       final error = await notifier.create(_form);
       if (!mounted) return;
       if (error != null) {
-        setState(() => _saving = false);
-        _toast(error, false);
+        setState(() {
+          _saving = false;
+          _saveError = error;
+        });
+        _showProblem();
         return;
       }
       if (_pendingAttachments.isNotEmpty) {
@@ -808,8 +939,7 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
         if (createdId != null) {
           final failures = <String>[];
           for (final pending in _pendingAttachments) {
-            final uploadError =
-                await notifier.uploadAttachment(createdId, pending.file, pending.mimeType);
+            final uploadError = await notifier.uploadAttachment(createdId, pending.file, pending.mimeType);
             if (uploadError != null) failures.add(pending.filename);
           }
           if (failures.isNotEmpty && mounted) {
@@ -818,88 +948,170 @@ class _TemplateEditorSheetState extends ConsumerState<TemplateEditorSheet> {
         }
       }
       if (!mounted) return;
-      setState(() => _saving = false);
-      Navigator.pop(context);
+      Navigator.of(context).pop(true);
     } else {
       final error = await notifier.edit(widget.template!.id, _form);
       if (!mounted) return;
-      setState(() => _saving = false);
       if (error == null) {
-        Navigator.pop(context);
+        Navigator.of(context).pop(true);
       } else {
-        _toast(error, false);
+        setState(() {
+          _saving = false;
+          _saveError = error;
+        });
+        _showProblem();
       }
     }
   }
-}
-
-// ── Shared widgets ────────────────────────────────────────────────────────────
-
-class _ToolbarBtn extends StatelessWidget {
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-  const _ToolbarBtn({required this.icon, required this.tooltip, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Icon(icon, size: 18, color: AppColors.textSecondary),
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final tight = MediaQuery.sizeOf(context).height - MediaQuery.viewInsetsOf(context).bottom < 480;
+    final name = widget.template?.displayName ?? '';
+
+    return PopScope(
+      canPop: !_saving,
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: BlueAppBar(title: _isAdd ? 'Add Email Template' : 'Edit: $name'),
+        // With the keyboard up on a very short screen the bar would eat the form: it
+        // returns as soon as the keyboard closes.
+        bottomNavigationBar: keyboardOpen && tight ? null : _actionBar(context),
+        body: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            // Not a lazy list: every field is built, so a refused field far down can be scrolled to.
+            child: SingleChildScrollView(
+              key: const Key('et-form'),
+              controller: _scroll,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                if (_saveError != null) _banner(_saveError!),
+                ProfileSectionCard(
+                  icon: Icons.mail_outline,
+                  title: 'Basics',
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    _buildDisplayName(),
+                    if (_isAdd) _buildSlug(),
+                    _buildCategory(),
+                  ]),
+                ),
+                const SizedBox(height: 12),
+                ProfileSectionCard(
+                  icon: Icons.edit_note_outlined,
+                  title: 'Message',
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    _buildSubject(),
+                    _buildBody(),
+                  ]),
+                ),
+                const SizedBox(height: 12),
+                ProfileSectionCard(
+                  icon: Icons.data_object,
+                  title: 'Variables',
+                  child: _buildVariables(_allVars),
+                ),
+                const SizedBox(height: 12),
+                ProfileSectionCard(
+                  icon: Icons.attach_file,
+                  title: 'Attachments',
+                  child: _buildAttachments(),
+                ),
+                const SizedBox(height: 12),
+                ProfileSectionCard(
+                  icon: Icons.toggle_on_outlined,
+                  title: 'Status',
+                  child: _buildActiveSwitch(),
+                ),
+              ]),
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-class _DlgHeader extends StatelessWidget {
+// ── Shared widgets ────────────────────────────────────────────────────────────
+
+class _ToolbarBtn extends StatelessWidget {
+  final String id;
   final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onClose;
-  const _DlgHeader({required this.icon, required this.title, required this.subtitle, required this.onClose});
+  final String tooltip;
+  final VoidCallback? onTap;
+  const _ToolbarBtn({required this.id, required this.icon, required this.tooltip, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        key: Key('et-tool-$id'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Icon(icon, size: 20, color: onTap == null ? AppColors.textHint : AppColors.textSecondary),
+        ),
+      ),
+    );
+  }
+}
+
+String _sizeLabel(int bytes) {
+  final kb = bytes / 1024;
+  if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
+  return '${(kb / 1024).toStringAsFixed(1)} MB';
+}
+
+class _FileRowShell extends StatelessWidget {
+  const _FileRowShell(
+      {required this.icon, required this.name, required this.detail, required this.action, this.onOpen});
+  final Widget icon;
+  final String name;
+  final String detail;
+  final Widget action;
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
+      padding: const EdgeInsets.only(left: 10, top: 4, bottom: 4),
       decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         children: [
-          Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: Colors.white, size: 20),
-          ),
-          const SizedBox(width: 12),
+          icon,
+          const SizedBox(width: 8),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 2),
-                Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 12),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-              ],
+            child: InkWell(
+              onTap: onOpen,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      name,
+                      style: AppTextStyles.caption.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(detail, style: AppTextStyles.caption.copyWith(color: AppColors.textHint, fontSize: 11)),
+                  ],
+                ),
+              ),
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.close, color: Colors.white70, size: 20),
-            onPressed: onClose,
-            visualDensity: VisualDensity.compact,
-          ),
+          action,
         ],
       ),
     );
@@ -909,7 +1121,7 @@ class _DlgHeader extends StatelessWidget {
 class _AttachmentRow extends StatelessWidget {
   final EmailTemplateAttachmentModel attachment;
   final VoidCallback onOpen;
-  final VoidCallback onDelete;
+  final VoidCallback? onDelete;
 
   const _AttachmentRow({required this.attachment, required this.onOpen, required this.onDelete});
 
@@ -923,57 +1135,19 @@ class _AttachmentRow extends StatelessWidget {
     return Icons.insert_drive_file_outlined;
   }
 
-  String get _sizeLabel {
-    final kb = attachment.size / 1024;
-    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
-    return '${(kb / 1024).toStringAsFixed(1)} MB';
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Icon(_icon, size: 18, color: AppColors.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: InkWell(
-              onTap: onOpen,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    attachment.filename,
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    _sizeLabel,
-                    style: AppTextStyles.caption.copyWith(color: AppColors.textHint, fontSize: 10.5),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, size: 17),
-            color: AppColors.error,
-            visualDensity: VisualDensity.compact,
-            onPressed: onDelete,
-            tooltip: 'Remove',
-          ),
-        ],
+    return _FileRowShell(
+      icon: Icon(_icon, size: 18, color: AppColors.primary),
+      name: attachment.filename,
+      detail: _sizeLabel(attachment.size),
+      onOpen: onOpen,
+      action: IconButton(
+        key: Key('et-attachment-remove-${attachment.id}'),
+        icon: const Icon(Icons.delete_outline, size: 18),
+        color: AppColors.error,
+        onPressed: onDelete,
+        tooltip: 'Remove',
       ),
     );
   }
@@ -982,112 +1156,22 @@ class _AttachmentRow extends StatelessWidget {
 // Row for a locally-picked, not-yet-uploaded attachment (add mode only).
 class _PendingAttachmentRow extends StatelessWidget {
   final _PendingAttachment attachment;
-  final VoidCallback onRemove;
+  final VoidCallback? onRemove;
 
   const _PendingAttachmentRow({required this.attachment, required this.onRemove});
 
-  String get _sizeLabel {
-    final kb = attachment.size / 1024;
-    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
-    return '${(kb / 1024).toStringAsFixed(1)} MB';
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border, style: BorderStyle.solid),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.upload_file_outlined, size: 18, color: AppColors.textHint),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  attachment.filename,
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  '$_sizeLabel · will upload on save',
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textHint, fontSize: 10.5),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 17),
-            color: AppColors.error,
-            visualDensity: VisualDensity.compact,
-            onPressed: onRemove,
-            tooltip: 'Remove',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FormField extends StatelessWidget {
-  final String label;
-  final String? hint;
-  final TextEditingController controller;
-  final String? error;
-  final bool readOnly;
-  final ValueChanged<String>? onChanged;
-
-  const _FormField({
-    required this.label,
-    required this.controller,
-    this.hint,
-    this.error,
-    this.readOnly = false,
-    this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: TextFormField(
-        controller: controller,
-        readOnly: readOnly,
-        style: AppTextStyles.body,
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hint,
-          errorText: error,
-          labelStyle: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-          filled: true,
-          fillColor: readOnly ? AppColors.background : AppColors.surface,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: AppColors.border),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: AppColors.primary, width: 1.5),
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: AppColors.error),
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          suffixIcon: readOnly ? Icon(Icons.lock_outline, size: 16, color: AppColors.textHint) : null,
-        ),
+    return _FileRowShell(
+      icon: Icon(Icons.upload_file_outlined, size: 18, color: AppColors.textHint),
+      name: attachment.filename,
+      detail: '${_sizeLabel(attachment.size)} · will upload on save',
+      action: IconButton(
+        key: Key('et-pending-remove-${attachment.filename}'),
+        icon: const Icon(Icons.close, size: 18),
+        color: AppColors.error,
+        onPressed: onRemove,
+        tooltip: 'Remove',
       ),
     );
   }

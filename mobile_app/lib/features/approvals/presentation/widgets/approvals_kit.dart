@@ -413,7 +413,8 @@ class ApprovalsEmptyState extends StatelessWidget {
   /// The state for a caught load [error]: access / disabled-module → denied (no
   /// Retry), connection → offline, anything else → error; the server's own text
   /// is the message.
-  factory ApprovalsEmptyState.forError(Object error, {Key? key, VoidCallback? onRetry, bool compact = false}) {
+  factory ApprovalsEmptyState.forError(Object error,
+      {Key? key, VoidCallback? onRetry, bool compact = false, String what = 'requests'}) {
     final message = moduleDisabledMessage(error) ?? userFriendlyMessage(error);
     switch (appErrorKind(error)) {
       case AppErrorKind.moduleDisabled:
@@ -446,7 +447,7 @@ class ApprovalsEmptyState extends StatelessWidget {
         return ApprovalsEmptyState(
             key: key,
             kind: ApprovalsStateKind.error,
-            title: 'Couldn’t load requests',
+            title: 'Couldn’t load $what',
             message: message,
             actionLabel: onRetry == null ? null : 'Retry',
             onAction: onRetry,

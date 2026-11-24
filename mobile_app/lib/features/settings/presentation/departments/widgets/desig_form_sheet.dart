@@ -4,24 +4,27 @@ import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_text_styles.dart';
 import '../../../data/models/departments_model.dart';
 import '../../providers/settings_providers.dart';
+import 'department_select_field.dart';
 
-class DesigFormSheet extends StatefulWidget {
+class DesigFormSheet extends ConsumerStatefulWidget {
   final DesignationModel? designation;
-  final WidgetRef ref;
   final int? defaultDeptId;
 
-  const DesigFormSheet({super.key, this.designation, required this.ref, this.defaultDeptId});
+  // Its own ref: the sheet must rebuild when the departments request changes (Retry),
+  // which a ref borrowed from the screen behind the dialog would not do.
+  const DesigFormSheet({super.key, this.designation, this.defaultDeptId});
 
   @override
-  State<DesigFormSheet> createState() => _DesigFormSheetState();
+  ConsumerState<DesigFormSheet> createState() => _DesigFormSheetState();
 }
 
-class _DesigFormSheetState extends State<DesigFormSheet> {
+class _DesigFormSheetState extends ConsumerState<DesigFormSheet> {
   late final TextEditingController _nameCtrl;
   int? _deptId;
   late bool _isActive;
   bool _saving = false;
   Map<String, String?> _errors = {};
+  String? _saveError;
 
   bool get _isAdd => widget.designation == null;
 
@@ -41,7 +44,7 @@ class _DesigFormSheetState extends State<DesigFormSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final deptsAsync = widget.ref.watch(departmentsProvider);
+    final deptsAsync = ref.watch(departmentsProvider);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
@@ -63,30 +66,34 @@ class _DesigFormSheetState extends State<DesigFormSheet> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (_saveError != null) ...[
+                      _ErrorBanner(message: _saveError!),
+                      const SizedBox(height: 12),
+                    ],
                     TextFormField(
+                      key: const Key('desig-name'),
                       controller: _nameCtrl,
                       style: AppTextStyles.body,
                       autofocus: true,
-                      onChanged: (_) => setState(() => _errors.remove('name')),
+                      onChanged: (_) => setState(() {
+                        _errors.remove('name');
+                        _saveError = null;
+                      }),
+                      maxLength: 100,
+                      buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                       decoration: _dec('Designation Name *', _errors['name']),
                     ),
                     const SizedBox(height: 12),
-                    deptsAsync.when(
-                      data: (depts) => DropdownButtonFormField<int>(
-                        initialValue: _deptId,
-                        style: AppTextStyles.body,
-                        decoration: _dec('Department *', _errors['departmentId']),
-                        items: depts.map((d) => DropdownMenuItem(
-                          value: d.id,
-                          child: Text(d.name),
-                        )).toList(),
-                        onChanged: (v) => setState(() {
-                          _deptId = v;
-                          _errors.remove('departmentId');
-                        }),
-                      ),
-                      loading: () => const LinearProgressIndicator(),
-                      error: (_, __) => const SizedBox.shrink(),
+                    DepartmentSelectField(
+                      departments: deptsAsync,
+                      value: _deptId,
+                      errorText: _errors['departmentId'],
+                      onRetry: () => ref.invalidate(departmentsProvider),
+                      onChanged: (v) => setState(() {
+                        _deptId = v;
+                        _errors.remove('departmentId');
+                        _saveError = null;
+                      }),
                     ),
                     const SizedBox(height: 12),
                     _StatusToggle(
@@ -95,6 +102,7 @@ class _DesigFormSheetState extends State<DesigFormSheet> {
                     ),
                     const SizedBox(height: 20),
                     FilledButton(
+                      key: const Key('desig-submit'),
                       onPressed: _saving ? null : _submit,
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(double.infinity, 48),
@@ -140,8 +148,11 @@ class _DesigFormSheetState extends State<DesigFormSheet> {
       setState(() => _errors = validationErrors);
       return;
     }
-    setState(() => _saving = true);
-    final notifier = widget.ref.read(designationsProvider.notifier);
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
+    final notifier = ref.read(designationsProvider.notifier);
     final result = _isAdd
         ? await notifier.createDesig(form)
         : await notifier.editDesig(widget.designation!.id, form);
@@ -150,11 +161,33 @@ class _DesigFormSheetState extends State<DesigFormSheet> {
     if (result == null) {
       Navigator.pop(context);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result),
-        backgroundColor: AppColors.error,
-      ));
+      // Inline (as web's saveError alert): a snackbar would sit behind this dialog's scrim.
+      setState(() => _saveError = result);
     }
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  final String message;
+  const _ErrorBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('desig-save-error'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.4)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(Icons.error_outline, size: 18, color: AppColors.error),
+        const SizedBox(width: 8),
+        Expanded(child: Text(message, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error))),
+      ]),
+    );
   }
 }
 
@@ -233,6 +266,8 @@ class _DlgHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // At large text the icon tile and subtitle give way so the title keeps whole words.
+    final large = MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3;
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
       decoration: BoxDecoration(
@@ -241,7 +276,7 @@ class _DlgHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
+          if (!large) Container(
             width: 40, height: 40,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.15),
@@ -249,21 +284,22 @@ class _DlgHeader extends StatelessWidget {
             ),
             child: Icon(icon, color: Colors.white, size: 20),
           ),
-          const SizedBox(width: 12),
+          if (!large) const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
-                const SizedBox(height: 2),
-                Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                if (!large) const SizedBox(height: 2),
+                if (!large) Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 12)),
               ],
             ),
           ),
           IconButton(
+            tooltip: 'Close',
             icon: const Icon(Icons.close, color: Colors.white70, size: 20),
             onPressed: onClose,
-            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           ),
         ],
       ),

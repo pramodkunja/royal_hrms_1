@@ -126,9 +126,10 @@ class _DeptHeader extends StatelessWidget {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: _DeptHeaderRow(
+          canEdit: canEdit,
+          actionsKey: Key('dept-actions-${dept.id}'),
+          lead: [
             // Gradient avatar with shadow
             Container(
               width: 50,
@@ -166,31 +167,38 @@ class _DeptHeader extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          dept.name,
-                          style: AppTextStyles.label.copyWith(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                            color: AppColors.textPrimary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                  // The whole department name wraps (no ellipsis); at large text the
+                  // status drops under it instead of squeezing it.
+                  LayoutBuilder(builder: (context, c) {
+                    final nameText = Text(
+                      dept.name,
+                      style: AppTextStyles.label.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: AppColors.textPrimary,
                       ),
-                      const SizedBox(width: 8),
-                      _StatusBadge(isActive: dept.isActive),
-                    ],
-                  ),
+                    );
+                    final stacked = c.maxWidth < 200 || MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3;
+                    if (stacked) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [nameText, const SizedBox(height: 6), _StatusBadge(isActive: dept.isActive)],
+                      );
+                    }
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: nameText),
+                        const SizedBox(width: 8),
+                        _StatusBadge(isActive: dept.isActive),
+                      ],
+                    );
+                  }),
                   if (dept.description != null && dept.description!.isNotEmpty) ...[
                     const SizedBox(height: 3),
                     Text(
                       dept.description!,
                       style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                   const SizedBox(height: 8),
@@ -222,32 +230,63 @@ class _DeptHeader extends StatelessWidget {
                 ],
               ),
             ),
-            // Action buttons stacked
-            if (canEdit)
-            Column(
-              key: Key('dept-actions-${dept.id}'),
-              mainAxisSize: MainAxisSize.min,
-              children: [
+          ],
+          actions: [
+
                 IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 17),
+                  key: Key('dept-edit-${dept.id}'),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
                   color: AppColors.textSecondary,
-                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                   onPressed: onEdit,
                   tooltip: 'Edit',
                 ),
                 IconButton(
-                  icon: const Icon(Icons.delete_outline, size: 17),
+                  key: Key('dept-delete-${dept.id}'),
+                  icon: const Icon(Icons.delete_outline, size: 18),
                   color: AppColors.error,
-                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                   onPressed: onDelete,
                   tooltip: 'Delete',
                 ),
-              ],
-            ),
           ],
         ),
       ),
     );
+  }
+}
+
+/// Department header: identity on the left, Edit/Delete stacked on the right when there is
+/// room; at large text or on a narrow card the actions move under the details so the name
+/// and status keep the full width.
+class _DeptHeaderRow extends StatelessWidget {
+  final bool canEdit;
+  final Key actionsKey;
+  final List<Widget> lead;
+  final List<Widget> actions;
+  const _DeptHeaderRow(
+      {required this.canEdit, required this.actionsKey, required this.lead, required this.actions});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, c) {
+      final large = MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3;
+      if (!canEdit) return Row(crossAxisAlignment: CrossAxisAlignment.start, children: lead);
+      if (large || c.maxWidth < 280) {
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: lead),
+          Align(
+              alignment: Alignment.centerRight,
+              child: Row(key: actionsKey, mainAxisSize: MainAxisSize.min, children: actions)),
+        ]);
+      }
+      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        ...lead,
+        Column(key: actionsKey, mainAxisSize: MainAxisSize.min, children: actions),
+      ]);
+    });
   }
 }
 
@@ -331,8 +370,13 @@ class _DesignationPanel extends StatelessWidget {
         Container(
           color: AppColors.success,
           padding: const EdgeInsets.fromLTRB(16, 11, 12, 11),
-          child: Row(
+          // A Wrap, not a Row: at large text the Add button drops below the title instead of overflowing.
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            runSpacing: 8,
             children: [
+              Row(mainAxisSize: MainAxisSize.min, children: [
               Container(
                 padding: const EdgeInsets.all(5),
                 decoration: BoxDecoration(
@@ -342,14 +386,14 @@ class _DesignationPanel extends StatelessWidget {
                 child: const Icon(Icons.work_outline, color: Colors.white, size: 15),
               ),
               const SizedBox(width: 8),
-              Text(
+              Flexible(child: Text(
                 'Designations',
                 style: AppTextStyles.label.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
                   fontSize: 13,
                 ),
-              ),
+              )),
               const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -366,12 +410,15 @@ class _DesignationPanel extends StatelessWidget {
                   ),
                 ),
               ),
-              const Spacer(),
+              ]),
               if (canEdit)
               GestureDetector(
                 key: const Key('desig-add'),
+                behavior: HitTestBehavior.opaque,
                 onTap: onAdd,
                 child: Container(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  alignment: Alignment.center,
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.22),
@@ -400,7 +447,7 @@ class _DesignationPanel extends StatelessWidget {
         ),
         // Desig list
         Container(
-          color: const Color(0xFFF0FAF7),
+          color: Color.alphaBlend(AppColors.success.withValues(alpha: 0.07), AppColors.surface),
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
           child: designations.isEmpty
               ? Padding(
@@ -465,8 +512,8 @@ class _DesigCard extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 9, 6, 9),
-        child: Row(
-          children: [
+        child: _DesigRow(
+          lead: [
             // Teal-themed avatar to differ from dept (navy)
             Container(
               width: 36,
@@ -498,20 +545,22 @@ class _DesigCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
+            // The whole name wraps (no ellipsis); the status sits beneath it.
             Expanded(
-              child: Text(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
                 desig.name,
                 style: AppTextStyles.label.copyWith(
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
                   color: AppColors.textPrimary,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            // Active / Inactive badge
-            Container(
+                  const SizedBox(height: 6),
+                  Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: desig.isActive
@@ -547,19 +596,27 @@ class _DesigCard extends StatelessWidget {
                 ],
               ),
             ),
+                ],
+              ),
+            ),
+          ],
+          actions: [
             if (canEdit) ...[
             IconButton(
               key: Key('desig-edit-${desig.id}'),
-              icon: const Icon(Icons.edit_outlined, size: 15),
+              icon: const Icon(Icons.edit_outlined, size: 18),
               color: AppColors.textSecondary,
-              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
               onPressed: onEdit,
               tooltip: 'Edit',
             ),
             IconButton(
-              icon: const Icon(Icons.delete_outline, size: 15),
+              key: Key('desig-delete-${desig.id}'),
+              icon: const Icon(Icons.delete_outline, size: 18),
               color: AppColors.error,
-              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
               onPressed: onDelete,
               tooltip: 'Delete',
             ),
@@ -568,6 +625,27 @@ class _DesigCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Name block with its Edit/Delete actions: side by side when the card is wide enough,
+/// otherwise the actions sit under the name (never squeezing the name or the status).
+class _DesigRow extends StatelessWidget {
+  final List<Widget> lead;
+  final List<Widget> actions;
+  const _DesigRow({required this.lead, required this.actions});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, c) {
+      final stacked =
+          actions.isNotEmpty && (c.maxWidth < 250 || MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3);
+      if (!stacked) return Row(children: [...lead, ...actions]);
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: lead),
+        Align(alignment: Alignment.centerRight, child: Row(mainAxisSize: MainAxisSize.min, children: actions)),
+      ]);
+    });
   }
 }
 
@@ -644,12 +722,14 @@ class _CountChip extends StatelessWidget {
         children: [
           Icon(icon, size: 11, color: color),
           const SizedBox(width: 4),
-          Text(
-            '$value $label',
-            style: AppTextStyles.caption.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-              fontSize: 10,
+          Flexible(
+            child: Text(
+              '$value $label',
+              style: AppTextStyles.caption.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+                fontSize: 10,
+              ),
             ),
           ),
         ],

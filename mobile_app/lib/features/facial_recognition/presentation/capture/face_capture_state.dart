@@ -1,3 +1,5 @@
+import 'dart:ui' show Rect, Size;
+
 // One capture engine shared by self-registration, HR-assisted registration,
 // and clock-in verification — all three just need "get me a liveness-checked
 // photo and its server-computed embedding", nothing else differs between them.
@@ -46,6 +48,26 @@ class FaceCaptureUiState {
   final int? captureFrameCount;
   final double? captureVariance;
 
+  /// Liveness progress for the scan screen: which challenge steps are done,
+  /// whether a blink is required at all, and whole seconds left in the window.
+  final bool blinkSeen;
+  final bool turnSeen;
+  final bool blinkRequired;
+  final int? livenessSecondsLeft;
+
+  /// Latest detected face box in UPRIGHT image coordinates plus that upright
+  /// frame size (ML Kit's coordinate space) and the camera's portrait aspect.
+  /// Only geometry — no pixels. Null while no single face is tracked.
+  final Rect? faceBox;
+  final Size? uprightFrame;
+  final double? previewAspect;
+  final bool mirrored;
+
+  /// Aggregate stage durations in whole milliseconds (camera init, first
+  /// preview frame, first detection, still capture, descriptor, …). Numbers
+  /// only — never frames, descriptors or identifiers.
+  final Map<String, int> timingsMs;
+
   const FaceCaptureUiState({
     this.phase = FaceCapturePhase.idle,
     this.message,
@@ -56,6 +78,15 @@ class FaceCaptureUiState {
     this.liveHint,
     this.captureFrameCount,
     this.captureVariance,
+    this.blinkSeen = false,
+    this.turnSeen = false,
+    this.blinkRequired = false,
+    this.livenessSecondsLeft,
+    this.faceBox,
+    this.uprightFrame,
+    this.previewAspect,
+    this.mirrored = false,
+    this.timingsMs = const {},
   });
 
   FaceCaptureUiState copyWith({
@@ -68,6 +99,16 @@ class FaceCaptureUiState {
     String? liveHint,
     int? captureFrameCount,
     double? captureVariance,
+    bool? blinkSeen,
+    bool? turnSeen,
+    bool? blinkRequired,
+    int? livenessSecondsLeft,
+    Rect? faceBox,
+    Size? uprightFrame,
+    double? previewAspect,
+    bool? mirrored,
+    bool clearFace = false,
+    Map<String, int>? timingsMs,
   }) {
     return FaceCaptureUiState(
       phase: phase ?? this.phase,
@@ -79,6 +120,15 @@ class FaceCaptureUiState {
       liveHint: liveHint,
       captureFrameCount: captureFrameCount ?? this.captureFrameCount,
       captureVariance: captureVariance ?? this.captureVariance,
+      blinkSeen: blinkSeen ?? this.blinkSeen,
+      turnSeen: turnSeen ?? this.turnSeen,
+      blinkRequired: blinkRequired ?? this.blinkRequired,
+      livenessSecondsLeft: livenessSecondsLeft ?? this.livenessSecondsLeft,
+      faceBox: clearFace ? null : (faceBox ?? this.faceBox),
+      uprightFrame: uprightFrame ?? this.uprightFrame,
+      previewAspect: previewAspect ?? this.previewAspect,
+      mirrored: mirrored ?? this.mirrored,
+      timingsMs: timingsMs ?? this.timingsMs,
     );
   }
 }

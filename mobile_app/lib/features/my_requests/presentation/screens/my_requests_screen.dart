@@ -25,8 +25,35 @@ import '../widgets/my_correction_detail_sheet.dart';
 /// widgets and needs no extra wiring here. Unlike web (which has no `wfh`
 /// branch in its detail-modal switch and silently no-ops on tap), WFH rows
 /// here open correctly.
-class MyRequestsScreen extends ConsumerWidget {
-  const MyRequestsScreen({super.key});
+class MyRequestsScreen extends ConsumerStatefulWidget {
+  /// Web's `?tab=` (leave | expense | wfh | attendance_correction; anything else → All).
+  final String? initialTab;
+  const MyRequestsScreen({super.key, this.initialTab});
+
+  @override
+  ConsumerState<MyRequestsScreen> createState() => _MyRequestsScreenState();
+}
+
+MyRequestsTypeTab myRequestsTabFromQuery(String? tab) => switch (tab) {
+      'leave' => MyRequestsTypeTab.leave,
+      'expense' => MyRequestsTypeTab.expense,
+      'wfh' => MyRequestsTypeTab.wfh,
+      'attendance_correction' => MyRequestsTypeTab.attendanceCorrection,
+      _ => MyRequestsTypeTab.all,
+    };
+
+class _MyRequestsScreenState extends ConsumerState<MyRequestsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    final wanted = myRequestsTabFromQuery(widget.initialTab);
+    if (wanted != MyRequestsTypeTab.all) {
+      // Providers cannot be changed while the tree builds.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) ref.read(myRequestsTypeTabProvider.notifier).state = wanted;
+      });
+    }
+  }
 
   void _openDetail(BuildContext context, MyRequestItem item) {
     switch (item.kind) {
@@ -46,7 +73,7 @@ class MyRequestsScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -92,10 +119,20 @@ class _MyRequestsTypeTabsRow extends ConsumerWidget {
         MyRequestsTypeTab.attendanceCorrection => 'Attendance Correction',
       };
 
+  // One key per chip so the selected one can be scrolled into view (the row scrolls sideways,
+  // and a tab chosen from outside — e.g. ?tab=attendance_correction — may start off-screen).
+  static final _chipKeys = {for (final t in MyRequestsTypeTab.values) t: GlobalKey()};
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final active = ref.watch(myRequestsTypeTabProvider);
     final counts = ref.watch(myRequestsTypeTabCountsProvider);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _chipKeys[active]?.currentContext;
+      if (ctx != null && ctx.mounted) {
+        Scrollable.ensureVisible(ctx, alignment: 0.5, duration: const Duration(milliseconds: 200));
+      }
+    });
     // Web: tabs only for the company's modules (unknown list → all).
     final user = ref.watch(authStateProvider).valueOrNull?.user;
     final tabs =
@@ -114,6 +151,7 @@ class _MyRequestsTypeTabsRow extends ConsumerWidget {
         child: Row(
           children: tabs
               .map((t) => Padding(
+                    key: _chipKeys[t],
                     padding: const EdgeInsets.only(right: 8),
                     child: _TypeTabChip(
                       label: _labelFor(t),

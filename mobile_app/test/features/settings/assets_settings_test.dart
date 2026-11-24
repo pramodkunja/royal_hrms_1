@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:cookie_jar/cookie_jar.dart';
@@ -95,13 +96,22 @@ class Backend implements HttpClientAdapter {
       'employee_code': 'EMP-2',
     }),
     asset('a2', 'PHN-001', 'Pixel', category: 'Other', categoryOther: 'Mobiles', type: 'Phone', status: 'damaged'),
-    asset('a3', 'MON-001', 'Monitor 24', type: 'Monitor', status: 'under_repair',
+    asset('a3', 'MON-001', 'Monitor 24',
+        type: 'Monitor',
+        status: 'under_repair',
         maintenance: {'id': 'm1', 'issue': 'Flickering screen', 'maintenance_start_date': '2026-11-02'}),
     asset('a4', 'LAP-002', 'Spare Laptop', branch: '2', branchName: 'South Wing'),
   ];
   final calls = <(String, String, Object?, Map<String, dynamic>)>[];
   int listStatus = 200;
   int detailStatus = 200;
+
+  /// Holds the next create/update answer until completed (to see the saving state).
+  Completer<void>? holdWrite;
+
+  /// Failure / emptiness of the form's pick lists.
+  int categoriesStatus = 200;
+  bool noBranches = false;
   ({int status, String message, Map<String, dynamic>? data})? refuseNext;
   List<Map<String, dynamic>> categories = [
     {'id': 1, 'name': 'IT Equipment'},
@@ -128,12 +138,16 @@ class Backend implements HttpClientAdapter {
   Future<ResponseBody> fetch(RequestOptions o, Stream<List<int>>? _, Future<void>? __) async {
     calls.add((o.method, o.path, o.data, Map.of(o.queryParameters)));
     final p = o.path;
+    if (holdWrite != null && (o.method == 'POST' || o.method == 'PUT') && p.startsWith('/assets/')) {
+      await holdWrite!.future;
+    }
     final r = refuseNext;
     if (r != null && o.method != 'GET') {
       refuseNext = null;
       return _err(r.status, r.message, r.data);
     }
     if (p == '/branch/branches/') {
+      if (noBranches) return _ok({'results': []});
       return _ok({
         'results': [
           {'id': 1, 'branch_name': 'North Wing'},
@@ -141,20 +155,31 @@ class Backend implements HttpClientAdapter {
         ]
       });
     }
-    if (p == '/assets/categories/' && o.method == 'GET') return _ok(categories);
+    if (p == '/assets/categories/' && o.method == 'GET') {
+      return categoriesStatus == 200 ? _ok(categories) : _err(categoriesStatus, 'Server error.');
+    }
     if (p == '/assets/categories/' && o.method == 'POST') {
       if (!can('assets.create')) return _err(403, 'You do not have permission to create asset categories.');
       final name = '${(o.data as Map)['name']}';
-      categories = [...categories, {'id': 4, 'name': name}];
+      categories = [
+        ...categories,
+        {'id': 4, 'name': name}
+      ];
       return _ok({'id': 4, 'name': name}, 'Asset category created.', 201);
     }
     if (p == '/assets/types/' && o.method == 'GET') {
       final c = o.queryParameters['category'];
-      return _ok([for (final t in types) if (c == null || '${t['category']}' == '$c') t]);
+      return _ok([
+        for (final t in types)
+          if (c == null || '${t['category']}' == '$c') t
+      ]);
     }
     if (p == '/assets/types/' && o.method == 'POST') {
       final b = Map<String, dynamic>.from(o.data as Map);
-      types = [...types, {'id': 13, 'name': b['name'], 'category': b['category']}];
+      types = [
+        ...types,
+        {'id': 13, 'name': b['name'], 'category': b['category']}
+      ];
       return _ok({'id': 13, 'name': b['name']}, 'Asset type created.', 201);
     }
     if (p == '/assets/' && o.method == 'GET') {
@@ -163,8 +188,7 @@ class Backend implements HttpClientAdapter {
       final q = o.queryParameters;
       var rows = assets.where((a) {
         final s = '${q['search'] ?? ''}'.toLowerCase();
-        if (s.isNotEmpty &&
-            !'${a['asset_tag']} ${a['asset_name']} ${a['serial_number']}'.toLowerCase().contains(s)) {
+        if (s.isNotEmpty && !'${a['asset_tag']} ${a['asset_name']} ${a['serial_number']}'.toLowerCase().contains(s)) {
           return false;
         }
         if ((q['status'] ?? '') != '' && a['status'] != q['status']) return false;
@@ -210,8 +234,8 @@ class Backend implements HttpClientAdapter {
       if (o.method == 'DELETE') {
         if (!can('assets.delete')) return _err(403, 'You do not have permission to delete assets.');
         if (row['status'] == 'assigned') {
-          return _err(409,
-              'Cannot delete "${row['asset_tag']}" — it is currently assigned to an employee. Return it first.');
+          return _err(
+              409, 'Cannot delete "${row['asset_tag']}" — it is currently assigned to an employee. Return it first.');
         }
         assets = assets.where((a) => a != row).toList();
         return _ok({}, 'Asset deleted successfully.');
@@ -268,7 +292,8 @@ final viewer = user(['settings.view', 'assets.view']);
 
 late Backend server;
 Finder byKey(String k) => find.byKey(Key(k));
-String? statusOf(WidgetTester t, String id) => t.widget<Text>(byKey('asset-status-$id')).data;
+String? statusOf(WidgetTester t, String id) =>
+    t.widget<Text>(find.descendant(of: byKey('asset-status-$id'), matching: find.byType(Text))).data;
 
 Future<void> pump(WidgetTester tester, {UserEntity? as, void Function(Backend)? setup, Widget? child}) async {
   tester.view.physicalSize = const Size(1080, 4200);
@@ -310,6 +335,8 @@ Future<void> settle(WidgetTester tester) async {
 Future<void> tapKey(WidgetTester tester, String key) async {
   await tester.ensureVisible(byKey(key));
   await tester.tap(byKey(key));
+  await settle(tester);
+  // The form is a full-screen route: let a page transition (push or pop) finish.
   await settle(tester);
 }
 
@@ -366,7 +393,8 @@ void main() {
         'employee_code': null,
       })) as HolderAssigned;
       expect((hidden.employee, hidden.code), ('Not visible to you', null));
-      expect((holderView(a(null)) as HolderNone).message, 'Marked Assigned, but no active assignment record was found.');
+      expect(
+          (holderView(a(null)) as HolderNone).message, 'Marked Assigned, but no active assignment record was found.');
       expect((holderView(a(null, status: 'available')) as HolderNone).message, 'Not currently assigned.');
     });
 
@@ -384,8 +412,10 @@ void main() {
       await pump(tester);
       expect(find.text('LAP-001'), findsOneWidget);
       expect(find.text('Dell Latitude'), findsOneWidget);
-      expect(find.text('Other (Mobiles) · Phone'), findsOneWidget);
-      expect(find.text('North Wing · Condition: Good'), findsWidgets);
+      expect(find.text('Other (Mobiles)'), findsOneWidget); // category chip
+      expect(find.text('Phone'), findsOneWidget); // type chip
+      expect(find.text('North Wing'), findsWidgets); // branch chip
+      expect(find.text('Condition: Good'), findsWidgets);
       expect(statusOf(tester, 'a3'), 'Under Repair');
       expect(server.lists().first, {'page': 1, 'page_size': 20});
       // Actions by status: maintenance only for damaged, complete only under repair.
@@ -405,29 +435,34 @@ void main() {
       await settle(tester);
       expect(server.lists().last, {'search': 'lap', 'page': 1, 'page_size': 20});
       expect(find.text('Pixel'), findsNothing);
-      await choose(tester, 'asset-filter-status', 'Available');
+      await tapKey(tester, 'asset-pill-available'); // web's Status select, as one-tap pills
       expect(server.lists().last['status'], 'available');
       expect(find.text('Dell Latitude'), findsNothing);
-      await choose(tester, 'asset-filter-status', 'All Statuses');
+      await tapKey(tester, 'asset-pill-all');
       await type(tester, 'asset-search', '');
       await tester.pump(const Duration(milliseconds: 400));
       await settle(tester);
+      await tapKey(tester, 'asset-filters'); // category / type / branch live in the filter sheet
       await type(tester, 'asset-filter-category', 'it equipment');
       await type(tester, 'asset-filter-type', 'monitor');
       await tester.pump(const Duration(milliseconds: 400));
       await settle(tester);
       expect(server.lists().last, {'category': 'it equipment', 'asset_type': 'monitor', 'page': 1, 'page_size': 20});
+      await tapKey(tester, 'asset-sheet-done');
       expect(find.text('Monitor 24'), findsOneWidget);
       expect(find.text('Dell Latitude'), findsNothing);
     });
 
     testWidgets('branch filter (branches from the server)', (tester) async {
       await pump(tester);
-      await tester.tap(find.text('All Branches'));
-      await settle(tester);
-      await tester.tap(find.text('South Wing').last);
+      await tapKey(tester, 'asset-filters');
+      await tapKey(tester, 'asset-filter-branch');
+      // the menu item (not the "South Wing" chip on a card behind the sheet)
+      await tester
+          .tap(find.descendant(of: find.byType(DropdownMenuItem<String>), matching: find.text('South Wing')).last);
       await settle(tester);
       expect(server.lists().last['branch'], '2');
+      await tapKey(tester, 'asset-sheet-done');
       expect(find.text('Spare Laptop'), findsOneWidget);
       expect(find.text('Dell Latitude'), findsNothing);
     });
@@ -437,8 +472,7 @@ void main() {
         s.assets = [for (var i = 0; i < 25; i++) asset('p$i', 'TAG-${i.toString().padLeft(2, '0')}', 'Item $i')];
       });
       expect(find.text('Page 1 of 2'), findsOneWidget);
-      expect(tester.widget<TextButton>(find.ancestor(of: find.text('Prev'), matching: find.byType(TextButton))).onPressed,
-          isNull);
+      expect(tester.widget<OutlinedButton>(byKey('asset-prev')).onPressed, isNull);
       await tapKey(tester, 'asset-next');
       expect(server.lists().last['page'], 2);
       expect(find.text('Page 2 of 2'), findsOneWidget);
@@ -456,7 +490,7 @@ void main() {
       await pump(tester, setup: (s) => s.listStatus = 500);
       expect(byKey('asset-load-error'), findsOneWidget);
       server.listStatus = 200;
-      await tapKey(tester, 'asset-retry');
+      await tapKey(tester, 'approvals-empty-action'); // Retry
       expect(find.text('Dell Latitude'), findsOneWidget);
     });
 
@@ -559,7 +593,13 @@ void main() {
       await type(tester, 'asset-field-category_other', 'Mobiles');
       await type(tester, 'asset-field-asset_tag', 'PHN-9');
       await type(tester, 'asset-field-asset_name', 'Phone');
-      server.refuseNext = (status: 400, message: 'Asset Type is required.', data: {'asset_type': ['Asset Type is required.']});
+      server.refuseNext = (
+        status: 400,
+        message: 'Asset Type is required.',
+        data: {
+          'asset_type': ['Asset Type is required.']
+        }
+      );
       await tapKey(tester, 'asset-save');
       final body = server.bodies('POST', '/assets/').single as Map;
       expect(body['category'], 'Other');
@@ -615,8 +655,7 @@ void main() {
   });
 
   group('delete and maintenance', () {
-    testWidgets('delete: confirm; an assigned asset is refused with the server message; else removed',
-        (tester) async {
+    testWidgets('delete: confirm; an assigned asset is refused with the server message; else removed', (tester) async {
       await pump(tester);
       await tapKey(tester, 'asset-delete-a1');
       expect(find.textContaining('LAP-001 — Dell Latitude'), findsOneWidget);
@@ -671,7 +710,8 @@ void main() {
       await tapKey(tester, 'asset-complete-a3');
       await tester.tap(byKey('complete-condition'));
       await settle(tester);
-      expect(find.text('Damaged'), findsOneWidget); // only asset a2's status in the list, not an option
+      // "Damaged" is not an option for the resulting condition (it is a status elsewhere on the page)
+      expect(find.descendant(of: find.byType(DropdownMenuItem<String>), matching: find.text('Damaged')), findsNothing);
       await tester.tap(find.text('Fair').last);
       await settle(tester);
       await type(tester, 'complete-notes', 'Replaced cable');

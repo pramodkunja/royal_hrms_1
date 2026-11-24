@@ -1,3 +1,8 @@
+import 'dart:isolate';
+import 'dart:typed_data';
+
+import 'package:image/image.dart' as img;
+
 import 'face_api_image.dart';
 import 'face_api_math.dart';
 import 'face_api_nets.dart';
@@ -31,6 +36,61 @@ const kVerificationFramesToCapture = 3;
 /// Web MULTI_FRAME_ATTEMPTS_PER_TARGET_FRAME.
 const kAttemptsPerTargetFrame = 4;
 
+/// JPEG bytes → the frame the networks see: decoded, EXIF-upright, at most
+/// 800 px wide, CLAHE-normalised (pipeline steps 1–2). Pure CPU work, so
+/// [prepareStillOffUi] runs it on a worker isolate and keeps the UI smooth.
+/// Returns null when the bytes are not a decodable image.
+RgbaBuffer? prepareStillJpeg(Uint8List jpeg, {bool normalizeLighting = true}) =>
+    prepareStillTimed(jpeg, normalizeLighting: normalizeLighting).frame;
+
+/// [prepareStillJpeg] plus the microseconds spent in decode / scale / CLAHE.
+({RgbaBuffer? frame, int decodeUs, int convertUs, int scaleUs, int claheUs}) prepareStillTimed(
+  Uint8List jpeg, {
+  bool normalizeLighting = true,
+}) {
+  final sw = Stopwatch()..start();
+  final img.Image? decoded;
+  try {
+    decoded = img.decodeImage(jpeg);
+  } catch (_) {
+    return (frame: null, decodeUs: 0, convertUs: 0, scaleUs: 0, claheUs: 0); // truncated / corrupt file
+  }
+  if (decoded == null) return (frame: null, decodeUs: 0, convertUs: 0, scaleUs: 0, claheUs: 0);
+  final decodeUs = sw.elapsedMicroseconds; // JPEG → pixels
+  sw.reset();
+  final upright = RgbaBuffer.fromImage(decoded); // EXIF orientation + RGBA
+  final convertUs = sw.elapsedMicroseconds;
+  sw.reset();
+  // The decoded buffer is ours alone, so a frame that needs no scaling is
+  // used in place (no copy) — CLAHE then normalises it in place as before.
+  final frame = scaleToMaxWidth(upright, kCaptureMaxFrameWidth, copyIfUnscaled: false);
+  final scaleUs = sw.elapsedMicroseconds;
+  sw.reset();
+  if (normalizeLighting) applyClahe(frame);
+  return (frame: frame, decodeUs: decodeUs, convertUs: convertUs, scaleUs: scaleUs, claheUs: sw.elapsedMicroseconds);
+}
+
+/// [prepareStillJpeg] on a short-lived worker isolate (one per still, not per
+/// camera frame; only the bytes are sent and only the pixels come back).
+Future<RgbaBuffer?> prepareStillOffUi(Uint8List jpeg, {bool normalizeLighting = true, FaceApiStageTimes? times}) async {
+  final r = await Isolate.run(() => prepareStillTimed(jpeg, normalizeLighting: normalizeLighting));
+  if (times != null) {
+    times.decodeUs += r.decodeUs;
+    times.convertUs += r.convertUs;
+    times.scaleUs += r.scaleUs;
+    times.claheUs += r.claheUs;
+  }
+  return r.frame;
+}
+
+/// Aggregate microseconds per pipeline stage (numbers only), summed over the
+/// frames of one capture — diagnostics for finding the real bottleneck.
+class FaceApiStageTimes {
+  int detectUs = 0, landmarksUs = 0, describeUs = 0, qualityUs = 0, averageUs = 0;
+  int decodeUs = 0, convertUs = 0, scaleUs = 0, claheUs = 0;
+  int framesAnalysed = 0;
+}
+
 class FrameAttempt {
   const FrameAttempt({this.descriptor, this.codes = const [], this.reasons = const []});
   final List<double>? descriptor;
@@ -43,12 +103,30 @@ class FaceApiPipeline {
   final FaceApiNets nets;
 
   /// One frame → a descriptor, or why not (web captureOneQualityGatedFrame).
-  Future<FrameAttempt> analyzeFrame(RgbaBuffer raw, {bool normalizeLighting = true}) async {
-    final frame = scaleToMaxWidth(raw, kCaptureMaxFrameWidth);
-    if (normalizeLighting) applyClahe(frame);
+  ///
+  /// [prepared]: the frame already went through [prepareStillJpeg] (scaled and
+  /// CLAHE-normalised, e.g. on a worker isolate) — the steps are not repeated.
+  Future<FrameAttempt> analyzeFrame(
+    RgbaBuffer raw, {
+    bool normalizeLighting = true,
+    bool prepared = false,
+    FaceApiStageTimes? times,
+  }) async {
+    final sw = Stopwatch();
+    times?.framesAnalysed++;
+    final RgbaBuffer frame;
+    if (prepared) {
+      frame = raw;
+    } else {
+      frame = scaleToMaxWidth(raw, kCaptureMaxFrameWidth);
+      if (normalizeLighting) applyClahe(frame);
+    }
 
+    sw.start();
+    final detOut = await nets.detect(imageToSquareRgb(frame, kDetectorInputSize, center: false));
+    times?.detectUs += sw.elapsedMicroseconds;
     final detections = decodeTinyFaceDetector(
-      await nets.detect(imageToSquareRgb(frame, kDetectorInputSize, center: false)),
+      detOut,
       imageWidth: frame.width,
       imageHeight: frame.height,
       inputSize: kDetectorInputSize,
@@ -64,8 +142,11 @@ class FaceApiPipeline {
     final detCropBox = det.box.floor().clipAtImageBorders(frame.width, frame.height);
     if (detCropBox.width < 1 || detCropBox.height < 1) return const FrameAttempt(codes: ['no_face']);
     final detCrop = frame.crop(detCropBox);
+    sw.reset();
+    final lmkOut = await nets.landmarks(imageToSquareRgb(detCrop, 112, center: true));
+    times?.landmarksUs += sw.elapsedMicroseconds;
     final rel = landmarkRelativePositions(
-      await nets.landmarks(imageToSquareRgb(detCrop, 112, center: true)),
+      lmkOut,
       cropWidth: detCrop.width,
       cropHeight: detCrop.height,
     );
@@ -74,8 +155,10 @@ class FaceApiPipeline {
     // Descriptor on the dlib-aligned crop (useDlibAlignment: true).
     final faceBox = landmarks.alignDlib().clipAtImageBorders(frame.width, frame.height);
     if (faceBox.width < 1 || faceBox.height < 1) return const FrameAttempt(codes: ['no_face']);
-    final descriptor = await nets.describe(imageToSquareRgb(frame.crop(faceBox), 150, center: true));
-
+    // The quality gate and the eye-occlusion check do not depend on the
+    // descriptor, so they run first: a frame that fails them no longer pays
+    // for the (largest) recognition inference. Outcome is unchanged.
+    sw.reset();
     final failures = assessFrameQuality(FrameQualityMetrics(
       detectionScore: det.score,
       faceWidthRatio: det.box.width / frame.width,
@@ -88,39 +171,86 @@ class FaceApiPipeline {
     if (eyesLookOccluded(frame, landmarks.leftEye, landmarks.rightEye)) {
       return const FrameAttempt(codes: ['eye_occlusion'], reasons: [kEyeOcclusionMessage]);
     }
+    times?.qualityUs += sw.elapsedMicroseconds;
+
+    sw.reset();
+    final descriptor = await nets.describe(imageToSquareRgb(frame.crop(faceBox), 150, center: true));
+    times?.describeUs += sw.elapsedMicroseconds;
     return FrameAttempt(descriptor: List<double>.from(descriptor));
   }
 
-  /// Web captureMultipleFrames: up to framesToCapture × 4 attempts (frames
-  /// from [nextFrame], [interval] apart), then the consistency check and the
-  /// average. [nextFrame] returning null counts as a failed attempt.
+  /// Web captureMultipleFrames: up to framesToCapture × 4 attempts, then the
+  /// consistency check and the average — same frame count, same per-frame
+  /// quality gate, same consistency rule, same averaging.
+  ///
+  /// Overlap: while a still is being analysed the next one is already being
+  /// taken (camera, worker isolate and the networks work in parallel), but no
+  /// more stills are started than could still be needed
+  /// (good + in-flight < [framesToCapture]), and consecutive stills are never
+  /// closer than [interval] to each other. Descriptors are averaged in
+  /// attempt order, exactly as a one-at-a-time capture would.
   Future<CaptureOutcome> capture({
     required Future<RgbaBuffer?> Function() nextFrame,
     required int framesToCapture,
     Duration interval = const Duration(milliseconds: 250),
     bool normalizeLighting = true,
+    bool framesArePrepared = false,
+    void Function(int micros)? onAnalysisTime,
+    bool Function()? isCancelled,
+    FaceApiStageTimes? times,
   }) async {
-    final collected = <List<double>>[];
-    final reasonsPerAttempt = <List<String>>[];
     final maxAttempts = framesToCapture * kAttemptsPerTargetFrame;
-    for (var attempt = 0; attempt < maxAttempts && collected.length < framesToCapture; attempt++) {
-      if (attempt > 0) await Future<void>.delayed(interval);
-      final frame = await nextFrame();
-      if (frame == null) {
-        reasonsPerAttempt.add(const []);
+    final attempts = <FrameAttempt?>[]; // by attempt index; null = still running
+    final active = <Future<void>>{};
+    var good = 0;
+    var started = 0;
+    var lastCaptureTook = Duration.zero;
+
+    bool cancelled() => isCancelled?.call() ?? false;
+
+    while (started < maxAttempts) {
+      if (cancelled()) return CaptureOutcome.failed('Cancelled.');
+      if (good + active.length >= framesToCapture) {
+        if (good >= framesToCapture) break;
+        // Everything that could finish the job is already running: wait for
+        // one of them (a failure frees a slot for another still).
+        await Future.any(active);
         continue;
       }
-      final r = await analyzeFrame(frame, normalizeLighting: normalizeLighting);
-      if (r.descriptor != null) {
-        collected.add(r.descriptor!);
-      } else {
-        reasonsPerAttempt.add(r.reasons);
+      if (started > 0 && lastCaptureTook < interval) await Future<void>.delayed(interval - lastCaptureTook);
+      if (cancelled()) return CaptureOutcome.failed('Cancelled.');
+      final took = Stopwatch()..start();
+      final frame = await nextFrame();
+      lastCaptureTook = took.elapsed;
+      final index = started++;
+      if (frame == null) {
+        attempts.add(const FrameAttempt());
+        continue;
       }
+      attempts.add(null);
+      late final Future<void> job;
+      job = () async {
+        final sw = Stopwatch()..start();
+        final r = await analyzeFrame(frame, normalizeLighting: normalizeLighting, prepared: framesArePrepared, times: times);
+        onAnalysisTime?.call(sw.elapsedMicroseconds);
+        attempts[index] = r;
+        if (r.descriptor != null) good++;
+      }()
+          .whenComplete(() => active.remove(job));
+      active.add(job);
     }
+    await Future.wait(active.toList());
+    if (cancelled()) return CaptureOutcome.failed('Cancelled.');
+
+    final collected = <List<double>>[
+      for (final a in attempts)
+        if (a?.descriptor != null) a!.descriptor!
+    ];
+    if (collected.length > framesToCapture) collected.length = framesToCapture;
     if (collected.length < framesToCapture) {
       String? specific;
-      for (final reasons in reasonsPerAttempt) {
-        if (reasons.isNotEmpty) specific = reasons.first;
+      for (final a in attempts) {
+        if (a != null && a.descriptor == null && a.reasons.isNotEmpty) specific = a.reasons.first;
       }
       return CaptureOutcome.failed(specific ??
           (framesToCapture > 1
@@ -131,8 +261,10 @@ class FaceApiPipeline {
     if (!consistency.passed) {
       return CaptureOutcome.failed("Your captures didn't quite agree with each other — hold still and try again.");
     }
-    return CaptureOutcome.captured(averageDescriptors(collected),
-        frameCount: collected.length, variance: consistency.mean);
+    final avg = Stopwatch()..start();
+    final averaged = averageDescriptors(collected);
+    times?.averageUs += avg.elapsedMicroseconds;
+    return CaptureOutcome.captured(averaged, frameCount: collected.length, variance: consistency.mean);
   }
 }
 

@@ -149,8 +149,11 @@ HolderView holderView(CatalogueAsset asset) {
 }
 
 class AssetPage {
-  const AssetPage({required this.results, required this.page, required this.totalPages});
+  const AssetPage({required this.results, required this.page, required this.totalPages, this.count = 0});
   final List<CatalogueAsset> results;
+
+  /// Matching assets across all pages (the API's `count`).
+  final int count;
   final int page;
   final int totalPages;
 }
@@ -244,6 +247,7 @@ class AssetCatalogueApi {
       results: _rows(d).map(CatalogueAsset.new).toList(),
       page: (d is Map ? d['page'] as num? : null)?.toInt() ?? page,
       totalPages: (d is Map ? d['total_pages'] as num? : null)?.toInt() ?? 1,
+      count: (d is Map ? d['count'] as num? : null)?.toInt() ?? _rows(d).length,
     );
   }
 
